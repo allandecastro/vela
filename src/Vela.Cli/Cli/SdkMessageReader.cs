@@ -25,7 +25,7 @@ internal static class SdkMessageReader
     /// deprecated/generic exclusions, that has at least one <c>sdkmessagefilter</c> which both allows a custom
     /// processing step and is visible. Custom-API-backed names are dropped so <c>--custom-apis</c> owns them (with
     /// richer metadata) and the developer's own authored Custom APIs stay out of the generated set. The caller
-    /// reads each message's requests (<see cref="ReadSdkMessages"/>) and drops those that already have an SDK request
+    /// reads each message's requests (<see cref="ReadMessageRequests"/>) and drops those that already have an SDK request
     /// class (see <see cref="SdkMessageClassResolver"/>). Each result carries the entities it applies to
     /// (<c>primaryobjecttypecode</c>). Validated live: ~416 messages, versus ~1707 with
     /// <c>isprivate == false</c> alone.
@@ -75,27 +75,50 @@ internal static class SdkMessageReader
     }
 
     /// <summary>
-    /// Reads the typed contracts behind <paramref name="name"/>: an sdkmessage name (<c>Close</c>) yields one
-    /// contract per request it serves (<c>CloseIncident</c>, <c>CloseQuote</c>), and a request name
-    /// (<c>CloseQuote</c>) yields just that one. A shared sdkmessage carries one <c>sdkmessagerequest</c> per entity,
-    /// each with its own fields (verified live 2026-10-09: Close, Win, Cancel, Send), so reading only the first
-    /// request would type a <c>CloseIncident</c> step with the <c>CloseQuote</c> contract. Each contract is named
-    /// after its request (that is what <c>Execute</c> takes), keeps the sdkmessage its steps register on, and
-    /// applies to the request's own entity when it has one.
+    /// Reads the typed contract of the request <paramref name="requestName"/>: the name <c>Execute</c> takes
+    /// (<c>CloseQuote</c>, <c>SendEmail</c>, <c>Create</c>), never an sdkmessage alias. A name that is only an
+    /// sdkmessage (<c>Close</c>, <c>Send</c>) is rejected with the request names it serves, so the generator makes
+    /// exactly what was asked. The contract keeps the sdkmessage its steps register on and applies to the request's
+    /// own entity when it has one (verified live 2026-10-09: a shared sdkmessage carries one request per entity, each
+    /// with its own fields).
     /// </summary>
-    internal static IReadOnlyList<SdkMessage> ReadSdkMessages(IOrganizationService service, string name)
+    internal static SdkMessage ReadRequest(IOrganizationService service, string requestName)
     {
-        string? onlyRequest = null;
-        Entity? message = FindMessage(service, name);
-        if (message == null)
+        List<Entity> owners = FindMessagesOfRequest(service, requestName);
+        if (owners.Count == 0)
         {
-            // Not an sdkmessage: a request name whose sdkmessage differs (CloseQuote runs on Close).
-            message = FindMessageOfRequest(service, name)
-                ?? throw new InvalidOperationException($"SDK message '{name}' was not found (neither an sdkmessage nor an sdkmessagerequest of that name).");
-            onlyRequest = name;
+            Entity? alias = FindMessage(service, requestName);
+            if (alias != null)
+            {
+                IReadOnlyList<string> requests = ReadContracts(service, alias, onlyRequest: null).Select(c => c.Name).ToList();
+                throw new InvalidOperationException(
+                    $"'{requestName}' is an sdkmessage, not a request: pass the request name you execute ({string.Join(", ", requests)}).");
+            }
+
+            throw new InvalidOperationException($"SDK request '{requestName}' was not found.");
         }
 
-        string messageName = message.GetAttributeValue<string>("name") ?? name;
+        // A request name can live under several sdkmessages (SetState sits under SetState and SetStateDynamicEntity):
+        // prefer the sdkmessage of the same name.
+        Entity message = owners.FirstOrDefault(m => string.Equals(m.GetAttributeValue<string>("name"), requestName, StringComparison.OrdinalIgnoreCase))
+            ?? owners[0];
+        return ReadContracts(service, message, requestName).Single();
+    }
+
+    /// <summary>
+    /// Reads every request the sdkmessage <paramref name="messageName"/> serves (the bare <c>--messages</c>, which
+    /// generates all registerable messages): <c>Close</c> yields <c>CloseIncident</c> and <c>CloseQuote</c>.
+    /// </summary>
+    internal static IReadOnlyList<SdkMessage> ReadMessageRequests(IOrganizationService service, string messageName)
+    {
+        Entity message = FindMessage(service, messageName)
+            ?? throw new InvalidOperationException($"SDK message '{messageName}' was not found.");
+        return ReadContracts(service, message, onlyRequest: null);
+    }
+
+    private static IReadOnlyList<SdkMessage> ReadContracts(IOrganizationService service, Entity message, string? onlyRequest)
+    {
+        string messageName = message.GetAttributeValue<string>("name") ?? string.Empty;
 
         // A message has several pairs, one per SOAP contract version and request, and the field CLR types differ by
         // pair: the legacy 2007/WebServices pair carries null or pre-Xrm types (e.g. Microsoft.Crm.Sdk.SecurityPrincipal)
@@ -171,14 +194,14 @@ internal static class SdkMessageReader
         return service.RetrieveMultiple(messageQuery).Entities.FirstOrDefault();
     }
 
-    // The sdkmessage behind a request name, through its pair (sdkmessagerequest -> sdkmessagepair -> sdkmessage).
-    private static Entity? FindMessageOfRequest(IOrganizationService service, string requestName)
+    // The sdkmessages serving a request name, through their pairs (sdkmessagerequest -> sdkmessagepair -> sdkmessage).
+    private static List<Entity> FindMessagesOfRequest(IOrganizationService service, string requestName)
     {
-        QueryExpression query = new QueryExpression("sdkmessage") { ColumnSet = new ColumnSet("sdkmessageid", "name"), TopCount = 1 };
+        QueryExpression query = new QueryExpression("sdkmessage") { ColumnSet = new ColumnSet("sdkmessageid", "name"), Distinct = true };
         LinkEntity pair = query.AddLink("sdkmessagepair", "sdkmessageid", "sdkmessageid", JoinOperator.Inner);
         LinkEntity request = pair.AddLink("sdkmessagerequest", "sdkmessagepairid", "sdkmessagepairid", JoinOperator.Inner);
         request.LinkCriteria.AddCondition("name", ConditionOperator.Equal, requestName);
-        return service.RetrieveMultiple(query).Entities.FirstOrDefault();
+        return service.RetrieveMultiple(query).Entities.ToList();
     }
 
     // The entities a message applies to (its step-eligible, visible sdkmessagefilter rows'

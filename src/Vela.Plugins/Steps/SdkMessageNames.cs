@@ -1,8 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
-using Microsoft.Xrm.Sdk;
-using Vela.Messages;
 
 namespace Vela.Steps
 {
@@ -10,7 +7,7 @@ namespace Vela.Steps
     /// Maps an SDK request name (<c>OrganizationRequest.RequestName</c>, e.g. <c>SendEmail</c>) to the sdkmessage a
     /// plugin step registers on and sees as <c>MessageName</c> at runtime (e.g. <c>Send</c>). The two differ for a
     /// set of business messages; registering a step under the request name fails because no such sdkmessage exists.
-    /// The builder applies it to every trigger, so <see cref="StepDefinition.Message"/> (what the CLI deploys) is
+    /// The builder applies it to every trigger, so <c>StepDefinition.Message</c> (what the CLI deploys) is
     /// already the sdkmessage; the test harness uses it to run a request's steps under the platform's name.
     /// </summary>
     /// <remarks>
@@ -23,10 +20,11 @@ namespace Vela.Steps
     /// only a type pinned with <c>[SdkMessage("SetState")]</c> still lands on it (analyzer VELA022). Several request names
     /// share one sdkmessage (<c>Close</c> serves both <c>CloseIncident</c> and <c>CloseQuote</c>); the step's
     /// entity tells them apart, so the runtime keeps the request name to build the right typed context. A request
-    /// type outside this table states its sdkmessage with <see cref="Vela.Messages.SdkMessageAttribute"/>, which
-    /// <c>vela models --messages</c> emits.
+    /// type outside this table states its sdkmessage with <c>[SdkMessage("...")]</c> (<c>Vela.Messages</c>). This file
+    /// is linked into the CLI so <c>vela models --messages</c> emits that attribute only for a request the table does
+    /// not know.
     /// </remarks>
-    internal static class SdkMessageNames
+    internal static partial class SdkMessageNames
     {
         private static readonly Dictionary<string, string> RequestToMessage = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -86,16 +84,6 @@ namespace Vela.Steps
 
             string trimmed = requestName.Trim();
             return RequestToMessage.TryGetValue(trimmed, out string? message) ? message : trimmed;
-        }
-
-        /// <summary>
-        /// The sdkmessage <paramref name="request"/> runs on: its type's <see cref="Vela.Messages.SdkMessageAttribute"/>
-        /// when present, else <see cref="ToSdkMessage(string)"/> of its <c>RequestName</c>.
-        /// </summary>
-        internal static string ToSdkMessage(OrganizationRequest request)
-        {
-            SdkMessageAttribute? declared = request.GetType().GetCustomAttribute<SdkMessageAttribute>(inherit: true);
-            return declared != null ? declared.MessageName : ToSdkMessage(request.RequestName);
         }
     }
 }

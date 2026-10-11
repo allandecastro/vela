@@ -8,7 +8,7 @@ namespace Vela.Cli.Tests;
 public class SdkMessageGeneratorTests
 {
     private static string Generate(SdkMessage message) =>
-        SdkMessageGenerator.Generate(new[] { message }, "Acme.Shared.Models.Generated").Single().Code;
+        SdkMessageGenerator.Generate(new[] { message }, "Acme.Shared.Models.Generated").Code();
 
     [Fact]
     public void Generates_TypedRequestAndResponse()
@@ -39,18 +39,58 @@ public class SdkMessageGeneratorTests
     }
 
     [Fact]
-    public void Request_OnADifferentSdkMessage_CarriesSdkMessageAttribute()
+    public void Request_TheFrameworkTableRoutes_HasNoSdkMessageAttribute()
     {
-        // CloseQuote is executed under its own name but its steps register on Close (verified live 2026-10-09).
+        // CloseQuote runs on Close (verified live 2026-10-09); the framework's request table already routes it, so the
+        // generated class mentions only its real name.
         string code = Generate(new SdkMessage("CloseQuote", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
         {
             MessageName = "Close",
             Entities = new[] { "quote" },
         });
 
-        Assert.Contains("[Vela.Messages.SdkMessage(\"Close\")]\n    public partial class CloseQuoteRequest : Vela.Messages.TypedRequest", code.Replace("\r\n", "\n"));
+        Assert.DoesNotContain("SdkMessage(", code);
         Assert.Contains("RequestName = \"CloseQuote\";", code);
         Assert.Contains("public static Vela.Steps.ITypedStages<Quote, CloseQuoteRequest> OnCloseQuote(this Vela.Steps.IStepTrigger<Quote> builder)", code);
+    }
+
+    [Fact]
+    public void Request_OnAnUnknownDifferentSdkMessage_CarriesSdkMessageAttribute()
+    {
+        string code = Generate(new SdkMessage("acme_CloseThing", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
+        {
+            MessageName = "acme_Close",
+        });
+
+        Assert.Contains("[Vela.Messages.SdkMessage(\"acme_Close\")]\n    public partial class acme_CloseThingRequest : Vela.Messages.TypedRequest", code.Replace("\r\n", "\n"));
+    }
+
+    [Fact]
+    public void StepExtension_GoesToItsOwnFile_OutOfTheSharedContract()
+    {
+        var models = SdkMessageGenerator.Generate(new[]
+        {
+            new SdkMessage("QualifyLead", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()) { Entities = new[] { "lead" } },
+        }, "Acme.Shared.Models.Generated");
+
+        Assert.Equal(new[] { "Messages/QualifyLead.cs", "Messages/QualifyLead.Steps.cs" }, models.Select(m => m.FileName).ToArray());
+        Assert.DoesNotContain("Vela.Steps", models[0].Code);
+        Assert.Contains("internal static class QualifyLeadStepExtensions", models[1].Code);
+    }
+
+    [Fact]
+    public void SdkBackedRequest_EmitsOnlyTheStepExtension_OverTheSdkType()
+    {
+        string code = Generate(new SdkMessage("CloseQuote", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>())
+        {
+            MessageName = "Close",
+            Entities = new[] { "quote" },
+            SdkRequestType = "Microsoft.Crm.Sdk.Messages.CloseQuoteRequest",
+        });
+
+        Assert.DoesNotContain("class CloseQuoteRequest", code);
+        Assert.DoesNotContain("class CloseQuoteResponse", code);
+        Assert.Contains("public static Vela.Steps.ITypedStages<Quote, Microsoft.Crm.Sdk.Messages.CloseQuoteRequest> OnCloseQuote(this Vela.Steps.IStepTrigger<Quote> builder) => builder.On<Microsoft.Crm.Sdk.Messages.CloseQuoteRequest>();", code);
     }
 
     [Fact]
@@ -102,7 +142,7 @@ public class SdkMessageGeneratorTests
     {
         GeneratedModel model = SdkMessageGenerator
             .Generate(new[] { new SdkMessage("AddToQueue", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()) }, "N")
-            .Single();
+            .First();
 
         Assert.Equal("Messages/AddToQueue.cs", model.FileName);
     }
@@ -118,7 +158,7 @@ public class SdkMessageGeneratorTests
             },
             "N");
 
-        Assert.Equal(new[] { "Messages/Alpha.cs", "Messages/Zeta.cs" }, models.Select(m => m.FileName).ToArray());
+        Assert.Equal(new[] { "Messages/Alpha.cs", "Messages/Alpha.Steps.cs", "Messages/Zeta.cs", "Messages/Zeta.Steps.cs" }, models.Select(m => m.FileName).ToArray());
     }
 
     [Fact]
@@ -132,7 +172,7 @@ public class SdkMessageGeneratorTests
             },
             "N");
 
-        Assert.Equal(new[] { "Messages/Real.cs" }, models.Select(m => m.FileName).ToArray());
+        Assert.Equal(new[] { "Messages/Real.cs", "Messages/Real.Steps.cs" }, models.Select(m => m.FileName).ToArray());
     }
 
     [Fact]
@@ -146,7 +186,7 @@ public class SdkMessageGeneratorTests
             Entities = new[] { "lead" },
         });
 
-        Assert.Contains("public static class QualifyLeadStepExtensions", code);
+        Assert.Contains("internal static class QualifyLeadStepExtensions", code);
         Assert.Contains(
             "public static Vela.Steps.ITypedStages<Lead, QualifyLeadRequest> OnQualifyLead(this Vela.Steps.IStepTrigger<Lead> builder) => builder.On<QualifyLeadRequest>();",
             code);
@@ -202,7 +242,7 @@ public class SdkMessageGeneratorTests
             },
             "N",
             entityTypeNames: null,
-            generatedEntityLogicalNames: new[] { "account" }).Single().Code;
+            generatedEntityLogicalNames: new[] { "account" }).Code();
 
         Assert.Contains("IStepTrigger<Account>", code);       // the generated entity keeps its overload
         Assert.DoesNotContain("IStepTrigger<Contact>", code); // the absent one is dropped (no dangling reference)
@@ -221,7 +261,7 @@ public class SdkMessageGeneratorTests
             },
             "N",
             entityTypeNames: null,
-            generatedEntityLogicalNames: Array.Empty<string>()).Single().Code;
+            generatedEntityLogicalNames: Array.Empty<string>()).Code();
 
         Assert.Contains("OnMerge<TEntity>(this Vela.Steps.IStepTrigger<TEntity> builder) where TEntity : Microsoft.Xrm.Sdk.Entity", code);
         Assert.DoesNotContain("IStepTrigger<Account>", code);
@@ -288,4 +328,10 @@ public class SdkMessageGeneratorTests
         Assert.Throws<ArgumentException>(() =>
             SdkMessageGenerator.Generate(new[] { new SdkMessage("X", Array.Empty<SdkMessageField>(), Array.Empty<SdkMessageField>()) }, "  "));
     }
+}
+
+internal static class GeneratedCode
+{
+    // A message's contract and its .Steps.cs extension file, read together.
+    public static string Code(this System.Collections.Generic.IEnumerable<GeneratedModel> models) => string.Join("\n", models.Select(m => m.Code));
 }

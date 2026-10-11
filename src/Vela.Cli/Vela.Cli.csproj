@@ -36,6 +36,9 @@
     <!-- Step image capabilities (allowed images per message/stage, messagepropertyname): shared with the runtime
          builder, the harness and the analyzer so none of them accepts what another rejects. -->
     <Compile Include="..\Vela.Plugins\Steps\StepImageRules.cs" Link="Shared\StepImageRules.cs" />
+    <!-- Request name to sdkmessage table: `vela models` (messages) marks a generated request [SdkMessage] only when
+         the framework's table does not already route it. -->
+    <Compile Include="..\Vela.Plugins\Steps\SdkMessageNames.cs" Link="Shared\SdkMessageNames.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -411,7 +411,7 @@ two differ, and Dataverse only knows the sdkmessage: `OnSendEmail()` registers o
 differs (read from Dataverse metadata, for example `CloseQuote` → `Close`, `CancelSalesOrder` → `Cancel`,
 `SendFax` → `Send`, `PublishXml` → `Publish`), so `On<CloseQuoteRequest>()` registers on `Close`. A request type
 outside the table states its sdkmessage with `[SdkMessage("...")]` (from `Vela.Messages`), which
-`vela models --messages` emits on a generated request whose name differs from its sdkmessage.
+`vela models --messages` emits on a generated request the table does not know.
 
 Some request messages accept no custom step at all, so they have no trigger: `ReviseQuote`, `FulfillSalesOrder`,
 `ConvertQuoteToSalesOrder`, `GenerateSalesOrderFromOpportunity`, `GenerateInvoiceFromOpportunity` and the three

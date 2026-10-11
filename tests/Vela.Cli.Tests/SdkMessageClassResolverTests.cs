@@ -16,15 +16,26 @@ public class SdkMessageClassResolverTests
     }
 
     [Theory]
-    [InlineData("QualifyLead")]        // Microsoft.Crm.Sdk.Messages.QualifyLeadRequest (curated supplement)
-    [InlineData("WinOpportunity")]     // Microsoft.Crm.Sdk.Messages.WinOpportunityRequest (curated supplement)
-    [InlineData("RenewContract")]      // backlog candidate, Crm.Sdk-backed (supplement)
-    [InlineData("qualifylead")]        // supplement lookup is case-insensitive
-    public void HasSdkRequestClass_True_ForCuratedCrmSdkMessages(string messageName)
+    [InlineData("QualifyLead")]        // Microsoft.Crm.Sdk.Messages.QualifyLeadRequest
+    [InlineData("WinOpportunity")]
+    [InlineData("RenewContract")]
+    [InlineData("CloseQuote")]         // was missing from the old hand-kept list
+    [InlineData("CancelSalesOrder")]
+    [InlineData("qualifylead")]        // case-insensitive
+    public void HasSdkRequestClass_True_ForCrmSdkMessages(string messageName)
     {
-        // Not found by reflection (Microsoft.CrmSdk.CoreAssemblies is deliberately not referenced), but skipped
-        // via the curated Crm.Sdk supplement so ALL mode doesn't emit a duplicate wrapper.
+        // Reflected over Microsoft.Crm.Sdk.Proxy, which the CLI loads through the Dataverse client.
         Assert.True(SdkMessageClassResolver.HasSdkRequestClass(messageName));
+    }
+
+    [Theory]
+    [InlineData("create", "Microsoft.Xrm.Sdk.Messages.CreateRequest")]
+    [InlineData("closequote", "Microsoft.Crm.Sdk.Messages.CloseQuoteRequest")]
+    [InlineData("SetState", "Microsoft.Crm.Sdk.Messages.SetStateRequest")]
+    public void TryGetSdkRequestTypeName_ReturnsTheSdkCasing(string messageName, string expected)
+    {
+        Assert.True(SdkMessageClassResolver.TryGetSdkRequestTypeName(messageName, out string typeName));
+        Assert.Equal(expected, typeName);
     }
 
     [Theory]
@@ -42,5 +53,31 @@ public class SdkMessageClassResolverTests
     public void HasSdkRequestClass_False_ForBlank(string? messageName)
     {
         Assert.False(SdkMessageClassResolver.HasSdkRequestClass(messageName!));
+    }
+
+    private static SdkMessage Contract(string name) => new SdkMessage(name, System.Array.Empty<SdkMessageField>(), System.Array.Empty<SdkMessageField>());
+
+    [Fact]
+    public void PreferSdkType_SdkBackedRequest_PointsAtTheSdkType()
+    {
+        SdkMessage? contract = ModelsCommand.PreferSdkType(Contract("CloseQuote"));
+
+        Assert.Equal("Microsoft.Crm.Sdk.Messages.CloseQuoteRequest", contract!.SdkRequestType);
+    }
+
+    [Theory]
+    [InlineData("Create")]
+    [InlineData("WinOpportunity")]
+    public void PreferSdkType_CuratedTrigger_GeneratesNothing(string name)
+    {
+        Assert.Null(ModelsCommand.PreferSdkType(Contract(name)));
+    }
+
+    [Fact]
+    public void PreferSdkType_NonSdkRequest_IsKept()
+    {
+        SdkMessage? contract = ModelsCommand.PreferSdkType(Contract("msdyn_DoThing"));
+
+        Assert.Null(contract!.SdkRequestType);
     }
 }

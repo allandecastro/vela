@@ -491,15 +491,26 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (CLI, breaking)
 
+- **The generated `On<Message>()` step extensions move to `Messages/<Name>.Steps.cs`, compiled by the plugin
+  projects.** They extend the `Vela.Plugins` step builder, but they were written into the contract file in the Shared
+  project, which references only `Vela.Messages`, so any `vela models --messages` / `--custom-apis` output with an
+  extension failed to build in a scaffolded solution (`CS0234: 'Steps' does not exist in the namespace 'Vela'`, found
+  on a live run). `vela init` now excludes `*.Steps.cs` from Shared and links it into the plugin projects, and the
+  extension classes are `internal`. An existing solution needs the two `.csproj` lines shown in the models guide.
+
 
 - **`vela models --messages` generates one class per request, not per sdkmessage (#403).** A shared sdkmessage has one
   request per entity, each with its own fields (verified live: `Close` serves `CloseIncident` and `CloseQuote`,
   `Cancel` serves `CancelContract` and `CancelSalesOrder`, `Send` serves `SendEmail`, `SendFax` and `SendTemplate`).
   The generator read only the first request, so `--messages Close` produced one `CloseRequest` typed with whichever
-  entity's fields came first. It now generates `CloseIncidentRequest` and `CloseQuoteRequest`, each with its own
-  fields and its own entity's `On<Message>()`, named after the request and marked `[SdkMessage("Close")]` so the step
-  registers on `Close`. A request name is accepted too (`--messages CloseQuote`). The "already has an SDK request
-  class" check now uses the request name, so the bare `--messages` no longer generates duplicates such as
+  entity's fields came first. `--messages` now takes the real request name and generates exactly it
+  (`--messages CloseQuote` gives `CloseQuoteRequest` with `QuoteClose` and an `OnCloseQuote()` on `Quote`); an
+  sdkmessage name that is not a request (`Close`, `Send`) is rejected with the request names it serves. The bare
+  `--messages` generates every request of every registerable message. A request the framework's table does not route
+  is marked `[SdkMessage("...")]`. A request the SDK already ships (found by reflection over `Microsoft.Xrm.Sdk` and
+  `Microsoft.Crm.Sdk.Proxy`, replacing the hand-kept list) gets no duplicate class, only its entity-constrained
+  `On<Message>()` over the SDK type (`OnCloseQuote()` → `On<Microsoft.Crm.Sdk.Messages.CloseQuoteRequest>()`); a
+  curated trigger gets nothing. The "already has an SDK request class" check now uses the request name, so the bare `--messages` no longer generates duplicates such as
   `WinRequest` or `SendRequest` next to the SDK's `WinOpportunityRequest` and `SendEmailRequest`.
 - **`vela add` registers an unmodelled message through its request type.** `--message <Name>` outside the curated set
   renders `On<NameRequest>()` with an `IMessagePost/PreContext<NameRequest>` handler instead of `OnMessage("Name")`:

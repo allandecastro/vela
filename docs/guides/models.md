@@ -190,6 +190,27 @@ rather than fail:
 Offline output is C# only (`--forms` / `--tables` and `--verify` need live metadata). When the org is reachable,
 prefer the connected path - it carries the full metadata (typed lookup targets, relationships).
 
+## Where the message files go
+
+`--custom-apis` and `--messages` write two files per message into `Messages/`: the request/response contract
+(`Messages/<Name>.cs`), compiled by the Shared project, and its `On<Message>()` step extension
+(`Messages/<Name>.Steps.cs`, an `internal` class), compiled by each plugin project. The extension extends the
+`Vela.Plugins` step builder, which the Shared project does not reference, so a scaffold made by `vela init` excludes
+`*.Steps.cs` from Shared and links it into the plugin projects. A project scaffolded before this change needs the
+two lines by hand:
+
+```xml
+<!-- Shared .csproj -->
+<ItemGroup>
+  <Compile Remove="Models\Generated\Messages\*.Steps.cs" />
+</ItemGroup>
+
+<!-- each plugin .csproj -->
+<ItemGroup>
+  <Compile Include="..\Acme.Shared\Models\Generated\Messages\*.Steps.cs" Link="Models\Generated\Messages\%(Filename)%(Extension)" />
+</ItemGroup>
+```
+
 ## Custom API message classes (`--custom-apis`)
 
 `--custom-apis` generates typed `OrganizationRequest`/`OrganizationResponse` classes into a `Messages/` subfolder:
@@ -218,17 +239,25 @@ excluded.
 `--messages a,b,c` generates typed `Request`/`Response` classes for any SDK message (`sdkmessage`), into
 `Messages/`. With **no value** it generates every *registerable* message (Microsoft's "available events":
 non-private messages with a visible, custom-step-allowed `sdkmessagefilter`), skipping messages backed by a
-Custom API and requests that already ship an SDK request class - the core `Microsoft.Xrm.Sdk.Messages.*` types
-and the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (matched against a curated, non-exhaustive supplement;
-an unlisted one just makes a harmless duplicate).
+Custom API (owned by `--custom-apis`).
+
+**A request the SDK already ships keeps its SDK class.** For a request with a class in `Microsoft.Xrm.Sdk.Messages`
+or `Microsoft.Crm.Sdk.Messages` (found by reflection, so `CloseQuote`, `SetState`, `Recalculate`, ... are all
+recognised), `--messages` generates no duplicate request/response, only its entity-constrained `On<Message>()`
+extension over the SDK type (`OnCloseQuote()` → `On<Microsoft.Crm.Sdk.Messages.CloseQuoteRequest>()`, compiling on
+`Quote` only). A request with a curated trigger (`Create`, `QualifyLead`, `WinOpportunity`, ...) generates nothing:
+the builder already has it. The Shared project needs no new reference: it compiles the SDK message types from
+`Microsoft.CrmSdk.CoreAssemblies` (net462) and the Dataverse client (net10.0) it already uses.
 
 **One class per request, not per sdkmessage.** Several requests can share one sdkmessage, each for its own entity
 and with its own fields: `Close` serves `CloseIncident` (incident, `IncidentResolution`) and `CloseQuote` (quote,
 `QuoteClose`); `Cancel` serves `CancelContract` and `CancelSalesOrder`; `Send` serves `SendEmail`, `SendFax` and
-`SendTemplate`. `--messages Close` therefore generates `CloseIncidentRequest` and `CloseQuoteRequest`, and you can
-also name one request (`--messages CloseQuote`). A class is named after its request (that is what `Execute`
-takes), and when its sdkmessage differs it carries `[SdkMessage("Close")]` (from `Vela.Messages`), so
-`On<CloseQuoteRequest>()` registers the step on `Close` and the test harness runs it there.
+`SendTemplate`. `--messages` takes the **request name** you execute (`--messages CloseQuote`) and generates exactly
+that class, typed with that request's own fields and entity. An sdkmessage name that is not itself a request
+(`--messages Close`) is rejected with the request names it serves; the bare `--messages` generates them all. The
+framework already knows on which sdkmessage each platform request registers (`On<CloseQuoteRequest>()` lands on
+`Close`); a request it does not know is marked `[SdkMessage("...")]` (from `Vela.Messages`) so the step and the
+test harness still use the right sdkmessage.
 
 Alongside each `XxxRequest`/`XxxResponse`, `--messages` emits an **entity-constrained `On<Message>()` step
 extension** per applicable entity (from the message's `sdkmessagefilter` `primaryobjecttypecode`), giving

@@ -31,8 +31,8 @@ public class SdkMessageReaderTests
         return e;
     }
 
-    // The single contract behind a message that serves one request.
-    private static SdkMessage ReadSingle(FakeOrgService svc, string name) => Assert.Single(SdkMessageReader.ReadSdkMessages(svc, name));
+    // The contract of one request, read by its real name.
+    private static SdkMessage ReadSingle(FakeOrgService svc, string name) => SdkMessageReader.ReadRequest(svc, name);
 
     // A request row per pair whose id IS the pair id, so a field query on the request tells which pair won.
     private static Entity RequestOfPair(QueryExpression q) =>
@@ -300,7 +300,7 @@ public class SdkMessageReaderTests
         var svc = new FakeOrgService { OnRetrieveMultiple = _ => new EntityCollection() };
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
-            () => SdkMessageReader.ReadSdkMessages(svc, "Nope"));
+            () => SdkMessageReader.ReadRequest(svc, "Nope"));
         Assert.Contains("Nope", ex.Message);
     }
 
@@ -336,9 +336,10 @@ public class SdkMessageReaderTests
                 switch (q.EntityName)
                 {
                     case "sdkmessage":
-                        // A request-name lookup joins through the pair to the request; both resolve to Close.
+                        // By name (the sdkmessage itself), or through pair -> request for one of its two request names.
                         bool byName = q.Criteria.Conditions.Any(c => c.AttributeName == "name" && (string)c.Values[0] == "Close");
-                        bool byRequest = q.LinkEntities.Any();
+                        bool byRequest = q.LinkEntities.SelectMany(p => p.LinkEntities).SelectMany(r => r.LinkCriteria.Conditions)
+                            .Any(c => c.AttributeName == "name" && (string)c.Values[0] is "CloseIncident" or "CloseQuote");
                         return byName || byRequest ? FakeOrgService.Collection(Row("sdkmessage", ("name", "Close"))) : new EntityCollection();
                     case "sdkmessagepair":
                         return FakeOrgService.Collection(
@@ -370,9 +371,10 @@ public class SdkMessageReaderTests
     }
 
     [Fact]
-    public void ReadSdkMessages_SharedMessage_YieldsOneContractPerRequest_WithItsOwnFieldsAndEntity()
+    public void ReadMessageRequests_SharedMessage_YieldsOneContractPerRequest_WithItsOwnFieldsAndEntity()
     {
-        IReadOnlyList<SdkMessage> contracts = SdkMessageReader.ReadSdkMessages(SharedCloseMessage(), "Close");
+        // The bare --messages reads every request an sdkmessage serves.
+        IReadOnlyList<SdkMessage> contracts = SdkMessageReader.ReadMessageRequests(SharedCloseMessage(), "Close");
 
         Assert.Equal(new[] { "CloseIncident", "CloseQuote" }, contracts.Select(c => c.Name).ToArray());
         Assert.All(contracts, c => Assert.Equal("Close", c.MessageName));
@@ -387,13 +389,25 @@ public class SdkMessageReaderTests
     }
 
     [Fact]
-    public void ReadSdkMessages_RequestName_YieldsJustThatRequest_OnItsSdkMessage()
+    public void ReadRequest_YieldsJustThatRequest_OnItsSdkMessage()
     {
-        SdkMessage quote = Assert.Single(SdkMessageReader.ReadSdkMessages(SharedCloseMessage(), "CloseQuote"));
+        SdkMessage quote = SdkMessageReader.ReadRequest(SharedCloseMessage(), "CloseQuote");
 
         Assert.Equal("CloseQuote", quote.Name);
         Assert.Equal("Close", quote.MessageName);
         Assert.Equal("QuoteClose", Assert.Single(quote.RequestFields).Name);
+    }
+
+    // A targeted name must be the request the user executes: an sdkmessage alias is rejected with the real names,
+    // never expanded into several classes.
+    [Fact]
+    public void ReadRequest_SdkMessageAlias_IsRejectedWithTheRequestNames()
+    {
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            () => SdkMessageReader.ReadRequest(SharedCloseMessage(), "Close"));
+
+        Assert.Contains("'Close' is an sdkmessage, not a request", ex.Message);
+        Assert.Contains("CloseIncident, CloseQuote", ex.Message);
     }
 
     [Fact]

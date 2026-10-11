@@ -341,6 +341,11 @@ public class ProjectScaffolderTests
             Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "GetScore", "--entity", "Account", "--function", "--prefix", "zava", "--project", pluginsProject]));
             Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Lookup", "--global", "--function", "--prefix", "zava", "--project", pluginsProject]));
 
+            // And their `vela add test` forms: the bound one builds its context from the typed request (ForRequest).
+            string pluginTestsProject = Path.Combine(root, "tests", "Zava.Plugins.Tests", "Zava.Plugins.Tests.csproj");
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "GetScore", "--kind", "customapi", "--entity", "Account", "--project", pluginTestsProject]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "Lookup", "--kind", "customapi", "--project", pluginTestsProject]));
+
             // The scaffold resolves Vela from nuget.org and emits no nuget.config; here we build against the
             // repo's *current* Vela.Plugins / Vela.Testing (1.0.0) instead, so the test writes its own
             // local-packages nuget.config (additive; nuget.org still resolves the Microsoft SDK / test packages)

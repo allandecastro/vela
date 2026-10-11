@@ -24,7 +24,7 @@ internal static class AddCommand
 
     // SDK messages that have a dedicated On...() builder method, matched case-insensitively so the
     // scaffold emits the strongly-typed call. Any other name is registered via its request type, On<XxxRequest>().
-    private static readonly string[] KnownMessages =
+    internal static readonly string[] KnownMessages =
     [
         "Create", "Update", "CreateMultiple", "UpdateMultiple", "Delete", "Retrieve", "RetrieveMultiple",
         "Associate", "Disassociate", "Assign", "Merge", "GrantAccess", "ModifyAccess", "RevokeAccess",
@@ -526,7 +526,7 @@ internal static class AddCommand
             string ns = $"{rootNamespace}.{entity}.CustomApis";
             string apiNamespace = $"{pluginsRoot}.{entity}.CustomApis";
             string relativePath = Path.Combine(entity!, "CustomApis", $"{testClass}.cs");
-            string content = AddCustomApiTestFile(ns, apiNamespace, testClass, name, uniqueName);
+            string content = AddCustomApiTestFile(ns, apiNamespace, testClass, name, uniqueName, requestType: $"{name}Request");
             return WriteFile(projectDir, relativePath, content, force, $"Custom API test {testClass} (for {name})", HasFlag(args, "--json"));
         }
     }

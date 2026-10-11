@@ -535,7 +535,11 @@ public class AddCommandTests
             string content = File.ReadAllText(Path.Combine(dir, "Contact", "CustomApis", "ExportContactTests.cs"));
             Assert.Contains("namespace Acme.Plugins.Tests.Contact.CustomApis", content);
             Assert.Contains("using Acme.Plugins.Contact.CustomApis;", content);
-            Assert.Contains("PluginContext.ForMessage(\"acme_ExportContact\")", content);
+
+            // A bound Custom API is typed (vela add customapi generates ExportContactRequest): the test states no
+            // message name or parameter key.
+            Assert.Contains("PluginContext.ForRequest(new ExportContactRequest", content);
+            Assert.DoesNotContain("ForMessage(", content);
         });
     }
 

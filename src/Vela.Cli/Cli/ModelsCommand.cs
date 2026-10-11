@@ -320,9 +320,9 @@ internal static class ModelsCommand
             if (scope.AllMessages)
             {
                 // ALL mode: every non-private, non-Custom-API-backed message (filtered by the reader), one contract per
-                // request it serves, minus any request that already has an SDK request class (skipped here to avoid a
-                // duplicate/collision with the SDK type; matched by request name, so the Win message's WinOpportunity
-                // and WinQuote are skipped). Because the reader already drops Custom-API-backed messages, the
+                // request it serves. A request that already has an SDK request class gets no duplicate class, only its
+                // entity-constrained On<Message>() over the SDK type (none for a curated trigger, which already
+                // exists on the builder). Because the reader already drops Custom-API-backed messages, the
                 // developer's own authored Custom APIs never reach --messages (they surface only under --custom-apis,
                 // filtered above); no package-based exclusion is needed here. A single unreadable message is skipped
                 // with a warning rather than aborting the batch.
@@ -332,8 +332,10 @@ internal static class ModelsCommand
                     string name = candidate.Name;
                     try
                     {
-                        sdkMessages.AddRange(SdkMessageReader.ReadSdkMessages(service, name)
-                            .Where(contract => !SdkMessageClassResolver.HasSdkRequestClass(contract.Name)));
+                        sdkMessages.AddRange(SdkMessageReader.ReadMessageRequests(service, name)
+                            .Select(PreferSdkType)
+                            .Where(contract => contract is not null)
+                            .Select(contract => contract!));
                     }
                     catch (Exception ex)
                     {
@@ -345,24 +347,26 @@ internal static class ModelsCommand
             }
             else if (scope.Messages.Length > 0)
             {
-                // Targeted: the user asked for these by name (an sdkmessage, or one of its requests), so generate
-                // exactly them — never silently skipped. If one already has an SDK request class, warn (suggest the
-                // SDK type) but still generate the wrapper.
-                // A message name and one of its requests can both be listed (Close,CloseQuote): each request is
-                // generated once.
+                // Targeted: the user asked for these requests by their real name (what Execute takes), so generate
+                // exactly them — never silently skipped, never expanded. An sdkmessage alias (Send, Close) is
+                // rejected by the reader with the request names it serves. If one already has an SDK request class,
+                // warn (suggest the SDK type) but still generate the wrapper.
                 List<SdkMessage> sdkMessages = new List<SdkMessage>();
-                HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (string name in scope.Messages)
+                foreach (string name in scope.Messages.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
-                    foreach (SdkMessage contract in SdkMessageReader.ReadSdkMessages(service, name).Where(c => seen.Add(c.Name)))
+                    SdkMessage? contract = PreferSdkType(SdkMessageReader.ReadRequest(service, name));
+                    if (contract is null)
                     {
-                        if (SdkMessageClassResolver.HasSdkRequestClass(contract.Name))
-                        {
-                            Console.Error.WriteLine($"Warning: '{contract.Name}' already has an SDK request class ({contract.Name}Request); generating a duplicate. Prefer the SDK type via On<{contract.Name}Request>().");
-                        }
-
-                        sdkMessages.Add(contract);
+                        Console.Error.WriteLine($"Note: '{name}' has a curated trigger (On{name}()) and an SDK request class; nothing to generate.");
+                        continue;
                     }
+
+                    if (contract.SdkRequestType is not null)
+                    {
+                        Console.Error.WriteLine($"Note: '{contract.Name}' ships in the SDK ({contract.SdkRequestType}); generating only its On{contract.Name}() step extension over that type.");
+                    }
+
+                    sdkMessages.Add(contract);
                 }
 
                 models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames(), logicalNames));
@@ -402,6 +406,20 @@ internal static class ModelsCommand
     // column by column, against the files already on disk. Reports drift (a column the live schema no longer has,
     // a retyped column, or a column added live) and returns ExitDriftDetected when anything is out of sync, so CI
     // can fail a stale model. Never writes. Verifies the C# early-bound entity model only.
+    // A request the SDK already ships keeps its SDK class: the generator emits only the step extension over it, and
+    // nothing at all for a curated trigger (OnCreate(), OnWinOpportunity(), ...), which the builder already has.
+    internal static SdkMessage? PreferSdkType(SdkMessage contract)
+    {
+        if (!SdkMessageClassResolver.TryGetSdkRequestTypeName(contract.Name, out string sdkType))
+        {
+            return contract;
+        }
+
+        return AddCommand.KnownMessages.Contains(contract.Name, StringComparer.OrdinalIgnoreCase)
+            ? null
+            : contract with { SdkRequestType = sdkType };
+    }
+
     private static int RunModelVerify(string[] args, bool interactive, string? solution, string[] entities, string ns, string outDir, bool dataAnnotations, bool json, bool ignoredScopes)
     {
         if (ignoredScopes)
