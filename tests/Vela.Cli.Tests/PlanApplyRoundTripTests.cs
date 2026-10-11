@@ -21,7 +21,7 @@ public sealed class PlanApplyRoundTripTests : IDisposable
 
     private const string AccountPlugin = "ContractPluginFixture.AccountContractPlugin";
 
-    private readonly string _nupkg = ContractFixturePackage.Build();
+    private string _nupkg = ContractFixturePackage.Build();
     private readonly string _out = Path.Combine(Path.GetTempPath(), $"vela-roundtrip-{Guid.NewGuid():N}.json");
     private readonly StatefulOrgService _org = NewEnvironment();
 
@@ -117,6 +117,25 @@ public sealed class PlanApplyRoundTripTests : IDisposable
 
         Assert.Equal(ExitSuccess, Run("plan", detailedExitCode: true));
         AssertSummary(Output(), added: 0, changed: 0, removed: 0);
+    }
+
+    [Fact]
+    public void A_version_bump_is_published_once_then_the_plan_is_empty()
+    {
+        Assert.Equal(ExitSuccess, Run("apply"));
+
+        // A content update leaves the stored version at 1.0.0 (verified live, #492): plan must not compare it.
+        File.Delete(_nupkg);
+        _nupkg = ContractFixturePackage.Build(version: "1.0.1");
+        Assert.Equal(ExitChangesPending, Run("plan", detailedExitCode: true));
+        Assert.Equal("update", Assert.Single(Output().GetProperty("operations").EnumerateArray()).GetProperty("action").GetString());
+
+        Assert.Equal(ExitSuccess, Run("apply"));
+        Assert.True(Output().GetProperty("executed").GetProperty("packageRepublished").GetBoolean());
+        Assert.Equal("1.0.0", Assert.Single(_org.Rows("pluginpackage")).GetAttributeValue<string>("version"));
+
+        Assert.Equal(ExitSuccess, Run("plan", detailedExitCode: true));
+        Assert.Empty(Output().GetProperty("operations").EnumerateArray());
     }
 
     private static StatefulOrgService NewEnvironment()

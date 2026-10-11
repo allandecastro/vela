@@ -361,7 +361,7 @@ internal static partial class DataverseRegistration
 
     // Skip a no-op Update: if the stored package is already this one, updating would only bump modifiedon (Last
     // Modified) and re-import the package on every apply, making it look churned when nothing changed.
-    if (PluginPackageMatches(service, existing, package.Version, packageBytes))
+    if (PluginPackageMatches(service, existing, packageBytes))
     {
         LogOperation("package", "unchanged", desiredPackageName, $"v{package.Version}", verbose);
         return existing.Id;
@@ -372,9 +372,9 @@ internal static partial class DataverseRegistration
     {
         Id = existing.Id
     };
-    // Only write content: Dataverse derives the pluginpackage version from the uploaded .nupkg and rejects an
-    // explicit write of the version field on an existing package ("PluginPackage version cannot be updated"),
-    // which used to fail apply mid-run whenever the package version was bumped.
+    // Only write content: an Update that sets content and a version other than the stored one fails with
+    // "PluginPackage version cannot be updated" (verified live), which used to fail apply mid-run whenever the
+    // package version was bumped. The stored version therefore keeps its first value (see PluginPackageMatches).
     update["content"] = packageContent;
     service.Update(update);
     return existing.Id;
@@ -384,13 +384,13 @@ internal static partial class DataverseRegistration
     // The registration diff only covers steps/custom APIs, so a code-only change (same step and custom-API
     // definitions, but a rebuilt assembly) is otherwise invisible and apply would report "no changes" and deploy
     // nothing. Mirrors UpsertPluginPackage's create/skip decision exactly (same prefix, same import bytes, same
-    // version+content compare) without writing.
+    // stored-file compare) without writing.
     internal static bool PluginPackagesNeedPublish(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories)
         => ComputePackagePublishActions(service, packagePayloads, solutionUniqueName, tempDirectories).Count > 0;
 
     // Per-package detail behind PluginPackagesNeedPublish: one action for every package that would be created
-    // (absent from Dataverse) or republished (stored version or content differs); packages whose deployed version
-    // AND content already match are omitted. Lets plan list the package operation and flag HasChanges for a
+    // (absent from Dataverse) or republished (stored file differs); packages whose stored file already matches are
+    // omitted. Lets plan list the package operation and flag HasChanges for a
     // code-only rebuild. Mirrors UpsertPluginPackage exactly so plan and apply never disagree: same create/skip
     // decision, same missing-file FileNotFoundException. The importable-prefix guard (EnsurePluginPackagesImportable)
     // runs separately in both paths, so an unprefixed package without --solution never reaches here as a "create".
@@ -427,7 +427,7 @@ internal static partial class DataverseRegistration
         }
 
         // Same decision as UpsertPluginPackage: update unless the stored package is already this one.
-        if (!PluginPackageMatches(service, existing, package.Version, packageBytes))
+        if (!PluginPackageMatches(service, existing, packageBytes))
         {
             actions.Add(new PackagePublishAction(desiredPackageName, IsCreate: false));
         }
@@ -583,17 +583,15 @@ internal static partial class DataverseRegistration
     return archive.GetEntry(".signature.p7s") != null;
 }
 
-    // Whether the stored package is already this version with these bytes. Dataverse keeps the uploaded .nupkg in the
-    // `package` file column and empties `content` once it has processed it (verified live: content reads back empty
-    // right after the create, and the package file is byte-identical to the upload), so the file is what is compared.
-    // Its size is checked first, so a changed package is usually told apart without a download.
-    internal static bool PluginPackageMatches(IOrganizationService service, Entity existing, string version, byte[] packageBytes)
+    // Whether the stored package is already these bytes. Dataverse keeps the uploaded .nupkg in the `package` file
+    // column and empties `content` once it has processed it (verified live: content reads back empty right after the
+    // create, and the package file is byte-identical to the upload), so the file is what is compared. Its size is
+    // checked first, so a changed package is usually told apart without a download. The stored `version` is not
+    // compared: a content update leaves it at its first value (verified live: 1.0.0 after 1.0.1 was uploaded), so
+    // every plan after a version bump would propose the update again. The bytes include the .nuspec, so a version
+    // bump still shows as a change.
+    internal static bool PluginPackageMatches(IOrganizationService service, Entity existing, byte[] packageBytes)
 {
-    if (!string.Equals(existing.GetAttributeValue<string>("version") ?? string.Empty, version, StringComparison.Ordinal))
-    {
-        return false;
-    }
-
     InitializeFileBlocksDownloadResponse download;
     try
     {
@@ -642,9 +640,9 @@ internal static partial class DataverseRegistration
 {
     QueryExpression query = new QueryExpression("pluginpackage")
     {
-        // The version is read so a no-op Update can be skipped (PluginPackageMatches); content is not, it reads back
-        // empty.
-        ColumnSet = new ColumnSet("pluginpackageid", "name", "version"),
+        // Neither content nor version is read: content reads back empty and version keeps its first value
+        // (PluginPackageMatches compares the stored file instead).
+        ColumnSet = new ColumnSet("pluginpackageid", "name"),
         TopCount = 1
     };
     query.Criteria.AddCondition("name", ConditionOperator.Equal, packageName);

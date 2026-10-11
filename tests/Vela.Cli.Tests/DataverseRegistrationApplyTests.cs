@@ -390,6 +390,22 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
+    public void UpsertPluginPackage_skips_update_when_only_the_stored_version_is_stale()
+    {
+        // The stored version stays at 1.0.0 after 1.0.1 was uploaded (verified live, #492); the file is 1.0.1.
+        byte[] bytes = Encoding.UTF8.GetBytes("pkg-1.0.1");
+        string path = NewTempFile(bytes);
+        var existing = new Entity("pluginpackage", Guid.NewGuid()) { ["version"] = "1.0.0" };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        svc.PackageFiles.Store(existing.Id, bytes);
+
+        DataverseRegistration.UpsertPluginPackage(svc, new PluginPackagePayload("acme_Pkg", "1.0.1", path), solutionPrefix: null, new List<string>(), verbose: false);
+
+        Assert.Empty(svc.Updated);
+        Assert.Empty(svc.Created);
+    }
+
+    [Fact]
     public void UpsertPluginPackage_updates_when_content_changed_even_if_version_matches()
     {
         byte[] oldBytes = Encoding.UTF8.GetBytes("pkg-old");
@@ -448,11 +464,11 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
-    public void PluginPackagesNeedPublish_true_when_only_the_version_differs()
+    public void PluginPackagesNeedPublish_false_when_only_the_stored_version_is_stale()
     {
-        // Mirrors UpsertPluginPackage: it republishes when the stored version differs even if the content is byte
-        // identical, so the plan/gate must not treat a version-only bump as "no change".
-        byte[] bytes = Encoding.UTF8.GetBytes("pkg-same");
+        // A content update leaves the stored version at its first value (verified live, #492): after 1.0.0 -> 1.0.1
+        // the record still says 1.0.0 while its file is the 1.0.1 package. Identical bytes are no change.
+        byte[] bytes = Encoding.UTF8.GetBytes("pkg-1.0.1");
         string path = NewTempFile(bytes);
         var existing = new Entity("pluginpackage", Guid.NewGuid());
         existing["version"] = "1.0.0";
@@ -460,7 +476,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.1", path);
 
-        Assert.True(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+        Assert.False(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
     }
 
     [Fact]
@@ -525,17 +541,16 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
-    public void ComputePackagePublishActions_update_when_only_the_version_differs()
+    public void ComputePackagePublishActions_empty_when_only_the_stored_version_is_stale()
     {
-        // Same bytes, new version: UpsertPluginPackage updates, so plan must report it too.
-        byte[] bytes = Encoding.UTF8.GetBytes("pkg-same");
+        // Same bytes, stale stored version (a content update never moves it): nothing to publish.
+        byte[] bytes = Encoding.UTF8.GetBytes("pkg-1.0.1");
         string path = NewTempFile(bytes);
         var existing = new Entity("pluginpackage", Guid.NewGuid()) { ["version"] = "1.0.0" };
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
         svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
 
-        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.1", path) }, solutionUniqueName: null, new List<string>()));
-        Assert.False(action.IsCreate);
+        Assert.Empty(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.1", path) }, solutionUniqueName: null, new List<string>()));
     }
 
     [Fact]
