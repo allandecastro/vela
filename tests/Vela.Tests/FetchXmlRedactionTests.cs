@@ -30,4 +30,18 @@ public sealed class FetchXmlRedactionTests
         Assert.DoesNotContain("Fabrikam", redacted);
         Assert.Contains("<value>***</value>", redacted);
     }
+
+    [Fact]
+    public void Redacts_a_cdata_value_even_when_it_contains_markup()
+    {
+        string fetch = "<fetch><entity name='contact'><filter><condition attribute='lastname' operator='in'><value><![CDATA[O'Brien <ada@contoso.com>]]></value><value>Plain</value></condition></filter></entity></fetch>";
+
+        string redacted = TracingOrganizationService.RedactFetchXmlValues(fetch);
+
+        Assert.DoesNotContain("O'Brien", redacted);
+        Assert.DoesNotContain("ada@contoso.com", redacted);
+        Assert.DoesNotContain("Plain", redacted);
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(redacted, "<value>\\*\\*\\*</value>").Count);
+        Assert.Contains("attribute='lastname'", redacted);
+    }
 }

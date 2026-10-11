@@ -53,11 +53,11 @@ namespace Vela.Context
         /// <param name="context">Plugin context.</param>
         /// <param name="phase">Logical phase name.</param>
         /// <param name="detail">
-        /// <see cref="TraceSnapshotDetail.Full"/> (the default for an explicit call) includes attribute and parameter
-        /// values; <see cref="TraceSnapshotDetail.Metadata"/> lists only names, ids and counts, so no record data
-        /// (personal data, secrets) is written.
+        /// <see cref="TraceSnapshotDetail.Metadata"/> (the default, like the automatic snapshot) lists only names, ids
+        /// and counts, so no record data (personal data, secrets) is written; pass <see cref="TraceSnapshotDetail.Full"/>
+        /// to include attribute and parameter values.
         /// </param>
-        public static void TraceExecutionSnapshot(this ILocalPluginContext context, string phase, TraceSnapshotDetail detail = TraceSnapshotDetail.Full)
+        public static void TraceExecutionSnapshot(this ILocalPluginContext context, string phase, TraceSnapshotDetail detail = TraceSnapshotDetail.Metadata)
         {
             if (context == null)
             {

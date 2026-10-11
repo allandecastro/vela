@@ -26,6 +26,27 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **Runtime edge cases that were silent now fail or behave as documented (#447).**
+  - The typed requests' `Target` (`CreateRequest<T>`, `UpdateRequest<T>`, `UpsertRequest<T>`,
+    `SendEmailFromTemplateRequest<T>`) throws the same `InvalidPluginExecutionException` as `ctx.GetTarget<T>()`
+    when `Target` is absent or not an entity, instead of returning null.
+  - `AssociateRelated` throws, naming each offending entry, when a related record has no id, and associates nothing.
+    It used to skip those records.
+  - `RetrieveWithRelated`: including the same relationship twice throws. The second `Include` used to replace the first.
+  - `UpsertByKey` upserts a copy keyed by exactly the given key. It no longer merges into the entity's existing
+    `KeyAttributes` or modifies the entity, and it rejects an entity with an id or a key without key attributes.
+  - A lightweight Custom API handler must take exactly `ILocalPluginContext`. A derived parameter type was accepted
+    and then failed at invocation.
+  - `StepDefinitionReader.GetStepDefinitions(assembly)` throws, listing every plugin or type it could not read. It
+    used to skip them silently. The new overload with a diagnostics collection keeps the best-effort scan.
+  - `IsBulkOperation` and `BulkTargets` are set only for CreateMultiple, UpdateMultiple and UpsertMultiple, not for
+    any message with an `EntityCollection` input named `Targets`.
+  - The injected `IEnvironmentVariableReader` rejects Secret-type variables, like the context extensions did.
+  - An explicit `ctx.TraceExecutionSnapshot(phase)` defaults to `TraceSnapshotDetail.Metadata`, like the automatic
+    snapshot. Pass `TraceSnapshotDetail.Full` to trace values.
+  - A message template whose placeholders do not match its arguments throws an `InvalidPluginExecutionException`
+    naming the key and the language, from `TryGetMessage` too, instead of a bare `FormatException`.
+
 - **Several steps may share a trigger, and the rank is no longer part of a step's identity.** Two steps on the same
   message, stage, mode and entity were rejected; they are now allowed when their filtering attributes, images,
   relationship scope or step key tell them apart, and the executing step (`OwningExtension`, resolved by id for an
@@ -168,6 +189,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Added (Framework)
 
+- **`Include` takes column selectors (#447):** `q.Include(o => o.Order_Details, l => l.LineTotal)` reads only those
+  columns of the related records.
+
 - **`Async(deleteJobOnSuccess: true)`** deletes an asynchronous step's system job once it succeeds (Dataverse
   `asyncautodelete`), carried on `StepDefinition.AsyncAutoDelete`.
 - **`ForRelationship("schema_name", ...)` on `OnAssociate()` / `OnDisassociate()`.** Dataverse fires these steps for
@@ -259,6 +283,16 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   on every execution.
 
 ### Fixed (Framework)
+
+- **Early-bound entities are downcast deeply, and the caller's request is left untouched (#447).** `ctx.Service`
+  now also downcasts early-bound entities nested in `RelatedEntities` (deep insert) and in `EntityCollection`
+  attributes (activity parties), which failed with the same `SerializationException`. `Execute` sends a copy of the
+  request instead of replacing the parameters of the caller's request object.
+- **`TypedQuery.Select` / `SelectAll` keep the group-by and aggregate columns added before them (#447).**
+- **`Clone()` drops only the real primary key (#447).** Another `*id` Guid column holding the same value as `Id`
+  is kept; an early-bound model's key column is read from its `Id` property.
+- **FetchXML value redaction covers CDATA values (#447).**
+- **The manifest scanner reports the real cause of a discovery failure (#447),** not the reflection wrapper's message.
 
 - **The in-memory pipeline fills a bulk step's image collections as Dataverse does** (verified live): each target's
   collection also holds the images of the plugin type's other steps on the message and the platform's

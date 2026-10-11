@@ -66,7 +66,8 @@ public sealed class PluginRuntimeCoverageTests
     [Fact]
     public void StepDefinitionReader_scans_an_assembly_for_every_plugin()
     {
-        IEnumerable<StepDefinition> all = StepDefinitionReader.GetStepDefinitions(typeof(PluginRuntimeCoverageTests).Assembly);
+        List<Vela.Manifest.FrameworkManifestDiagnostic> diagnostics = new List<Vela.Manifest.FrameworkManifestDiagnostic>();
+        IEnumerable<StepDefinition> all = StepDefinitionReader.GetStepDefinitions(typeof(PluginRuntimeCoverageTests).Assembly, diagnostics);
 
         Assert.Contains(all, s => s.Message == PluginMessages.Update && s.Stage == PluginStages.PostOperation);
     }

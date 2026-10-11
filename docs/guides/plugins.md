@@ -421,8 +421,8 @@ Vela also owns `UpsertRequest<TEntity>` / `UpsertResponse` for **calling** Upser
 `service.Execute(new UpsertRequest<Account> { Target = account }).ToResponse<UpsertResponse>()` returns
 `RecordCreated` (whether the row was inserted or updated) and the affected `Target` reference. Upsert is a message
 you call rather than register a step on, so it has no curated `On...()` method. To upsert by a **business key**,
-`service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` copies the key onto the target and returns
-`(Created, Target)` in one call (see [alternate keys](models.md#what-the-generated-table-classes-contain)).
+`service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` upserts a copy of `account` keyed by exactly
+that key (`account` itself is not modified and must not have an id) and returns `(Created, Target)` in one call (see [alternate keys](models.md#what-the-generated-table-classes-contain)).
 
 The modelled messages with a typed context are:
 
@@ -637,7 +637,7 @@ deletes them before PreOperation.
 - `ctx.AcquireManagedIdentityToken(scopes)` - Acquire token via `IManagedIdentityService` when available
 - `ctx.LogInformation(...)` / `ctx.LogWarning(...)` / `ctx.LogError(ex, ...)` / `ctx.LogMetric(...)` - Leveled, structured telemetry to the trace log and Application Insights (see [Telemetry & Application Insights](telemetry.md))
 - `ctx.TraceMethod("details")` - Trace caller method name with correlation/stage/depth
-- `ctx.TraceExecutionSnapshot("phase")` - Trace a structured context snapshot to the trace log, including the Target/Image/Input/Output attribute values (pass `TraceSnapshotDetail.Metadata` for names only)
+- `ctx.TraceExecutionSnapshot("phase")` - Trace a structured context snapshot to the trace log: names, ids and counts only (pass `TraceSnapshotDetail.Full` to include the Target/Image/Input/Output attribute values)
 
 ### Duplicating a record (`Clone`)
 
@@ -745,8 +745,9 @@ protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail
 Snapshots go **only to the plug-in trace log**: they are never forwarded to Application Insights.
 
 To capture **intermediate** state, call `TraceExecutionSnapshot(...)` yourself **inside your handler** with your
-own phase label - a checkpoint around a risky step. An explicit call traces values (`TraceSnapshotDetail.Full`)
-unless you pass `TraceSnapshotDetail.Metadata`. Use the lighter `TraceMethod(...)` when you don't need a payload:
+own phase label - a checkpoint around a risky step. Like the automatic snapshot, an explicit call lists names, ids
+and counts only (`TraceSnapshotDetail.Metadata`); pass `TraceSnapshotDetail.Full` to trace the values too. Use the
+lighter `TraceMethod(...)` when you don't need a payload:
 
 ```csharp
 private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
@@ -755,7 +756,7 @@ private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
     ctx.TraceMethod("computing credit limit");       // lightweight: method/message/stage/depth, no payload
     var limit = ComputeCreditLimit(target);
 
-    ctx.TraceExecutionSnapshot("after-credit-calc"); // full snapshot at this exact point, your own label
+    ctx.TraceExecutionSnapshot("after-credit-calc", TraceSnapshotDetail.Full); // values at this point, your own label
 }
 ```
 

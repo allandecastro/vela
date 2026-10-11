@@ -44,11 +44,8 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
     public OrganizationResponse Execute(OrganizationRequest request)
     {
         string requestName = request?.RequestName ?? "UnknownRequest";
-        if (request != null)
-        {
-            SanitizeEarlyBoundParameters(request);
-        }
-        return Trace("Execute", $"request={requestName}", () => _innerService.Execute(request));
+        OrganizationRequest? sanitized = request == null ? null : SanitizeEarlyBoundParameters(request);
+        return Trace("Execute", $"request={requestName}", () => _innerService.Execute(sanitized));
     }
 
     /// <inheritdoc />
@@ -78,7 +75,8 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
 
     // FetchXML condition values can be PII (emails, names, ids); the plug-in trace log is broadly readable and
     // often exported, so redact the literal values while keeping the query shape (entities, attributes, operators)
-    // for diagnostics. Covers both the attribute form (value="...") and the multi-value element form (<value>...</value>).
+    // for diagnostics. Covers the attribute form (value="..."), the multi-value element form (<value>...</value>) and
+    // a CDATA section inside the element (<value><![CDATA[...]]></value>), which can itself contain '<'.
     internal static string RedactFetchXmlValues(string? fetchXml)
     {
         if (string.IsNullOrEmpty(fetchXml))
@@ -88,7 +86,7 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
 
         string redacted = Regex.Replace(fetchXml, "value\\s*=\\s*\"[^\"]*\"", "value=\"***\"");
         redacted = Regex.Replace(redacted, "value\\s*=\\s*'[^']*'", "value='***'");
-        redacted = Regex.Replace(redacted, "(<value[^>]*>)[^<]*(</value>)", "$1***$2");
+        redacted = Regex.Replace(redacted, "(<value(?:\\s[^>]*)?>)(?:<!\\[CDATA\\[.*?\\]\\]>|[^<])*(</value>)", "$1***$2", RegexOptions.Singleline);
         return redacted;
     }
 
@@ -97,49 +95,114 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
     // ("The deserializer has no knowledge of any type that maps to the name '<namespace>:Account'"). Downcasting
     // to the base Entity keeps the same LogicalName, Id and attributes, so the write succeeds regardless. This
     // makes ctx.Service accept early-bound entities out of the box, including in projects that predate the
-    // scaffold's [assembly: ProxyTypesAssembly].
-    private static Entity? ToBaseEntity(Entity? entity) =>
-        entity == null || entity.GetType() == typeof(Entity) ? entity : entity.ToEntity<Entity>();
+    // scaffold's [assembly: ProxyTypesAssembly]. The downcast is deep: an early-bound entity nested in
+    // RelatedEntities (deep insert) or in an EntityCollection attribute (activity parties) fails the same way.
+    // Nothing the caller owns is mutated: any entity or collection holding an early-bound value is copied.
+    internal static Entity? ToBaseEntity(Entity? entity)
+    {
+        if (entity == null || !ContainsEarlyBound(entity))
+        {
+            return entity;
+        }
+
+        // Built by hand rather than with ToEntity<Entity>(): that shares the source's collections, and the SDK's
+        // RelatedEntities setter clears the collection it replaces, which would empty the caller's.
+        Entity copy = new Entity(entity.LogicalName, entity.Id)
+        {
+            EntityState = entity.EntityState,
+            RowVersion = entity.RowVersion,
+            KeyAttributes = entity.KeyAttributes,
+            ExtensionData = entity.ExtensionData,
+        };
+        foreach (var attribute in entity.Attributes)
+        {
+            copy.Attributes.Add(attribute.Key, ToBaseValue(attribute.Value));
+        }
+
+        foreach (var formatted in entity.FormattedValues)
+        {
+            copy.FormattedValues.Add(formatted.Key, formatted.Value);
+        }
+
+        foreach (var pair in entity.RelatedEntities)
+        {
+            copy.RelatedEntities.Add(pair.Key, ToBaseCollection(pair.Value));
+        }
+
+        return copy;
+    }
+
+    private static EntityCollection? ToBaseCollection(EntityCollection? collection)
+    {
+        if (collection == null || !collection.Entities.Any(ContainsEarlyBound))
+        {
+            return collection;
+        }
+
+        EntityCollection sanitized = new EntityCollection
+        {
+            EntityName = collection.EntityName,
+            MoreRecords = collection.MoreRecords,
+            PagingCookie = collection.PagingCookie,
+            MinActiveRowVersion = collection.MinActiveRowVersion,
+            TotalRecordCount = collection.TotalRecordCount,
+            TotalRecordCountLimitExceeded = collection.TotalRecordCountLimitExceeded,
+        };
+        foreach (Entity item in collection.Entities)
+        {
+            sanitized.Entities.Add(ToBaseEntity(item)!);
+        }
+
+        return sanitized;
+    }
+
+    private static object? ToBaseValue(object? value) => value switch
+    {
+        Entity entity => ToBaseEntity(entity),
+        EntityCollection collection => ToBaseCollection(collection),
+        _ => value,
+    };
+
+    private static bool ContainsEarlyBound(Entity? entity) =>
+        entity != null
+        && (entity.GetType() != typeof(Entity)
+            || entity.Attributes.Any(a => ValueContainsEarlyBound(a.Value))
+            || entity.RelatedEntities.Any(r => r.Value != null && r.Value.Entities.Any(ContainsEarlyBound)));
+
+    private static bool ValueContainsEarlyBound(object? value) => value switch
+    {
+        Entity entity => ContainsEarlyBound(entity),
+        EntityCollection collection => collection.Entities.Any(ContainsEarlyBound),
+        _ => false,
+    };
 
     // Downcast early-bound entities carried inside a request (Target, Targets, and any other Entity /
     // EntityCollection parameter) for the same reason - covers CreateRequest/UpdateRequest, CreateMultiple/
-    // UpdateMultiple, Upsert, and custom requests.
-    private static void SanitizeEarlyBoundParameters(OrganizationRequest request)
+    // UpdateMultiple, Upsert, and custom requests. The caller's request is left untouched: a copy of the same
+    // request type carries the sanitized parameters, so the plug-in can still read its own request after Execute.
+    internal static OrganizationRequest SanitizeEarlyBoundParameters(OrganizationRequest request)
     {
-        if (request.Parameters == null || request.Parameters.Count == 0)
+        if (request.Parameters == null || !request.Parameters.Any(p => ValueContainsEarlyBound(p.Value)))
         {
-            return;
+            return request;
         }
 
-        foreach (string key in request.Parameters.Keys.ToArray())
+        ParameterCollection parameters = new ParameterCollection();
+        foreach (var parameter in request.Parameters)
         {
-            switch (request.Parameters[key])
-            {
-                case Entity entity when entity.GetType() != typeof(Entity):
-                    request.Parameters[key] = entity.ToEntity<Entity>();
-                    break;
-                case EntityCollection collection:
-                    // Build a new collection of downcast copies rather than overwriting the caller's entries in
-                    // place - the request parameter often references caller-owned entities the plug-in still reads
-                    // after the Execute, so mutating them here would surprise the caller.
-                    EntityCollection sanitized = new EntityCollection
-                    {
-                        EntityName = collection.EntityName,
-                        MoreRecords = collection.MoreRecords,
-                        PagingCookie = collection.PagingCookie,
-                        MinActiveRowVersion = collection.MinActiveRowVersion,
-                        TotalRecordCount = collection.TotalRecordCount,
-                        TotalRecordCountLimitExceeded = collection.TotalRecordCountLimitExceeded,
-                    };
-                    foreach (Entity item in collection.Entities)
-                    {
-                        sanitized.Entities.Add(item != null && item.GetType() != typeof(Entity) ? item.ToEntity<Entity>() : item);
-                    }
-
-                    request.Parameters[key] = sanitized;
-                    break;
-            }
+            parameters.Add(parameter.Key, ToBaseValue(parameter.Value));
         }
+
+        // The same request type keeps the typed response and any type-based dispatch (e.g. a test double); a
+        // request type without a public parameterless constructor falls back to the base OrganizationRequest.
+        OrganizationRequest copy = request.GetType().GetConstructor(Type.EmptyTypes) != null
+            ? (OrganizationRequest)Activator.CreateInstance(request.GetType())
+            : new OrganizationRequest();
+        copy.RequestName = request.RequestName;
+        copy.RequestId = request.RequestId;
+        copy.ExtensionData = request.ExtensionData;
+        copy.Parameters = parameters;
+        return copy;
     }
 
     // One line when the call starts (so a call that hangs or times out is still visible) and one when it ends: the

@@ -220,6 +220,7 @@ namespace Vela.Testing.Tests
         public void WithTargets_MarksBulkOperation_AndExposesTargets()
         {
             LocalPluginContext ctx = PluginContext.For<FakeAccount>()
+                .OnMessage(PluginMessages.UpdateMultiple)
                 .WithTargets(new FakeAccount { Name = "A" }, new FakeAccount { Name = "B" })
                 .Build();
 
