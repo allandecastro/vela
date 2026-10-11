@@ -8,7 +8,7 @@ using Verify = Microsoft.CodeAnalysis.CSharp.Testing.XUnit.CodeFixVerifier<
 using FixTest = Microsoft.CodeAnalysis.CSharp.Testing.CSharpCodeFixTest<
     Vela.Analyzers.HandlerContextMatchAnalyzer,
     Vela.CodeFixes.UseStepContextTypeCodeFix,
-    Microsoft.CodeAnalysis.Testing.Verifiers.XUnitVerifier>;
+    Microsoft.CodeAnalysis.Testing.DefaultVerifier>;
 
 namespace Vela.CodeFixes.Tests;
 

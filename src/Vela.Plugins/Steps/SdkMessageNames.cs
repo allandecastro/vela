@@ -8,7 +8,7 @@ namespace Vela.Steps
     /// plugin step registers on and sees as <c>MessageName</c> at runtime (e.g. <c>Send</c>), and to the table the
     /// request runs on. The two names differ for many business messages; registering a step under the request name
     /// fails because no such sdkmessage exists. The builder applies it to every trigger, so
-    /// <see cref="StepDefinition.Message"/> (what the CLI deploys) is already the sdkmessage; the test harness uses it
+    /// <c>StepDefinition.Message</c> (what the CLI deploys) is already the sdkmessage; the test harness uses it
     /// to run a request's steps under the platform's name and on the platform's table. Shared as linked source with
     /// the CLI.
     /// </summary>

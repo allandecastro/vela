@@ -64,7 +64,7 @@ public class RibbonDiffXmlGeneratorTests
 
         // Referenced twice (a self-closing <EnableRule Id=.. /> per command) but its CustomRule is defined once.
         Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(xml, "<EnableRule Id=\"adc.shared.EnableRule\" />").Count);
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(xml, "<CustomRule FunctionName=\"adc.shared\"").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(xml, "<CustomRule FunctionName=\"adc.shared\""));
         Assert.True(RibbonSchema.IsValid(xml), string.Join("\n", RibbonSchema.Validate(xml)));
     }
 

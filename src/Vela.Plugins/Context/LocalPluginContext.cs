@@ -47,6 +47,7 @@ namespace Vela.Context
         /// Initializes a new instance of the <see cref="LocalPluginContext"/> class.
         /// </summary>
         /// <param name="serviceProvider">Runtime service provider.</param>
+        /// <param name="pluginTypeName">The plugin's type name, for the trace lines; null when unknown.</param>
         public LocalPluginContext(IServiceProvider serviceProvider, string? pluginTypeName = null)
         {
             ServiceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));

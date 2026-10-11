@@ -427,6 +427,6 @@ public class ScaffoldOptionsTests
             System.Text.RegularExpressions.RegexOptions.Multiline);
 
         Assert.True(latest.Success, "No framework release heading found in CHANGELOG.md.");
-        Assert.Equal(latest.Groups["v"].Value, ScaffoldOptions.DefaultCoreVersion);
+        Assert.Equal(ScaffoldOptions.DefaultCoreVersion, latest.Groups["v"].Value);
     }
 }

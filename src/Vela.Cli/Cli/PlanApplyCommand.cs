@@ -27,7 +27,6 @@ internal sealed class PlanApplyHost
     public static PlanApplyHost Default { get; } = new();
     /// <summary>Builds the local state from the plugin packages: the package scan, in a child process that does not
     /// share the CLI's connection, token or secrets (IsolatedPackageScan; not a sandbox).</summary>
-    /// credentials (IsolatedPackageScan).</summary>
     public Func<SharedOptions, JsonSerializerOptions, List<string>, RegistrationState> ScanLocal { get; init; } =
         IsolatedPackageScan.Scan;
 

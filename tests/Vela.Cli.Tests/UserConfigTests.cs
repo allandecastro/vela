@@ -42,6 +42,7 @@ public class UserConfigTests
     }
 
     [Fact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")] // returns early on Windows; tells CA1416 so
     public void Write_CreatesTheConfigDirWith0700OnUnix()   // #307 L4
     {
         if (OperatingSystem.IsWindows())

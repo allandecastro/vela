@@ -12,7 +12,7 @@ namespace Vela.Cli;
 
 /// <summary>
 /// Parsed options for the <c>vela init</c> scaffolding command. Unlike the other commands this one
-/// does not touch Dataverse, so it has its own parser rather than reusing <see cref="CommandLineOptions.TryParseSharedOptions"/>.
+/// does not touch Dataverse, so it has its own parser rather than reusing <see cref="CommandLineOptions.TryParseSharedOptions(string[], out SharedOptions, out int)"/>.
 /// </summary>
 /// <param name="SolutionName">Name of the generated solution (also the root folder and .sln file name).</param>
 /// <param name="Prefix">Namespace / assembly-name prefix for the generated projects.</param>

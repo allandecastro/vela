@@ -36,8 +36,11 @@ jobs:
           dotnet-version: 10.0.x
       - name: Restore
         run: dotnet restore Vela.sln
+      # Warnings fail the build (#448): the solution builds warning-free, so a new compiler, analyzer or xUnit warning
+      # is fixed in the PR that introduces it. NuGet audit advisories (NU1901-NU1904) stay warnings: a new advisory on
+      # a pinned package should not turn every open PR red; it still shows in the build log.
       - name: Build
-        run: dotnet build Vela.sln -c Release --no-restore
+        run: dotnet build Vela.sln -c Release --no-restore -p:TreatWarningsAsErrors=true -p:WarningsNotAsErrors="NU1901%3BNU1902%3BNU1903%3BNU1904"
       # StepApi.cs / StepBuilder.Impl.cs are generated from tools/codegen/Vela.StepApiGen/MessageModel.cs. Fail
       # when the committed files differ from the generator output (a hand edit, or a model change not regenerated).
       - name: Generated step API is up to date

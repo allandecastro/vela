@@ -465,7 +465,7 @@ namespace Vela.Testing
                 return RunAtomically(() => CreateGraph(entity));
             }
 
-            return CreateGraph(entity);
+            return CreateGraph(entity!);
         }
 
         private Guid CreateGraph(Entity entity)

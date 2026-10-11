@@ -74,7 +74,7 @@ jobs:
 
   harness:
     runs-on: windows-latest
-    timeout-minutes: 30 # a normal run is ~12min; cap a hung restore/build (the runner is a personal machine that can sleep)
+    timeout-minutes: 45 # the 2026-10 run with Stryker 4.16.0 hit the old 30-minute cap; still caps a hung restore/build
     env:
       # The runner's account can't write to C:\Program Files\dotnet, so install .NET into a writable dir.
       DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet

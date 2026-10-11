@@ -311,6 +311,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   implements `IPluginExecutionContext2..7` explicitly returned nothing. They are now read through the interfaces,
   which also lets the compiler check each member's type. Whether the platform's own context class implements them
   explicitly is not verified live; this removes the dependency on it, and the last per-process reflection cache.
+- **The generated step API is compiled with nullable annotations enabled (#448).** `StepApi.cs`,
+  `StepBuilder.Impl.cs` and `TypedTriggers.cs` carried `?` annotations in a nullable-disabled context (CS8669), so
+  the annotations were ignored; the generator now emits `#nullable enable`, matching the hand-written API.
 - **VELA011 catches more mutable plugin state (#448).** Besides a writable field, it now warns on a writable
   auto-property, a `readonly` field holding a mutable collection (`List<T>`, `Dictionary<,>`, `HashSet<T>`, the
   `IList<T>` / `IDictionary<,>` / `ICollection<T>` / `ISet<T>` interfaces, the non-generic collections) and a
