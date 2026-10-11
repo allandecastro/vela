@@ -55,13 +55,18 @@ namespace Vela.Context
         /// <param name="detail">
         /// <see cref="TraceSnapshotDetail.Full"/> (the default for an explicit call) includes attribute and parameter
         /// values; <see cref="TraceSnapshotDetail.Metadata"/> lists only names, ids and counts, so no record data
-        /// (personal data, secrets) is written.
+        /// (personal data, secrets) is written; <see cref="TraceSnapshotDetail.None"/> writes nothing.
         /// </param>
         public static void TraceExecutionSnapshot(this ILocalPluginContext context, string phase, TraceSnapshotDetail detail = TraceSnapshotDetail.Full)
         {
             if (context == null)
             {
                 throw new ArgumentNullException(nameof(context));
+            }
+
+            if (detail == TraceSnapshotDetail.None)
+            {
+                return;
             }
 
             string safePhase = string.IsNullOrWhiteSpace(phase) ? "unknown" : phase;

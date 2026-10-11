@@ -85,6 +85,7 @@ namespace Vela.Plugin
 
             Stopwatch stopwatch = Stopwatch.StartNew();
             TraceSnapshotDetail snapshotDetail = AutoSnapshotDetail;
+            localContext.TraceServiceCalls = AutoTraceServiceCalls;
             try
             {
                 // Service registration runs inside the try, so a throwing registrar or ConfigureServices is traced,
@@ -168,7 +169,22 @@ namespace Vela.Plugin
         /// personal data and secrets never land in the trace log by default. Override with
         /// <see cref="TraceSnapshotDetail.Full"/> while debugging to also trace every value, at start and on success.
         /// </summary>
+        /// <remarks>
+        /// <see cref="TraceSnapshotDetail.None"/> drops the snapshots entirely (failures included), leaving the plug-in
+        /// trace log budget (about 10 KB per execution) to the plugin's own traces.
+        /// </remarks>
         protected virtual TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Metadata;
+
+        /// <summary>
+        /// Whether the wrapped organization services (<see cref="ILocalPluginContext.Service"/>,
+        /// <see cref="ILocalPluginContext.SystemService"/>, <see cref="ILocalPluginContext.AsUser"/>) trace every
+        /// Dataverse call: a start line and an end line with the duration. On by default; override to return
+        /// <c>false</c> for a plugin that makes many calls, whose two lines each would otherwise crowd its own traces
+        /// out of the plug-in trace log (capped at about 10 KB per execution). A failed call is still traced, on one
+        /// line naming the operation, the table or request, and the exception type. Like the other <c>AutoTrace</c>
+        /// settings it applies to this plugin class only; override it on a shared base class to cover a whole project.
+        /// </summary>
+        protected virtual bool AutoTraceServiceCalls => true;
 
         /// <summary>
         /// Builds the message the caller sees when the plug-in fails with an unexpected exception (anything other than

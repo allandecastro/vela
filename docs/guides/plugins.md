@@ -715,7 +715,7 @@ submitted `Targets` verbatim.)
 Managed identity: acquire a token for an external API without a stored secret with
 `ctx.AcquireManagedIdentityToken(scopes)` - see [Managed identity](managed-identity.md).
 
-Dataverse operation tracing is automatic through wrapped services (`Service`, `SystemService`, `AsUser(id)`): each call logs operation name (`Create`, `Update`, `RetrieveMultiple`, `Execute`, ...), timestamp, duration, and pipeline context.
+Dataverse operation tracing is automatic through wrapped services (`Service`, `SystemService`, `AsUser(id)`): each call writes a start line (operation name such as `Create`, `Update`, `RetrieveMultiple`, `Execute`, plus scope, depth and table or request) and an end line with its duration. Add `protected override bool AutoTraceServiceCalls => false;` on the plugin/Custom API to drop them for a plugin that makes many calls; a failed call is still traced, on a single line with the same detail and the exception type.
 
 Handler entry is traced automatically too: alongside the plugin-level `Executing ...` line (message, stage, mode, depth), the runtime writes `Entering handler '<Name>' for message '<Message>'.` naming the specific step (or Custom API) handler that fired - the missing dimension when a plugin registers several steps, so you no longer hand-trace the method name to locate a failure. Add `protected override bool AutoTraceHandlerEntry => false;` on the plugin/Custom API to silence it (a lambda handler has only a compiler-generated name and is not traced).
 
@@ -744,9 +744,53 @@ protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail
 
 Snapshots go **only to the plug-in trace log**: they are never forwarded to Application Insights.
 
+**Keep the trace budget for your own lines.** Dataverse persists only about **10 KB of trace text per execution** and
+drops whatever exceeds it, so the automatic traces compete with yours for that space. A metadata snapshot alone is about 20 lines, and
+each Dataverse call through the wrapped services adds two. For a plugin that makes many calls, or whose own traces
+matter most, turn the automatic ones down:
+
+```csharp
+protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.None; // no snapshot, failures included
+protected override bool AutoTraceServiceCalls => false; // only a failed Dataverse call is traced
+protected override bool AutoTraceHandlerEntry => false; // no "Entering handler" line
+```
+
+The one-line `Executing ...` and `Execution completed in N ms.` traces, and the exception traces on failure, are
+always written.
+
+**These settings apply to one plugin class.** An override on a plugin or Custom API class applies to every step and
+handler that class registers, and to the classes that derive from it, but not to the other plugins of the assembly:
+each class keeps the defaults unless it overrides them. To turn the traces down for every plugin of a project, put
+the overrides on your own abstract base classes and derive your plugins from them (one per Vela base you use):
+
+```csharp
+public abstract class QuietEntityPluginBase<TEntity>(string unsecureConfig, string secureConfig)
+    : EntityPluginBase<TEntity>(unsecureConfig, secureConfig) where TEntity : Entity
+{
+    protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.None;
+    protected override bool AutoTraceServiceCalls => false;
+}
+
+public abstract class QuietCustomApiBase<TRequest, TResponse>(string unsecureConfig, string secureConfig)
+    : CustomApiBase<TRequest, TResponse>(unsecureConfig, secureConfig)
+    where TRequest : OrganizationRequest, new() where TResponse : OrganizationResponse, new()
+{
+    protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.None;
+    protected override bool AutoTraceServiceCalls => false;
+}
+
+public sealed class AccountPlugin(string unsecureConfig, string secureConfig)
+    : QuietEntityPluginBase<Account>(unsecureConfig, secureConfig)
+{
+    // A plugin can still override a setting again, for example while debugging it:
+    protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Full;
+    // ...
+}
+```
+
 To capture **intermediate** state, call `TraceExecutionSnapshot(...)` yourself **inside your handler** with your
 own phase label - a checkpoint around a risky step. An explicit call traces values (`TraceSnapshotDetail.Full`)
-unless you pass `TraceSnapshotDetail.Metadata`. Use the lighter `TraceMethod(...)` when you don't need a payload:
+unless you pass `TraceSnapshotDetail.Metadata` (`TraceSnapshotDetail.None` writes nothing). Use the lighter `TraceMethod(...)` when you don't need a payload:
 
 ```csharp
 private void OnAccountUpdated(IUpdatePostContext<Account> ctx)

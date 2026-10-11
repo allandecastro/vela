@@ -10,11 +10,32 @@ namespace Vela.Context;
 /// <summary>
 /// Decorates <see cref="IOrganizationService"/> with structured tracing for Dataverse operations.
 /// </summary>
-public sealed class TracingOrganizationService(IOrganizationService innerService, ILocalPluginContext context, string scopeName) : IOrganizationService
+public sealed class TracingOrganizationService : IOrganizationService
 {
-    private readonly IOrganizationService _innerService = innerService ?? throw new ArgumentNullException(nameof(innerService));
-    private readonly ILocalPluginContext _context = context ?? throw new ArgumentNullException(nameof(context));
-    private readonly string _scopeName = string.IsNullOrWhiteSpace(scopeName) ? "Service" : scopeName;
+    private readonly IOrganizationService _innerService;
+    private readonly ILocalPluginContext _context;
+    private readonly string _scopeName;
+    private readonly bool _traceEachCall;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TracingOrganizationService"/> class that traces every call.
+    /// </summary>
+    /// <param name="innerService">The organization service to decorate.</param>
+    /// <param name="context">The plugin context the traces are written through.</param>
+    /// <param name="scopeName">The scope named in each trace (User, System, AsUser...).</param>
+    public TracingOrganizationService(IOrganizationService innerService, ILocalPluginContext context, string scopeName)
+        : this(innerService, context, scopeName, traceEachCall: true)
+    {
+    }
+
+    // traceEachCall false (PluginBase.AutoTraceServiceCalls) traces only a failed call, on a single line.
+    internal TracingOrganizationService(IOrganizationService innerService, ILocalPluginContext context, string scopeName, bool traceEachCall)
+    {
+        _innerService = innerService ?? throw new ArgumentNullException(nameof(innerService));
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _scopeName = string.IsNullOrWhiteSpace(scopeName) ? "Service" : scopeName;
+        _traceEachCall = traceEachCall;
+    }
 
     /// <inheritdoc />
     public Guid Create(Entity entity)
@@ -144,27 +165,48 @@ public sealed class TracingOrganizationService(IOrganizationService innerService
 
     // One line when the call starts (so a call that hangs or times out is still visible) and one when it ends: the
     // plug-in trace log is capped (about 10 KB), so a verbose multi-line block per call would crowd out the handler's
-    // own traces. Only metadata is traced (operation, table, ids, request name), never attribute values.
+    // own traces. Only metadata is traced (operation, table, ids, request name), never attribute values. With
+    // per-call tracing off, a successful call writes nothing and a failed one writes a single line that also carries
+    // the start line's scope, depth and details, since no start line precedes it.
     private TResult Trace<TResult>(string operation, string details, Func<TResult> action)
     {
         Stopwatch stopwatch = Stopwatch.StartNew();
-        _context.Trace("Dataverse.{0} start scope={1} depth={2} {3}", operation, _scopeName, _context.Depth, details);
+        if (_traceEachCall)
+        {
+            _context.Trace("Dataverse.{0} start scope={1} depth={2} {3}", operation, _scopeName, _context.Depth, details);
+        }
 
         try
         {
             TResult result = action();
-            _context.Trace("Dataverse.{0} ok {1} ms", operation, stopwatch.ElapsedMilliseconds);
+            if (_traceEachCall)
+            {
+                _context.Trace("Dataverse.{0} ok {1} ms", operation, stopwatch.ElapsedMilliseconds);
+            }
+
             return result;
         }
         catch (Exception ex)
         {
             // The exception type only: a service fault's message can echo submitted values or record names, and this
             // line is metadata-only. The exception itself propagates to the plugin with its full message.
-            _context.Trace(
-                "Dataverse.{0} fail {1} ms {2}",
-                operation,
-                stopwatch.ElapsedMilliseconds,
-                ex.GetType().FullName ?? ex.GetType().Name);
+            string exceptionType = ex.GetType().FullName ?? ex.GetType().Name;
+            if (_traceEachCall)
+            {
+                _context.Trace("Dataverse.{0} fail {1} ms {2}", operation, stopwatch.ElapsedMilliseconds, exceptionType);
+            }
+            else
+            {
+                _context.Trace(
+                    "Dataverse.{0} fail {1} ms {2} scope={3} depth={4} {5}",
+                    operation,
+                    stopwatch.ElapsedMilliseconds,
+                    exceptionType,
+                    _scopeName,
+                    _context.Depth,
+                    details);
+            }
+
             throw;
         }
     }
