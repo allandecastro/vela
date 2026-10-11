@@ -167,6 +167,7 @@ namespace Vela.Testing
             StampOwningExtension(context, registration.Step);
             context.PreEntityImagesCollection = items.Select(item => BuildBulkImageCollection(registration, message, isPre: true, item.PreState)).ToArray();
             context.PostEntityImagesCollection = items.Select(item => BuildBulkImageCollection(registration, message, isPre: false, item.PostState)).ToArray();
+            MaskSecuredImageColumns(context.PreEntityImagesCollection.Concat(context.PostEntityImagesCollection));
 
             // A CreateMultiple Post step sees the created ids as OutputParameters["Ids"], exactly as Dataverse
             // surfaces them, so ctx.Response.Ids resolves in a post-create-multiple handler.
@@ -299,6 +300,8 @@ namespace Vela.Testing
                 // The platform adds this post image to every asynchronous step: the record's primary name and id.
                 context.PostEntityImages[AsyncPrimaryNameImage] = PrimaryNameImage(invocation.PostState);
             }
+
+            MaskSecuredImageColumns(new[] { context.PreEntityImages, context.PostEntityImages });
 
             _log.Add(new PipelineExecutionEntry(registration.Step.PluginTypeName, invocation.Message, invocation.Stage, registration.Step.Mode, invocation.EntityLogicalName, _depth));
             IPlugin plugin = registration.GetInstance(SecureConfigFor(registration.Step));
@@ -445,6 +448,20 @@ namespace Vela.Testing
                 ? step.StepKey
                 : step.Message + (string.IsNullOrWhiteSpace(step.EntityLogicalName) ? string.Empty : " of " + step.EntityLogicalName.ToLowerInvariant());
             return $"{step.PluginTypeName} - {lifecycle}: {subject}";
+        }
+
+        // Images carry only the columns the calling user may read, as a Retrieve does (verified live: a secured column
+        // the caller has no read access to is absent from the pre- and post-images, present for an administrator).
+        // The mask uses the identity the operation runs as; a step impersonating another user was not probed.
+        private void MaskSecuredImageColumns(IEnumerable<EntityImageCollection> collections)
+        {
+            foreach (EntityImageCollection collection in collections)
+            {
+                foreach (Entity image in collection.Values)
+                {
+                    _store.MaskSecuredImageColumns(image);
+                }
+            }
         }
 
         private Entity PrimaryNameImage(Entity state)
