@@ -340,11 +340,23 @@ Typed triggers exist for:
 - **Membership:** `AddMembersTeam`, `RemoveMembersTeam` (team), `AddListMembersList`, `AddMemberList`,
   `RemoveMemberList` (list).
 - **Case and contract:** `CloseIncident` (incident), `CancelContract`, `CloneContract` (contract).
+- **Marketing:** `AddItemCampaign`, `RemoveItemCampaign` (campaign).
+- **Pricing and goals:** `LockSalesOrderPricing` (salesorder), `LockInvoicePricing` (invoice), `Recalculate` (goal),
+  and the global `UnlockSalesOrderPricing`, `UnlockInvoicePricing`.
+- **Scheduling:** `ImmediateBook` (appointment), `Reschedule` (appointment, serviceappointment,
+  recurringappointmentmaster).
+- **Fax and templates:** `SendFax` (fax), `SendTemplate` (template).
+- **Product kits:** `AddProductToKit` (product), and the global `RemoveProductFromKit`.
 
 A message with a table in parentheses runs on that table only: register its trigger from an `EntityPluginBase<T>` on
 that table (the builder rejects any other). That is what tells `OnWinQuote()` from `OnWinOpportunity()`, which share
-`Win`. The queue messages run on `queueitem` whatever their `Target`. On all of these `ctx.PrimaryEntityId` is empty:
-read the record from `ctx.Request` (`ctx.Request.EmailId`, `ctx.Request.TeamId`, ...).
+`Win`. The queue messages run on `queueitem` whatever their `Target`. On all of these `ctx.PrimaryEntityId` is empty
+unless the request's `Target` is a record of that table (`Recalculate`): read the record from `ctx.Request`
+(`ctx.Request.EmailId`, `ctx.Request.TeamId`, ...).
+
+A **global** message (`Associate`, `Disassociate`, `UnlockSalesOrderPricing`, `UnlockInvoicePricing`,
+`RemoveProductFromKit`) has no per-table filter: its step registers on no table, whatever the plugin's `T`, and
+`ctx.PrimaryEntityName` is `none`.
 
 **One way per message.** A message with a typed trigger is registered through it. `On<TRequest>()` and
 `OnAsyncOnly<TRequest>()` are only for messages without one: `On<UpdateRequest>()` throws when the step is
@@ -356,7 +368,8 @@ knows the sdkmessage, and the handler sees it in `ctx.MessageName`: `SendEmail` 
 `SendFromTemplate`, `DeliverIncomingEmail` → `DeliverIncoming`, `DeliverPromoteEmail` → `DeliverPromote`,
 `WinOpportunity` / `WinQuote` → `Win`, `LoseOpportunity` → `Lose`, `CloseIncident` → `Close`, `CancelContract` →
 `Cancel`, `CloneContract` → `Clone`, `AddMembersTeam` → `AddMembers`, `RemoveMembersTeam` → `RemoveMembers`,
-`AddListMembersList` → `AddListMembers`, `AddMemberList` → `AddMember`, `RemoveMemberList` → `RemoveMember`.
+`AddListMembersList` → `AddListMembers`, `AddMemberList` → `AddMember`, `RemoveMemberList` → `RemoveMember`,
+`AddItemCampaign` → `AddItem`, `RemoveItemCampaign` → `RemoveItem`, `SendFax` / `SendTemplate` → `Send`.
 The test harness (`For<T>().OnMessage(...)`, `WithRequest(...)`) translates the same way. The translation covers every
 SDK request whose name is not an sdkmessage, so `On<CloseQuoteRequest>()` registers on `Close` too, and
 `On<SetStateRequest>()` on `SetStateDynamicEntity` (a step on `SetState` never fires). A request type outside the table
@@ -364,7 +377,9 @@ states its sdkmessage with `[SdkMessage("...")]` (`Vela.Messages`).
 
 `ReviseQuote`, `FulfillSalesOrder`, `ConvertQuoteToSalesOrder`, `GenerateSalesOrderFromOpportunity`,
 `GenerateInvoiceFromOpportunity` and the three `Get*ProductsFromOpportunity` accept no custom step (Dataverse fails
-with 0x80044187), so they have no trigger. Global messages such as `WhoAmI` cannot carry an entity-bound step either;
+with 0x80044187), so they have no trigger. Neither do `RenewContract`, `RenewEntitlement`, `QualifyMemberList`,
+`CopyCampaignResponse`, `ExecuteWorkflow`, `SetProcess`, `SendBulkMail`, `ReassignObjectsOwner`, `InitializeFrom`,
+`ConvertProductToKit` and `ConvertKitToProduct`, for the same reason. Global messages such as `WhoAmI` cannot carry an entity-bound step either;
 call them from a handler (`service.Execute(new WhoAmIRequest())`).
 
 `OnAssign()` is entity-bound and fires on reassignment, with the new owner in `ctx.Request.Assignee`. An Update of

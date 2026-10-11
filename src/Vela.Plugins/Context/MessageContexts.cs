@@ -167,6 +167,58 @@ namespace Vela.Context
     public interface IWinQuotePreContext<TEntity> : IStepRequestContext<WinQuoteRequest> where TEntity : Entity { }
     /// <summary>Post-stage typed context for a WinQuote step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
     public interface IWinQuotePostContext<TEntity> : IStepRequestContext<WinQuoteRequest>, IStepResponseContext<WinQuoteResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a AddItemCampaign step (<c>ctx.Request</c> only).</summary>
+    public interface IAddItemCampaignPreContext<TEntity> : IStepRequestContext<AddItemCampaignRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a AddItemCampaign step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IAddItemCampaignPostContext<TEntity> : IStepRequestContext<AddItemCampaignRequest>, IStepResponseContext<AddItemCampaignResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a RemoveItemCampaign step (<c>ctx.Request</c> only).</summary>
+    public interface IRemoveItemCampaignPreContext<TEntity> : IStepRequestContext<RemoveItemCampaignRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a RemoveItemCampaign step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRemoveItemCampaignPostContext<TEntity> : IStepRequestContext<RemoveItemCampaignRequest>, IStepResponseContext<RemoveItemCampaignResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a Recalculate step (<c>ctx.Request</c> only).</summary>
+    public interface IRecalculatePreContext<TEntity> : IStepRequestContext<RecalculateRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Recalculate step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRecalculatePostContext<TEntity> : IStepRequestContext<RecalculateRequest>, IStepResponseContext<RecalculateResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a LockSalesOrderPricing step (<c>ctx.Request</c> only).</summary>
+    public interface ILockSalesOrderPricingPreContext<TEntity> : IStepRequestContext<LockSalesOrderPricingRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a LockSalesOrderPricing step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ILockSalesOrderPricingPostContext<TEntity> : IStepRequestContext<LockSalesOrderPricingRequest>, IStepResponseContext<LockSalesOrderPricingResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a UnlockSalesOrderPricing step (<c>ctx.Request</c> only).</summary>
+    public interface IUnlockSalesOrderPricingPreContext<TEntity> : IStepRequestContext<UnlockSalesOrderPricingRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a UnlockSalesOrderPricing step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IUnlockSalesOrderPricingPostContext<TEntity> : IStepRequestContext<UnlockSalesOrderPricingRequest>, IStepResponseContext<UnlockSalesOrderPricingResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a LockInvoicePricing step (<c>ctx.Request</c> only).</summary>
+    public interface ILockInvoicePricingPreContext<TEntity> : IStepRequestContext<LockInvoicePricingRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a LockInvoicePricing step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ILockInvoicePricingPostContext<TEntity> : IStepRequestContext<LockInvoicePricingRequest>, IStepResponseContext<LockInvoicePricingResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a UnlockInvoicePricing step (<c>ctx.Request</c> only).</summary>
+    public interface IUnlockInvoicePricingPreContext<TEntity> : IStepRequestContext<UnlockInvoicePricingRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a UnlockInvoicePricing step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IUnlockInvoicePricingPostContext<TEntity> : IStepRequestContext<UnlockInvoicePricingRequest>, IStepResponseContext<UnlockInvoicePricingResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a Reschedule step (<c>ctx.Request</c> only).</summary>
+    public interface IReschedulePreContext<TEntity> : IStepRequestContext<RescheduleRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a Reschedule step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IReschedulePostContext<TEntity> : IStepRequestContext<RescheduleRequest>, IStepResponseContext<RescheduleResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a ImmediateBook step (<c>ctx.Request</c> only).</summary>
+    public interface IImmediateBookPreContext<TEntity> : IStepRequestContext<ImmediateBookRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a ImmediateBook step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IImmediateBookPostContext<TEntity> : IStepRequestContext<ImmediateBookRequest>, IStepResponseContext<ImmediateBookResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a SendTemplate step (<c>ctx.Request</c> only).</summary>
+    public interface ISendTemplatePreContext<TEntity> : IStepRequestContext<SendTemplateRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a SendTemplate step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ISendTemplatePostContext<TEntity> : IStepRequestContext<SendTemplateRequest>, IStepResponseContext<SendTemplateResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a SendFax step (<c>ctx.Request</c> only).</summary>
+    public interface ISendFaxPreContext<TEntity> : IStepRequestContext<SendFaxRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a SendFax step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface ISendFaxPostContext<TEntity> : IStepRequestContext<SendFaxRequest>, IStepResponseContext<SendFaxResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a AddProductToKit step (<c>ctx.Request</c> only).</summary>
+    public interface IAddProductToKitPreContext<TEntity> : IStepRequestContext<AddProductToKitRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a AddProductToKit step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IAddProductToKitPostContext<TEntity> : IStepRequestContext<AddProductToKitRequest>, IStepResponseContext<AddProductToKitResponse> where TEntity : Entity { }
+    /// <summary>Pre-stage typed context for a RemoveProductFromKit step (<c>ctx.Request</c> only).</summary>
+    public interface IRemoveProductFromKitPreContext<TEntity> : IStepRequestContext<RemoveProductFromKitRequest> where TEntity : Entity { }
+    /// <summary>Post-stage typed context for a RemoveProductFromKit step (<c>ctx.Request</c> + <c>ctx.Response</c>).</summary>
+    public interface IRemoveProductFromKitPostContext<TEntity> : IStepRequestContext<RemoveProductFromKitRequest>, IStepResponseContext<RemoveProductFromKitResponse> where TEntity : Entity { }
 
     /// <summary>Runtime pre-stage context for Create.</summary>
     public class CreatePreContext<TEntity> : PreStepContext<Vela.Messages.CreateRequest<TEntity>>, ICreatePreContext<TEntity> where TEntity : Entity
@@ -665,5 +717,161 @@ namespace Vela.Context
     {
         /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
         public WinQuotePostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for AddItemCampaign.</summary>
+    public class AddItemCampaignPreContext<TEntity> : PreStepContext<AddItemCampaignRequest>, IAddItemCampaignPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public AddItemCampaignPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for AddItemCampaign.</summary>
+    public class AddItemCampaignPostContext<TEntity> : PostStepContext<AddItemCampaignRequest, AddItemCampaignResponse>, IAddItemCampaignPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public AddItemCampaignPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for RemoveItemCampaign.</summary>
+    public class RemoveItemCampaignPreContext<TEntity> : PreStepContext<RemoveItemCampaignRequest>, IRemoveItemCampaignPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RemoveItemCampaignPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for RemoveItemCampaign.</summary>
+    public class RemoveItemCampaignPostContext<TEntity> : PostStepContext<RemoveItemCampaignRequest, RemoveItemCampaignResponse>, IRemoveItemCampaignPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RemoveItemCampaignPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for Recalculate.</summary>
+    public class RecalculatePreContext<TEntity> : PreStepContext<RecalculateRequest>, IRecalculatePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RecalculatePreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for Recalculate.</summary>
+    public class RecalculatePostContext<TEntity> : PostStepContext<RecalculateRequest, RecalculateResponse>, IRecalculatePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RecalculatePostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for LockSalesOrderPricing.</summary>
+    public class LockSalesOrderPricingPreContext<TEntity> : PreStepContext<LockSalesOrderPricingRequest>, ILockSalesOrderPricingPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public LockSalesOrderPricingPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for LockSalesOrderPricing.</summary>
+    public class LockSalesOrderPricingPostContext<TEntity> : PostStepContext<LockSalesOrderPricingRequest, LockSalesOrderPricingResponse>, ILockSalesOrderPricingPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public LockSalesOrderPricingPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for UnlockSalesOrderPricing.</summary>
+    public class UnlockSalesOrderPricingPreContext<TEntity> : PreStepContext<UnlockSalesOrderPricingRequest>, IUnlockSalesOrderPricingPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public UnlockSalesOrderPricingPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for UnlockSalesOrderPricing.</summary>
+    public class UnlockSalesOrderPricingPostContext<TEntity> : PostStepContext<UnlockSalesOrderPricingRequest, UnlockSalesOrderPricingResponse>, IUnlockSalesOrderPricingPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public UnlockSalesOrderPricingPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for LockInvoicePricing.</summary>
+    public class LockInvoicePricingPreContext<TEntity> : PreStepContext<LockInvoicePricingRequest>, ILockInvoicePricingPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public LockInvoicePricingPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for LockInvoicePricing.</summary>
+    public class LockInvoicePricingPostContext<TEntity> : PostStepContext<LockInvoicePricingRequest, LockInvoicePricingResponse>, ILockInvoicePricingPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public LockInvoicePricingPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for UnlockInvoicePricing.</summary>
+    public class UnlockInvoicePricingPreContext<TEntity> : PreStepContext<UnlockInvoicePricingRequest>, IUnlockInvoicePricingPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public UnlockInvoicePricingPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for UnlockInvoicePricing.</summary>
+    public class UnlockInvoicePricingPostContext<TEntity> : PostStepContext<UnlockInvoicePricingRequest, UnlockInvoicePricingResponse>, IUnlockInvoicePricingPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public UnlockInvoicePricingPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for Reschedule.</summary>
+    public class ReschedulePreContext<TEntity> : PreStepContext<RescheduleRequest>, IReschedulePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ReschedulePreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for Reschedule.</summary>
+    public class ReschedulePostContext<TEntity> : PostStepContext<RescheduleRequest, RescheduleResponse>, IReschedulePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ReschedulePostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for ImmediateBook.</summary>
+    public class ImmediateBookPreContext<TEntity> : PreStepContext<ImmediateBookRequest>, IImmediateBookPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ImmediateBookPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for ImmediateBook.</summary>
+    public class ImmediateBookPostContext<TEntity> : PostStepContext<ImmediateBookRequest, ImmediateBookResponse>, IImmediateBookPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public ImmediateBookPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for SendTemplate.</summary>
+    public class SendTemplatePreContext<TEntity> : PreStepContext<SendTemplateRequest>, ISendTemplatePreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public SendTemplatePreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for SendTemplate.</summary>
+    public class SendTemplatePostContext<TEntity> : PostStepContext<SendTemplateRequest, SendTemplateResponse>, ISendTemplatePostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public SendTemplatePostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for SendFax.</summary>
+    public class SendFaxPreContext<TEntity> : PreStepContext<SendFaxRequest>, ISendFaxPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public SendFaxPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for SendFax.</summary>
+    public class SendFaxPostContext<TEntity> : PostStepContext<SendFaxRequest, SendFaxResponse>, ISendFaxPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public SendFaxPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for AddProductToKit.</summary>
+    public class AddProductToKitPreContext<TEntity> : PreStepContext<AddProductToKitRequest>, IAddProductToKitPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public AddProductToKitPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for AddProductToKit.</summary>
+    public class AddProductToKitPostContext<TEntity> : PostStepContext<AddProductToKitRequest, AddProductToKitResponse>, IAddProductToKitPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public AddProductToKitPostContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime pre-stage context for RemoveProductFromKit.</summary>
+    public class RemoveProductFromKitPreContext<TEntity> : PreStepContext<RemoveProductFromKitRequest>, IRemoveProductFromKitPreContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RemoveProductFromKitPreContext(ILocalPluginContext inner) : base(inner) { }
+    }
+    /// <summary>Runtime post-stage context for RemoveProductFromKit.</summary>
+    public class RemoveProductFromKitPostContext<TEntity> : PostStepContext<RemoveProductFromKitRequest, RemoveProductFromKitResponse>, IRemoveProductFromKitPostContext<TEntity> where TEntity : Entity
+    {
+        /// <summary>Wraps the runtime context.</summary><param name="inner">The runtime plugin context.</param>
+        public RemoveProductFromKitPostContext(ILocalPluginContext inner) : base(inner) { }
     }
 }

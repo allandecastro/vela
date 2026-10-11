@@ -83,6 +83,33 @@ namespace Vela.Tests
             Assert.Equal("account", defs.Single(d => d.Message == PluginMessages.Update).EntityLogicalName);
         }
 
+        private sealed class GlobalMessagePlugin : EntityPluginBase<TestAccount>
+        {
+            public GlobalMessagePlugin() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+            {
+                RegisterStep().OnUnlockSalesOrderPricing().PostOperation().Sync().Handle(ctx => { });
+                RegisterStep().OnUnlockInvoicePricing().PostOperation().Sync().Handle(ctx => { });
+                RegisterStep().OnRemoveProductFromKit().PostOperation().Sync().Handle(ctx => { });
+                // Control: Reschedule runs on several tables (appointment, serviceappointment, ...), not on none.
+                RegisterStep().OnReschedule().PostOperation().Sync().Handle(ctx => { });
+            }
+        }
+
+        // UnlockSalesOrderPricing, UnlockInvoicePricing and RemoveProductFromKit have a single "none"
+        // sdkmessagefilter: a step keeping TEntity's table would fail at apply (no filter for that table).
+        [Fact]
+        public void Global_messages_register_with_no_primary_entity()
+        {
+            StepDefinition[] defs = new GlobalMessagePlugin().GetStepDefinitions();
+
+            Assert.Equal(string.Empty, defs.Single(d => d.Message == PluginMessages.UnlockSalesOrderPricing).EntityLogicalName);
+            Assert.Equal(string.Empty, defs.Single(d => d.Message == PluginMessages.UnlockInvoicePricing).EntityLogicalName);
+            Assert.Equal(string.Empty, defs.Single(d => d.Message == PluginMessages.RemoveProductFromKit).EntityLogicalName);
+            Assert.Equal("account", defs.Single(d => d.Message == PluginMessages.Reschedule).EntityLogicalName);
+        }
+
         private sealed class AssignPlugin : EntityPluginBase<TestAccount>
         {
             public AssignPlugin() : base(string.Empty, string.Empty) { }

@@ -92,12 +92,11 @@ public sealed partial class StepBuilder<TEntity>
         _definition.PreImages = _preImages.ToArray();
         _definition.PostImages = _postImages.ToArray();
 
-        // Associate/Disassociate have no single primary entity: Dataverse registers these steps against primary
-        // entity "none" (there is no per-entity message filter, and the Target can be either end of the
-        // relationship). The ctor stamped TEntity's logical name, so clear it here - otherwise apply fails
-        // resolving a non-existent per-entity filter. The handler discriminates on ctx.Request.Relationship.
-        if (string.Equals(_definition.Message, PluginMessages.Associate, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(_definition.Message, PluginMessages.Disassociate, StringComparison.OrdinalIgnoreCase))
+        // A global message has no per-entity message filter: Dataverse registers its steps against primary entity
+        // "none" (Associate/Disassociate, whose Target can be either end of the relationship and whose handler
+        // discriminates on ctx.Request.Relationship, and the other PluginMessages.GlobalMessages). The ctor stamped
+        // TEntity's logical name, so clear it here - otherwise apply fails resolving a non-existent per-entity filter.
+        if (PluginMessages.IsGlobalMessage(_definition.Message))
         {
             _definition.EntityLogicalName = string.Empty;
         }

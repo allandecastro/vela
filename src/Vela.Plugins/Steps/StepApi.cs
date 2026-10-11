@@ -1952,6 +1952,591 @@ namespace Vela.Steps
         void Handle(Action<IMergePostContext<TEntity>> handler);
     }
 
+    /// <summary>Config for the AddItemCampaign step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IAddItemCampaignPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IAddItemCampaignPreValidationConfig<TEntity> WithDescription(string description);
+        IAddItemCampaignPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IAddItemCampaignPreValidationConfig<TEntity> WithStepKey(string key);
+        IAddItemCampaignPreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IAddItemCampaignPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IAddItemCampaignPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddItemCampaignPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddItemCampaignPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        IAddItemCampaignPreValidationConfig<TEntity> Disabled();
+        void Handle(Action<IAddItemCampaignPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the AddItemCampaign step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IAddItemCampaignPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IAddItemCampaignPreOperationConfig<TEntity> WithDescription(string description);
+        IAddItemCampaignPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddItemCampaignPreOperationConfig<TEntity> WithStepKey(string key);
+        IAddItemCampaignPreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IAddItemCampaignPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IAddItemCampaignPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddItemCampaignPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddItemCampaignPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IAddItemCampaignPreOperationConfig<TEntity> Disabled();
+        void Handle(Action<IAddItemCampaignPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the AddItemCampaign step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IAddItemCampaignPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IAddItemCampaignPostOperationConfig<TEntity> WithDescription(string description);
+        IAddItemCampaignPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddItemCampaignPostOperationConfig<TEntity> WithStepKey(string key);
+        IAddItemCampaignPostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IAddItemCampaignPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IAddItemCampaignPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddItemCampaignPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddItemCampaignPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IAddItemCampaignPostOperationConfig<TEntity> Disabled();
+        void Handle(Action<IAddItemCampaignPostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the RemoveItemCampaign step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IRemoveItemCampaignPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IRemoveItemCampaignPreValidationConfig<TEntity> WithDescription(string description);
+        IRemoveItemCampaignPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveItemCampaignPreValidationConfig<TEntity> WithStepKey(string key);
+        IRemoveItemCampaignPreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IRemoveItemCampaignPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IRemoveItemCampaignPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveItemCampaignPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveItemCampaignPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        IRemoveItemCampaignPreValidationConfig<TEntity> Disabled();
+        void Handle(Action<IRemoveItemCampaignPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the RemoveItemCampaign step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IRemoveItemCampaignPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IRemoveItemCampaignPreOperationConfig<TEntity> WithDescription(string description);
+        IRemoveItemCampaignPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveItemCampaignPreOperationConfig<TEntity> WithStepKey(string key);
+        IRemoveItemCampaignPreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IRemoveItemCampaignPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IRemoveItemCampaignPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveItemCampaignPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveItemCampaignPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IRemoveItemCampaignPreOperationConfig<TEntity> Disabled();
+        void Handle(Action<IRemoveItemCampaignPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the RemoveItemCampaign step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IRemoveItemCampaignPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IRemoveItemCampaignPostOperationConfig<TEntity> WithDescription(string description);
+        IRemoveItemCampaignPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveItemCampaignPostOperationConfig<TEntity> WithStepKey(string key);
+        IRemoveItemCampaignPostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IRemoveItemCampaignPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IRemoveItemCampaignPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveItemCampaignPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveItemCampaignPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IRemoveItemCampaignPostOperationConfig<TEntity> Disabled();
+        void Handle(Action<IRemoveItemCampaignPostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the Recalculate step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IRecalculatePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IRecalculatePreValidationConfig<TEntity> WithDescription(string description);
+        IRecalculatePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRecalculatePreValidationConfig<TEntity> WithStepKey(string key);
+        IRecalculatePreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IRecalculatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IRecalculatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRecalculatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRecalculatePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        IRecalculatePreValidationConfig<TEntity> Disabled();
+        void Handle(Action<IRecalculatePreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the Recalculate step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IRecalculatePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IRecalculatePreOperationConfig<TEntity> WithDescription(string description);
+        IRecalculatePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRecalculatePreOperationConfig<TEntity> WithStepKey(string key);
+        IRecalculatePreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IRecalculatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IRecalculatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRecalculatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRecalculatePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IRecalculatePreOperationConfig<TEntity> Disabled();
+        void Handle(Action<IRecalculatePreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the Recalculate step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IRecalculatePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IRecalculatePostOperationConfig<TEntity> WithDescription(string description);
+        IRecalculatePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRecalculatePostOperationConfig<TEntity> WithStepKey(string key);
+        IRecalculatePostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IRecalculatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IRecalculatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRecalculatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRecalculatePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IRecalculatePostOperationConfig<TEntity> Disabled();
+        void Handle(Action<IRecalculatePostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the LockSalesOrderPricing step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ILockSalesOrderPricingPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ILockSalesOrderPricingPreValidationConfig<TEntity> WithDescription(string description);
+        ILockSalesOrderPricingPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ILockSalesOrderPricingPreValidationConfig<TEntity> WithStepKey(string key);
+        ILockSalesOrderPricingPreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ILockSalesOrderPricingPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ILockSalesOrderPricingPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ILockSalesOrderPricingPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ILockSalesOrderPricingPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        ILockSalesOrderPricingPreValidationConfig<TEntity> Disabled();
+        void Handle(Action<ILockSalesOrderPricingPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the LockSalesOrderPricing step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ILockSalesOrderPricingPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ILockSalesOrderPricingPreOperationConfig<TEntity> WithDescription(string description);
+        ILockSalesOrderPricingPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ILockSalesOrderPricingPreOperationConfig<TEntity> WithStepKey(string key);
+        ILockSalesOrderPricingPreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ILockSalesOrderPricingPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ILockSalesOrderPricingPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ILockSalesOrderPricingPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ILockSalesOrderPricingPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        ILockSalesOrderPricingPreOperationConfig<TEntity> Disabled();
+        void Handle(Action<ILockSalesOrderPricingPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the LockSalesOrderPricing step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ILockSalesOrderPricingPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ILockSalesOrderPricingPostOperationConfig<TEntity> WithDescription(string description);
+        ILockSalesOrderPricingPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ILockSalesOrderPricingPostOperationConfig<TEntity> WithStepKey(string key);
+        ILockSalesOrderPricingPostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ILockSalesOrderPricingPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ILockSalesOrderPricingPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ILockSalesOrderPricingPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ILockSalesOrderPricingPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        ILockSalesOrderPricingPostOperationConfig<TEntity> Disabled();
+        void Handle(Action<ILockSalesOrderPricingPostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the UnlockSalesOrderPricing step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IUnlockSalesOrderPricingPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> WithDescription(string description);
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> WithStepKey(string key);
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        IUnlockSalesOrderPricingPreValidationConfig<TEntity> Disabled();
+        void Handle(Action<IUnlockSalesOrderPricingPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the UnlockSalesOrderPricing step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IUnlockSalesOrderPricingPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> WithDescription(string description);
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> WithStepKey(string key);
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IUnlockSalesOrderPricingPreOperationConfig<TEntity> Disabled();
+        void Handle(Action<IUnlockSalesOrderPricingPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the UnlockSalesOrderPricing step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IUnlockSalesOrderPricingPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> WithDescription(string description);
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> WithStepKey(string key);
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IUnlockSalesOrderPricingPostOperationConfig<TEntity> Disabled();
+        void Handle(Action<IUnlockSalesOrderPricingPostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the LockInvoicePricing step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ILockInvoicePricingPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ILockInvoicePricingPreValidationConfig<TEntity> WithDescription(string description);
+        ILockInvoicePricingPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ILockInvoicePricingPreValidationConfig<TEntity> WithStepKey(string key);
+        ILockInvoicePricingPreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ILockInvoicePricingPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ILockInvoicePricingPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ILockInvoicePricingPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ILockInvoicePricingPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        ILockInvoicePricingPreValidationConfig<TEntity> Disabled();
+        void Handle(Action<ILockInvoicePricingPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the LockInvoicePricing step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ILockInvoicePricingPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ILockInvoicePricingPreOperationConfig<TEntity> WithDescription(string description);
+        ILockInvoicePricingPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ILockInvoicePricingPreOperationConfig<TEntity> WithStepKey(string key);
+        ILockInvoicePricingPreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ILockInvoicePricingPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ILockInvoicePricingPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ILockInvoicePricingPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ILockInvoicePricingPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        ILockInvoicePricingPreOperationConfig<TEntity> Disabled();
+        void Handle(Action<ILockInvoicePricingPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the LockInvoicePricing step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ILockInvoicePricingPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ILockInvoicePricingPostOperationConfig<TEntity> WithDescription(string description);
+        ILockInvoicePricingPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ILockInvoicePricingPostOperationConfig<TEntity> WithStepKey(string key);
+        ILockInvoicePricingPostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ILockInvoicePricingPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ILockInvoicePricingPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ILockInvoicePricingPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ILockInvoicePricingPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        ILockInvoicePricingPostOperationConfig<TEntity> Disabled();
+        void Handle(Action<ILockInvoicePricingPostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the UnlockInvoicePricing step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IUnlockInvoicePricingPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IUnlockInvoicePricingPreValidationConfig<TEntity> WithDescription(string description);
+        IUnlockInvoicePricingPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IUnlockInvoicePricingPreValidationConfig<TEntity> WithStepKey(string key);
+        IUnlockInvoicePricingPreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IUnlockInvoicePricingPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IUnlockInvoicePricingPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUnlockInvoicePricingPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUnlockInvoicePricingPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        IUnlockInvoicePricingPreValidationConfig<TEntity> Disabled();
+        void Handle(Action<IUnlockInvoicePricingPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the UnlockInvoicePricing step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IUnlockInvoicePricingPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IUnlockInvoicePricingPreOperationConfig<TEntity> WithDescription(string description);
+        IUnlockInvoicePricingPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IUnlockInvoicePricingPreOperationConfig<TEntity> WithStepKey(string key);
+        IUnlockInvoicePricingPreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IUnlockInvoicePricingPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IUnlockInvoicePricingPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUnlockInvoicePricingPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUnlockInvoicePricingPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IUnlockInvoicePricingPreOperationConfig<TEntity> Disabled();
+        void Handle(Action<IUnlockInvoicePricingPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the UnlockInvoicePricing step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IUnlockInvoicePricingPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IUnlockInvoicePricingPostOperationConfig<TEntity> WithDescription(string description);
+        IUnlockInvoicePricingPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IUnlockInvoicePricingPostOperationConfig<TEntity> WithStepKey(string key);
+        IUnlockInvoicePricingPostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IUnlockInvoicePricingPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IUnlockInvoicePricingPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IUnlockInvoicePricingPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IUnlockInvoicePricingPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IUnlockInvoicePricingPostOperationConfig<TEntity> Disabled();
+        void Handle(Action<IUnlockInvoicePricingPostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the Reschedule step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IReschedulePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IReschedulePreValidationConfig<TEntity> WithDescription(string description);
+        IReschedulePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IReschedulePreValidationConfig<TEntity> WithStepKey(string key);
+        IReschedulePreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IReschedulePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IReschedulePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IReschedulePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IReschedulePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        IReschedulePreValidationConfig<TEntity> Disabled();
+        void Handle(Action<IReschedulePreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the Reschedule step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IReschedulePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IReschedulePreOperationConfig<TEntity> WithDescription(string description);
+        IReschedulePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IReschedulePreOperationConfig<TEntity> WithStepKey(string key);
+        IReschedulePreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IReschedulePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IReschedulePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IReschedulePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IReschedulePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IReschedulePreOperationConfig<TEntity> Disabled();
+        void Handle(Action<IReschedulePreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the Reschedule step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IReschedulePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IReschedulePostOperationConfig<TEntity> WithDescription(string description);
+        IReschedulePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IReschedulePostOperationConfig<TEntity> WithStepKey(string key);
+        IReschedulePostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IReschedulePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IReschedulePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IReschedulePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IReschedulePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IReschedulePostOperationConfig<TEntity> Disabled();
+        void Handle(Action<IReschedulePostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the ImmediateBook step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IImmediateBookPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IImmediateBookPreValidationConfig<TEntity> WithDescription(string description);
+        IImmediateBookPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IImmediateBookPreValidationConfig<TEntity> WithStepKey(string key);
+        IImmediateBookPreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IImmediateBookPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IImmediateBookPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IImmediateBookPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IImmediateBookPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        IImmediateBookPreValidationConfig<TEntity> Disabled();
+        void Handle(Action<IImmediateBookPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the ImmediateBook step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IImmediateBookPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IImmediateBookPreOperationConfig<TEntity> WithDescription(string description);
+        IImmediateBookPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IImmediateBookPreOperationConfig<TEntity> WithStepKey(string key);
+        IImmediateBookPreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IImmediateBookPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IImmediateBookPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IImmediateBookPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IImmediateBookPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IImmediateBookPreOperationConfig<TEntity> Disabled();
+        void Handle(Action<IImmediateBookPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the ImmediateBook step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IImmediateBookPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IImmediateBookPostOperationConfig<TEntity> WithDescription(string description);
+        IImmediateBookPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IImmediateBookPostOperationConfig<TEntity> WithStepKey(string key);
+        IImmediateBookPostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IImmediateBookPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IImmediateBookPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IImmediateBookPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IImmediateBookPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IImmediateBookPostOperationConfig<TEntity> Disabled();
+        void Handle(Action<IImmediateBookPostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the SendTemplate step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ISendTemplatePreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ISendTemplatePreValidationConfig<TEntity> WithDescription(string description);
+        ISendTemplatePreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ISendTemplatePreValidationConfig<TEntity> WithStepKey(string key);
+        ISendTemplatePreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ISendTemplatePreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ISendTemplatePreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendTemplatePreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendTemplatePreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        ISendTemplatePreValidationConfig<TEntity> Disabled();
+        void Handle(Action<ISendTemplatePreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the SendTemplate step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ISendTemplatePreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ISendTemplatePreOperationConfig<TEntity> WithDescription(string description);
+        ISendTemplatePreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ISendTemplatePreOperationConfig<TEntity> WithStepKey(string key);
+        ISendTemplatePreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ISendTemplatePreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ISendTemplatePreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendTemplatePreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendTemplatePreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        ISendTemplatePreOperationConfig<TEntity> Disabled();
+        void Handle(Action<ISendTemplatePreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the SendTemplate step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ISendTemplatePostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ISendTemplatePostOperationConfig<TEntity> WithDescription(string description);
+        ISendTemplatePostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ISendTemplatePostOperationConfig<TEntity> WithStepKey(string key);
+        ISendTemplatePostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ISendTemplatePostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ISendTemplatePostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendTemplatePostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendTemplatePostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        ISendTemplatePostOperationConfig<TEntity> Disabled();
+        void Handle(Action<ISendTemplatePostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the SendFax step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ISendFaxPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ISendFaxPreValidationConfig<TEntity> WithDescription(string description);
+        ISendFaxPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        ISendFaxPreValidationConfig<TEntity> WithStepKey(string key);
+        ISendFaxPreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ISendFaxPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ISendFaxPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendFaxPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendFaxPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        ISendFaxPreValidationConfig<TEntity> Disabled();
+        void Handle(Action<ISendFaxPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the SendFax step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ISendFaxPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ISendFaxPreOperationConfig<TEntity> WithDescription(string description);
+        ISendFaxPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        ISendFaxPreOperationConfig<TEntity> WithStepKey(string key);
+        ISendFaxPreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ISendFaxPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ISendFaxPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendFaxPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendFaxPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        ISendFaxPreOperationConfig<TEntity> Disabled();
+        void Handle(Action<ISendFaxPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the SendFax step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface ISendFaxPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        ISendFaxPostOperationConfig<TEntity> WithDescription(string description);
+        ISendFaxPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        ISendFaxPostOperationConfig<TEntity> WithStepKey(string key);
+        ISendFaxPostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        ISendFaxPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        ISendFaxPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        ISendFaxPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        ISendFaxPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        ISendFaxPostOperationConfig<TEntity> Disabled();
+        void Handle(Action<ISendFaxPostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the AddProductToKit step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IAddProductToKitPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IAddProductToKitPreValidationConfig<TEntity> WithDescription(string description);
+        IAddProductToKitPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IAddProductToKitPreValidationConfig<TEntity> WithStepKey(string key);
+        IAddProductToKitPreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IAddProductToKitPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IAddProductToKitPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddProductToKitPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddProductToKitPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        IAddProductToKitPreValidationConfig<TEntity> Disabled();
+        void Handle(Action<IAddProductToKitPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the AddProductToKit step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IAddProductToKitPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IAddProductToKitPreOperationConfig<TEntity> WithDescription(string description);
+        IAddProductToKitPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddProductToKitPreOperationConfig<TEntity> WithStepKey(string key);
+        IAddProductToKitPreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IAddProductToKitPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IAddProductToKitPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddProductToKitPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddProductToKitPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IAddProductToKitPreOperationConfig<TEntity> Disabled();
+        void Handle(Action<IAddProductToKitPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the AddProductToKit step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IAddProductToKitPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IAddProductToKitPostOperationConfig<TEntity> WithDescription(string description);
+        IAddProductToKitPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IAddProductToKitPostOperationConfig<TEntity> WithStepKey(string key);
+        IAddProductToKitPostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IAddProductToKitPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IAddProductToKitPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IAddProductToKitPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IAddProductToKitPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IAddProductToKitPostOperationConfig<TEntity> Disabled();
+        void Handle(Action<IAddProductToKitPostContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the RemoveProductFromKit step at PreValidation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IRemoveProductFromKitPreValidationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IRemoveProductFromKitPreValidationConfig<TEntity> WithDescription(string description);
+        IRemoveProductFromKitPreValidationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveProductFromKitPreValidationConfig<TEntity> WithStepKey(string key);
+        IRemoveProductFromKitPreValidationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IRemoveProductFromKitPreValidationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IRemoveProductFromKitPreValidationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveProductFromKitPreValidationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveProductFromKitPreValidationConfig<TEntity> WithSecureConfigFrom(string name);
+        IRemoveProductFromKitPreValidationConfig<TEntity> Disabled();
+        void Handle(Action<IRemoveProductFromKitPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the RemoveProductFromKit step at PreOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IRemoveProductFromKitPreOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IRemoveProductFromKitPreOperationConfig<TEntity> WithDescription(string description);
+        IRemoveProductFromKitPreOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveProductFromKitPreOperationConfig<TEntity> WithStepKey(string key);
+        IRemoveProductFromKitPreOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IRemoveProductFromKitPreOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IRemoveProductFromKitPreOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveProductFromKitPreOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveProductFromKitPreOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IRemoveProductFromKitPreOperationConfig<TEntity> Disabled();
+        void Handle(Action<IRemoveProductFromKitPreContext<TEntity>> handler);
+    }
+
+    /// <summary>Config for the RemoveProductFromKit step at PostOperation. Handle(...) is last; With* modifiers are order-free.</summary>
+    public interface IRemoveProductFromKitPostOperationConfig<TEntity> : IStepConfig<TEntity> where TEntity : Entity
+    {
+        IRemoveProductFromKitPostOperationConfig<TEntity> WithDescription(string description);
+        IRemoveProductFromKitPostOperationConfig<TEntity> WithExecutionOrder(int order);
+        IRemoveProductFromKitPostOperationConfig<TEntity> WithStepKey(string key);
+        IRemoveProductFromKitPostOperationConfig<TEntity> SkipWhenDepthAbove(int maxDepth);
+        IRemoveProductFromKitPostOperationConfig<TEntity> WithImpersonation(Guid systemUserId);
+        IRemoveProductFromKitPostOperationConfig<TEntity> WithSupportedDeployment(SupportedDeployment deployment);
+        IRemoveProductFromKitPostOperationConfig<TEntity> WithUnsecureConfig(string configuration);
+        IRemoveProductFromKitPostOperationConfig<TEntity> WithSecureConfigFrom(string name);
+        IRemoveProductFromKitPostOperationConfig<TEntity> Disabled();
+        void Handle(Action<IRemoveProductFromKitPostContext<TEntity>> handler);
+    }
+
     /// <summary>Stage choice for OnCreate(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
     public interface ICreateStages<TEntity> : IFluentStep where TEntity : Entity
     {
@@ -2264,6 +2849,110 @@ namespace Vela.Steps
         ISyncAsyncMode<IMergePostOperationConfig<TEntity>> PostOperation();
     }
 
+    /// <summary>Stage choice for OnAddItemCampaign(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface IAddItemCampaignStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<IAddItemCampaignPreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<IAddItemCampaignPreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<IAddItemCampaignPostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnRemoveItemCampaign(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface IRemoveItemCampaignStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<IRemoveItemCampaignPreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<IRemoveItemCampaignPreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<IRemoveItemCampaignPostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnRecalculate(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface IRecalculateStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<IRecalculatePreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<IRecalculatePreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<IRecalculatePostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnLockSalesOrderPricing(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface ILockSalesOrderPricingStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<ILockSalesOrderPricingPreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<ILockSalesOrderPricingPreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<ILockSalesOrderPricingPostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnUnlockSalesOrderPricing(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface IUnlockSalesOrderPricingStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<IUnlockSalesOrderPricingPreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<IUnlockSalesOrderPricingPreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<IUnlockSalesOrderPricingPostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnLockInvoicePricing(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface ILockInvoicePricingStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<ILockInvoicePricingPreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<ILockInvoicePricingPreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<ILockInvoicePricingPostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnUnlockInvoicePricing(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface IUnlockInvoicePricingStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<IUnlockInvoicePricingPreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<IUnlockInvoicePricingPreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<IUnlockInvoicePricingPostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnReschedule(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface IRescheduleStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<IReschedulePreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<IReschedulePreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<IReschedulePostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnImmediateBook(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface IImmediateBookStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<IImmediateBookPreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<IImmediateBookPreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<IImmediateBookPostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnSendTemplate(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface ISendTemplateStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<ISendTemplatePreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<ISendTemplatePreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<ISendTemplatePostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnSendFax(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface ISendFaxStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<ISendFaxPreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<ISendFaxPreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<ISendFaxPostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnAddProductToKit(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface IAddProductToKitStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<IAddProductToKitPreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<IAddProductToKitPreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<IAddProductToKitPostOperationConfig<TEntity>> PostOperation();
+    }
+
+    /// <summary>Stage choice for OnRemoveProductFromKit(). Pre-stages are Sync-only; PostOperation is Sync/Async.</summary>
+    public interface IRemoveProductFromKitStages<TEntity> : IFluentStep where TEntity : Entity
+    {
+        ISyncMode<IRemoveProductFromKitPreValidationConfig<TEntity>> PreValidation();
+        ISyncMode<IRemoveProductFromKitPreOperationConfig<TEntity>> PreOperation();
+        ISyncAsyncMode<IRemoveProductFromKitPostOperationConfig<TEntity>> PostOperation();
+    }
+
     /// <summary>Stage choice for OnMessage<TMessage>(): a custom / non-modelled message. Universal image rules only.</summary>
     public interface IPermissiveStages<TEntity> : IFluentStep where TEntity : Entity
     {
@@ -2462,6 +3151,19 @@ namespace Vela.Steps
         IWinQuoteStages<TEntity> OnWinQuote();
         IModifyAccessStages<TEntity> OnModifyAccess();
         IMergeStages<TEntity> OnMerge();
+        IAddItemCampaignStages<TEntity> OnAddItemCampaign();
+        IRemoveItemCampaignStages<TEntity> OnRemoveItemCampaign();
+        IRecalculateStages<TEntity> OnRecalculate();
+        ILockSalesOrderPricingStages<TEntity> OnLockSalesOrderPricing();
+        IUnlockSalesOrderPricingStages<TEntity> OnUnlockSalesOrderPricing();
+        ILockInvoicePricingStages<TEntity> OnLockInvoicePricing();
+        IUnlockInvoicePricingStages<TEntity> OnUnlockInvoicePricing();
+        IRescheduleStages<TEntity> OnReschedule();
+        IImmediateBookStages<TEntity> OnImmediateBook();
+        ISendTemplateStages<TEntity> OnSendTemplate();
+        ISendFaxStages<TEntity> OnSendFax();
+        IAddProductToKitStages<TEntity> OnAddProductToKit();
+        IRemoveProductFromKitStages<TEntity> OnRemoveProductFromKit();
         /// <summary>Trigger on a custom / non-modelled message stated by a marker type ([CustomMessage("...")]) or a request type. Image validity is enforced at runtime.</summary>
         IPermissiveStages<TEntity> OnMessage<TMessage>() where TMessage : class;
         /// <summary>Trigger on the message named by TRequest (its RequestName); the handler is pre-typed to TRequest.</summary>
