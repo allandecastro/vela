@@ -761,7 +761,7 @@ namespace Vela.Testing
             }
 
             // Column aliases on the link (<attribute name alias/> in a link-entity) are returned under the alias.
-            foreach (XrmAttributeExpression expression in link.Columns.AttributeExpressions)
+            foreach (XrmAttributeExpression expression in link.Columns?.AttributeExpressions ?? Enumerable.Empty<XrmAttributeExpression>())
             {
                 object? value = EntityValues.GetValue(target, expression.AttributeName);
                 if (value != null)

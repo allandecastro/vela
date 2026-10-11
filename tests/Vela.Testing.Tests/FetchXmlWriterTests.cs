@@ -369,7 +369,7 @@ namespace Vela.Testing.Tests
             LinkEntity anyAll = new LinkEntity("account", "contact", "accountid", "parentcustomerid", JoinOperator.Any);
             anyAll.LinkCriteria.AddCondition("firstname", ConditionOperator.Equal, "Jane");
             query.Criteria.AnyAllFilterLinkEntity = anyAll; // "accounts that have any contact named Jane"
-            query.Criteria.AddCondition(new ConditionExpression("name", ConditionOperator.Equal, new object[] { null }));
+            query.Criteria.AddCondition(new ConditionExpression("name", ConditionOperator.Equal, new object[] { null! }));
 
             string xml = query.ToFetchXml();
             Assert.Contains("link-type=\"any\"", xml);        // Any/All related-record filter emitted inside the filter

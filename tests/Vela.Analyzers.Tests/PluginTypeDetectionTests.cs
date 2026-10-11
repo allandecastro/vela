@@ -33,6 +33,6 @@ namespace Demo
 }";
 
         await Verify.VerifyAnalyzerAsync(code,
-            new DiagnosticResult(MutablePluginStateAnalyzer.DiagnosticId, DiagnosticSeverity.Warning).WithLocation(0).WithArguments("_count"));
+            new DiagnosticResult(MutablePluginStateAnalyzer.DiagnosticId, DiagnosticSeverity.Warning).WithLocation(0).WithArguments("_count", MutablePluginStateAnalyzer.WritableField));
     }
 }

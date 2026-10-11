@@ -494,7 +494,7 @@ public class FormModelTsGeneratorTests
 
         string ts = Generate(new FormSource("id", "Main", "Info", FormXmlParser.Parse(xml), entity), "forms/account/info.form.ts");
 
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(ts, "Dup: \\{").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(ts, "Dup: \\{"));
     }
 
     [Fact]
@@ -539,7 +539,7 @@ public class FormModelTsGeneratorTests
         Assert.Contains("at: { tab: 'general', section: 's1' },", ts);
         Assert.Contains("s1: {", ts);
         Assert.DoesNotContain("s2: {", ts);          // the empty second section is not resurrected
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(ts, "'name'").Count); // listed once, under s1
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(ts, "'name'")); // listed once, under s1
     }
 
     [Fact]

@@ -28,7 +28,7 @@ public class AddCommandTests
             AddCommand.BuildAddReport("plugin Foo (Create Account)", ["/proj/Account/Plugins/Foo.cs"]));
 
         Assert.Equal("plugin Foo (Create Account)", doc.RootElement.GetProperty("description").GetString());
-        string created = Assert.Single(System.Linq.Enumerable.ToArray(
+        string? created = Assert.Single(System.Linq.Enumerable.ToArray(
             System.Linq.Enumerable.Select(doc.RootElement.GetProperty("created").EnumerateArray(), e => e.GetString())));
         Assert.Equal("/proj/Account/Plugins/Foo.cs", created);
     }

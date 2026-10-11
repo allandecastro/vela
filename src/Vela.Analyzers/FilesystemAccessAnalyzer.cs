@@ -65,7 +65,7 @@ namespace Vela.Analyzers
                 return;
             }
 
-            if (!IsFilesystemType(type, InstantiableFilesystemTypes) || !InPluginType(context, plugins))
+            if (!IsFilesystemType(type, InstantiableFilesystemTypes) || !plugins.Encloses(context.Node, context.SemanticModel, context.CancellationToken))
             {
                 return;
             }
@@ -84,7 +84,7 @@ namespace Vela.Analyzers
                 return;
             }
 
-            if (!IsFilesystemType(type, StaticFilesystemTypes) || !InPluginType(context, plugins))
+            if (!IsFilesystemType(type, StaticFilesystemTypes) || !plugins.Encloses(context.Node, context.SemanticModel, context.CancellationToken))
             {
                 return;
             }
@@ -94,18 +94,5 @@ namespace Vela.Analyzers
 
         private static bool IsFilesystemType(INamedTypeSymbol type, ImmutableHashSet<string> names)
             => names.Contains(type.Name) && type.ContainingNamespace?.ToDisplayString() == "System.IO";
-
-        private static bool InPluginType(SyntaxNodeAnalysisContext context, PluginTypes plugins)
-        {
-            for (SyntaxNode? current = context.Node; current is not null; current = current.Parent)
-            {
-                if (current is TypeDeclarationSyntax type)
-                {
-                    return plugins.IsPluginType(context.SemanticModel.GetDeclaredSymbol(type, context.CancellationToken));
-                }
-            }
-
-            return false;
-        }
     }
 }

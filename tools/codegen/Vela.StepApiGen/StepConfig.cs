@@ -137,7 +137,7 @@ internal sealed record StepConfig(
         return new(
             $"IPermissive{stage}Config<TEntity>",
             " where TEntity : Entity",
-            $"Config for an OnMessage<TMessage>() step at {stage}. Handle(...) is last; With* modifiers are order-free.",
+            $"Config for an <c>OnMessage&lt;TMessage&gt;()</c> step at {stage}. Handle(...) is last; With* modifiers are order-free.",
             stage,
             FilterOn: false,
             Unmodelled.HasPreImage(stage),

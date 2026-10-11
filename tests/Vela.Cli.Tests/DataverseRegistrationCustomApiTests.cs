@@ -155,6 +155,7 @@ public sealed class DataverseRegistrationCustomApiTests
             ["bindingtype"] = new OptionSetValue(liveBindingType),
             ["boundentitylogicalname"] = string.IsNullOrEmpty(liveBoundEntity) ? null : liveBoundEntity,
         };
+        Assert.True(live.Contains(liveColumn)); // the row names a column the seeded live API carries
         svc.OnRetrieve = (_, _, _) => live;
         // The desired shape leaves every immutable field at its default (action, global, unbound); exactly one
         // therefore differs from the seeded live value named by liveColumn.

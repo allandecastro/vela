@@ -1,10 +1,10 @@
 # Analyzers and generators
 
-Vela ships 23 Roslyn **analyzers** (VELA001 to VELA023), one **source generator** and a set of IDE **code fixes**
+Vela ships 23 Roslyn **analyzers** (VELA001 to VELA024; VELA006 was removed), one **source generator** and a set of IDE **code fixes**
 inside the `Vela.Plugins` package (assemblies `Vela.Analyzers` and `Vela.CodeFixes`). There is nothing else to
 reference: they run in the editor and at build with no configuration. A mistake that would fail at registration
 or silently do nothing is an **error**; advisory rules (VELA011, VELA012, VELA013, VELA018, VELA019,
-VELA021 and VELA022) are **warnings**.
+VELA021, VELA022 and VELA024) are **warnings**.
 
 | Rule | Category | Severity | What it catches |
 | --- | --- | --- | --- |
@@ -17,9 +17,9 @@ VELA021 and VELA022) are **warnings**.
 | [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share a trigger and nothing tells them apart (same filters and images, no step key) |
 | [VELA009](#vela009) | Vela.Usage | Error | `HasChanged`/`HasAnyChanged` in a handler whose step registers no pre-image |
 | [VELA010](#vela010) | Vela.Usage | Error | A generated relationship navigation property used in a column selector |
-| [VELA011](#vela011) | Vela.Reliability | Warning | A writable field (mutable state) on a plugin type |
+| [VELA011](#vela011) | Vela.Reliability | Warning | Mutable state on a plugin type: a writable field or auto-property, a `readonly` mutable collection, a captured primary-constructor parameter |
 | [VELA012](#vela012) | Vela.Usage | Warning | Throwing an exception other than `InvalidPluginExecutionException` from a plugin |
-| [VELA013](#vela013) | Vela.Performance | Warning | `new ColumnSet(true)` retrieves every column |
+| [VELA013](#vela013) | Vela.Performance | Warning | `new ColumnSet(true)` in a plugin type retrieves every column |
 | [VELA014](#vela014) | Vela.Usage | Error | A plugin with a generated context or typed image must be declared `partial` |
 | [VELA015](#vela015) | Vela.Usage | Error | A step handler's context does not match the step's message/stage |
 | [VELA016](#vela016) | Vela.Usage | Error | A typed-context handler is bound on more than one image-capturing step |
@@ -30,6 +30,7 @@ VELA021 and VELA022) are **warnings**.
 | [VELA021](#vela021) | Vela.Usage | Warning | An image capture lists columns but no typed projection can be generated for it |
 | [VELA022](#vela022) | Vela.Reliability | Warning | A step on the `SetState` message never fires |
 | [VELA023](#vela023) | Vela.Usage | Error | A message with a typed trigger is registered through it, not `On<UpdateRequest>()` |
+| [VELA024](#vela024) | Vela.Reliability | Warning | A plugin runs work in parallel (`Task.Run`, `Parallel.*`, `new Thread`, ...) or blocks on a task (`.Result`, `.Wait()`) |
 
 Code fixes (editor lightbulb): VELA003, VELA004, VELA005, VELA007, VELA012, VELA014, VELA015 and VELA023. The
 [typed image projection generator](#typed-image-projection-generator) ships in the same assembly as the analyzers.
@@ -163,13 +164,25 @@ or load related records with a deep insert / relationship-aware read rather than
 
 ## VELA011
 
-**Mutable plugin state.** A writable field on a plugin / Custom API type is shared state: the Dataverse sandbox
-caches and reuses plugin instances across executions and calls them concurrently, so a mutable field leaks data
-between unrelated operations and races. Only writable fields are flagged; `const`, `readonly` and `static readonly`
-(immutable configuration) are fine. Plugin types are recognised by symbol (`Microsoft.Xrm.Sdk.IPlugin`,
+**Mutable plugin state.** The Dataverse sandbox caches and reuses plugin instances across executions and calls them
+concurrently, so state stored on a plugin / Custom API type leaks data between unrelated operations and races. Four
+shapes are flagged:
+
+- a writable field (instance or `static`);
+- a writable auto-property (`{ get; set; }`, also with a `private set`): its backing field is a writable field;
+- a `readonly` field holding a mutable collection (`List<T>`, `Dictionary<TKey, TValue>`, `HashSet<T>`, the other
+  `System.Collections.Generic` collections, `IList<T>` / `ICollection<T>` / `IDictionary<TKey, TValue>` / `ISet<T>`,
+  and the non-generic `ArrayList` / `Hashtable`): `readonly` freezes the reference, not the contents;
+- a primary-constructor parameter that a member reads or writes: the compiler stores it in a writable field.
+
+`const`, `readonly` and `static readonly` fields of immutable values, get-only and `init` auto-properties, arrays (the
+usual fixed column lists), read-only views (`IReadOnlyList<T>`, `ReadOnlyCollection<T>`), the concurrent collections
+(thread-safe, the deliberate cache) and a primary-constructor parameter used only in an initializer or a base
+constructor call are fine. Plugin types are recognised by symbol (`Microsoft.Xrm.Sdk.IPlugin`,
 `Vela.Plugin.PluginBase`, `EntityPluginBase<T>`, `Vela.CustomApi.CustomApiBase`), never by a look-alike name.
 
-**Fix:** keep per-execution state in locals or on the execution context; make constants `const` / `readonly`.
+**Fix:** keep per-execution state in locals or on the execution context; make constants `const` / `readonly` and
+expose collections as read-only.
 
 ## VELA012
 
@@ -201,6 +214,9 @@ user-facing failures.
 
 **Retrieving all columns.** `new ColumnSet(true)` fetches every column, moving far more data than a plugin needs.
 Request only the columns you use (the explicit `SelectAll()` on a typed query states the intent and is left alone).
+The argument is read as a constant, so `new ColumnSet(AllColumns)` over a `const bool` and `AllColumns = true` in an
+object initializer are caught too. Like VELA019, the rule applies inside a plugin / Custom API type only: a test
+class or a tool in the same solution is not flagged.
 
 **Fix:** pass the specific columns to `ColumnSet`, or use the typed `Select(...)`.
 
@@ -362,3 +378,22 @@ Key points:
   and Custom API handlers get none. See
   [Typed step context](../guides/plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage) and the
   VELA015 / VELA016 guard rails.
+
+## VELA024
+
+**Parallel execution in a plugin.** Microsoft's guidance is
+[not to use parallel execution in plug-ins](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/do-not-use-parallel-execution-in-plug-ins):
+the execution context and the organization services are not thread-safe, work on another thread runs outside the
+step's transaction and can outlive the step, and blocking on a task risks deadlocks and timeouts. Reported inside a
+plugin / Custom API type on:
+
+- work started on another thread: `Task.Run`, `Task.Factory.StartNew`, `Parallel.For` / `ForEach` / `Invoke`, PLINQ
+  `AsParallel()`, `ThreadPool.QueueUserWorkItem`, `new Thread(...)`;
+- blocking on a task: `.Result`, `.Wait()`, `Task.WaitAll` / `WaitAny`, `GetAwaiter().GetResult()`.
+
+Types are matched by namespace (`System.Threading`, `System.Threading.Tasks`, `System.Linq`), so a look-alike
+`Task` of another library is not flagged. Like VELA019, code outside a plugin type (tests, tools, a nested helper
+type) is left alone.
+
+**Fix:** run the work sequentially on the calling thread (batch Dataverse calls with `ExecuteMultipleRequest` if
+needed), or move it out of the sandbox: an asynchronous step, a Power Automate flow or an Azure function.

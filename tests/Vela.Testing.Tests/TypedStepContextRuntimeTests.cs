@@ -50,7 +50,7 @@ namespace Vela.Testing.Tests
                 .Handle(OnCreated);
 
         private void OnCreated(OnCreatedContext ctx)
-            => ctx.SystemService.Create(new FakeTask { Subject = ctx.PostImage?.Name });
+            => ctx.SystemService.Create(new FakeTask { Subject = ctx.PostImage?.Name! });
 
         public sealed class OnCreatedContext : CreatePostContext<FakeAccount>
         {

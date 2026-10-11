@@ -66,7 +66,7 @@ public sealed class CustomApiParameterNamingTests
 
         private void Handle(ILocalPluginContext ctx)
         {
-            string message = ctx.GetInputParameter<string>("Message");
+            string? message = ctx.GetInputParameter<string>("Message");
             ctx.SetOutputParameter("Echo", "echo:" + message);
         }
     }

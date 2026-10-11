@@ -13,10 +13,10 @@ namespace Microsoft.Xrm.Sdk { public interface IPlugin { } }
 namespace Vela.Plugin { public abstract class EntityPluginBase<T> { } }
 ";
 
-    private static DiagnosticResult Expected(string field) =>
+    private static DiagnosticResult Expected(string member, string shape = MutablePluginStateAnalyzer.WritableField, int location = 0) =>
         new DiagnosticResult(Vela.Analyzers.MutablePluginStateAnalyzer.DiagnosticId, DiagnosticSeverity.Warning)
-            .WithLocation(0)
-            .WithArguments(field);
+            .WithLocation(location)
+            .WithArguments(member, shape);
 
     [Fact]
     public async Task Flags_a_writable_instance_field_on_a_plugin()
@@ -85,18 +85,179 @@ namespace Demo
     }
 
     [Fact]
-    public async Task Does_not_flag_a_mutable_auto_property()
+    public async Task Flags_a_writable_auto_property_on_a_plugin()
     {
-        // A writable auto-property's backing field is compiler-generated (AssociatedSymbol set), so it is not
-        // flagged - only plain writable fields are.
+        // #448: the backing field of a writable auto-property is a writable field the sandbox shares across
+        // executions, whatever the setter's accessibility and whether it is static.
         string code = Harness + @"
 namespace Demo
 {
     using Microsoft.Xrm.Sdk;
     public class MyPlugin : IPlugin
     {
-        public int Count { get; set; }
+        public int {|#0:Count|} { get; set; }
+        public string {|#1:Last|} { get; private set; }
+        public static string {|#2:Shared|} { get; set; }
         public void Execute(System.IServiceProvider sp) { }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(
+            code,
+            Expected("Count", MutablePluginStateAnalyzer.WritableAutoProperty, 0),
+            Expected("Last", MutablePluginStateAnalyzer.WritableAutoProperty, 1),
+            Expected("Shared", MutablePluginStateAnalyzer.WritableAutoProperty, 2));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_get_only_init_only_or_computed_properties()
+    {
+        // A get-only auto-property is backed by a readonly field, init-only is set once at construction, and a
+        // property with accessor bodies stores nothing itself (its field, when writable, is flagged on its own).
+        string code = Harness + @"
+namespace System.Runtime.CompilerServices { internal static class IsExternalInit { } }
+namespace Demo
+{
+    using Microsoft.Xrm.Sdk;
+    public class MyPlugin : IPlugin
+    {
+        private readonly int _value = 1;
+        public int Id { get; } = 1;
+        public string Name { get; init; }
+        public int Value { get => _value; set { } }
+        public int Twice => _value * 2;
+        public int this[int i] { get => i; set { } }
+        public void Execute(System.IServiceProvider sp) { }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_writable_auto_property_on_a_non_plugin_type()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    public class Settings
+    {
+        public int Count { get; set; }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_a_readonly_field_holding_a_mutable_collection()
+    {
+        // #448: readonly freezes the reference, not the contents, so a readonly List/Dictionary/HashSet (or a field
+        // typed as a mutable collection interface) still shares its contents across executions.
+        string code = Harness + @"
+namespace Demo
+{
+    using System.Collections;
+    using System.Collections.Generic;
+    using Microsoft.Xrm.Sdk;
+    public class MyPlugin : IPlugin
+    {
+        private readonly List<string> {|#0:_seen|} = new List<string>();
+        private static readonly Dictionary<string, int> {|#1:Counts|} = new Dictionary<string, int>();
+        private static readonly IList<string> {|#2:Names|} = new List<string>();
+        private readonly Hashtable {|#3:_legacy|} = new Hashtable();
+        public void Execute(System.IServiceProvider sp) { }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(
+            code,
+            Expected("_seen", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 0),
+            Expected("Counts", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 1),
+            Expected("Names", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 2),
+            Expected("_legacy", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 3));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_readonly_arrays_read_only_concurrent_or_immutable_collections()
+    {
+        // Arrays (the usual fixed column lists), read-only views and the concurrent collections (thread-safe by
+        // design, the deliberate cache) are left alone; so is a mutable collection on a non-plugin type.
+        string code = Harness + @"
+namespace Demo
+{
+    using System.Collections.Concurrent;
+    using System.Collections.Generic;
+    using System.Collections.ObjectModel;
+    using Microsoft.Xrm.Sdk;
+    public class MyPlugin : IPlugin
+    {
+        private static readonly string[] Columns = { ""name"" };
+        private static readonly IReadOnlyList<string> Names = new List<string>();
+        private static readonly IReadOnlyDictionary<string, int> Map = new Dictionary<string, int>();
+        private static readonly ReadOnlyCollection<string> View = new List<string>().AsReadOnly();
+        private static readonly ConcurrentDictionary<string, int> Cache = new ConcurrentDictionary<string, int>();
+        public void Execute(System.IServiceProvider sp) { }
+    }
+    public class Helper
+    {
+        private readonly List<string> _items = new List<string>();
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_a_primary_constructor_parameter_captured_by_a_member()
+    {
+        // #448: a primary-constructor parameter read by a method is stored by the compiler in a writable field.
+        string code = Harness + @"
+namespace Demo
+{
+    using Microsoft.Xrm.Sdk;
+    public class MyPlugin(string {|#0:unsecure|}, string secure) : IPlugin
+    {
+        public void Execute(System.IServiceProvider sp) { System.GC.KeepAlive(unsecure); }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code, Expected("unsecure", MutablePluginStateAnalyzer.CapturedParameter));
+    }
+
+    [Fact]
+    public async Task Flags_a_primary_constructor_parameter_captured_by_several_members_once()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class Account { }
+    public sealed class MyPlugin(string {|#0:config|}) : EntityPluginBase<Account>
+    {
+        public string Config => config;
+        public void Reset() { config = null; }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code, Expected("config", MutablePluginStateAnalyzer.CapturedParameter));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_primary_constructor_parameter_used_only_at_construction()
+    {
+        // A use in a field / property initializer or a base-constructor argument runs once at construction and
+        // stores nothing; an unused parameter is not captured either.
+        string code = Harness + @"
+namespace Demo
+{
+    using Microsoft.Xrm.Sdk;
+    public abstract class Base : IPlugin
+    {
+        protected Base(string name) { }
+        public void Execute(System.IServiceProvider sp) { }
+    }
+    public class MyPlugin(string unsecure, string secure, string unused) : Base(secure)
+    {
+        private readonly string _config = unsecure;
+        public string Config { get; } = unsecure;
+    }
+    public class Helper(string value)
+    {
+        public string Value => value;
     }
 }";
         await Verify.VerifyAnalyzerAsync(code);

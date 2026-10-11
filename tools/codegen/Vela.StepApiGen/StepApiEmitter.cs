@@ -32,7 +32,7 @@ internal static class StepApiEmitter
 
         // The permissive OnMessage<TMessage>() surface: universal image rules, untyped or request-typed handlers.
         WriteStages(w,
-            "Stage choice for OnMessage<TMessage>(): a custom / non-modelled message. Universal image rules only.",
+            "Stage choice for <c>OnMessage&lt;TMessage&gt;()</c>: a custom / non-modelled message. Universal image rules only.",
             "IPermissiveStages<TEntity>",
             " where TEntity : Entity",
             stage => $"IPermissive{stage}Config<TEntity>");

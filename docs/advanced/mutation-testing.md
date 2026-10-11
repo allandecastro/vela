@@ -98,6 +98,9 @@ All jobs run on the self-hosted Windows runner (like `ci.yml`, to avoid GitHub A
 | `plugins-steps` | `Vela.Plugins/Steps` (generated `StepApi.cs` / `StepBuilder.Impl.cs` and the `SdkMessageNames.cs` data table excluded) | ~86% (net10 proxy, see note) | 80 |
 | `plugins-context` | `Vela.Plugins/Context` | ~88% (net10 proxy, see note) | 80 |
 | `plugins-services` | `Vela.Plugins/DI`, `Caching`, `Localization` | ~85% (net10 proxy, see note) | 80 |
+| `plugins-runtime` | `Vela.Plugins/Plugin` (PluginBase, EntityPluginBase, handler invocation) and `Retry` | ~66.7% / ~70.8% before the #448 tests (Windows, partial globs) | 80 |
+| `harness-store` | `InMemoryOrganizationService.cs` (the store core) | ~68.9% before the #448 tests (Windows) | 80 |
+| `harness-pipeline` | `PluginPipeline.cs`, `.Stages.cs`, `.Execution.cs` | ~71.3% before the #448 tests (Windows) | 80 |
 
 Notes on the scores:
 
@@ -109,6 +112,10 @@ Notes on the scores:
   can't run offline (the `cli-reader` live-connection methods). The scanner's
   `BuildLocalStateFromPackages` used to as well; it is now driven end-to-end by
   `PackageScannerBuildStateTests` on a real compiled plugin fixture.
+- The **#448 areas** (`plugins-runtime`, `harness-store`, `harness-pipeline`) were measured once on a Windows
+  runner (Stryker 4.16, a single test project) before their mutation tests landed, which is why they sit under
+  the floor above. That run also put `LocalPluginContext` + `TracingOrganizationService` at ~69.3%, well under the
+  net10 proxy of `plugins-context`. Ratchet all four once a full Windows run is in.
 - The **plugin runtime** areas are net462, so their scores above are estimates from a
   throwaway net10 build of `Vela.Plugins` and its tests (same mutate globs, both test
   projects), not the Windows run. Ratchet each area once its first Windows run is in.

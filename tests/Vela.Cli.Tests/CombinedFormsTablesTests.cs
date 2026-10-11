@@ -61,7 +61,7 @@ public class CombinedFormsTablesTests
         // The form and the table both reference account_statuscode, but the shared registry emits one enum file.
         Assert.Single(files, f => f.FileName == "option-sets/account.ts");
         string optionSets = files.Single(f => f.FileName == "option-sets/account.ts").Code;
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(optionSets, "export enum account_statuscode").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(optionSets, "export enum account_statuscode"));
     }
 
     [Fact]

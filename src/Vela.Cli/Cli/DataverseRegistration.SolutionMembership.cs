@@ -10,6 +10,10 @@ namespace Vela.Cli;
 /// <summary>
 /// A Vela-owned component that exists in Dataverse but is not part of the <c>--solution</c> being applied to.
 /// </summary>
+/// <param name="Kind">The component kind, as the plan reports it.</param>
+/// <param name="Name">The component's name.</param>
+/// <param name="ComponentType">The solution component type code.</param>
+/// <param name="ComponentId">The component's id in Dataverse.</param>
 /// <param name="Parent">For a Custom API parameter or response property: its Custom API's unique name.</param>
 public sealed record SolutionMembershipAction(string Kind, string Name, int ComponentType, Guid ComponentId, string? Parent = null);
 

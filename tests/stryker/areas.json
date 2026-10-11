@@ -12,5 +12,8 @@
   { "area": "analyzers", "tests": "tests/Vela.Analyzers.Tests", "timeout": 45, "sources": "^src/Vela\\.Analyzers/.*\\.cs$" },
   { "area": "plugins-steps", "tests": "tests/Vela.Tests", "timeout": 120, "sources": "^src/Vela\\.Plugins/Steps/.*\\.cs$", "exclude": "^src/Vela\\.Plugins/Steps/(StepApi|StepBuilder\\.Impl|SdkMessageNames)\\.cs$" },
   { "area": "plugins-context", "tests": "tests/Vela.Tests", "timeout": 150, "sources": "^src/Vela\\.Plugins/Context/.*\\.cs$" },
-  { "area": "plugins-services", "tests": "tests/Vela.Tests", "timeout": 90, "sources": "^src/Vela\\.Plugins/(DI|Caching|Localization)/.*\\.cs$" }
+  { "area": "plugins-services", "tests": "tests/Vela.Tests", "timeout": 90, "sources": "^src/Vela\\.Plugins/(DI|Caching|Localization)/.*\\.cs$" },
+  { "area": "plugins-runtime", "tests": "tests/Vela.Tests", "timeout": 120, "sources": "^src/Vela\\.Plugins/(Plugin|Retry)/.*\\.cs$" },
+  { "area": "harness-store", "tests": "tests/Vela.Testing.Tests", "timeout": 60, "sources": "^src/Vela\\.Testing/Fakes/InMemoryOrganizationService\\.cs$" },
+  { "area": "harness-pipeline", "tests": "tests/Vela.Testing.Tests", "timeout": 60, "sources": "^src/Vela\\.Testing/Pipeline/PluginPipeline(\\.Stages|\\.Execution)?\\.cs$" }
 ]

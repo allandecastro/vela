@@ -29,5 +29,6 @@ namespace Vela
         public const string ImageProjectionNotGenerated = "VELA021";
         public const string SetStateNeverFires = "VELA022";
         public const string TypedTriggerRequired = "VELA023";
+        public const string ParallelExecution = "VELA024";
     }
 }

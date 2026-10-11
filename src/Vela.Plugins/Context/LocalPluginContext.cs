@@ -1,8 +1,5 @@
 using System;
-using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Reflection;
 using Vela.Constants;
 using Vela.DI;
 using Microsoft.Xrm.Sdk;
@@ -32,16 +29,25 @@ namespace Vela.Context
         private IOrganizationService? _systemService;
         private IServiceEndpointNotificationService? _notificationService;
 
-        // Reflection results are the same for every execution of a worker, so resolve them once per process instead
-        // of on every plugin invocation: the context interface types and the context property accessors read by name.
-        private static readonly Type[] PreferredContextTypes = ResolvePreferredContextTypes();
-        private static readonly ConcurrentDictionary<(Type, string), PropertyInfo?> ContextProperties =
-            new ConcurrentDictionary<(Type, string), PropertyInfo?>();
+        // Dataverse serves successive context interface versions (IPluginExecutionContext2..7), each adding members.
+        // The richest one is requested first. The SDK the plugin compiles against defines them all, and the platform
+        // always loads a newer SDK, so they are referenced directly.
+        private static readonly Type[] PreferredContextTypes =
+        {
+            typeof(IPluginExecutionContext7),
+            typeof(IPluginExecutionContext6),
+            typeof(IPluginExecutionContext5),
+            typeof(IPluginExecutionContext4),
+            typeof(IPluginExecutionContext3),
+            typeof(IPluginExecutionContext2),
+            typeof(IPluginExecutionContext),
+        };
 
         /// <summary>
         /// Initializes a new instance of the <see cref="LocalPluginContext"/> class.
         /// </summary>
         /// <param name="serviceProvider">Runtime service provider.</param>
+        /// <param name="pluginTypeName">The plugin's type name, for the trace lines; null when unknown.</param>
         public LocalPluginContext(IServiceProvider serviceProvider, string? pluginTypeName = null)
         {
             ServiceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
@@ -55,15 +61,21 @@ namespace Vela.Context
             // a Microsoft.Extensions.Logging.ILogger). It is a no-op when the environment exports no telemetry.
             Logger = serviceProvider.GetService(typeof(ILogger)) as ILogger ?? NullPluginTelemetryLogger.Instance;
             ManagedIdentityService = serviceProvider.GetService(typeof(IManagedIdentityService)) as IManagedIdentityService;
-            _environmentId = ResolveContextNonEmptyString(PluginExecutionContext, "EnvironmentId");
-            _tenantId = ResolveContextGuid(PluginExecutionContext, "TenantId");
-            _initiatingUserAgent = ResolveContextString(PluginExecutionContext, "InitiatingUserAgent") ?? string.Empty;
-            _isPortalsClientCall = ResolveContextBool(PluginExecutionContext, "IsPortalsClientCall");
-            _portalsContactId = ResolveContextGuid(PluginExecutionContext, "PortalsContactId");
-            _isApplicationUser = ResolveContextBool(PluginExecutionContext, "IsApplicationUser");
-            _bulkTargets = ResolveBulkTargets(PluginExecutionContext);
-            _bulkPreEntityImagesCollection = ResolveBulkEntityImages(PluginExecutionContext, "PreEntityImagesCollection");
-            _bulkPostEntityImagesCollection = ResolveBulkEntityImages(PluginExecutionContext, "PostEntityImagesCollection");
+            // The newer members are read through their SDK interface, never by name on the concrete type: the
+            // platform's context class is opaque and may implement them explicitly, and the compiler then pins each
+            // member's type (EnvironmentId is a string, TenantId a Guid).
+            IPluginExecutionContext context = PluginExecutionContext;
+            _environmentId = NullIfEmpty((context as IPluginExecutionContext6)?.EnvironmentId);
+            _tenantId = NullIfEmpty((context as IPluginExecutionContext6)?.TenantId);
+            _initiatingUserAgent = (context as IPluginExecutionContext5)?.InitiatingUserAgent ?? string.Empty;
+            _isPortalsClientCall = (context as IPluginExecutionContext2)?.IsPortalsClientCall == true;
+            _portalsContactId = NullIfEmpty((context as IPluginExecutionContext2)?.PortalsContactId);
+            _isApplicationUser = (context as IPluginExecutionContext7)?.IsApplicationUser == true;
+            _bulkTargets = ResolveBulkTargets(context);
+            _bulkPreEntityImagesCollection = (IReadOnlyList<EntityImageCollection>?)(context as IPluginExecutionContext4)?.PreEntityImagesCollection
+                ?? Array.Empty<EntityImageCollection>();
+            _bulkPostEntityImagesCollection = (IReadOnlyList<EntityImageCollection>?)(context as IPluginExecutionContext4)?.PostEntityImagesCollection
+                ?? Array.Empty<EntityImageCollection>();
             Resolver = SimpleServiceResolver.CreateDefault(this);
         }
 
@@ -453,46 +465,9 @@ namespace Vela.Context
                 ?? throw new InvalidPluginExecutionException("IManagedIdentityService is unavailable.");
         }
 
-        private static Guid? ResolveContextGuid(object context, string propertyName)
-        {
-            if (!TryGetContextProperty(context, propertyName, out object? value))
-            {
-                return null;
-            }
+        private static Guid? NullIfEmpty(Guid? value) => value == Guid.Empty ? null : value;
 
-            if (value is Guid guid)
-            {
-                return guid == Guid.Empty ? (Guid?)null : guid;
-            }
-
-            return null;
-        }
-
-        private static string? ResolveContextString(object context, string propertyName)
-        {
-            if (!TryGetContextProperty(context, propertyName, out object? value))
-            {
-                return null;
-            }
-
-            return value as string;
-        }
-
-        private static string? ResolveContextNonEmptyString(object context, string propertyName)
-        {
-            string? value = ResolveContextString(context, propertyName);
-            return string.IsNullOrEmpty(value) ? null : value;
-        }
-
-        private static bool ResolveContextBool(object context, string propertyName)
-        {
-            if (!TryGetContextProperty(context, propertyName, out object? value))
-            {
-                return false;
-            }
-
-            return value is bool flag && flag;
-        }
+        private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
         // Only the bulk table messages carry their rows in Targets. Any other message (a Custom API, a custom
         // action) can have an EntityCollection input that happens to be named Targets: that is not a bulk operation.
@@ -511,107 +486,16 @@ namespace Vela.Context
             || string.Equals(messageName, PluginMessages.UpdateMultiple, StringComparison.Ordinal)
             || string.Equals(messageName, "UpsertMultiple", StringComparison.Ordinal);
 
-        private static IReadOnlyList<EntityImageCollection> ResolveBulkEntityImages(IPluginExecutionContext context, string propertyName)
-        {
-            if (!TryGetContextProperty(context, propertyName, out object? value) || value == null)
-            {
-                return Array.Empty<EntityImageCollection>();
-            }
-
-            if (value is IReadOnlyList<EntityImageCollection> readOnlyList)
-            {
-                return readOnlyList;
-            }
-
-            if (value is IEnumerable<EntityImageCollection> typedEnumerable)
-            {
-                List<EntityImageCollection> items = new List<EntityImageCollection>();
-                foreach (EntityImageCollection imageCollection in typedEnumerable)
-                {
-                    items.Add(imageCollection);
-                }
-
-                return items;
-            }
-
-            if (value is IEnumerable untypedEnumerable)
-            {
-                List<EntityImageCollection> items = new List<EntityImageCollection>();
-                foreach (object? item in untypedEnumerable)
-                {
-                    if (item is EntityImageCollection imageCollection)
-                    {
-                        items.Add(imageCollection);
-                    }
-                }
-
-                return items;
-            }
-
-            return Array.Empty<EntityImageCollection>();
-        }
-
-        private static bool TryGetContextProperty(object context, string propertyName, out object? value)
-        {
-            value = null;
-            if (context == null || string.IsNullOrWhiteSpace(propertyName))
-            {
-                return false;
-            }
-
-            PropertyInfo? property = ContextProperties.GetOrAdd(
-                (context.GetType(), propertyName),
-                static key => key.Item1.GetProperty(key.Item2, BindingFlags.Instance | BindingFlags.Public));
-            if (property == null)
-            {
-                return false;
-            }
-
-            value = property.GetValue(context);
-            return true;
-        }
-
         // Traces an ALREADY-COMPOSED string safely. Dataverse's ITracingService.Trace runs string.Format even when
         // no args are supplied, so a pre-built line containing a literal '{' or '}' (e.g. a serialized entity
         // snapshot) would throw FormatException. Passing the text as the {0} argument means string.Format never
         // parses the braces inside it.
         private void SafeTrace(string text) => _safeTracingService.Trace("{0}", text);
 
-        private static Type[] ResolvePreferredContextTypes()
-        {
-            string[] names =
-            {
-                "Microsoft.Xrm.Sdk.IPluginExecutionContext7, Microsoft.Xrm.Sdk",
-                "Microsoft.Xrm.Sdk.IPluginExecutionContext6, Microsoft.Xrm.Sdk",
-                "Microsoft.Xrm.Sdk.IPluginExecutionContext5, Microsoft.Xrm.Sdk",
-                "Microsoft.Xrm.Sdk.IPluginExecutionContext4, Microsoft.Xrm.Sdk",
-                "Microsoft.Xrm.Sdk.IPluginExecutionContext3, Microsoft.Xrm.Sdk",
-                "Microsoft.Xrm.Sdk.IPluginExecutionContext2, Microsoft.Xrm.Sdk",
-                "Microsoft.Xrm.Sdk.IPluginExecutionContext, Microsoft.Xrm.Sdk"
-            };
-
-            List<Type> types = new List<Type>(names.Length);
-            foreach (string name in names)
-            {
-                Type? type = Type.GetType(name, throwOnError: false);
-                if (type != null)
-                {
-                    types.Add(type);
-                }
-            }
-
-            return types.ToArray();
-        }
-
         private static IPluginExecutionContext ResolveExecutionContext(IServiceProvider serviceProvider)
         {
-            // Dataverse exposes successive context interface versions (IPluginExecutionContext2..7), each
-            // adding members. We request the richest one the running platform offers and fall back to
-            // older versions so the framework keeps working across environments. The types are resolved
-            // by name (Type.GetType) because older SDK assemblies may not define the newer interfaces.
-            // All versions derive from IPluginExecutionContext, so the resolved instance is returned as
-            // that common type.
-            // The interface types are resolved by name once per process (PreferredContextTypes).
+            // Request the richest context interface the platform serves, falling back to older ones. All versions
+            // derive from IPluginExecutionContext, so the resolved instance is returned as that common type.
             object? context = null;
             foreach (Type type in PreferredContextTypes)
             {

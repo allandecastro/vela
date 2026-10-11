@@ -39,7 +39,7 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         // ordered by kind then type, so "custom-api" precedes "step".
         Assert.Equal(new[] { "custom-api", "step" }, state.Items.Select(i => i.Kind).ToArray());
 
-        RegistrationItem step = Assert.Single(state.Items.Where(i => i.Kind == "step"));
+        RegistrationItem step = Assert.Single(state.Items, i => i.Kind == "step");
         Assert.Equal("SamplePluginFixture.SampleAccountPlugin", step.Type);
         Assert.Equal("Create", step.Definition.GetProperty("message").GetString());
         Assert.Equal("account", step.Definition.GetProperty("entityLogicalName").GetString());
@@ -49,7 +49,7 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         // The classic IPlugin in the same assembly is not scanned for registrations, only reported as unmanaged.
         Assert.Equal(new[] { "SamplePluginFixture.LegacyPlugin" }, state.UnmanagedPluginTypes);
 
-        RegistrationItem api = Assert.Single(state.Items.Where(i => i.Kind == "custom-api"));
+        RegistrationItem api = Assert.Single(state.Items, i => i.Kind == "custom-api");
         Assert.Equal("SamplePluginFixture.SampleCustomApi", api.Type);
         Assert.Equal("sample_DoThing", api.Definition.GetProperty("uniqueName").GetString());
     }

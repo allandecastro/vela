@@ -60,6 +60,8 @@ namespace Demo
         yield return Case<MissingFilterAnalyzer>(Compose(typeof(MissingFilterAnalyzerTests), "InMethod", "RegisterStep().OnCreate().PostOperation().Disabled().Handle(H);"));
         yield return Case<MutablePluginStateAnalyzer>(Harness(typeof(MutablePluginStateAnalyzerTests)) +
             PluginShell.Replace("BODY", "private int _count; public void Execute(IServiceProvider sp) { }"));
+        yield return Case<ParallelExecutionAnalyzer>(Harness(typeof(ParallelExecutionAnalyzerTests)) +
+            PluginShell.Replace("BODY", "public void Execute(IServiceProvider sp) { System.Threading.Tasks.Task.Run(() => { }); }"));
         yield return Case<PartialPluginForTypedImageAnalyzer>(Compose(typeof(PartialPluginForTypedImageAnalyzerTests), "InPlugin", @"
     public sealed class Audit : EntityPluginBase<Account>
     {
@@ -73,7 +75,7 @@ namespace Demo
 namespace Demo
 {
     using Microsoft.Xrm.Sdk.Query;
-    public class Use { public object M() => new ColumnSet(true); }
+    public class Use : PluginShape { public object M() => new ColumnSet(true); }
 }");
         yield return Case<SingleStepPerTypedContextHandlerAnalyzer>(Compose(typeof(SingleStepPerTypedContextHandlerAnalyzerTests), "InPlugin", @"
             RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).WithPostImage(a => a.Name).Handle(Shared);

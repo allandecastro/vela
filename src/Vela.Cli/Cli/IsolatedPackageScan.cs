@@ -60,7 +60,7 @@ internal static class IsolatedPackageScan
 
     /// <summary>
     /// Scans in a child process (the default) and adds the web resources in this process (reading files runs no
-    /// package code). <paramref name="command"/> overrides how the child is started (tests).
+    /// package code). The internal overload's <c>command</c> overrides how the child is started (tests).
     /// </summary>
     public static RegistrationState Scan(SharedOptions options, JsonSerializerOptions jsonOptions, List<string> tempDirectories) =>
         Scan(options, jsonOptions, tempDirectories, command: null, Environment.GetEnvironmentVariable);

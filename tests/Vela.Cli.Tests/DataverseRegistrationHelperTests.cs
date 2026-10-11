@@ -281,7 +281,6 @@ public class DataverseRegistrationHelperTests
     [InlineData("guid", 12)]               // the C# spellings a caller may pass
     [InlineData("bool", 0)]
     [InlineData("decimal", 2)]
-    [InlineData("System.Decimal", 2)]
     [InlineData("double", 6)]
     [InlineData("Double", 6)]
     [InlineData("string", 10)]

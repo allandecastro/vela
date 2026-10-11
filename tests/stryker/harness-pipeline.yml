@@ -1,0 +1,17 @@
+# Mutation area: the in-memory plugin pipeline core (#448): PluginPipeline.cs and its Stages and Execution partials
+# (stage ordering, transactions and rollback, async steps, images, depth). The request mapping and configuration
+# partials are not gated yet. Run from tests/Vela.Testing.Tests. net462: Windows only. First Windows measurement
+# (2026-10, Stryker 4.16): ~71.3%; the #448 mutation tests target those survivors. Ratchet once the first full run
+# is in.
+stryker-config:
+  solution: ../../Vela.sln
+  project: Vela.Testing.csproj
+  mutate:
+    - "**/Pipeline/PluginPipeline.cs"
+    - "**/Pipeline/PluginPipeline.Stages.cs"
+    - "**/Pipeline/PluginPipeline.Execution.cs"
+  reporters: [cleartext, markdown, html, json]
+  thresholds:
+    high: 90
+    low: 80
+    break: 80

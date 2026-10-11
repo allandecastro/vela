@@ -69,7 +69,7 @@ public class AddFormScriptTests
             string afterSecond = File.ReadAllText(Path.Combine(dir, "web-resources.entries.ts"));
 
             Assert.Equal(afterFirst, afterSecond);
-            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(afterSecond, "adc_/js/contact/Forms/main").Count);
+            Assert.Single(System.Text.RegularExpressions.Regex.Matches(afterSecond, "adc_/js/contact/Forms/main"));
         });
     }
 

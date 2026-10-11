@@ -22,7 +22,7 @@ public class CustomApiMessageGeneratorTests
             ResponseProperties: Array.Empty<CustomApiParameter>()));
 
         // Exactly one 'Target' member (the auto bound-record property); the duplicate parameter is skipped + documented.
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(code, "EntityReference Target").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(code, "EntityReference Target"));
         Assert.Contains("shares the 'Target' member emitted above", code);
         // The other, non-colliding parameter is still emitted.
         Assert.Contains("public Money Amount", code);
