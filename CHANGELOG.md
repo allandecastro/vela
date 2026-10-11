@@ -26,6 +26,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework, breaking)
 
+- **One way to register a step per message.** `On<TRequest>()` and `OnAsyncOnly<TRequest>()` now reject a request
+  whose message has a typed trigger (`On<UpdateRequest>()`, `On<AssignRequest>()`, `On<CreateMultipleRequest>()`,
+  `On<Vela.Messages.CreateRequest<T>>()`, ...): registering the step throws, naming the trigger to use (`OnUpdate()`).
+  They stay the way to register Custom APIs and messages without a typed trigger. The new analyzer **VELA023** (error)
+  reports it at build with a code fix to the typed trigger, and **VELA006** now finds every typed trigger on the step
+  builder instead of a fixed list. The list of typed triggers is generated from the message model.
 - **A typed trigger bound to one table is rejected on any other (#461).** `OnWinQuote()` and `OnWinOpportunity()`
   both register on `Win`, on quote and opportunity, so on the wrong table a step would run with the wrong typed
   request. The step builder now rejects a typed trigger on a table its message does not run on: `OnQualifyLead()`
@@ -527,6 +533,10 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (CLI, breaking)
 
+- **`vela models --messages` no longer emits an `On{Message}()` step extension for a message with a typed trigger.**
+  The step builder's own `OnQualifyLead()`, `OnMerge()`, ... registers those messages (one way per message), so the
+  extension was dead code and a second path; the typed request and response are still generated, and messages without
+  a typed trigger keep their extension. The list is the one generated from the message model.
 - **Steps deployed by very old Vela versions (named `df:<plugin type>:<step key>`) are no longer recognised by
   their step key.** The live read no longer parses that name format. Such a step is matched like a keyless step
   (plugin type, message, stage, mode and table) and renamed on the next `apply`; when it cannot be matched that way,

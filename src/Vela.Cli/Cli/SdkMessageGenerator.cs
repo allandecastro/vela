@@ -146,6 +146,15 @@ public static class SdkMessageGenerator
             return;
         }
 
+        // One way per message: a message with a typed trigger on the step builder is registered through it, and an
+        // extension here would be dead (the builder's own method wins) and a second path.
+        if (Vela.Steps.TypedTriggers.Find(message.Name) is { } typed)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"    // No On{message.Name}() step extension: the step builder's typed {typed}() registers this message.");
+            return;
+        }
+
         string request = $"{message.Name}Request";
         IReadOnlyList<string> entities = message.Entities ?? Array.Empty<string>();
 
