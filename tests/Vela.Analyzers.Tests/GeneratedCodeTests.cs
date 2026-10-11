@@ -68,7 +68,6 @@ namespace Demo
     }"));
         yield return Case<PluginExceptionTypeAnalyzer>(Harness(typeof(PluginExceptionTypeAnalyzerTests)) +
             PluginShell.Replace("BODY", "public void Execute(IServiceProvider sp) { throw new InvalidOperationException(\"bad\"); }"));
-        yield return Case<PreferTypedMessageAnalyzer>(Compose(typeof(PreferTypedMessageAnalyzerTests), "InMethod", "RegisterStep().OnMessage(\"create\").Handle();"));
         yield return Case<RelationshipColumnSelectorAnalyzer>(Compose(typeof(RelationshipColumnSelectorAnalyzerTests), "InMethod", "RegisterStep().FilterOn(a => a.Contacts).Handle();"));
         yield return Case<RetrieveAllColumnsAnalyzer>(Harness(typeof(RetrieveAllColumnsAnalyzerTests)) + @"
 namespace Demo

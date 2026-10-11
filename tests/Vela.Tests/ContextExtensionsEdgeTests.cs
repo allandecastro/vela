@@ -331,9 +331,11 @@ public sealed class ContextExtensionsEdgeTests
     }
 
     [Fact]
-    public void Early_bound_entities_in_a_request_are_downcast_and_the_callers_collection_is_left_alone()
+    public void Early_bound_entities_in_a_request_are_downcast_on_a_copy_and_the_callers_request_is_left_alone()
     {
         (TracingOrganizationService service, Mock<IOrganizationService> inner, _) = Tracing();
+        OrganizationRequest? sentRequest = null;
+        inner.Setup(s => s.Execute(It.IsAny<OrganizationRequest>())).Callback((OrganizationRequest r) => sentRequest = r).Returns(new OrganizationResponse());
         TestAccount early = new() { Name = "x" };
         Entity plain = new("account");
         EntityCollection targets = new() { EntityName = "account", MoreRecords = true, PagingCookie = "c", TotalRecordCount = 3 };
@@ -343,16 +345,20 @@ public sealed class ContextExtensionsEdgeTests
 
         service.Execute(request);
 
-        Assert.Equal(typeof(Entity), request["Target"].GetType());
-        Assert.Equal("x", ((Entity)request["Target"])["name"]);
-        EntityCollection sent = (EntityCollection)request["Targets"];
+        Assert.NotNull(sentRequest);
+        Assert.Equal("custom", sentRequest!.RequestName);
+        Assert.Equal(typeof(Entity), sentRequest["Target"].GetType());
+        Assert.Equal("x", ((Entity)sentRequest["Target"])["name"]);
+        EntityCollection sent = (EntityCollection)sentRequest["Targets"];
         Assert.NotSame(targets, sent);
         Assert.Equal(("account", true, "c", 3), (sent.EntityName, sent.MoreRecords, sent.PagingCookie, sent.TotalRecordCount));
         Assert.Equal(typeof(Entity), sent.Entities[0].GetType());
         Assert.Same(plain, sent.Entities[1]);
+        Assert.Equal(1, sentRequest["Count"]);
+        // The caller still holds its own early-bound objects.
+        Assert.Same(early, request["Target"]);
+        Assert.Same(targets, request["Targets"]);
         Assert.IsType<TestAccount>(targets.Entities[0]);
-        Assert.Equal(1, request["Count"]);
-        inner.Verify(s => s.Execute(request), Times.Once);
     }
 
     [Fact]

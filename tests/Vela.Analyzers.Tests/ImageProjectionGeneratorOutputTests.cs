@@ -329,6 +329,7 @@ namespace Demo
     using Vela.Plugin;
     public sealed class CustomMarker { }
     public sealed class Request { }
+    public sealed class GoMarker { }
     public sealed partial class Messages : EntityPluginBase<Account>
     {
         protected override void RegisterPluginSteps()
@@ -339,7 +340,7 @@ namespace Demo
             RegisterStep().OnUpdateMultiple().PostOperation().Sync().WithPreImage(a => a.Name).Handle(() => { });
             RegisterStep().On<Request>().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
             RegisterStep().On<CustomMarker>().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
-            RegisterStep().OnMessage(""1go"").PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
+            RegisterStep().OnMessage<GoMarker>().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });
             RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(""2024"", a => a.Name).Handle(() => { });
         }
     }
@@ -348,8 +349,9 @@ namespace Demo
 
         Assert.Empty(run.GeneratorDiagnostics);
         // A lambda handler has no name, so the projection is {Message}{Stage}_{Role}: a type named exactly "Request"
-        // keeps its name (only a longer name loses a trailing "Request"), any other marker type is used as is, and a
-        // name or alias that starts with a digit is prefixed with "_" to stay a legal identifier.
+        // keeps its name (only a longer name loses a trailing "Request"), any other marker type (On<T>() or
+        // OnMessage<T>()) is used as is, and an alias that starts with a digit is prefixed with "_" to stay a legal
+        // identifier.
         AssertGeneratedFiles(run,
             "Demo_Messages_CreatePostOp_PostImage.g.cs",
             "Demo_Messages_DeletePreOp_PreImage.g.cs",
@@ -357,14 +359,14 @@ namespace Demo
             "Demo_Messages_UpdateMultiplePostOp_PreImage.g.cs",
             "Demo_Messages_RequestPostOp_PostImage.g.cs",
             "Demo_Messages_CustomMarkerPostOp_PostImage.g.cs",
-            "Demo_Messages__1goPostOp_PostImage.g.cs",
+            "Demo_Messages_GoMarkerPostOp_PostImage.g.cs",
             "Demo_Messages_UpdatePostOp_PostImage__2024.g.cs");
-        Assert.Contains("public sealed class _1goPostOp_PostImage :", Source(run, "Demo_Messages__1goPostOp_PostImage.g.cs"));
+        Assert.Contains("public sealed class GoMarkerPostOp_PostImage :", Source(run, "Demo_Messages_GoMarkerPostOp_PostImage.g.cs"));
         Assert.Contains("public sealed class UpdatePostOp_PostImage__2024 :", Source(run, "Demo_Messages_UpdatePostOp_PostImage__2024.g.cs"));
     }
 
     [Theory]
-    [InlineData("RegisterStep().OnMessage(\"   \").PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });", "WithPostImage", "PostImage")]
+    [InlineData("RegisterStep().OnMessage<int>().PostOperation().Sync().WithPostImage(a => a.Name).Handle(() => { });", "WithPostImage", "PostImage")]
     [InlineData("RegisterStep().On<int>().PostOperation().Sync().WithPreImage(a => a.Name).Handle(() => { });", "WithPreImage", "PreImage")]
     public void A_trigger_whose_message_is_blank_or_not_a_named_type_reports_VELA021_with_the_exact_message(string step, string method, string role)
     {

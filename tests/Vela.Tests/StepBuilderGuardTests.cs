@@ -50,21 +50,35 @@ public sealed class StepBuilderGuardTests
         Assert.Equal(AlreadySet("WithExecutionOrder"), Error(s => s.OnDelete().PostOperation().Sync().WithExecutionOrder(1).WithExecutionOrder(2).Handle(_ => { })).Message);
     }
 
+    // Markers for OnMessage<TMessage>(): a custom request name whose [SdkMessage] registers the step on a modelled
+    // sdkmessage. The typed-trigger rule checks the request name, so the builder's backstops still apply to these.
+    [Vela.Constants.CustomMessage("contract_UpdateAlias")]
+    [Vela.Messages.SdkMessage("Update")]
+    private sealed class UpdateAlias { }
+
+    [Vela.Constants.CustomMessage("contract_DeleteAlias")]
+    [Vela.Messages.SdkMessage("Delete")]
+    private sealed class DeleteAlias { }
+
+    [Vela.Constants.CustomMessage("contract_RouteAlias")]
+    [Vela.Messages.SdkMessage("RouteTo")]
+    private sealed class RouteAlias { }
+
     [Fact]
-    public void A_permissive_update_without_a_filter_is_refused()
+    public void A_step_registered_on_update_without_a_filter_is_refused()
     {
-        Assert.Equal(
-            "Step on message 'Update' must declare at least one filtering attribute via FilterOn(...). An unfiltered Create/Update step fires on every change. Use the typed OnCreate() / OnUpdate() / OnCreateMultiple() / OnUpdateMultiple() methods (which require the filtering attribute) rather than the permissive OnMessage(\"...\").",
-            Error(s => s.OnMessage("Update").PostOperation().Sync().Handle(_ => { })).Message);
+        Assert.StartsWith(
+            "Step on message 'Update' must declare at least one filtering attribute via FilterOn(...). An unfiltered Create/Update step fires on every change.",
+            Error(s => s.OnMessage<UpdateAlias>().PostOperation().Sync().Handle(_ => { })).Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void An_image_the_message_cannot_provide_is_refused_with_its_reason()
     {
         Assert.Equal("PreImage 'Old' is not supported for message 'RouteTo' at stage 'PostOperation': Dataverse supports no image on this message.",
-            Error(s => s.OnMessage("RouteTo").PostOperation().Sync().WithPreImage("Old", a => a.Name).Handle(_ => { })).Message);
+            Error(s => s.OnMessage<RouteAlias>().PostOperation().Sync().WithPreImage("Old", a => a.Name).Handle(_ => { })).Message);
         Assert.Equal("PostImage 'Gone' is not supported for message 'Delete' at stage 'PostOperation': the row no longer exists after a delete.",
-            Error(s => s.OnMessage("Delete").PostOperation().Sync().WithPostImage("Gone", a => a.Name).Handle(_ => { })).Message);
+            Error(s => s.OnMessage<DeleteAlias>().PostOperation().Sync().WithPostImage("Gone", a => a.Name).Handle(_ => { })).Message);
     }
 
     [Fact]

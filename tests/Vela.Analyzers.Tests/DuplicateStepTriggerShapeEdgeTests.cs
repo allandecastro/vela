@@ -7,7 +7,7 @@ using Verify = Microsoft.CodeAnalysis.CSharp.Testing.XUnit.AnalyzerVerifier<Vela
 namespace Vela.Analyzers.Tests;
 
 // Edges of VELA008's step shape: what does and does not tell two steps on one trigger apart (image kind, alias case,
-// column order and casing, subordinate images, non-literal aliases and messages).
+// column order and casing, subordinate images, non-literal aliases, and messages declared by type).
 public sealed class DuplicateStepTriggerShapeEdgeTests
 {
     private const string Harness = @"
@@ -17,7 +17,7 @@ using System.Linq.Expressions;
 namespace Vela.Steps
 {
     public interface IFluentStep { }
-    public interface ITrigger : IFluentStep { IStages OnUpdate(); IStages OnMerge(); IStages OnMessage(string message); }
+    public interface ITrigger : IFluentStep { IStages OnUpdate(); IStages OnMerge(); IStages OnMessage<TMessage>(); }
     public interface IStages : IFluentStep { IMode PreOperation(); IMode PostOperation(); }
     public interface IMode : IFluentStep { IConfig Sync(); IConfig Async(); }
     public interface IConfig : IFluentStep
@@ -33,9 +33,17 @@ namespace Vela.Steps
     }
 }
 
+namespace Vela.Constants
+{
+    [AttributeUsage(AttributeTargets.Class)]
+    public sealed class CustomMessageAttribute : Attribute { public CustomMessageAttribute(string messageName) { } }
+}
+
 namespace Demo
 {
     using Vela.Steps;
+    [Vela.Constants.CustomMessage(""contract_Ping"")] public sealed class Ping { }
+    [Vela.Constants.CustomMessage(""CONTRACT_PING"")] public sealed class PingUpper { }
     public class Account { public string Name { get; set; } public string Phone { get; set; } }
     public class Plugin { protected ITrigger RegisterStep() => null!; }
 }
@@ -116,18 +124,10 @@ namespace Demo
     }
 
     [Fact]
-    public async Task A_blank_permissive_message_is_not_a_trigger()
+    public async Task Declared_messages_match_whatever_their_case()
     {
         await Verify.VerifyAnalyzerAsync(InRegister(
-            "OnMessage(\"  \").PostOperation().Sync()",
-            "OnMessage(\"  \").PostOperation().Sync()"));
-    }
-
-    [Fact]
-    public async Task A_permissive_message_matches_whatever_its_case_and_spacing()
-    {
-        await Verify.VerifyAnalyzerAsync(InRegister(
-            "OnMessage(\"contract_Ping\").PostOperation().Sync()",
-            "{|#0:OnMessage|}(\" CONTRACT_PING \").PostOperation().Sync()"), Expected("contract_ping"));
+            "OnMessage<Ping>().PostOperation().Sync()",
+            "{|#0:OnMessage<PingUpper>|}().PostOperation().Sync()"), Expected("contract_ping"));
     }
 }
