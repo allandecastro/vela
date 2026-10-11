@@ -46,9 +46,11 @@ internal static class StepBuilderImplEmitter
         // Triggers: record the message, return the builder as the stage selector.
         foreach (var message in messages)
         {
-            w.Line($"        {StepConfig.StagesType(message.Name)} IStepTrigger<TEntity>.On{message.Name}() {{ SetMessage(PluginMessages.{message.Name}); return this; }}");
+            string entity = message.Entity is null ? string.Empty : $", \"{message.Entity}\"";
+            w.Line($"        {StepConfig.StagesType(message.Name)} IStepTrigger<TEntity>.On{message.Name}() {{ SetMessage(PluginMessages.{message.Name}{entity}); return this; }}");
         }
         w.Block(UnmodelledTriggers);
+
 
         // Permissive surface.
         WriteStages(w, "IPermissiveStages<TEntity>", stage => StepConfig.ForPermissive(stage).Type);
@@ -155,8 +157,8 @@ internal static class StepBuilderImplEmitter
     private const string UnmodelledTriggers = """
                 IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage(string messageName) { if (string.IsNullOrWhiteSpace(messageName)) throw new ArgumentNullException(nameof(messageName)); SetMessage(messageName); return this; }
                 IPermissiveStages<TEntity> IStepTrigger<TEntity>.OnMessage<TMessage>() { SetMessage(ExpressionHelper.GetMessageName<TMessage>()); return this; }
-                ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { SetMessage(ExpressionHelper.GetMessageName<TRequest>()); return new TypedStepAdapter<TEntity, TRequest>(this); }
-                IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { SetMessage(ExpressionHelper.GetMessageName<TRequest>()); return new TypedStepAdapter<TEntity, TRequest>(this); }
+                ITypedStages<TEntity, TRequest> IStepTrigger<TEntity>.On<TRequest>() { SetTypedRequestMessage(ExpressionHelper.GetMessageName<TRequest>(), typeof(TRequest), "On"); return new TypedStepAdapter<TEntity, TRequest>(this); }
+                IAsyncOnlyTypedStages<TEntity, TRequest> IStepTrigger<TEntity>.OnAsyncOnly<TRequest>() { SetTypedRequestMessage(ExpressionHelper.GetMessageName<TRequest>(), typeof(TRequest), "OnAsyncOnly"); return new TypedStepAdapter<TEntity, TRequest>(this); }
 
         """;
 

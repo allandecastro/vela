@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
+using Vela.Constants;
 using Vela.Context;
 using Vela.Plugin;
 using Vela.Steps;
@@ -37,21 +38,32 @@ namespace Vela.Testing.Tests
         }
     }
 
-    // Typed On<TRequest>() path: the handler keeps its IMessagePreContext<DeleteRequest> and reads the projection
-    // through the same accessor.
-    public sealed class TypedDeletePreImage : EntityPluginBase<FakeAccount>
+    // A custom message with no typed trigger: the On<TRequest>() path is for messages like this one only.
+    public sealed class RecalculateRequest : OrganizationRequest
     {
-        public TypedDeletePreImage(string unsecure, string secure) : base(unsecure, secure) { }
+        public const string Name = "new_Recalculate";
+
+        public RecalculateRequest()
+        {
+            RequestName = Name;
+        }
+    }
+
+    // Typed On<TRequest>() path: the handler keeps its IMessagePreContext<RecalculateRequest> and reads the projection
+    // through the same accessor.
+    public sealed class TypedRequestPreImage : EntityPluginBase<FakeAccount>
+    {
+        public TypedRequestPreImage(string unsecure, string secure) : base(unsecure, secure) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().On<DeleteRequest>().PreOperation().Sync()
+            => RegisterStep().On<RecalculateRequest>().PreOperation().Sync()
                 .WithPreImage(a => a.Name)
-                .Handle(OnDelete);
+                .Handle(OnRecalculate);
 
-        private void OnDelete(IMessagePreContext<DeleteRequest> ctx)
+        private void OnRecalculate(IMessagePreContext<RecalculateRequest> ctx)
         {
             AccountNameImage? pre = ctx.PreImageAs<AccountNameImage>();
-            ctx.SystemService.Create(new FakeTask { Subject = pre?.Name ?? "(none)" });
+            ctx.Trace("pre:" + (pre?.Name ?? "(none)"));
         }
     }
 
@@ -121,13 +133,14 @@ namespace Vela.Testing.Tests
         public void Accessor_projects_the_captured_image_on_the_typed_on_request_path()
         {
             Guid id = Guid.NewGuid();
-            PluginPipeline pipeline = PluginPipeline.Empty().Register<TypedDeletePreImage>()
-                .Seed(new FakeAccount { Id = id, Name = "Zava" });
+            PluginContextBuilder<FakeAccount> builder = PluginContext.For<FakeAccount>()
+                .OnMessage(RecalculateRequest.Name).Stage(PluginStages.PreOperation).Sync()
+                .WithPrimaryEntity(FakeAccount.EntityLogicalNameValue, id)
+                .WithPreImage(new FakeAccount { Id = id, Name = "Zava" });
 
-            pipeline.Service.Delete("account", id);
+            builder.Execute(new TypedRequestPreImage(null!, null!));
 
-            FakeTask task = Assert.Single(pipeline.GetAll("task")).ToEntity<FakeTask>();
-            Assert.Equal("Zava", task.Subject);
+            Assert.Contains("pre:Zava", builder.TraceCapture.Output);
         }
     }
 }

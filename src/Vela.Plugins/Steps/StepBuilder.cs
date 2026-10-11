@@ -27,6 +27,7 @@ public sealed partial class StepBuilder<TEntity>
     private ImageDefinition? _currentImage;
     private bool _isPreImage;
     private SetOnceModifier _setOnce;
+    private string? _requiredEntity;
 
     // The single-value modifiers on the fluent chain: each is a "last wins" overwrite if called twice, which
     // silently drops the earlier value. They may be set at most once per step; a second call throws (and the
@@ -98,6 +99,19 @@ public sealed partial class StepBuilder<TEntity>
             string.Equals(_definition.Message, PluginMessages.Disassociate, StringComparison.OrdinalIgnoreCase))
         {
             _definition.EntityLogicalName = string.Empty;
+        }
+
+        // A typed trigger whose message Dataverse accepts on one table only (OnSendEmail() on email, OnWinQuote() on
+        // quote) cannot be registered on another one. Apply would at best fail on the missing sdkmessagefilter; for
+        // an sdkmessage shared by several requests (Win, Close, Cancel) it would register on the sibling table and
+        // hand the handler the wrong typed request.
+        if (_requiredEntity != null &&
+            !string.Equals(_definition.EntityLogicalName, _requiredEntity, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"On{_definition.RequestName}() registers on the '{_definition.Message}' message of table '{_requiredEntity}', " +
+                $"but this plugin's table is '{_definition.EntityLogicalName}'. Register the step from an EntityPluginBase<T> " +
+                $"whose T is the '{_requiredEntity}' table.");
         }
 
         // Hard guarantee (the type-state only forces filtering when the fluent chain is consumed; the
@@ -214,11 +228,27 @@ public sealed partial class StepBuilder<TEntity>
     }
 
     // Every trigger records its message here: the request name it was declared with is kept for the typed context,
-    // and the step registers on the real sdkmessage (OnSendEmail() -> Send, OnWinQuote() -> Win).
-    private void SetMessage(string requestName)
+    // and the step registers on the real sdkmessage (OnSendEmail() -> Send, OnWinQuote() -> Win). A typed trigger
+    // whose message Dataverse accepts on a single table also passes that table, checked by Build().
+    // On<TRequest>() / OnAsyncOnly<TRequest>() serve the messages without a typed trigger only: a message with one is
+    // registered through it (one way per message), so the chain fails here with the trigger to use.
+    private void SetTypedRequestMessage(string requestName, Type requestType, string trigger)
+    {
+        if (TypedTriggers.Find(requestName) is string typed)
+        {
+            throw new InvalidOperationException(
+                $"{requestName} has a typed trigger: register the step with {typed}() instead of {trigger}<{requestType.Name}>(). " +
+                $"{trigger}<TRequest>() is only for messages without one.");
+        }
+
+        SetMessage(requestName);
+    }
+
+    private void SetMessage(string requestName, string? requiredEntity = null)
     {
         _definition.RequestName = requestName;
         _definition.Message = SdkMessageNames.ToSdkMessage(requestName);
+        _requiredEntity = requiredEntity;
     }
 
     // Mutation hooks for the generic typed-message adapter (Vela.Steps.TypedStepAdapter<TEntity, TRequest>),

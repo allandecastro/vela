@@ -30,17 +30,45 @@ public class InteractiveMenuTests
     [Fact]
     public void ComposeInitArgs_AddsSkipFlags_WhenProjectsDisabled()
     {
+        string[] args = InteractiveMenu.ComposeInitArgs("X", "X", "/tmp", integrations: false, tests: false, console: false, samples: true);
+
+        Assert.Equal(["init", "--name", "X", "--prefix", "X", "--output", "/tmp", "--samples", "--no-integrations", "--no-tests", "--no-console"], args);
+    }
+
+    [Fact]
+    public void ComposeInitArgs_Minimal_OmitsTheDemoOnlyProjectFlags()
+    {
+        // Without samples the Integrations/ConsoleApp projects do not exist, so their flags are never emitted.
         string[] args = InteractiveMenu.ComposeInitArgs("X", "X", "/tmp", integrations: false, tests: false, console: false);
 
-        Assert.Contains("--no-integrations", args);
-        Assert.Contains("--no-tests", args);
-        Assert.Contains("--no-console", args);
+        Assert.Equal(["init", "--name", "X", "--prefix", "X", "--output", "/tmp", "--no-tests"], args);
+    }
+
+    [Theory]
+    [InlineData("ZavaSales", true, true)]    // derives 'zavasales' (9 characters): invalid, so the wizard must ask
+    [InlineData("ZavaSales", false, false)]  // minimal: no sample Custom API needs one
+    [InlineData("Zava", true, false)]        // derives 'zava': valid
+    public void NeedsPublisherPrefix_OnlyWhenSamplesDeriveAnInvalidOne(string prefix, bool samples, bool expected)   // review
+    {
+        Assert.Equal(expected, InteractiveMenu.NeedsPublisherPrefix(prefix, samples));
+    }
+
+    [Fact]
+    public void ComposeInitArgs_WithAPublisherPrefix_ParsesForASamplesSolutionWhoseDerivedPrefixIsInvalid()   // review
+    {
+        // Without --publisher-prefix, `init ZavaSales --samples` is refused; the wizard passes the prompted one.
+        string[] args = InteractiveMenu.ComposeInitArgs("ZavaSales", "ZavaSales", "/tmp/out", integrations: true, tests: true, console: true, samples: true, publisherPrefix: "zava");
+
+        Assert.Equal(["init", "--name", "ZavaSales", "--prefix", "ZavaSales", "--output", "/tmp/out", "--publisher-prefix", "zava", "--samples"], args);
+        Assert.True(ScaffoldOptions.TryParse(args[1..], out ScaffoldOptions options, out _));
+        Assert.Equal("zava", options.PublisherPrefix);
+        Assert.False(ScaffoldOptions.TryParse(InteractiveMenu.ComposeInitArgs("ZavaSales", "ZavaSales", "/tmp/out", true, true, true, samples: true)[1..], out _, out _));
     }
 
     [Fact]
     public void ComposeInitArgs_RoundTripsThroughScaffoldOptions()
     {
-        string[] args = InteractiveMenu.ComposeInitArgs("ZavaSales", "Zava.CRM", "/tmp/out", integrations: false, tests: false, console: true);
+        string[] args = InteractiveMenu.ComposeInitArgs("ZavaSales", "Zava.CRM", "/tmp/out", integrations: false, tests: false, console: true, samples: true);
 
         bool ok = ScaffoldOptions.TryParse(args[1..], out ScaffoldOptions options, out _);
 
@@ -51,6 +79,7 @@ public class InteractiveMenuTests
         Assert.False(options.IncludeIntegrations);
         Assert.False(options.IncludeTests);
         Assert.True(options.IncludeConsole);
+        Assert.True(options.IncludeSamples);
     }
 
     [Theory]

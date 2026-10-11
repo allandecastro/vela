@@ -7,8 +7,8 @@ exit codes. For the full narrative, see [The vela CLI](../guides/cli-overview.md
 
 | Command | Purpose | Key options |
 | --- | --- | --- |
-| `vela init` (alias `new`) | Scaffold a build-ready solution | `--name`, `--prefix`, `--minimal`/`--no-demos`, `--output`, `--no-tests`/`--no-console`/`--no-integrations`, `--managed-identity`, `--web-resources`, `--core-version`, `--force` |
-| `vela add <kind> <Name>` | Generate one file into a project | kinds: `plugin`/`service`/`customapi`/`test`/`step`/`form-script`/`ribbon-script`; `--entity`, `--message`, `--stage`, `--mode`, `--filtering-attributes` (required for Create/Update steps), `--handler` (step), `--function`/`--action`, `--bound`/`--global`, `--prefix` (customapi publisher prefix), `--project`, `--force` |
+| `vela init` (alias `new`) | Scaffold a build-ready solution (minimal by default) | `--name`, `--prefix`, `--publisher-prefix`, `--samples` (demo code + Integrations/ConsoleApp), `--output`, `--no-tests` (with `--samples`: `--no-console`/`--no-integrations`, `--managed-identity`), `--web-resources`, `--core-version`, `--force` (keeps your and edited files), `--verbose`, `--json` |
+| `vela add <kind> <Name>` | Generate one file into a project | kinds: `plugin`/`service`/`customapi`/`test`/`step`/`form-script`/`ribbon-script`; `--entity`, `--message`, `--stage`, `--mode`, `--filtering-attributes` (required for Create/Update steps), `--handler` (step), `--function`/`--action`, `--bound`/`--global`, `--prefix` (customapi/test publisher prefix; default: the project's `VelaPublisherPrefix`), `--project`, `--force` (not step), `--json`; an option a kind does not use is rejected |
 | `vela models <scope>` | Generate early-bound / typed models | see [scopes](#models-scopes) + connection flags |
 | `vela plan` | Preview registrations (read-only) | package inputs + connection flags, `--solution`, `--secure-config NAME=VALUE\|NAME=@file`, `--strict`, `--detailed-exitcode`, `--verbose`, `--json`, `--out` |
 | `vela apply` | Apply registrations (writes) | package inputs + connection flags, `--solution`, `--secure-config`, `--auto-approve` (alias `--yes`), `--batch-size`, `--strict`, `--webresources`, `--json`, `--out` |
@@ -16,7 +16,7 @@ exit codes. For the full narrative, see [The vela CLI](../guides/cli-overview.md
 | `vela solution show <uniquename>` | Print a solution's publisher prefix | connection flags, `--json` |
 | `vela logs` (alias `trace`) | Read the plug-in trace log, or failed system jobs (read-only) | `--jobs` (`--all-statuses`), `--errors`, `--top`, `--since`, `--type`, `--message`, `--entity`, `--correlation`, `--full`, `--json` + connection flags |
 | `vela help [<command>]` | Help for one command; `vela help --json` for the whole command table | |
-| `vela sign` | Sign a plugin package | `--package`, `--fingerprint` \| (`--pfx`/`--pfx-base64` + `--pfx-password`/`--pfx-credential`), `--timestamp` |
+| `vela sign` | Sign a plugin package | `--package`, `--fingerprint` \| (`--pfx`/`--pfx-base64-env <VAR>` + `--pfx-password-env <VAR>`/`--pfx-credential`; literal `--pfx-base64`/`--pfx-password` warn), `--timestamp` |
 | `vela logout` | Clear the cached interactive token and remembered URL | |
 | `vela update` | Update the global tool (`dotnet tool update --global Vela.Cli`) | `--version <x.y.z>` (Windows: run from a fresh shell, the running exe is locked) |
 | `vela menu` (or bare `vela`) | Interactive menu | |
@@ -49,7 +49,7 @@ Package inputs (for `plan`/`apply`/`inspect`): `--package <file.nupkg>` (repeata
 | `--solution <uniquename>` | Early-bound classes for the solution's tables |
 | `--entities a,b,c` | Early-bound classes for the named tables |
 | `--custom-apis [a,b,c]` | Typed request/response classes (no value = every Custom API in the environment, with a warning) |
-| `--messages [a,b,c]` | Typed request/response classes for SDK messages (no value = all consumable messages) |
+| `--messages [a,b,c]` | Typed request/response classes for SDK requests, by request name (e.g. `SendEmail`; no value = every request of the consumable messages) |
 | `--roles "A,B"` | A dependency-light `Roles` class (missing names are skipped with a warning) |
 | `--solution-roles` | Every security role in `--solution` |
 | `--forms` / `--tables` | TypeScript FormModel files / Web API record interfaces (preview) |

@@ -219,12 +219,19 @@ excluded.
 
 ## SDK message classes (`--messages`)
 
-`--messages a,b,c` generates typed `Request`/`Response` classes for any SDK message (`sdkmessage`), into
-`Messages/`. With **no value** it generates every *registerable* message (Microsoft's "available events":
+`--messages a,b,c` generates typed `Request`/`Response` classes for SDK requests, by request name (`SendEmail`
+generates `SendEmailRequest` / `SendEmailResponse`), into `Messages/`. With **no value** it generates one class per
+request of every *registerable* message (Microsoft's "available events":
 non-private messages with a visible, custom-step-allowed `sdkmessagefilter`), skipping messages backed by a
 Custom API and messages that already ship an SDK request class - the core `Microsoft.Xrm.Sdk.Messages.*` types
 and the Sales/business `Microsoft.Crm.Sdk.Messages.*` types (matched against a curated, non-exhaustive supplement;
 an unlisted one just makes a harmless duplicate).
+
+The names are **SDK request names**, the names Dataverse executes: `--messages SendEmail` generates
+`SendEmailRequest`. A request name is not always the name of the `sdkmessage` a step registers on (`SendEmail`
+runs as `Send`, `WinQuote` as `Win`), and Dataverse refuses a request sent under the sdkmessage name ("Request not
+supported"). So `--messages Send` fails and lists the requests to generate instead (`SendEmail`, `SendFax`,
+`SendTemplate`). With no value, one class is generated per request.
 
 Alongside each `XxxRequest`/`XxxResponse`, `--messages` emits an **entity-constrained `On<Message>()` step
 extension** per applicable entity (from the message's `sdkmessagefilter` `primaryobjecttypecode`), giving

@@ -16,22 +16,8 @@ namespace Vela.CodeFixes
     [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(PreferTypedTriggerCodeFix)), Shared]
     public sealed class PreferTypedTriggerCodeFix : CodeFixProvider
     {
-        // Modelled messages that have a typed On...() trigger, by their lower-cased message name. Must stay in sync
-        // with PreferTypedMessageAnalyzer.TypedTriggers so every flagged message gets a fix.
-        private static readonly Dictionary<string, string> TypedTriggers = new Dictionary<string, string>
-        {
-            ["create"] = "OnCreate",
-            ["update"] = "OnUpdate",
-            ["delete"] = "OnDelete",
-            ["createmultiple"] = "OnCreateMultiple",
-            ["updatemultiple"] = "OnUpdateMultiple",
-            ["retrieve"] = "OnRetrieve",
-            ["retrievemultiple"] = "OnRetrieveMultiple",
-            ["associate"] = "OnAssociate",
-            ["disassociate"] = "OnDisassociate",
-            ["assign"] = "OnAssign",
-            ["merge"] = "OnMerge",
-        };
+        // The typed trigger comes from the diagnostic (read off the trigger interface by the analyzer): no list here.
+        private const string TriggerProperty = "Trigger";
 
         public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(DiagnosticIds.PreferTypedMessage);
 
@@ -56,7 +42,7 @@ namespace Vela.CodeFixes
                     continue;
                 }
 
-                if (!TypedTriggers.TryGetValue(literal.Token.ValueText.Trim().ToLowerInvariant(), out string trigger))
+                if (!diagnostic.Properties.TryGetValue(TriggerProperty, out string? trigger) || string.IsNullOrEmpty(trigger))
                 {
                     continue;
                 }
@@ -64,7 +50,7 @@ namespace Vela.CodeFixes
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         $"Use {trigger}()",
-                        ct => ReplaceAsync(context.Document, call, trigger, ct),
+                        ct => ReplaceAsync(context.Document, call, trigger!, ct),
                         equivalenceKey: "PreferTypedTrigger"),
                     diagnostic);
             }

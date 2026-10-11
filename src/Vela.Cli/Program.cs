@@ -103,7 +103,7 @@ static int RunNew(string[] args)
     // Unless the caller pinned a version, scaffold against the latest published framework resolved from
     // nuget.org, so the CLI and framework can release on independent tags without the scaffold going stale.
     // Falls back to the built-in default when offline.
-    if (!args.Any(x => string.Equals(x, "--core-version", StringComparison.OrdinalIgnoreCase)))
+    if (!options.CoreVersionPinned)
     {
         string? latest = ScaffoldOptions.ResolveLatestFrameworkVersion();
         if (latest != null)
@@ -118,7 +118,7 @@ static int RunNew(string[] args)
         }
     }
 
-    bool verbose = args.Any(x => string.Equals(x, "--verbose", StringComparison.OrdinalIgnoreCase) || string.Equals(x, "-v", StringComparison.OrdinalIgnoreCase));
+    bool verbose = options.Verbose;
     try
     {
         return ProjectScaffolder.Generate(options);

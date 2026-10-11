@@ -357,6 +357,30 @@ public class ModelGeneratorTests
         Assert.Contains(models, m => m.FileName == "Cdf_status2.cs");
     }
 
+    [Theory]
+    [InlineData("contact")]   // Pascalizes to the table class name "Contact"
+    [InlineData("CONTACT")]   // differs only by case: a second CONTACT.cs would overwrite Contact.cs on Windows/macOS
+    public void GlobalOptionSet_NamedLikeATable_IsSuffixed_SoTypesAndFilesDoNotCollide(string optionSetName)   // A-78
+    {
+        System.Collections.Generic.IReadOnlyList<GeneratedModel> models = ModelGenerator.Generate(
+            new[]
+            {
+                MetadataFactory.Entity("account", "Account")
+                    .PrimaryId("accountid", "AccountId")
+                    .Choice("new_kind", "Kind", global: true, optionSetName, (1, "One"))
+                    .Build(),
+                MetadataFactory.Entity("contact", "Contact").PrimaryId("contactid", "ContactId").Build(),
+            },
+            new ModelGenOptions("Acme.Shared.Models.Generated"));
+
+        string[] files = models.Select(m => m.FileName).ToArray();
+        Assert.Equal(files.Length, files.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        GeneratedModel global = Assert.Single(models, m => m.Code.Contains("public enum "));
+        Assert.EndsWith("2.cs", global.FileName);
+        Assert.Contains("public enum " + global.FileName[..^3], global.Code);
+        Assert.Contains($"public {global.FileName[..^3]}? Kind", models.Single(m => m.FileName == "Account.cs").Code);
+    }
+
     [Fact]
     public void SameGlobalOptionSet_ReferencedTwice_EmitsOneSharedEnum()
     {

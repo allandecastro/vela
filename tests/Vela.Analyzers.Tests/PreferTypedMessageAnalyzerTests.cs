@@ -15,6 +15,10 @@ namespace Vela.Steps
     public interface IFakeStep : IFluentStep
     {
         IFakeStep OnMessage(string message);
+        // The typed triggers the analyzer finds on the trigger type (generated from the message model in Vela).
+        IFakeStep OnCreate();
+        IFakeStep OnUpdate();
+        IFakeStep OnAssign();
         void Handle();
     }
 }

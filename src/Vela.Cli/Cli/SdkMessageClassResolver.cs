@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Xrm.Sdk.Messages;
 
 namespace Vela.Cli;
@@ -67,19 +68,36 @@ internal static class SdkMessageClassResolver
     };
 
     /// <summary>
-    /// True when the Dataverse SDK already ships a <c>&lt;messageName&gt;Request</c> type — either found by
-    /// reflection in <c>Microsoft.Xrm.Sdk.Messages</c> (e.g. <c>"Create"</c> → <c>CreateRequest</c>) or listed in
-    /// the curated <c>Microsoft.Crm.Sdk.Messages</c> supplement (e.g. <c>"QualifyLead"</c>). See the class remarks
-    /// for why the supplement exists and why it is non-exhaustive.
+    /// True when the Dataverse SDK already ships a request type for <paramref name="messageName"/>: see
+    /// <see cref="SdkRequestName"/>.
     /// </summary>
-    public static bool HasSdkRequestClass(string messageName)
+    public static bool HasSdkRequestClass(string messageName) => SdkRequestName(messageName) != null;
+
+    /// <summary>
+    /// The name of the SDK request that runs as <paramref name="messageName"/> and ships a <c>&lt;name&gt;Request</c>
+    /// type, or null when there is none. The message is an <c>sdkmessage</c> name, which is not always the request
+    /// name: <c>Send</c> is run by <c>SendEmailRequest</c>, <c>Win</c> by <c>WinOpportunityRequest</c> and
+    /// <c>WinQuoteRequest</c> (see <see cref="Vela.Steps.SdkMessageNames"/>). A request type is found by
+    /// reflection in <c>Microsoft.Xrm.Sdk.Messages</c> (e.g. <c>"Create"</c> → <c>CreateRequest</c>) or listed in the
+    /// curated <c>Microsoft.Crm.Sdk.Messages</c> supplement (e.g. <c>"QualifyLead"</c>). See the class remarks for why
+    /// the supplement exists and why it is non-exhaustive.
+    /// </summary>
+    public static string? SdkRequestName(string messageName)
     {
         if (string.IsNullOrWhiteSpace(messageName))
         {
-            return false;
+            return null;
         }
 
-        return SdkAssembly.GetType($"Microsoft.Xrm.Sdk.Messages.{messageName}Request") != null
-            || CrmSdkRequestMessages.Contains(messageName);
+        foreach (string requestName in new[] { messageName }.Concat(Vela.Steps.SdkMessageNames.RequestNamesFor(messageName)))
+        {
+            if (SdkAssembly.GetType($"Microsoft.Xrm.Sdk.Messages.{requestName}Request") != null
+                || CrmSdkRequestMessages.Contains(requestName))
+            {
+                return requestName;
+            }
+        }
+
+        return null;
     }
 }

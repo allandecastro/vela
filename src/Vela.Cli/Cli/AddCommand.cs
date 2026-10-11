@@ -23,14 +23,31 @@ internal static class AddCommand
     // shared models namespace ({prefix}.Shared.Models.Generated, where `vela models` writes) can be inferred.
 
     // SDK messages that have a dedicated On...() builder method, matched case-insensitively so the
-    // scaffold emits the strongly-typed call. Any other name is registered via .OnMessage("...").
-    private static readonly string[] KnownMessages =
-    [
-        "Create", "Update", "CreateMultiple", "UpdateMultiple", "Delete", "Retrieve", "RetrieveMultiple",
-        "Associate", "Disassociate", "Merge", "GrantAccess", "ModifyAccess", "RevokeAccess",
-        "QualifyLead", "WinOpportunity", "LoseOpportunity", "ConvertSalesOrderToInvoice", "GenerateQuoteFromOpportunity", "AddToQueue", "RemoveFromQueue", "PickFromQueue", "RouteTo", "ReleaseToQueue", "SendEmail", "SendEmailFromTemplate", "DeliverIncomingEmail", "DeliverPromoteEmail", "AddMembersTeam", "RemoveMembersTeam", "AddListMembersList", "AddMemberList", "RemoveMemberList", "CloseIncident", "CancelContract", "CloneContract", "RetrievePrincipalAccess", "RetrieveSharedPrincipalsAndAccess",
-        "WinQuote",
-    ];
+    // scaffold emits the strongly-typed call. Any other name is registered via .OnMessage("..."), which the
+    // analyzers flag (VELA006) for a modelled message. They are SDK request names: the sdkmessage a step registers on
+    // can be shorter (SendEmail runs as Send), see ResolveKnownMessage. The list is generated from the step builder's
+    // message model (Vela.Steps.TypedTriggers, linked as source), so it never drifts from the typed triggers.
+    internal static readonly string[] KnownMessages = Vela.Steps.TypedTriggers.Messages;
+
+    // The typed On...() trigger for --message: a request name (SendEmail), or the sdkmessage it runs as (Send),
+    // resolved through the table when several requests share it (Win is WinQuote on quote, WinOpportunity on
+    // opportunity). Null for a message with no typed trigger, registered with OnMessage("...").
+    internal static string? ResolveKnownMessage(string rawMessage, string entity)
+    {
+        string? known = KnownMessages.FirstOrDefault(m => string.Equals(m, rawMessage, StringComparison.OrdinalIgnoreCase));
+        if (known is not null)
+        {
+            return known;
+        }
+
+        string[] candidates = Vela.Steps.SdkMessageNames.RequestNamesFor(rawMessage)
+            .Select(request => KnownMessages.FirstOrDefault(m => string.Equals(m, request, StringComparison.OrdinalIgnoreCase)))
+            .OfType<string>()
+            .ToArray();
+        return candidates.Length == 1
+            ? candidates[0]
+            : candidates.FirstOrDefault(m => string.Equals(Vela.Steps.SdkMessageNames.PrimaryEntityOf(m), entity, StringComparison.OrdinalIgnoreCase));
+    }
 
     public static int Run(string[] args)
     {
@@ -68,6 +85,12 @@ internal static class AddCommand
         }
 
         string kind = args[0].ToLowerInvariant();
+
+        // Reject an option the kind does not use rather than silently ignoring it (e.g. `add service --message`).
+        if (ApplicableOptions.TryGetValue(kind, out HashSet<string>? applicable) && !TryCheckApplicable(kind, args, applicable, out int applicableExit))
+        {
+            return applicableExit;
+        }
 
         // form-script / ribbon-script target the TypeScript web-resources project (a folder with web-resources.entries.ts),
         // not a .csproj, so they resolve their target themselves and return before the C# project plumbing below.
@@ -119,9 +142,9 @@ internal static class AddCommand
         {
             "plugin" => AddPlugin(args, name, entity, force, projectDir, rootNamespace, modelsNamespace),
             "service" => AddService(name, entity, force, projectDir, rootNamespace, modelsNamespace, HasFlag(args, "--json")),
-            "test" => AddTest(args, name, entity, force, projectDir, rootNamespace),
+            "test" => AddTest(args, name, entity, force, projectFile, projectDir, rootNamespace),
             "step" => AddStep(args, name, entity, projectDir),
-            _ => AddCustomApi(args, name, entity, force, projectDir, rootNamespace, modelsNamespace, prefix),
+            _ => AddCustomApi(args, name, entity, force, projectFile, projectDir, rootNamespace, modelsNamespace, prefix),
         };
     }
 
@@ -360,7 +383,7 @@ internal static class AddCommand
             return Fail($"Invalid --message '{rawMessage}'. Use an SDK message name (letters, digits, '_'; not starting with a digit).", ExitInvalidArguments, includeUsage: false);
         }
 
-        string? known = KnownMessages.FirstOrDefault(m => string.Equals(m, rawMessage, StringComparison.OrdinalIgnoreCase));
+        string? known = ResolveKnownMessage(rawMessage, entity);
         string message = known ?? rawMessage;
         string registrationCall = known is null ? $"OnMessage(\"{message}\")" : $"On{message}()";
 
@@ -410,9 +433,15 @@ internal static class AddCommand
             return Fail($"{filePath} does not look like an EntityPluginBase<{entity}> plugin.", ExitInvalidArguments, includeUsage: false);
         }
 
-        if (!StepInjector.TryInject(source, entity!, message, registrationCall, handler, stageCall, modeCall, postStage, filterAttributes, out string updated, out string error))
+        if (!StepInjector.TryInject(source, entity!, message, registrationCall, handler, stageCall, modeCall, postStage, filterAttributes, out string updated, out string error, out string? note))
         {
             return Fail(error, ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (note is not null)
+        {
+            // stderr, so it never pollutes the --json report on stdout.
+            Console.Error.WriteLine("Note: " + note);
         }
 
         File.WriteAllText(filePath, NormalizeNewlines(updated));
@@ -429,7 +458,7 @@ internal static class AddCommand
         return ExitSuccess;
     }
 
-    private static int AddTest(string[] args, string name, string? entity, bool force, string projectDir, string rootNamespace)
+    private static int AddTest(string[] args, string name, string? entity, bool force, string projectFile, string projectDir, string rootNamespace)
     {
         // A test lives in the test project; its plugins project mirrors it without the .Tests suffix.
         if (!rootNamespace.EndsWith(".Tests", StringComparison.Ordinal))
@@ -470,7 +499,12 @@ internal static class AddCommand
             return WriteFile(projectDir, relativePath, content, force, $"plugin test {testClass} (for {name})", HasFlag(args, "--json"));
         }
 
-        string uniqueName = $"{ApiPrefix(prefix)}_{name}";
+        if (!TryResolvePublisherPrefix(args, projectFile, prefix, out string testApiPrefix, out int prefixExit))
+        {
+            return prefixExit;
+        }
+
+        string uniqueName = $"{testApiPrefix}_{name}";
         if (string.IsNullOrWhiteSpace(entity))
         {
             string ns = $"{rootNamespace}.GlobalCustomApis";
@@ -504,7 +538,7 @@ internal static class AddCommand
 
         // Messages with a dedicated On...() builder method get the strongly-typed call; any other name is
         // treated as a custom SDK message and registered through .OnMessage("...").
-        string? known = KnownMessages.FirstOrDefault(m => string.Equals(m, rawMessage, StringComparison.OrdinalIgnoreCase));
+        string? known = ResolveKnownMessage(rawMessage, entity);
         string message = known ?? rawMessage;
         string registrationCall = known is null ? $"OnMessage(\"{message}\")" : $"On{message}()";
 
@@ -570,7 +604,7 @@ internal static class AddCommand
         return WriteFile(projectDir, relativePath, content, force, $"service {name} (scoped to {entity})", json, registration);
     }
 
-    private static int AddCustomApi(string[] args, string name, string? entity, bool force, string projectDir, string rootNamespace, string modelsNamespace, string prefix)
+    private static int AddCustomApi(string[] args, string name, string? entity, bool force, string projectFile, string projectDir, string rootNamespace, string modelsNamespace, string prefix)
     {
         // --function / --action choose the OperationType (default Action). Functions return data and are
         // typically read-only; actions can mutate. Mutually exclusive.
@@ -615,30 +649,9 @@ internal static class AddCommand
             generateGlobal = string.IsNullOrWhiteSpace(entity);
         }
 
-        // A Custom API's unique name must carry the publisher customization prefix of the solution it is deployed
-        // into (Dataverse rejects it otherwise, and `vela apply --solution` validates this). That publisher prefix
-        // is NOT the same thing as the .NET project prefix (`vela init --prefix`), and it is often unrelated to the
-        // environment name. Default to the project prefix for convenience, but let `--prefix` override it and warn
-        // when the default is used so a mismatch is caught before deploy rather than at apply time.
-        string? prefixOverride = TryReadOption(args, "--prefix");
-        string apiPrefix;
-        if (!string.IsNullOrWhiteSpace(prefixOverride))
+        if (!TryResolvePublisherPrefix(args, projectFile, prefix, out string apiPrefix, out int prefixExit))
         {
-            string normalized = prefixOverride!.Trim().ToLowerInvariant();
-            if (!Regex.IsMatch(normalized, "^[a-z][a-z0-9]{1,7}$"))
-            {
-                return Fail($"Invalid --prefix '{prefixOverride}'. A Dataverse customization prefix is 2-8 characters, starts with a letter, and is alphanumeric (e.g. 'dv', 'acme').", ExitInvalidArguments, includeUsage: false);
-            }
-
-            apiPrefix = normalized;
-        }
-        else
-        {
-            apiPrefix = ApiPrefix(prefix);
-            if (!HasFlag(args, "--json"))
-            {
-                Console.Error.WriteLine($"Note: unique name uses the project prefix '{apiPrefix}_'. It must match your target solution's publisher prefix or 'vela apply --solution' will reject it. Override with --prefix <publisherprefix>.");
-            }
+            return prefixExit;
         }
 
         string uniqueName = $"{apiPrefix}_{name}";
@@ -657,6 +670,120 @@ internal static class AddCommand
             string content = AddBoundCustomApiFile(ns, name, uniqueName, entity!, modelsNamespace, operation);
             return WriteFile(projectDir, relativePath, content, force, $"Custom API {name} bound to {entity} ({uniqueName})", HasFlag(args, "--json"));
         }
+    }
+
+    // A Custom API's unique name must carry the publisher customization prefix of the solution it is deployed into
+    // (Dataverse rejects it otherwise, and `vela apply --solution` validates this). That publisher prefix is NOT the
+    // .NET project prefix. Resolution: --prefix, else the VelaPublisherPrefix recorded by `vela init --publisher-prefix`
+    // in the target project, else the project prefix (with a note, since it is a guess). A value that is not a valid
+    // publisher prefix (2-8 chars, letter first, alphanumeric) is refused rather than emitted into an unregistrable name.
+    private static bool TryResolvePublisherPrefix(string[] args, string projectFile, string projectPrefix, out string apiPrefix, out int exitCode)
+    {
+        exitCode = ExitSuccess;
+        string? explicitPrefix = TryReadOption(args, "--prefix");
+        if (!string.IsNullOrWhiteSpace(explicitPrefix))
+        {
+            apiPrefix = explicitPrefix!.Trim().ToLowerInvariant();
+            if (!ScaffoldOptions.IsValidPublisherPrefix(apiPrefix))
+            {
+                exitCode = Fail($"Invalid --prefix '{explicitPrefix}'. A Dataverse customization prefix is 2-8 characters, starts with a letter, and is alphanumeric (e.g. 'dv', 'acme').", ExitInvalidArguments, includeUsage: false);
+                return false;
+            }
+
+            return true;
+        }
+
+        string? recorded = ReadPublisherPrefix(projectFile);
+        if (recorded is not null)
+        {
+            apiPrefix = recorded;
+            if (!ScaffoldOptions.IsValidPublisherPrefix(apiPrefix))
+            {
+                exitCode = Fail($"The VelaPublisherPrefix '{recorded}' in {projectFile} is not a valid publisher prefix (2-8 characters, letter first, alphanumeric). Fix it or pass --prefix <publisherprefix>.", ExitInvalidArguments, includeUsage: false);
+                return false;
+            }
+
+            return true;
+        }
+
+        apiPrefix = ApiPrefix(projectPrefix);
+        if (!ScaffoldOptions.IsValidPublisherPrefix(apiPrefix))
+        {
+            exitCode = Fail($"The project prefix '{apiPrefix}' is not a valid Dataverse publisher prefix (2-8 characters, letter first, alphanumeric), so it cannot name a Custom API. Pass --prefix <publisherprefix> with your solution publisher's prefix.", ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
+        if (!HasFlag(args, "--json"))
+        {
+            Console.Error.WriteLine($"Note: unique name uses the project prefix '{apiPrefix}_'. It must match your target solution's publisher prefix or 'vela apply --solution' will reject it. Override with --prefix <publisherprefix>, or record it with 'vela init --force --publisher-prefix <prefix>'.");
+        }
+
+        return true;
+    }
+
+    // Reads the <VelaPublisherPrefix> recorded in a project file, or null when absent or unreadable.
+    private static string? ReadPublisherPrefix(string projectFile)
+    {
+        try
+        {
+            string? value = System.Xml.Linq.XDocument.Load(projectFile).Descendants("VelaPublisherPrefix").FirstOrDefault()?.Value;
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
+        }
+        catch (Exception ex) when (ex is IOException or System.Xml.XmlException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    // The options each kind uses. Anything else in the (union) allowlist is rejected for that kind.
+    private static readonly HashSet<string> CommonOptions = new(StringComparer.OrdinalIgnoreCase)
+        { "--project", "-p", "--json", "--help", "-h", "--interactive", "-i" };
+
+    private static HashSet<string> With(params string[] options) =>
+        new(CommonOptions.Concat(options), StringComparer.OrdinalIgnoreCase);
+
+    internal static readonly IReadOnlyDictionary<string, HashSet<string>> ApplicableOptions = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
+    {
+        ["plugin"] = With("--force", "--entity", "-e", "--message", "--stage", "--mode", "--filtering-attributes", "--filter"),
+        ["service"] = With("--force", "--entity", "-e"),
+        ["customapi"] = With("--force", "--entity", "-e", "--bound", "--global", "--function", "--action", "--prefix"),
+        ["test"] = With("--force", "--entity", "-e", "--kind", "--message", "--prefix"),
+        // step edits an existing file in place, so it has no --force.
+        ["step"] = With("--entity", "-e", "--message", "--handler", "--stage", "--mode", "--filtering-attributes", "--filter"),
+        ["form-script"] = With("--force"),
+        ["ribbon-script"] = With("--force"),
+    };
+
+    private static bool TryCheckApplicable(string kind, string[] args, HashSet<string> applicable, out int exitCode)
+    {
+        exitCode = ExitSuccess;
+        for (int i = 1; i < args.Length; i++)
+        {
+            string token = args[i];
+            if (token == "--")
+            {
+                break;
+            }
+
+            bool isValue = ValueOptions.Contains(token);
+            if (!isValue && !FlagOptions.Contains(token))
+            {
+                continue; // a positional (the tokenizer already rejected unknown options)
+            }
+
+            if (!applicable.Contains(token))
+            {
+                exitCode = Fail($"Option '{token}' does not apply to 'vela add {kind}'. Run 'vela add --help' for each kind's options.", ExitInvalidArguments, includeUsage: false);
+                return false;
+            }
+
+            if (isValue)
+            {
+                i++; // skip the option's value
+            }
+        }
+
+        return true;
     }
 
     private static int WriteFile(string projectDir, string relativePath, string content, bool force, string description, bool json = false, string? registration = null)
@@ -946,21 +1073,6 @@ internal static class AddCommand
         "--force", "--json", "--bound", "--global", "--function", "--action", "--interactive", "-i", "--help", "-h",
     };
 
-    private static void PrintAddUsage()
-    {
-        Console.WriteLine("Usage:");
-        Console.WriteLine("  vela add plugin <Name> --entity <ModelType> [--message <Message>] [--stage <PreValidation|PreOperation|PostOperation>] [--mode <Sync|Async>] [--filtering-attributes <Col1,Col2>] [--project <csproj>] [--force]");
-        Console.WriteLine("  vela add service <Name> --entity <ModelType> [--project <csproj>] [--force]");
-        Console.WriteLine("  vela add customapi <Name> [--entity <ModelType>] [--bound|--global] [--function|--action] [--project <csproj>] [--force]");
-        Console.WriteLine("  vela add test <Name> [--kind plugin|customapi] [--entity <ModelType>] [--message <Message>] [--project <csproj>] [--force]");
-        Console.WriteLine("  vela add step <PluginName> --entity <ModelType> [--message <Message>] [--handler <Method>] [--stage <PreValidation|PreOperation|PostOperation>] [--mode <Sync|Async>] [--filtering-attributes <Col1,Col2>] [--project <csproj>]");
-        Console.WriteLine("  vela add form-script <entity> [--project <web-resources dir>] [--force]   (preview)");
-        Console.WriteLine("  vela add ribbon-script <entity> [--project <web-resources dir>] [--force] (preview, ribbon commands)");
-        Console.WriteLine("  vela add --interactive            # guided wizard");
-        Console.WriteLine();
-        Console.WriteLine("Generates a single file into an existing project, inferring namespaces from its RootNamespace.");
-        Console.WriteLine("A service scaffolds a table-scoped interface + implementation; omit --entity on a Custom API for a global (unbound) one.");
-        Console.WriteLine("Run 'vela add test' inside your test project (RootNamespace ending in .Tests); <Name> is the class under test.");
-        Console.WriteLine("'vela add step' edits an existing handler-based (multi-step) plugin, adding a step + handler method.");
-    }
+    // The add help comes from the command table, like every other command's.
+    private static void PrintAddUsage() => CliCommands.PrintCommandHelp("add");
 }

@@ -95,12 +95,18 @@ namespace Vela.Context
         /// <inheritdoc />
         /// <remarks>Created on first use: an execution that never calls Dataverse creates no service.</remarks>
         public IOrganizationService Service =>
-            _service ??= new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(PluginExecutionContext.UserId), this, "User");
+            _service ??= new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(PluginExecutionContext.UserId), this, "User", TraceServiceCalls);
 
         /// <inheritdoc />
         /// <remarks>Created on first use.</remarks>
         public IOrganizationService SystemService =>
-            _systemService ??= new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(null), this, "System");
+            _systemService ??= new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(null), this, "System", TraceServiceCalls);
+
+        /// <summary>
+        /// Whether the wrapped organization services trace every call, or only a failed one (set by
+        /// <c>PluginBase.AutoTraceServiceCalls</c>). Read when a service is first created.
+        /// </summary>
+        internal bool TraceServiceCalls { get; set; } = true;
 
         /// <inheritdoc />
         public ILogger Logger { get; }
@@ -222,7 +228,7 @@ namespace Vela.Context
                 throw new ArgumentException("User id cannot be empty.", nameof(userId));
             }
 
-            return new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(userId), this, "AsUser");
+            return new TracingOrganizationService(OrganizationServiceFactory.CreateOrganizationService(userId), this, "AsUser", TraceServiceCalls);
         }
 
         /// <inheritdoc />
