@@ -789,13 +789,16 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     public void ApplyDiff_deletes_adds_and_updates_custom_apis()
     {
         const string apiType = "Zava.Plugins.MyApi";
+        var apiTypeId = Guid.NewGuid();
         var removedApiId = Guid.NewGuid();
         var svc = new TestSupport.FakeOrgService
         {
+            // The removed API is still implemented by our type when it is deleted.
+            OnRetrieve = (e, id, _) => e == "customapi" ? new Entity(e, id) { ["plugintypeid"] = new EntityReference("plugintype", apiTypeId) } : new Entity(e, id),
             OnRetrieveMultiple = q => q.EntityName switch
             {
                 "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
-                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = apiType }),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", apiTypeId) { ["typename"] = apiType }),
                 // The removed API exists (→ delete); the added/changed ones don't (→ create).
                 "customapi" => (string)q.Criteria.Conditions.Single().Values.Single() == "zava_Removed"
                     ? TestSupport.FakeOrgService.Collection(new Entity("customapi", removedApiId))
@@ -829,12 +832,15 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     public void ApplyDiff_resume_report_labels_custom_api_operations()
     {
         const string apiType = "Zava.Plugins.MyApi";
+        var apiTypeId = Guid.NewGuid();
         var svc = new TestSupport.FakeOrgService
         {
+            // The removed API is still implemented by our type when it is deleted.
+            OnRetrieve = (e, id, _) => e == "customapi" ? new Entity(e, id) { ["plugintypeid"] = new EntityReference("plugintype", apiTypeId) } : new Entity(e, id),
             OnRetrieveMultiple = q => q.EntityName switch
             {
                 "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
-                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = apiType }),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", apiTypeId) { ["typename"] = apiType }),
                 "customapi" => (string)q.Criteria.Conditions.Single().Values.Single() == "zava_Removed"
                     ? TestSupport.FakeOrgService.Collection(new Entity("customapi", Guid.NewGuid()))
                     : new EntityCollection(),
@@ -1074,14 +1080,17 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // capture phase. The added api's create is captured but never flushed (the batch aborts), so only the delete +
         // publish completed; the changed api (whose lookup threw) is the failure and the create is "not applied".
         const string apiType = "Zava.Plugins.MyApi";
+        var apiTypeId = Guid.NewGuid();
         var svc = new TestSupport.FakeOrgService
         {
+            // The removed API is still implemented by our type when it is deleted.
+            OnRetrieve = (e, id, _) => e == "customapi" ? new Entity(e, id) { ["plugintypeid"] = new EntityReference("plugintype", apiTypeId) } : new Entity(e, id),
             OnRetrieveMultiple = q =>
             {
                 switch (q.EntityName)
                 {
                     case "pluginassembly": return TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid()));
-                    case "plugintype": return TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = apiType });
+                    case "plugintype": return TestSupport.FakeOrgService.Collection(new Entity("plugintype", apiTypeId) { ["typename"] = apiType });
                     case "customapi":
                         string uname = (string)q.Criteria.Conditions.Single().Values.Single();
                         if (uname == "zava_Removed") return TestSupport.FakeOrgService.Collection(new Entity("customapi", Guid.NewGuid()));

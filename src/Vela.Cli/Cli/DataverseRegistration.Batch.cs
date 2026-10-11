@@ -40,9 +40,9 @@ internal static partial class DataverseRegistration
         List<CapturedOwner> owners = [];
         int seq = 0;
 
-        // A removed step is resolved only among the plugin types of the assemblies read for this run (the ones the
-        // diff's live side came from), queried once for the whole delete phase rather than environment-wide per step.
-        IReadOnlyDictionary<string, Guid> ourPluginTypeIds = removedSteps.Count == 0
+        // A removed step or Custom API is resolved only among the plugin types of the assemblies read for this run (the
+        // ones the diff's live side came from), queried once for the whole delete phase rather than per item.
+        IReadOnlyDictionary<string, Guid> ourPluginTypeIds = removedSteps.Count == 0 && removedApis.Count == 0
             ? new Dictionary<string, Guid>()
             : GetPluginTypeIdByNameForAssemblies(service, currentAssemblies);
 
@@ -75,7 +75,7 @@ internal static partial class DataverseRegistration
             CaptureOwner(capturing, owner, owners, progress, () =>
             {
                 LogOperation("custom-api", "delete", uniqueName, verbose: verbose);
-                DeleteCustomApi(capturing, item.Definition);
+                DeleteCustomApi(capturing, item.Definition, ourPluginTypeIds);
             });
 
             planned++;
@@ -104,7 +104,7 @@ internal static partial class DataverseRegistration
     private static bool IsChildDelete(CapturedOperation op)
         => op.Category is "request-parameter" or "response-property" or "image";
 
-    // ---- Upsert phase (tier 1: step/api rows; tier 2: images, params, secure config, state) ---------------------
+    // ---- Upsert phase (tier 1: step/api rows, a created step's disable; tier 2: images, params, secure config) --
 
     private static void ApplyUpsertsBatched(
         IOrganizationService service,
@@ -164,10 +164,16 @@ internal static partial class DataverseRegistration
         {
             HashSet<string> skip = new HashSet<string>();
             // Tier 1 is the row itself (the first write captured for each owner); tier 2 (images, parameters, secure
-            // config, state) references the row's id, so it runs only after tier 1 and is skipped for any owner whose
+            // config) references the row's id, so it runs only after tier 1 and is skipped for any owner whose
             // tier-1 row failed.
-            List<CapturedOperation> tier1 = capturing.Operations.Where(o => o.SeqInOwner == 0).ToList();
-            List<CapturedOperation> tier2 = capturing.Operations.Where(o => o.SeqInOwner > 0).ToList();
+            //
+            // Exception: the Update that disables a step just created runs in tier 1, right behind its create.
+            // Dataverse ignores statecode on Create, so a .Disabled() step is born enabled (UpsertStep); deferring the
+            // disable to tier 2 would let it fire on live traffic for the whole of tier 1, and leave it enabled if the
+            // run stopped between the tiers. ExecuteMultiple runs its requests in order, so it follows its create.
+            static bool InTier1(CapturedOperation o) => o.SeqInOwner == 0 || o.Category == "state";
+            List<CapturedOperation> tier1 = capturing.Operations.Where(InTier1).ToList();
+            List<CapturedOperation> tier2 = capturing.Operations.Where(o => !InTier1(o)).ToList();
             ExecuteBatchTier(service, tier1, chunkSize, report, skip);
             ExecuteBatchTier(service, tier2, chunkSize, report, skip);
             RenderBatchReport(report);
@@ -276,7 +282,7 @@ internal static partial class DataverseRegistration
             }
 
             ExecuteMultipleResponse? response = null;
-            bool wholeBatchFailed = false;
+            string? wholeBatchError = null;
             try
             {
                 ExecuteMultipleRequest request = new ExecuteMultipleRequest
@@ -293,18 +299,19 @@ internal static partial class DataverseRegistration
                 response = service.Execute(request) as ExecuteMultipleResponse;
                 if (response == null || !response.Results.ContainsKey("Responses"))
                 {
-                    wholeBatchFailed = true;
+                    wholeBatchError = "ExecuteMultiple returned no responses";
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // ExecuteMultiple can throw as a whole (not-supported / timeout / connection). Fall back below.
-                wholeBatchFailed = true;
+                // ExecuteMultiple can throw as a whole (not-supported / timeout / connection). Fall back below, but keep
+                // the cause: when the replay fails too, it is often the real reason (an expired token, a timeout).
+                wholeBatchError = ex.Message;
             }
 
-            if (wholeBatchFailed)
+            if (wholeBatchError != null)
             {
-                FallbackOneByOne(service, live, report, skipOwners);
+                FallbackOneByOne(service, live, report, skipOwners, wholeBatchError);
                 continue;
             }
 
@@ -316,7 +323,13 @@ internal static partial class DataverseRegistration
 
             for (int i = 0; i < live.Count; i++)
             {
-                if (byIndex.TryGetValue(i, out ExecuteMultipleResponseItem? item) && item.Fault != null)
+                if (!byIndex.TryGetValue(i, out ExecuteMultipleResponseItem? item))
+                {
+                    // With ReturnResponses every request gets an item (a response or a fault). One without an item has
+                    // no known outcome: reporting it as applied would hide a write that may never have landed.
+                    HandleBatchFault(live[i], new OrganizationServiceFault { Message = $"ExecuteMultiple returned no response for request {i}; its outcome is unknown." }, report, skipOwners);
+                }
+                else if (item.Fault != null)
                 {
                     HandleBatchFault(live[i], item.Fault, report, skipOwners);
                 }
@@ -332,7 +345,8 @@ internal static partial class DataverseRegistration
         IOrganizationService service,
         List<CapturedOperation> ops,
         BatchApplyReport report,
-        HashSet<string> skipOwners)
+        HashSet<string> skipOwners,
+        string batchError)
     {
         foreach (CapturedOperation op in ops)
         {
@@ -349,7 +363,11 @@ internal static partial class DataverseRegistration
             }
             catch (Exception ex)
             {
-                HandleBatchFault(op, ExtractFault(ex), report, skipOwners, replayed: true);
+                // The replay's own fault can hide the root cause (an expired token, a timeout), so the whole-batch
+                // failure is carried into the message the report and the resume summary show.
+                OrganizationServiceFault fault = ExtractFault(ex);
+                fault.Message = $"{fault.Message} (replayed one by one after the batch request failed: {batchError})";
+                HandleBatchFault(op, fault, report, skipOwners, replayed: true);
             }
         }
     }
@@ -596,7 +614,7 @@ internal sealed class BatchApplyReport
 }
 
 /// <summary>
-/// An <see cref="IOrganizationService"/> decorator that records every Create/Update/Delete/SetState the existing
+/// An <see cref="IOrganizationService"/> decorator that records every Create/Update/Delete the existing
 /// registration helpers would issue instead of executing it, so their unchanged logic produces a batchable plan.
 /// Reads pass through to the real service; a read of a row this session captured as a create (a not-yet-flushed
 /// parent) is answered locally as an empty/absent record so child reconciliation behaves as it would against a
@@ -636,8 +654,12 @@ internal sealed class BatchCapturingService : IOrganizationService
     {
         UpdateRequest request = new UpdateRequest { Target = entity };
         ApplySolution(request);
-        Capture(request, entity.LogicalName, "update", isDelete: false);
+        // A step update that carries only the state is the disable of a step just created (UpsertStep).
+        Capture(request, entity.LogicalName, IsStateOnly(entity) ? "state" : "update", isDelete: false);
     }
+
+    private static bool IsStateOnly(Entity entity)
+        => entity.Attributes.Count == 2 && entity.Contains("statecode") && entity.Contains("statuscode");
 
     public void Delete(string entityName, Guid id)
     {
@@ -645,16 +667,7 @@ internal sealed class BatchCapturingService : IOrganizationService
         Capture(request, entityName, "delete", isDelete: true);
     }
 
-    public OrganizationResponse Execute(OrganizationRequest request)
-    {
-        if (request is SetStateRequest)
-        {
-            Capture(request, string.Empty, "setstate", isDelete: false);
-            return new SetStateResponse();
-        }
-
-        return _inner.Execute(request);
-    }
+    public OrganizationResponse Execute(OrganizationRequest request) => _inner.Execute(request);
 
     public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet)
         => _capturedCreatedIds.Contains(id) ? new Entity(entityName, id) : _inner.Retrieve(entityName, id, columnSet);
@@ -693,7 +706,7 @@ internal sealed class BatchCapturingService : IOrganizationService
 
     private static string Categorize(string targetEntity, string verb, int seq, string ownerKind)
     {
-        if (verb == "setstate")
+        if (verb == "state")
         {
             return "state";
         }

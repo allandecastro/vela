@@ -76,15 +76,21 @@ internal static partial class DataverseRegistration
     step["impersonatinguserid"] = definition.ImpersonatingUserId == Guid.Empty
         ? null
         : new EntityReference("systemuser", definition.ImpersonatingUserId);
-    if (filterId.HasValue)
-    {
-        step["sdkmessagefilterid"] = new EntityReference("sdkmessagefilter", filterId.Value);
-    }
+    // Assigned (or cleared) explicitly like impersonatinguserid: a step whose entity is dropped (a global step now)
+    // keeps its old filter otherwise, and the next plan shows the same change forever. Clearing it on Update was
+    // verified live.
+    step["sdkmessagefilterid"] = filterId.HasValue ? new EntityReference("sdkmessagefilter", filterId.Value) : null;
 
+    // Steps default to enabled; a step declared .Disabled() is inactive (statecode 1 / statuscode 2), registered but
+    // never fired. The state is written with Update (SetStateRequest is deprecated). Dataverse ignores statecode on
+    // Create (verified live: the step reads back enabled, and statuscode 2 is rejected with 0x80048408), so an existing
+    // step gets its state in the same Update as its other columns, and a created step that must be disabled gets a
+    // second Update right behind its create (batched in the same tier, see ApplyUpsertsBatched).
     Guid stepId = existingId ?? Guid.Empty;
     if (existingId.HasValue)
     {
         step.Id = existingId.Value;
+        SetStepState(step, definition.Enabled);
         service.Update(step);
         stepId = existingId.Value;
         LogOperation("step", "update", BuildStepName(definition), verbose: verbose);
@@ -93,6 +99,12 @@ internal static partial class DataverseRegistration
     {
         stepId = service.Create(step);
         LogOperation("step", "create", BuildStepName(definition), verbose: verbose);
+        if (!definition.Enabled)
+        {
+            Entity disable = new Entity("sdkmessageprocessingstep") { Id = stepId };
+            SetStepState(disable, enabled: false);
+            service.Update(disable);
+        }
     }
 
     // definition.SecureConfig is only a digest. The raw value exists only for a secure configuration Vela was given a
@@ -104,25 +116,15 @@ internal static partial class DataverseRegistration
         SyncStepSecureConfig(service, stepId, rawSecureConfig);
     }
 
-    SyncStepState(service, stepId, definition.Enabled);
     SyncStepImages(service, stepId, definition.Message, definition.PreImages, definition.PostImages);
 }
 
-    /// <summary>
-    /// Reconciles the step's active state. Steps default to enabled; a step declared <c>.Disabled()</c>
-    /// is transitioned to the inactive state (statecode 1 / statuscode 2) so it stays registered but
-    /// does not fire. Idempotent — applied on every upsert to converge whatever the live state was.
-    /// </summary>
-    internal static void SyncStepState(IOrganizationService service, Guid stepId, bool enabled)
+    // Enabled: statecode 0 / statuscode 1; disabled: statecode 1 / statuscode 2. Written on every update so the live
+    // state converges whatever it was (re-sending the current state is accepted, verified live).
+    internal static void SetStepState(Entity step, bool enabled)
 {
-    int desiredState = enabled ? 0 : 1;
-    int desiredStatus = enabled ? 1 : 2;
-    service.Execute(new SetStateRequest
-    {
-        EntityMoniker = new EntityReference("sdkmessageprocessingstep", stepId),
-        State = new OptionSetValue(desiredState),
-        Status = new OptionSetValue(desiredStatus)
-    });
+    step["statecode"] = new OptionSetValue(enabled ? 0 : 1);
+    step["statuscode"] = new OptionSetValue(enabled ? 1 : 2);
 }
 
     /// <summary>

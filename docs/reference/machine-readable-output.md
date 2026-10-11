@@ -56,7 +56,7 @@ shape, or is removed. A new field is added without a version change, so read the
 | Field | Meaning |
 | --- | --- |
 | `schemaVersion` | Contract version (see above). Always the first property. |
-| `mode` | `plan`; for `apply`: `apply-execute` (finished, including "no changes") or `apply-failed` (stopped mid-run, exit 7). |
+| `mode` | `plan`; for `apply`: `apply-execute` (finished, including "no changes"), `apply-not-converged` (every write ran but the environment still differs; `summary` and `diff` show what remains, exit 5) or `apply-failed` (stopped mid-run, exit 7). |
 | `environment` | `--environment`, else `--url`. |
 | `hasChanges` | `true` when apply would write anything: a registration change, a package publish, or a component to add to `--solution`. Use this, not `summary`, to decide whether to apply. |
 | `summary` | Counts of the registration diff (steps, Custom APIs, and web resources on a `--webresources` run). It excludes package and solution-membership operations. After a successful apply it is what remains (normally all zero). |
@@ -111,7 +111,7 @@ the options, so an agent can discover the CLI without parsing help text.
 | `2` | Invalid arguments (unknown option, missing value, option of another command) |
 | `3` | File not found (package, folder, secure-config file) |
 | `4` | Error, including a `--strict` failure and a refused non-interactive `apply` without `--auto-approve` |
-| `5` | Drift detected (`vela models --verify`) |
+| `5` | Drift detected (`vela models --verify`), or `apply` did not converge (mode `apply-not-converged`) |
 | `6` | Dataverse connection failure |
 | `7` | Partial apply: the run stopped mid-way; Dataverse may be partly updated. Re-run `apply`. |
 | `8` | `vela plan --detailed-exitcode` only: the plan found changes to apply |

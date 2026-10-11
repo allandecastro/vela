@@ -238,23 +238,73 @@ public sealed class DataverseRegistrationStepsTests
     public void ResolveMessageFilterId_returns_null_when_no_filter_row()
         => Assert.Null(DataverseRegistration.ResolveMessageFilterId(new TestSupport.FakeOrgService(), Guid.NewGuid(), "account"));
 
-    // ---- SyncStepState -----------------------------------------------------------------------------
+    // ---- step state ---------------------------------------------------------------------------------
 
-    [Theory]
+    [Theory]   // #445
     [InlineData(true, 0, 1)]
     [InlineData(false, 1, 2)]
-    public void SyncStepState_sets_expected_state_and_status(bool enabled, int state, int status)
+    public void UpsertStep_writes_the_state_of_an_existing_step_in_its_update(bool enabled, int state, int status)
     {
+        // The state goes in the same Update as the other columns (SetStateRequest is deprecated): one write, so the
+        // step never runs with its new definition in its old state.
+        var existingStep = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid())),
+                "sdkmessageprocessingstep" => TestSupport.FakeOrgService.Collection(StepRow(existingStep, "Update", "", 40, 0, name: $"{Plugin} - PostOpSync: dv-key")),
+                _ => new EntityCollection(),
+            },
+        };
+
+        JsonElement def = Json(new { pluginTypeName = Plugin, message = "Update", stepKey = "dv-key", stage = 40, mode = 0, enabled });
+        DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = Guid.NewGuid() }, def, verbose: false);
+
+        Entity update = Assert.Single(svc.Updated, e => e.LogicalName == "sdkmessageprocessingstep");
+        Assert.Equal(existingStep, update.Id);
+        Assert.Equal(state, update.GetAttributeValue<OptionSetValue>("statecode").Value);
+        Assert.Equal(status, update.GetAttributeValue<OptionSetValue>("statuscode").Value);
+        Assert.Empty(svc.Executed);
+    }
+
+    [Theory]   // #445
+    [InlineData(true)]
+    [InlineData(false)]
+    public void UpsertStep_disables_a_created_step_with_an_update_right_after_its_create(bool enabled)
+    {
+        // Dataverse ignores statecode on Create (verified live), so a disabled step is created, then updated to
+        // inactive; an enabled one needs no second write.
         var stepId = Guid.NewGuid();
-        var svc = new TestSupport.FakeOrgService();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName == "sdkmessage"
+                ? TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid()))
+                : new EntityCollection(),
+            OnCreate = e => e.LogicalName == "sdkmessageprocessingstep" ? stepId : Guid.NewGuid(),
+        };
 
-        DataverseRegistration.SyncStepState(svc, stepId, enabled);
+        JsonElement def = Json(new { pluginTypeName = Plugin, message = "Update", stepKey = "dv-key", stage = 40, mode = 0, enabled });
+        DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = Guid.NewGuid() }, def, verbose: false);
 
-        var req = Assert.IsType<SetStateRequest>(Assert.Single(svc.Executed));
-        Assert.Equal(stepId, req.EntityMoniker.Id);
-        Assert.Equal("sdkmessageprocessingstep", req.EntityMoniker.LogicalName);
-        Assert.Equal(state, req.State.Value);
-        Assert.Equal(status, req.Status.Value);
+        Entity created = Assert.Single(svc.Created, e => e.LogicalName == "sdkmessageprocessingstep");
+        Assert.False(created.Contains("statecode"));
+        Assert.False(created.Contains("statuscode"));
+        if (enabled)
+        {
+            Assert.DoesNotContain(svc.Updated, e => e.LogicalName == "sdkmessageprocessingstep");
+        }
+        else
+        {
+            Entity disable = Assert.Single(svc.Updated, e => e.LogicalName == "sdkmessageprocessingstep");
+            Assert.Equal(stepId, disable.Id);
+            Assert.Equal(new[] { "statecode", "statuscode" }, disable.Attributes.Keys.OrderBy(k => k, StringComparer.Ordinal));
+            Assert.Equal(1, disable.GetAttributeValue<OptionSetValue>("statecode").Value);
+            Assert.Equal(2, disable.GetAttributeValue<OptionSetValue>("statuscode").Value);
+            Assert.Equal(new[] { "create:sdkmessageprocessingstep", "update:sdkmessageprocessingstep" }, svc.Writes.Take(2));
+        }
+
+        Assert.Empty(svc.Executed);
     }
 
     // ---- SyncStepSecureConfig ----------------------------------------------------------------------
@@ -589,6 +639,33 @@ public sealed class DataverseRegistrationStepsTests
         Entity step = svc.Created.Single(e => e.LogicalName == "sdkmessageprocessingstep");
         Assert.True(step.Contains("impersonatinguserid"));
         Assert.Null(step.GetAttributeValue<EntityReference>("impersonatinguserid"));
+    }
+
+    [Fact]
+    public void UpsertStep_clears_the_message_filter_of_a_step_that_became_global()   // #445
+    {
+        // An existing step (found by its step key) whose entity was dropped: the update must clear sdkmessagefilterid,
+        // or the step stays filtered and every later plan shows the same change. Clearing it was verified live.
+        var pluginTypeId = Guid.NewGuid();
+        var existingStep = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid())),
+                // Found by its step key; live, it is still filtered on account.
+                "sdkmessageprocessingstep" => TestSupport.FakeOrgService.Collection(StepRow(existingStep, "Update", "account", 40, 0, name: $"{Plugin} - PostOpSync: dv-key")),
+                _ => new EntityCollection(),
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id),
+        };
+
+        JsonElement def = Json(new { pluginTypeName = Plugin, message = "Update", entityLogicalName = "", stepKey = "dv-key", stage = 40, mode = 0 });
+        DataverseRegistration.UpsertStep(svc, new Dictionary<string, Guid> { [Plugin] = pluginTypeId }, def, verbose: false);
+
+        Entity step = svc.Updated.First(e => e.LogicalName == "sdkmessageprocessingstep" && e.Id == existingStep);
+        Assert.True(step.Contains("sdkmessagefilterid"));
+        Assert.Null(step.GetAttributeValue<EntityReference>("sdkmessagefilterid"));
     }
 
     [Fact]
