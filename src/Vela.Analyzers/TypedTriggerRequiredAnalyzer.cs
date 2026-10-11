@@ -27,7 +27,7 @@ namespace Vela.Analyzers
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "Each message is registered one way. A message with a typed trigger (OnCreate, OnUpdate, OnAssign, OnSendEmail, ...) is registered through it; On<TRequest>() and OnAsyncOnly<TRequest>() are for messages without one (custom APIs and the messages Vela does not model). The runtime rejects the same registration.");
+            description: "Each message is registered one way. A message with a typed trigger (OnCreate, OnUpdate, OnAssign, OnSendEmail, ...) is registered through it; On<TRequest>(), OnAsyncOnly<TRequest>() and OnMessage<TMessage>() are for messages without one (custom APIs and the messages Vela does not model). The runtime rejects the same registration.");
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 
@@ -51,7 +51,7 @@ namespace Vela.Analyzers
         {
             InvocationExpressionSyntax invocation = (InvocationExpressionSyntax)context.Node;
             if (invocation.Expression is not MemberAccessExpressionSyntax { Name: GenericNameSyntax name } ||
-                (name.Identifier.ValueText != "On" && name.Identifier.ValueText != "OnAsyncOnly") ||
+                name.Identifier.ValueText is not ("On" or "OnAsyncOnly" or "OnMessage") ||
                 name.TypeArgumentList.Arguments.Count != 1)
             {
                 return;

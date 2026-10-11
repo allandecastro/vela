@@ -402,7 +402,7 @@ namespace Vela.Plugin
 
         // Messages Vela models with a typed context: build the per-message context so its handler receives a
         // single strongly-typed argument (e.g. IMergeContext<TEntity>). Returns null for a permissive
-        // OnMessage(...) step that Vela does not model, so its handler receives the plain ILocalPluginContext.
+        // OnMessage<TMessage>() step that Vela does not model, so its handler receives the plain ILocalPluginContext.
         private static object? BuildTypedContext(string? message, PluginStages stage, ILocalPluginContext ctx)
         {
             bool post = stage == PluginStages.PostOperation;
@@ -451,7 +451,7 @@ namespace Vela.Plugin
             };
         }
 
-        // A permissive OnMessage(...) step whose handler takes a generic message context
+        // A permissive OnMessage<TMessage>() step whose handler takes a generic message context
         // (IMessagePreContext<TRequest> / IMessagePostContext<TRequest>) does not carry TRequest in the message
         // name, so it is resolved from the handler method's single parameter type. The matching concrete context
         // (MessagePreContext<TRequest> / MessagePostContext<TRequest>) is then built over the live pipeline

@@ -241,13 +241,18 @@ internal static partial class DataverseRegistration
     return result;
 }
 
-    // The unique names of every Custom API in the environment (case-insensitive). A Custom API's message name
+    // Which of the given message names are Custom API unique names (case-insensitive). A Custom API's message name
     // equals its unique name, so this is the set used to recognize (and skip) the platform-managed internal
-    // main-operation step of a Custom API when reading steps (A7).
-    private static HashSet<string> GetCustomApiMessageNames(IOrganizationService service)
+    // main-operation step of a Custom API when reading steps (A7). Only the candidate names are looked up, so the
+    // read never scans every customapi in the environment and issues no query when there is no candidate.
+    private static HashSet<string> GetCustomApiMessageNames(IOrganizationService service, IEnumerable<string> messageNames)
 {
-    QueryExpression query = new QueryExpression("customapi") { ColumnSet = new ColumnSet("uniquename") };
-    return service.RetrieveAll(query)
+    return service.RetrieveAllInChunks(messageNames, chunk =>
+        {
+            QueryExpression query = new QueryExpression("customapi") { ColumnSet = new ColumnSet("uniquename") };
+            query.Criteria.AddCondition("uniquename", ConditionOperator.In, chunk);
+            return query;
+        })
         .Select(e => e.GetAttributeValue<string>("uniquename"))
         .Where(n => !string.IsNullOrWhiteSpace(n))
         .Select(n => n!)
@@ -263,22 +268,29 @@ internal static partial class DataverseRegistration
         return items;
     }
 
-    QueryExpression stepsQuery = new QueryExpression("sdkmessageprocessingstep")
+    List<Entity> stepRows = service.RetrieveAllInChunks(pluginTypeIds, chunk =>
     {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid", "supporteddeployment", "asyncautodelete")
-    };
-    stepsQuery.Criteria.AddCondition("eventhandler", ConditionOperator.In, pluginTypeIds.Cast<object>().ToArray());
+        QueryExpression stepsQuery = new QueryExpression("sdkmessageprocessingstep")
+        {
+            ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "eventhandler", "name", "description", "stage", "mode", "rank", "filteringattributes", "statecode", "configuration", "sdkmessageprocessingstepsecureconfigid", "impersonatinguserid", "supporteddeployment", "asyncautodelete")
+        };
+        stepsQuery.Criteria.AddCondition("eventhandler", ConditionOperator.In, chunk);
 
-    LinkEntity messageLink = stepsQuery.AddLink("sdkmessage", "sdkmessageid", "sdkmessageid", JoinOperator.LeftOuter);
-    messageLink.EntityAlias = "msg";
-    messageLink.Columns = new ColumnSet("name");
+        LinkEntity messageLink = stepsQuery.AddLink("sdkmessage", "sdkmessageid", "sdkmessageid", JoinOperator.LeftOuter);
+        messageLink.EntityAlias = "msg";
+        messageLink.Columns = new ColumnSet("name");
 
-    LinkEntity filterLink = stepsQuery.AddLink("sdkmessagefilter", "sdkmessagefilterid", "sdkmessagefilterid", JoinOperator.LeftOuter);
-    filterLink.EntityAlias = "filter";
-    filterLink.Columns = new ColumnSet("primaryobjecttypecode");
-
-    List<Entity> stepRows = service.RetrieveAll(stepsQuery);
-    HashSet<string> customApiMessageNames = GetCustomApiMessageNames(service);
+        LinkEntity filterLink = stepsQuery.AddLink("sdkmessagefilter", "sdkmessagefilterid", "sdkmessagefilterid", JoinOperator.LeftOuter);
+        filterLink.EntityAlias = "filter";
+        filterLink.Columns = new ColumnSet("primaryobjecttypecode");
+        return stepsQuery;
+    });
+    HashSet<string> customApiMessageNames = GetCustomApiMessageNames(
+        service,
+        stepRows.Where(x => (x.GetAttributeValue<OptionSetValue>("stage")?.Value ?? 0) == SdkConstants.PipelineStage.MainOperation)
+            .Select(x => GetAliasedString(x, "msg.name"))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!));
     Dictionary<Guid, Entity[]> imagesByStep = GetStepImages(service, stepRows.Select(x => x.Id).ToArray());
     Dictionary<Guid, string> secureConfigsById = GetSecureConfigs(
         service,
@@ -380,13 +392,17 @@ internal static partial class DataverseRegistration
         return new Dictionary<Guid, Entity[]>();
     }
 
-    QueryExpression imageQuery = new QueryExpression("sdkmessageprocessingstepimage")
+    List<Entity> imageRows = service.RetrieveAllInChunks(stepIds, chunk =>
     {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "imagetype", "entityalias", "attributes", "messagepropertyname")
-    };
-    imageQuery.Criteria.AddCondition("sdkmessageprocessingstepid", ConditionOperator.In, stepIds.Cast<object>().ToArray());
+        QueryExpression imageQuery = new QueryExpression("sdkmessageprocessingstepimage")
+        {
+            ColumnSet = new ColumnSet("sdkmessageprocessingstepid", "imagetype", "entityalias", "attributes", "messagepropertyname")
+        };
+        imageQuery.Criteria.AddCondition("sdkmessageprocessingstepid", ConditionOperator.In, chunk);
+        return imageQuery;
+    });
 
-    foreach (Entity image in service.RetrieveAll(imageQuery))
+    foreach (Entity image in imageRows)
     {
         Guid stepId = image.GetAttributeValue<EntityReference>("sdkmessageprocessingstepid")?.Id ?? Guid.Empty;
         if (stepId == Guid.Empty)
@@ -419,13 +435,17 @@ internal static partial class DataverseRegistration
         return map;
     }
 
-    QueryExpression query = new QueryExpression("sdkmessageprocessingstepsecureconfig")
+    List<Entity> rows = service.RetrieveAllInChunks(secureConfigIds, chunk =>
     {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepsecureconfigid", "secureconfig")
-    };
-    query.Criteria.AddCondition("sdkmessageprocessingstepsecureconfigid", ConditionOperator.In, secureConfigIds.Cast<object>().ToArray());
+        QueryExpression query = new QueryExpression("sdkmessageprocessingstepsecureconfig")
+        {
+            ColumnSet = new ColumnSet("sdkmessageprocessingstepsecureconfigid", "secureconfig")
+        };
+        query.Criteria.AddCondition("sdkmessageprocessingstepsecureconfigid", ConditionOperator.In, chunk);
+        return query;
+    });
 
-    foreach (Entity row in service.RetrieveAll(query))
+    foreach (Entity row in rows)
     {
         map[row.Id] = row.GetAttributeValue<string>("secureconfig") ?? string.Empty;
     }
@@ -442,12 +462,15 @@ internal static partial class DataverseRegistration
         return items;
     }
 
-    QueryExpression apiQuery = new QueryExpression("customapi")
+    List<Entity> apiRows = service.RetrieveAllInChunks(pluginTypeIds, chunk =>
     {
-        ColumnSet = new ColumnSet("customapiid", "uniquename", "displayname", "description", "isfunction", "boundentitylogicalname", "executeprivilegename", "isprivate", "allowedcustomprocessingsteptype", "bindingtype", "workflowsdkstepenabled", "plugintypeid")
-    };
-    apiQuery.Criteria.AddCondition("plugintypeid", ConditionOperator.In, pluginTypeIds.Cast<object>().ToArray());
-    List<Entity> apiRows = service.RetrieveAll(apiQuery);
+        QueryExpression apiQuery = new QueryExpression("customapi")
+        {
+            ColumnSet = new ColumnSet("customapiid", "uniquename", "displayname", "description", "isfunction", "boundentitylogicalname", "executeprivilegename", "isprivate", "allowedcustomprocessingsteptype", "bindingtype", "workflowsdkstepenabled", "plugintypeid")
+        };
+        apiQuery.Criteria.AddCondition("plugintypeid", ConditionOperator.In, chunk);
+        return apiQuery;
+    });
 
     Guid[] apiIds = apiRows.Select(x => x.Id).ToArray();
     Dictionary<Guid, CustomApiParameterApplyDefinition[]> requestParams = GetCustomApiRequestParameters(service, apiIds);
@@ -499,13 +522,17 @@ internal static partial class DataverseRegistration
         return new Dictionary<Guid, CustomApiParameterApplyDefinition[]>();
     }
 
-    QueryExpression query = new QueryExpression("customapirequestparameter")
+    List<Entity> rows = service.RetrieveAllInChunks(apiIds, chunk =>
     {
-        ColumnSet = new ColumnSet("customapiid", "name", "isoptional", "type", "logicalentityname", "uniquename", "description")
-    };
-    query.Criteria.AddCondition("customapiid", ConditionOperator.In, apiIds.Cast<object>().ToArray());
+        QueryExpression query = new QueryExpression("customapirequestparameter")
+        {
+            ColumnSet = new ColumnSet("customapiid", "name", "isoptional", "type", "logicalentityname", "uniquename", "description")
+        };
+        query.Criteria.AddCondition("customapiid", ConditionOperator.In, chunk);
+        return query;
+    });
 
-    foreach (Entity row in service.RetrieveAll(query))
+    foreach (Entity row in rows)
     {
         Guid apiId = row.GetAttributeValue<EntityReference>("customapiid")?.Id ?? Guid.Empty;
         if (apiId == Guid.Empty)
@@ -544,13 +571,17 @@ internal static partial class DataverseRegistration
         return new Dictionary<Guid, CustomApiParameterApplyDefinition[]>();
     }
 
-    QueryExpression query = new QueryExpression("customapiresponseproperty")
+    List<Entity> rows = service.RetrieveAllInChunks(apiIds, chunk =>
     {
-        ColumnSet = new ColumnSet("customapiid", "name", "type", "logicalentityname", "uniquename", "description")
-    };
-    query.Criteria.AddCondition("customapiid", ConditionOperator.In, apiIds.Cast<object>().ToArray());
+        QueryExpression query = new QueryExpression("customapiresponseproperty")
+        {
+            ColumnSet = new ColumnSet("customapiid", "name", "type", "logicalentityname", "uniquename", "description")
+        };
+        query.Criteria.AddCondition("customapiid", ConditionOperator.In, chunk);
+        return query;
+    });
 
-    foreach (Entity row in service.RetrieveAll(query))
+    foreach (Entity row in rows)
     {
         Guid apiId = row.GetAttributeValue<EntityReference>("customapiid")?.Id ?? Guid.Empty;
         if (apiId == Guid.Empty)

@@ -188,6 +188,46 @@ namespace Vela.Testing.Tests
             Assert.Equal(50, ctx.PluginExecutionContext.OutputParameters["Score"]);
         }
 
+        // A typed request carries both the message and the input parameters, so the test names neither.
+        private sealed class ScoreRequest : Vela.Messages.TypedRequest
+        {
+            public ScoreRequest()
+            {
+                RequestName = "vela_Score";
+            }
+
+            public int AccountId { get => Get<int>(); set => Set(value); }
+        }
+
+        [Fact]
+        public void ForRequest_SetsMessageAndInputParameters_FromTheTypedRequest()
+        {
+            LocalPluginContext ctx = PluginContext.ForRequest(new ScoreRequest { AccountId = 5 }).Build();
+
+            Assert.Equal("vela_Score", ctx.MessageName);
+            Assert.Equal(5, ctx.PluginExecutionContext.InputParameters["AccountId"]);
+
+            new ScoringApi().Execute(ctx.ServiceProvider);
+
+            Assert.Equal(50, ctx.PluginExecutionContext.OutputParameters["Score"]);
+        }
+
+        [Fact]
+        public void WithRequest_TranslatesTheRequestNameToTheSdkMessage()
+        {
+            OrganizationRequest closeQuote = new OrganizationRequest("CloseQuote");
+            closeQuote.Parameters["Status"] = new OptionSetValue(4);
+
+            LocalPluginContext ctx = PluginContext.For<FakeAccount>().WithRequest(closeQuote).Build();
+
+            Assert.Equal("Close", ctx.MessageName);
+            Assert.Equal(4, ((OptionSetValue)ctx.PluginExecutionContext.InputParameters["Status"]).Value);
+        }
+
+        [Fact]
+        public void ForRequest_RejectsNull()
+            => Assert.Throws<ArgumentNullException>(() => PluginContext.ForRequest(null!));
+
         [Fact]
         public void WithPreImage_PopulatesImageCollection()
         {
@@ -261,6 +301,7 @@ namespace Vela.Testing.Tests
         public void WithTargets_MarksBulkOperation_AndExposesTargets()
         {
             LocalPluginContext ctx = PluginContext.For<FakeAccount>()
+                .OnMessage(PluginMessages.UpdateMultiple)
                 .WithTargets(new FakeAccount { Name = "A" }, new FakeAccount { Name = "B" })
                 .Build();
 

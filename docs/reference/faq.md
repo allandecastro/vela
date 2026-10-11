@@ -13,24 +13,28 @@ nothing to reconcile. See [plan/apply](../guides/plan-apply.md).
 
 Dataverse caches plugin assemblies **by version**, so re-deploying changed code under the **same** assembly
 version can keep serving the old assembly. Bump the assembly version and rebuild. Solutions scaffolded by
-`vela init` auto-increment `AssemblyVersion` (`1.0.*`); if you add a new plugin type without bumping the
-version, `vela apply` fails fast with this guidance rather than letting it break at runtime.
+`vela init` auto-increment `AssemblyVersion` (`1.0.*`). When a plugin type is still missing after the package
+publish, `vela apply` stops with `Plugin type not found in Dataverse after the plugin package publish` instead of
+registering its steps.
 
-### I get "RegisterCustomApi(...) can only be called inside RegisterCustomApi()" - what does it mean?
+### I get "can only call RegisterCustomApi(uniqueName, handler) inside RegisterCustomApi()" - what does it mean?
 
-Call `RegisterCustomApi(...)` only from inside the `RegisterCustomApi()` override method.
+Call `RegisterCustomApi("name", ...)` only from inside your `protected override void RegisterCustomApi()`.
 
 ### My step handler isn't found (or has the wrong signature) - what should it be?
 
-A plugin step handler is an instance method taking the **stage-typed** message context, bound by method group -
-`.Handle(OnUpdated)` where `void OnUpdated(IUpdatePostContext<TEntity> ctx)` for a PostOperation step (or
-`IUpdatePreContext<TEntity>` for a PreValidation/PreOperation step, which has `ctx.Request` but no `ctx.Response`;
-or `void OnX(ILocalPluginContext ctx)` for an `OnMessage("...")` step). The context type is checked against the
-message and stage at compile time, so binding an `OnUpdate()` step to an `ICreatePostContext` handler - or reading
-`ctx.Response` from a pre-stage handler - does not build. A single-step plugin binds the same typed
-`.Handle(...)` (its context is `I{Message}PostContext<T>` / `I{Message}PreContext<T>`) and reads the record
-with `ctx.Request.Target`; every step chain must end with `.Handle(...)`, so a typed handler is always bound.
-For a lightweight Custom API handler the signature is `void Handler(ILocalPluginContext)`.
+A step handler is an instance method returning `void` with one parameter, bound by method group
+(`.Handle(OnUpdated)`). The parameter is one of:
+
+- the stage-typed message context: `IUpdatePostContext<TEntity>` at PostOperation, `IUpdatePreContext<TEntity>` at
+  PreValidation/PreOperation (it has `ctx.Request` but no `ctx.Response`);
+- the generated `{Handler}Context` (here `OnUpdatedContext`), which adds the typed `ctx.PreImage` / `ctx.PostImage`
+  (the plugin must be `partial`, [VELA014](analyzers.md#vela014));
+- `ILocalPluginContext`, for `OnMessage<TMarker>()` steps or when you need nothing typed.
+
+A context for another message or stage is a build error ([VELA015](analyzers.md#vela015)), and every step chain
+must end with `.Handle(...)` ([VELA002](analyzers.md#vela002)). A lightweight Custom API handler is
+`void Handler(ILocalPluginContext ctx)`.
 
 ### Can `plan`/`apply` authenticate with a managed identity or a certificate?
 
@@ -56,8 +60,9 @@ not supported. See [limitations](limitations.md).
 ### Does the in-memory test harness support every SDK message?
 
 No - it covers a common set (`Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`, the `*Multiple` bulk
-messages, `Upsert`, `Assign`/`Associate`/`Disassociate`, metadata reads, and `ExecuteMultiple`/`ExecuteTransaction`).
-For any other message, inject your own `IOrganizationService` via `WithOrganizationService(...)`.
+messages, `Upsert`, `Assign`/`SetState`/`Merge`/`Associate`/`Disassociate`, file blocks, metadata reads, and
+`ExecuteMultiple`/`ExecuteTransaction`). For any other message, a single-plugin test can inject its own
+`IOrganizationService` via `WithOrganizationService(...)`; see [limitations](limitations.md#velatesting).
 See [testing](../guides/testing.md).
 
 ### Can I run `plan`/`apply`/`inspect` in CI or from a coding agent without them hanging?
@@ -69,16 +74,18 @@ See [plan → apply](../guides/plan-apply.md).
 
 ### `apply` rejected my signed plugin package - why?
 
-Applying with `--solution` adds the solution publisher prefix to the package name, which rewrites the `.nupkg`
-and would invalidate a signature already applied by `vela sign` (Dataverse returns `0x80040265`). Build and sign
-the package with the prefixed name already in place, or apply it without `--solution`.
+Dataverse only imports a plugin package whose name carries a solution publisher prefix. When the name lacks it,
+`apply --solution` adds the prefix by rewriting the `.nupkg`, which would invalidate a signature applied by
+`vela sign` (Dataverse returns `0x80040265`), so `apply` refuses a signed package that needs the rename. Give the
+package its prefixed name (for example `zava_Zava.Plugins`) before building and signing it.
 See [signing](../guides/signing.md).
 
-### Why did `apply` reject my workflow-enabled Custom API?
+### Why was my workflow-enabled Custom API rejected?
 
 A Custom API with `WorkflowSdkStepEnabled` set must be an action (not a function) and cannot use
-`Entity`/`EntityCollection`/`StringArray` parameters. `apply` validates this locally and fails with a clear
-message instead of an opaque platform error. See [Write a Custom API](../guides/custom-apis.md).
+`Entity`/`EntityCollection`/`string[]` parameters, nor an `EntityReference` unless it is bound to a table.
+`Build()` rejects such a definition with a message naming the API and the parameter, so `plan` fails before
+any write. See [Write a Custom API](../guides/custom-apis.md).
 
 ### Is the harness security model on by default?
 
@@ -103,8 +110,8 @@ or a base64 `.pfx`, and delegates to `dotnet nuget sign`. Key Vault / HSM signin
 
 ### Is Vela available on nuget.org?
 
-Yes. `Vela.Plugins` and `Vela.Testing` (the framework line) and `Vela.Cli` (the CLI) are published on
-nuget.org. Reference the framework packages with `dotnet add package Vela.Plugins` / `Vela.Testing`, and
+Yes. `Vela.Plugins`, `Vela.Testing` and `Vela.Messages` (the framework line) and `Vela.Cli` (the CLI) are
+published on nuget.org. Reference the framework packages with `dotnet add package Vela.Plugins` / `Vela.Testing`, and
 install the CLI with `dotnet tool install --global Vela.Cli`. It is still **pre-1.0**, so APIs may change
 between minor versions - see [limitations](limitations.md).
 

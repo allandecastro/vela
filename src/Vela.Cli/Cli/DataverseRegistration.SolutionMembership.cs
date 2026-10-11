@@ -92,17 +92,24 @@ internal static partial class DataverseRegistration
             }
 
             // The platform-managed main-operation step of a Custom API is not a component Vela registers.
-            QueryExpression steps = new("sdkmessageprocessingstep") { ColumnSet = new ColumnSet("name", "stage") };
-            steps.Criteria.AddCondition("eventhandler", ConditionOperator.In, typeIds.Cast<object>().ToArray());
-            foreach (Entity step in service.RetrieveAll(steps)
+            List<Entity> stepRows = service.RetrieveAllInChunks(typeIds, chunk =>
+            {
+                QueryExpression steps = new("sdkmessageprocessingstep") { ColumnSet = new ColumnSet("name", "stage") };
+                steps.Criteria.AddCondition("eventhandler", ConditionOperator.In, chunk);
+                return steps;
+            });
+            foreach (Entity step in stepRows
                 .Where(s => (s.GetAttributeValue<OptionSetValue>("stage")?.Value ?? 0) != SdkConstants.PipelineStage.MainOperation))
             {
                 candidates.Add(new SolutionMembershipAction("step", step.GetAttributeValue<string>("name") ?? step.Id.ToString(), SdkMessageProcessingStepComponentType, step.Id));
             }
 
-            QueryExpression apis = new("customapi") { ColumnSet = new ColumnSet("uniquename") };
-            apis.Criteria.AddCondition("plugintypeid", ConditionOperator.In, typeIds.Cast<object>().ToArray());
-            List<Entity> apiRows = service.RetrieveAll(apis);
+            List<Entity> apiRows = service.RetrieveAllInChunks(typeIds, chunk =>
+            {
+                QueryExpression apis = new("customapi") { ColumnSet = new ColumnSet("uniquename") };
+                apis.Criteria.AddCondition("plugintypeid", ConditionOperator.In, chunk);
+                return apis;
+            });
             foreach (Entity api in apiRows)
             {
                 AddTable("customapi", "custom-api", api.GetAttributeValue<string>("uniquename") ?? api.Id.ToString(), api.Id);
@@ -110,13 +117,17 @@ internal static partial class DataverseRegistration
 
             if (apiRows.Count > 0)
             {
-                object[] apiIds = apiRows.Select(a => (object)a.Id).ToArray();
+                Guid[] apiIds = apiRows.Select(a => a.Id).ToArray();
                 Dictionary<Guid, string> apiNames = apiRows.ToDictionary(a => a.Id, a => a.GetAttributeValue<string>("uniquename") ?? a.Id.ToString());
                 foreach ((string entity, string kind) in new[] { ("customapirequestparameter", "custom-api-parameter"), ("customapiresponseproperty", "custom-api-response-property") })
                 {
-                    QueryExpression children = new(entity) { ColumnSet = new ColumnSet("uniquename", "name", "customapiid") };
-                    children.Criteria.AddCondition("customapiid", ConditionOperator.In, apiIds);
-                    foreach (Entity child in service.RetrieveAll(children))
+                    List<Entity> childRows = service.RetrieveAllInChunks(apiIds, chunk =>
+                    {
+                        QueryExpression children = new(entity) { ColumnSet = new ColumnSet("uniquename", "name", "customapiid") };
+                        children.Criteria.AddCondition("customapiid", ConditionOperator.In, chunk);
+                        return children;
+                    });
+                    foreach (Entity child in childRows)
                     {
                         string name = child.GetAttributeValue<string>("uniquename") ?? child.GetAttributeValue<string>("name") ?? child.Id.ToString();
                         Guid parentId = child.GetAttributeValue<EntityReference>("customapiid")?.Id ?? Guid.Empty;
@@ -182,11 +193,14 @@ internal static partial class DataverseRegistration
 
     private static HashSet<Guid> GetSolutionMemberIds(IOrganizationService service, string solutionUniqueName, Guid[] objectIds)
     {
-        QueryExpression query = new("solutioncomponent") { ColumnSet = new ColumnSet("objectid") };
-        query.Criteria.AddCondition("objectid", ConditionOperator.In, objectIds.Cast<object>().ToArray());
-        LinkEntity solution = query.AddLink("solution", "solutionid", "solutionid");
-        solution.LinkCriteria.AddCondition("uniquename", ConditionOperator.Equal, solutionUniqueName);
-        return service.RetrieveAll(query)
+        return service.RetrieveAllInChunks(objectIds, chunk =>
+            {
+                QueryExpression query = new("solutioncomponent") { ColumnSet = new ColumnSet("objectid") };
+                query.Criteria.AddCondition("objectid", ConditionOperator.In, chunk);
+                LinkEntity solution = query.AddLink("solution", "solutionid", "solutionid");
+                solution.LinkCriteria.AddCondition("uniquename", ConditionOperator.Equal, solutionUniqueName);
+                return query;
+            })
             .Select(row => row.GetAttributeValue<Guid?>("objectid") ?? Guid.Empty)
             .Where(id => id != Guid.Empty)
             .ToHashSet();

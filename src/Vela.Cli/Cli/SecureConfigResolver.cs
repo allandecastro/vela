@@ -20,9 +20,10 @@ internal static class SecureConfigResolver
 
     /// <summary>
     /// Parses <c>--secure-config</c> specs (<c>NAME=VALUE</c> or <c>NAME=@path</c>). Messages name the
-    /// configuration, never its value.
+    /// configuration, never its value. An inline <c>NAME=VALUE</c> sits in shell history and the process listing, so
+    /// it is honored but reported through <paramref name="warn"/>, as <c>--client-secret</c> is.
     /// </summary>
-    internal static Dictionary<string, string> ParseSpecs(IEnumerable<string> specs, Func<string, string> readFile)
+    internal static Dictionary<string, string> ParseSpecs(IEnumerable<string> specs, Func<string, string> readFile, Action<string>? warn = null)
     {
         Dictionary<string, string> values = new(StringComparer.Ordinal);
         foreach (string spec in specs)
@@ -47,6 +48,10 @@ internal static class SecureConfigResolver
                 {
                     throw new FileNotFoundException($"Cannot read the secure configuration '{name}' from '{path}': {ex.Message}", path, ex);
                 }
+            }
+            else
+            {
+                warn?.Invoke($"Warning: --secure-config {name}=VALUE on the command line is exposed to shell history and process listings. Prefer --secure-config {name}=@file or the {EnvironmentVariablePrefix}{name} environment variable.");
             }
 
             if (!values.TryAdd(name, value))

@@ -92,7 +92,7 @@ namespace Vela.Testing.Tests
         public IsoMergeStep(string u, string s) : base(u, s) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage("Merge").PostOperation().Sync().Handle(ctx => { });
+            => RegisterStep().OnMerge().PostOperation().Sync().Handle(ctx => { });
     }
 
     public sealed class IsoCountsExecutions : EntityPluginBase<IsoRecord>

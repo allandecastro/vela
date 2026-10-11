@@ -96,5 +96,32 @@ namespace Vela.Testing.Tests
             Assert.Equal(id, reference.Id);
             Assert.Equal("New name", service.Retrieve("account", id, new ColumnSet("name")).GetAttributeValue<string>("name"));
         }
+
+        [Fact]
+        public void UpsertByKey_is_keyed_by_the_given_key_only_and_leaves_the_entity_untouched()
+        {
+            InMemoryOrganizationService service = new InMemoryOrganizationService();
+            Guid existing = service.Create(new Entity("account") { ["accountnumber"] = "A-001", ["name"] = "Old" });
+
+            // A stale key already on the entity must not be merged into the upsert key.
+            DeepAccount entity = new DeepAccount { Name = "New" };
+            entity.KeyAttributes["name"] = "Stale";
+
+            (bool created, EntityReference reference) = service.UpsertByKey(entity, AccountNumberKey("A-001"));
+
+            Assert.False(created);
+            Assert.Equal(existing, reference.Id);
+            Assert.Single(entity.KeyAttributes);
+            Assert.Equal("Stale", entity.KeyAttributes["name"]);
+        }
+
+        [Fact]
+        public void UpsertByKey_rejects_an_entity_with_an_id_and_a_key_without_attributes()
+        {
+            InMemoryOrganizationService service = new InMemoryOrganizationService();
+
+            Assert.Throws<ArgumentException>(() => service.UpsertByKey(new DeepAccount { Id = Guid.NewGuid() }, AccountNumberKey("A-001")));
+            Assert.Throws<ArgumentException>(() => service.UpsertByKey(new DeepAccount(), new EntityReference("account", Guid.NewGuid())));
+        }
     }
 }

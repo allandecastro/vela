@@ -103,5 +103,37 @@ namespace Vela.Testing.Tests
                 new EntityReference("account", accountId),
                 q => q.Include(a => a.Name)));
         }
+
+        [Fact]
+        public void Include_of_the_same_relationship_twice_throws()
+        {
+            InMemoryOrganizationService service = NewService();
+            Guid accountId = service.Create(new Entity("account") { ["name"] = "Contoso" });
+
+            ArgumentException ex = Assert.Throws<ArgumentException>(() => service.RetrieveWithRelated<DeepAccount>(
+                new EntityReference("account", accountId),
+                q => q.Include(a => a.Contacts).Include(a => a.Contacts, c => c.FirstName)));
+            Assert.Contains("Contacts", ex.Message);
+        }
+
+        [Fact]
+        public void Include_with_columns_reads_only_those_columns_of_the_related_records()
+        {
+            InMemoryOrganizationService service = NewService();
+            Guid accountId = service.Create(new Entity("account") { ["name"] = "Contoso" });
+            service.Create(new Entity("contact") { ["firstname"] = "Ada", ["lastname"] = "Lovelace", ["parentcustomerid"] = new EntityReference("account", accountId) });
+            Guid contactId = service.Create(new Entity("contact") { ["firstname"] = "Grace", ["parentcustomerid"] = new EntityReference("account", accountId) });
+
+            DeepAccount account = service.RetrieveWithRelated<DeepAccount>(
+                new EntityReference("account", accountId),
+                q => q.Include(a => a.Contacts, c => c.FirstName));
+            DeepContact contact = service.RetrieveWithRelated<DeepContact>(
+                new EntityReference("contact", contactId),
+                q => q.Include(c => c.ParentCustomer, a => a.Name));
+
+            DeepContact ada = Assert.Single(account.Contacts, c => c.FirstName == "Ada");
+            Assert.False(ada.Contains("lastname"));
+            Assert.Equal("Contoso", contact.ParentCustomer!.Name);
+        }
     }
 }

@@ -30,7 +30,7 @@ namespace Vela.Context
         /// <summary>Data source (connection reference), stored as JSON.</summary>
         DataSource = 100000004,
 
-        /// <summary>Secret backed by Azure Key Vault. Reading the secret value is not supported by this service.</summary>
+        /// <summary>Secret backed by Azure Key Vault. Reading the secret value is not supported: resolving one throws.</summary>
         Secret = 100000005,
     }
 
@@ -80,7 +80,8 @@ namespace Vela.Context
         /// <summary>
         /// Resolves the environment variable with the given schema name. When <paramref name="cacheFor"/> is null
         /// the value is read fresh once per execution (memoized within the run); when set, the value is cached
-        /// across executions for that duration.
+        /// across executions for that duration. A Secret-type variable throws: its stored value is a Key Vault
+        /// reference, not the secret.
         /// </summary>
         EnvironmentVariable Resolve(string schemaName, TimeSpan? cacheFor = null);
     }
@@ -108,6 +109,22 @@ namespace Vela.Context
 
         /// <inheritdoc />
         public EnvironmentVariable Resolve(string schemaName, TimeSpan? cacheFor = null)
+        {
+            EnvironmentVariable variable = ResolveAnyType(schemaName, cacheFor);
+
+            // A Secret's stored value is a Key Vault reference, not the secret: handing it out would let a caller use
+            // the reference as if it were the value. Rejected here so the injected reader and the context extensions
+            // behave the same.
+            if (variable.Exists && variable.Type == EnvironmentVariableType.Secret)
+            {
+                throw new InvalidPluginExecutionException(
+                    $"Environment variable '{schemaName}' is a Secret; reading secret values is not supported (they resolve through Azure Key Vault).");
+            }
+
+            return variable;
+        }
+
+        private EnvironmentVariable ResolveAnyType(string schemaName, TimeSpan? cacheFor)
         {
             if (string.IsNullOrWhiteSpace(schemaName))
             {

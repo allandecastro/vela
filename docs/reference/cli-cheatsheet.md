@@ -12,7 +12,7 @@ exit codes. For the full narrative, see [The vela CLI](../guides/cli-overview.md
 | `vela models <scope>` | Generate early-bound / typed models | see [scopes](#models-scopes) + connection flags |
 | `vela plan` | Preview registrations (read-only) | package inputs + connection flags, `--solution`, `--secure-config NAME=VALUE\|NAME=@file`, `--strict`, `--detailed-exitcode`, `--verbose`, `--json`, `--out` |
 | `vela apply` | Apply registrations (writes) | package inputs + connection flags, `--solution`, `--secure-config`, `--auto-approve` (alias `--yes`), `--batch-size`, `--strict`, `--webresources`, `--json`, `--out` |
-| `vela inspect` | Compare local packages with the live environment | package inputs + connection flags, `--secure-config`, `--json`, `--out` |
+| `vela inspect` | Compare local packages with the live environment | package inputs + connection flags, `--solution`, `--secure-config`, `--json`, `--out` |
 | `vela solution show <uniquename>` | Print a solution's publisher prefix | connection flags, `--json` |
 | `vela logs` (alias `trace`) | Read the plug-in trace log, or failed system jobs (read-only) | `--jobs` (`--all-statuses`), `--errors`, `--top`, `--since`, `--type`, `--message`, `--entity`, `--correlation`, `--full`, `--json` + connection flags |
 | `vela help [<command>]` | Help for one command; `vela help --json` for the whole command table | |
@@ -39,6 +39,18 @@ Package inputs (for `plan`/`apply`/`inspect`): `--package <file.nupkg>` (repeata
 | `--auth-client-id` / `--authority` | Override the MSAL client / authority (sovereign clouds) |
 | `--timeout <minutes>` | Dataverse request timeout (default 10, range 1 to 60); raise for a large org or slow cold start |
 | `--environment <label>` | Display label for the run (falls back to `--url`) |
+
+## Environment variables
+
+| Variable | Effect |
+| --- | --- |
+| `DATAVERSE_CLIENT_SECRET` | Client secret for app-registration auth (instead of `--client-secret`) |
+| `DATAVERSE_CONNECTION_STRING` | Connection string (instead of `--connection-string`) |
+| `VELA_SECURE_CONFIG_<NAME>` | Value of the step secure configuration `<NAME>` (instead of `--secure-config`) |
+| `VELA_CONFIG_DIR` | Location of the token cache and remembered URL (default `~/.vela`) |
+| `NO_COLOR` / `VELA_NO_COLOR` | Disable colors |
+| `VELA_NO_UPDATE_CHECK` | Disable the daily update notice |
+| `VELA_SCAN_IN_PROCESS=1` | Scan packages in the `vela` process instead of a child process (debugging only) |
 
 ## Models scopes
 

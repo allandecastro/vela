@@ -289,8 +289,7 @@ namespace {{prefix}}.Plugins.Tests.Account.CustomApis
         public void Returns_An_Estimated_Value_For_The_Bound_Account()
         {
             AccountEstimateValueCustomApi api = new AccountEstimateValueCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage(AccountEstimateValueCustomApi.UniqueName).Build();
-            context.PluginExecutionContext.InputParameters["AccountId"] = Guid.NewGuid();
+            LocalPluginContext context = PluginContext.ForRequest(new EstimateValueRequest { AccountId = Guid.NewGuid() }).Build();
 
             api.Execute(context.ServiceProvider);
 
@@ -320,8 +319,7 @@ namespace {{prefix}}.Plugins.Tests.Contact.CustomApis
         public void Reports_The_Bound_Contact_As_Valid()
         {
             ContactValidateCustomApi api = new ContactValidateCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage(ContactValidateCustomApi.UniqueName).Build();
-            context.PluginExecutionContext.InputParameters["ContactId"] = Guid.NewGuid();
+            LocalPluginContext context = PluginContext.ForRequest(new ContactValidateRequest { ContactId = Guid.NewGuid() }).Build();
 
             api.Execute(context.ServiceProvider);
 
@@ -378,8 +376,7 @@ namespace {{prefix}}.Integrations.Tests.Account.CustomApis
         public void Returns_A_Reconciled_Status_For_The_Bound_Account()
         {
             AccountReconcileCustomApi api = new AccountReconcileCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage(AccountReconcileCustomApi.UniqueName).Build();
-            context.PluginExecutionContext.InputParameters["AccountId"] = Guid.NewGuid();
+            LocalPluginContext context = PluginContext.ForRequest(new AccountReconcileRequest { AccountId = Guid.NewGuid() }).Build();
 
             api.Execute(context.ServiceProvider);
 
@@ -407,8 +404,7 @@ namespace {{prefix}}.Integrations.Tests.Contact.CustomApis
         {
             ContactExportCustomApi api = new ContactExportCustomApi(string.Empty, string.Empty);
             Guid contactId = Guid.NewGuid();
-            LocalPluginContext context = PluginContext.ForMessage(ContactExportCustomApi.UniqueName).Build();
-            context.PluginExecutionContext.InputParameters["ContactId"] = contactId;
+            LocalPluginContext context = PluginContext.ForRequest(new ContactExportRequest { ContactId = contactId }).Build();
 
             api.Execute(context.ServiceProvider);
 

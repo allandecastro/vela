@@ -41,9 +41,12 @@ vela add --interactive
   queues (`AddToQueue`, `RouteTo`, …), email (`SendEmail`, `SendEmailFromTemplate`, …), team/list membership and
   case/contract messages (see the full list in [Write a plugin](plugins.md)). The sdkmessage name works too:
   `--message Send` renders `OnSendEmail()`, and `--message Win` renders `OnWinQuote()` or `OnWinOpportunity()`
-  from `--entity`. Any other name is registered as a custom SDK message via `OnMessage("...")`. `Assign` gets the
-  typed `OnAssign()` too. The deprecated `SetState` / `SetStateDynamicEntity` messages have no typed method (update
-  `statecode`/`statuscode` with `Update` instead), so they render `OnMessage("...")`. `--project <csproj>` (default:
+  from `--entity`. `Assign` gets the typed `OnAssign()` too. Any other name is registered through its request type,
+  `On<XxxRequest>()`, with a handler taking `IMessagePostContext<XxxRequest>` (`IMessagePreContext` at a pre-stage):
+  the SDK class, fully qualified, when one ships (`--message SetState` renders
+  `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`, which registers on `SetStateDynamicEntity`, the message a state
+  change fires), otherwise the request [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`)
+  generates, with a note to generate it. `--project <csproj>` (default:
   the single `.csproj` in the current directory), `--force` (overwrite an existing file), `--json` (machine-readable
   report).
 - **Each kind takes only its own options.** An option the kind does not use (for example `add service --message`
@@ -79,8 +82,8 @@ vela add --interactive
   Replace those assertions with your plugin's own behaviour.
 - `vela add step <PluginName>` edits an existing **handler-based (multi-step)** plugin in place, appending a
   `RegisterStep().On<Message>()…Handle(Handle<Message>)` registration (where `On<Message>()` is the curated
-  method, e.g. `OnUpdate()`, or `OnMessage("...")` for an unmodelled message, not the generic `On<TRequest>()`
-  overload) and a matching handler method
+  method, e.g. `OnUpdate()`, or `On<XxxRequest>()` for an unmodelled message, as for `add plugin`) and a matching
+  handler method
   (`--message`, optional `--handler <Method>`). It refuses a plugin that has no handler-bound step yet (add a
   step ending in `.Handle(...)` first) and any file it can't parse cleanly, so it never corrupts source. It
   accepts the same `--stage`/`--mode` and `--filtering-attributes` options as `add plugin`: pass

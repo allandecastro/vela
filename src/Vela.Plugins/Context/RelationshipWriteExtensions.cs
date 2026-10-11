@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using Microsoft.Xrm.Sdk;
 using Vela.Steps;
 
@@ -40,7 +41,8 @@ namespace Vela.Context
         /// <summary>
         /// Associates <paramref name="entity"/> with the existing records held in its generated N:N navigation
         /// collections (an N:N link connects records that already exist, so each related record must have an id).
-        /// <paramref name="entity"/> must have an id. Empty collections and non-N:N navs are ignored.
+        /// <paramref name="entity"/> must have an id. Empty collections and non-N:N navs are ignored. A related
+        /// record without an id throws, naming each offending entry, before anything is associated.
         /// </summary>
         public static void AssociateRelated(this IOrganizationService service, Entity entity)
         {
@@ -59,6 +61,10 @@ namespace Vela.Context
                 throw new ArgumentException("The entity must have an id to associate related records.", nameof(entity));
             }
 
+            // Validate every collection before the first Associate, so a record without an id never leaves the
+            // entity half-associated.
+            List<(RelationshipNav Nav, EntityReferenceCollection Related)> associations = new List<(RelationshipNav, EntityReferenceCollection)>();
+            List<string> missingIds = new List<string>();
             foreach (RelationshipNav nav in RelationshipNavMap.For(entity.GetType()))
             {
                 if (!nav.IsManyToMany || nav.Property.GetValue(entity) is not IEnumerable value || value is string)
@@ -67,18 +73,37 @@ namespace Vela.Context
                 }
 
                 EntityReferenceCollection related = new EntityReferenceCollection();
+                int index = 0;
                 foreach (object? item in value)
                 {
                     if (item is Entity record && record.Id != Guid.Empty)
                     {
                         related.Add(record.ToEntityReference());
                     }
+                    else
+                    {
+                        missingIds.Add($"{nav.Property.Name}[{index}]");
+                    }
+
+                    index++;
                 }
 
                 if (related.Count > 0)
                 {
-                    service.Associate(entity.LogicalName, entity.Id, new Relationship(nav.SchemaName), related);
+                    associations.Add((nav, related));
                 }
+            }
+
+            if (missingIds.Count > 0)
+            {
+                throw new ArgumentException(
+                    "An N:N link connects existing records, so each related record must have an id. Missing an id: " + string.Join(", ", missingIds) + ".",
+                    nameof(entity));
+            }
+
+            foreach ((RelationshipNav nav, EntityReferenceCollection related) in associations)
+            {
+                service.Associate(entity.LogicalName, entity.Id, new Relationship(nav.SchemaName), related);
             }
         }
     }

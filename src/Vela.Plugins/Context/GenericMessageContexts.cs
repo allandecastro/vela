@@ -2,7 +2,7 @@ using Microsoft.Xrm.Sdk;
 
 namespace Vela.Context
 {
-    // Generic typed contexts for a custom / non-modelled message driven from OnMessage(...). Unlike the curated
+    // Generic typed contexts for a custom / non-modelled message driven from On<TRequest>() / OnMessage<TMessage>(). Unlike the curated
     // per-message contexts, these do not name a specific message: the caller supplies the request type at the
     // handler, so ctx.Request is that type over the live InputParameters, for any OrganizationRequest-derived type
     // (an SDK message request or a Vela-generated Custom API request). A pre-stage handler receives

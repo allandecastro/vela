@@ -21,29 +21,14 @@ _disableBreadcrumb: true
 
 Register a plugin step with a strongly-typed handler, preview it, apply it, then test it with no connection and no mocking library:
 
-```csharp
-public sealed class AccountValidator(string unsecure, string secure) : EntityPluginBase<Account>(unsecure, secure)
-{
-    protected override void RegisterPluginSteps() =>
-        RegisterStep().OnUpdate().PreOperation().Sync()
-            .FilterOn(a => a.Name)
-            .Handle(ctx =>
-            {
-                if (string.IsNullOrWhiteSpace(ctx.Request.Target.Name))
-                    throw new InvalidPluginExecutionException("Account name is required.");
-            });
-}
-```
+[!code-csharp[](samples/Vela.DocSamples/HomePageSample.cs#plugin)]
 
 ```powershell
-vela plan  --packages-dir ./artifacts --interactive   # preview the registration (read-only)
-vela apply --packages-dir ./artifacts --interactive   # upsert it into your environment
+vela plan  --packages-dir ./artifacts --solution ZavaSales --interactive   # preview the registration (read-only)
+vela apply --packages-dir ./artifacts --solution ZavaSales --interactive   # upsert it into your solution
 ```
 
-```csharp
-Assert.Throws<InvalidPluginExecutionException>(() =>
-    PluginContext.For<Account>().WithTarget(new Account { Name = "" }).Execute<AccountValidator>());
-```
+[!code-csharp[](samples/Vela.DocSamples/HomePageSample.cs#test)]
 
 ## Why Vela
 

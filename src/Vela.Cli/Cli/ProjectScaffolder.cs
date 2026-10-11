@@ -277,6 +277,8 @@ internal static class ProjectScaffolder
         // No nuget.config: Vela.Plugins / Vela.Testing (and the Microsoft SDK packages) all resolve from
         // nuget.org, the default source. Add your own nuget.config only if you use a private feed.
         Add("README.md", RootReadme(options));
+        // Instructions for AI coding agents: the step, Custom API and test patterns and the CLI loop.
+        Add("AGENTS.md", AgentsGuide(options));
 
         projects = entries;
         return plan;

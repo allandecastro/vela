@@ -9,22 +9,26 @@ namespace Vela.Analyzers.Tests;
 public sealed class SetStateStepAnalyzerTests
 {
     private const string Harness = @"
+namespace Vela.Messages
+{
+    [System.AttributeUsage(System.AttributeTargets.Class)]
+    public sealed class SdkMessageAttribute : System.Attribute { public SdkMessageAttribute(string messageName) { } }
+}
+
+namespace Vela.Constants
+{
+    [System.AttributeUsage(System.AttributeTargets.Class)]
+    public sealed class CustomMessageAttribute : System.Attribute { public CustomMessageAttribute(string messageName) { } }
+}
+
 namespace Vela.Steps
 {
     public interface IFluentStep { }
     public interface IFakeStep : IFluentStep
     {
-        IFakeStep OnMessage(string message);
+        IFakeStep On<TRequest>();
+        IFakeStep OnMessage<TMessage>();
         void Handle();
-    }
-}
-
-namespace Vela.Constants
-{
-    public static class PluginMessages
-    {
-        public const string SetState = ""SetState"";
-        public const string SetStateDynamicEntity = ""SetStateDynamicEntity"";
     }
 }
 
@@ -38,15 +42,28 @@ namespace Demo
 
     public class Other
     {
-        public Other OnMessage(string message) => this;
+        public Other OnMessage<T>() => this;
     }
+
+    public class SetStateRequest { }
+
+    [Vela.Messages.SdkMessage(""SetState"")]
+    public class PinnedSetState { }
+
+    [Vela.Messages.SdkMessage(""setstate"")]
+    public class PinnedSetStateLower { }
+
+    [Vela.Constants.CustomMessage(""SetState"")]
+    public class SetStateMarker { }
+
+    [Vela.Messages.SdkMessage(""SetStateDynamicEntity"")]
+    public class PinnedDynamic { }
 }
 ";
 
     private static string InMethod(string body) => Harness + @"
 namespace Demo
 {
-    using Vela.Constants;
     public class Use : Plugin
     {
         public void M()
@@ -57,36 +74,37 @@ namespace Demo
 }
 ";
 
-    private static DiagnosticResult Expected() =>
-        new DiagnosticResult(Vela.Analyzers.SetStateStepAnalyzer.DiagnosticId, DiagnosticSeverity.Warning).WithLocation(0);
+    private static DiagnosticResult Expected(string type) =>
+        new DiagnosticResult(Vela.Analyzers.SetStateStepAnalyzer.DiagnosticId, DiagnosticSeverity.Warning).WithLocation(0).WithArguments(type);
 
     [Fact]
-    public async Task Warns_on_the_SetState_constant()
+    public async Task Reports_a_request_type_pinned_to_SetState()
     {
-        await Verify.VerifyAnalyzerAsync(InMethod("RegisterStep().{|#0:OnMessage|}(PluginMessages.SetState).Handle();"), Expected());
+        await Verify.VerifyAnalyzerAsync(InMethod("RegisterStep().{|#0:On<PinnedSetState>|}().Handle();"), Expected("PinnedSetState"));
     }
 
     [Fact]
-    public async Task Warns_on_a_SetState_literal_case_insensitively()
+    public async Task Reports_a_marker_pinned_to_SetState_case_insensitively()
     {
-        await Verify.VerifyAnalyzerAsync(InMethod("RegisterStep().{|#0:OnMessage|}(\"setstate\").Handle();"), Expected());
+        await Verify.VerifyAnalyzerAsync(InMethod("RegisterStep().{|#0:OnMessage<PinnedSetStateLower>|}().Handle();"), Expected("PinnedSetStateLower"));
+    }
+
+    // The builder registers these on SetStateDynamicEntity (the request-name table maps SetState), so they fire.
+    [Fact]
+    public async Task Is_silent_for_SetStateRequest_and_a_CustomMessage_marker()
+    {
+        await Verify.VerifyAnalyzerAsync(InMethod("RegisterStep().On<SetStateRequest>().Handle(); RegisterStep().OnMessage<SetStateMarker>().Handle();"));
     }
 
     [Fact]
     public async Task Is_silent_for_SetStateDynamicEntity()
     {
-        await Verify.VerifyAnalyzerAsync(InMethod("RegisterStep().OnMessage(PluginMessages.SetStateDynamicEntity).Handle();"));
+        await Verify.VerifyAnalyzerAsync(InMethod("RegisterStep().On<PinnedDynamic>().Handle();"));
     }
 
     [Fact]
     public async Task Is_silent_for_a_non_step_OnMessage()
     {
-        await Verify.VerifyAnalyzerAsync(InMethod("new Other().OnMessage(\"SetState\");"));
-    }
-
-    [Fact]
-    public async Task Is_silent_for_a_message_that_is_not_constant()
-    {
-        await Verify.VerifyAnalyzerAsync(InMethod("string name = \"SetState\"; RegisterStep().OnMessage(name).Handle();"));
+        await Verify.VerifyAnalyzerAsync(InMethod("new Other().OnMessage<PinnedSetState>();"));
     }
 }

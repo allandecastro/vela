@@ -87,12 +87,14 @@ namespace Acme.Plugins.Account.Plugins
     }
 
     [Fact]
-    public void TryInject_CustomMessage_UsesOnMessage()
+    public void TryInject_CustomMessage_UsesRequestTypedTriggerAndContext()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "acme_DoThing", "OnMessage(\"acme_DoThing\")", "HandleDoThing", null, out string result, out _);
+        bool ok = StepInjector.TryInject(HandlerBased, "Account", "acme_DoThing", "On<acme_DoThingRequest>()", "HandleDoThing", null, out string result, out _);
 
         Assert.True(ok);
-        Assert.Contains("RegisterStep().OnMessage(\"acme_DoThing\")", result);
+        Assert.Contains("RegisterStep().On<acme_DoThingRequest>()", result);
+        Assert.Contains("private void HandleDoThing(IMessagePostContext<acme_DoThingRequest> ctx)", result);
+        Assert.Contains("ctx.Request", result);
     }
 
     [Fact]

@@ -34,8 +34,9 @@ namespace Vela.Analyzers
             "^I(Create|Update|CreateMultiple|UpdateMultiple)(PreValidation|PreOperation|PostOperation)Config$",
             RegexOptions.CultureInvariant);
 
+        // The configs of the type-stated triggers (OnMessage<TMessage>(), On<TRequest>()), which offer no FilterOn.
         private static readonly Regex PermissiveConfig = new Regex(
-            "^IPermissive(PreValidation|PreOperation|PostOperation)Config$",
+            "^I(Permissive|Typed)(PreValidation|PreOperation|PostOperation)Config$",
             RegexOptions.CultureInvariant);
 
         private static readonly string[] FilteredMessages = { "Create", "Update", "CreateMultiple", "UpdateMultiple" };
@@ -84,27 +85,26 @@ namespace Vela.Analyzers
                 return;
             }
 
-            // The permissive OnMessage("Create") path offers no FilterOn at all, so a filter-required message there
-            // always fails when the step is built: point at the typed trigger, which does.
+            // The type-stated On<UpdateRequest>() / OnMessage<TMarker>() paths offer no FilterOn at all, so a
+            // filter-required message there always fails when the step is built: point at the typed trigger, which does.
             if (PermissiveConfig.IsMatch(handle.ContainingType.Name)
-                && FindOnMessageName(member.Expression, context.SemanticModel, context.CancellationToken) is { } message
+                && FindTypeStatedMessage(member.Expression, context.SemanticModel, context.CancellationToken) is { } message
                 && FilteredMessages.FirstOrDefault(m => string.Equals(m, message, System.StringComparison.OrdinalIgnoreCase)) is { } canonical)
             {
                 context.ReportDiagnostic(Diagnostic.Create(Rule, member.Name.GetLocation(), canonical,
-                    $"use the typed On{canonical}() trigger, which offers .FilterOn(...), instead of OnMessage(...)"));
+                    $"use the typed On{canonical}() trigger, which offers .FilterOn(...), instead of a request-typed trigger"));
             }
         }
 
-        // The compile-time constant message name of the OnMessage("...") call on the chain (a literal or a const), or
-        // null when there is none or it is not constant.
-        private static string? FindOnMessageName(ExpressionSyntax receiver, SemanticModel model, System.Threading.CancellationToken cancellationToken)
+        // The message the chain's On<TRequest>() / OnMessage<TMessage>() trigger names, or null when there is none or
+        // it is not statically known.
+        private static string? FindTypeStatedMessage(ExpressionSyntax receiver, SemanticModel model, System.Threading.CancellationToken cancellationToken)
         {
             foreach (ChainCall call in FluentStep.Spine(receiver))
             {
-                if (call.MethodName == "OnMessage" && call.Arguments.Count >= 1)
+                if (FluentStep.TypeStatedMessage(call, model, cancellationToken) is { } message)
                 {
-                    Optional<object?> value = model.GetConstantValue(call.Arguments[0].Expression, cancellationToken);
-                    return value.HasValue ? value.Value as string : null;
+                    return message;
                 }
             }
 

@@ -1,98 +1,39 @@
 # Contributing
 
-This guide is for people who want to **build, test, or contribute to the Vela framework itself**. If you
-just want to *use* Vela to build Dataverse plugins and Custom APIs, start at
-[Getting started](../getting-started/install.md) - you do not need to clone this repository.
+This section is for people who **build, test or contribute to the Vela framework itself**. To *use* Vela, start at
+[Getting started](../getting-started/install.md); you do not need to clone this repository.
 
-Looking for something to work on? See the
-[open issues](https://github.com/allandecastro/vela/issues) for planned and candidate work.
-
-See [Architecture](../advanced/architecture.md) for the solution layout and architecture rules.
+The full contributor guide (quality gates, coverage and mutation thresholds, the build smoke test and the release
+process) is [`CONTRIBUTING.md`](https://github.com/allandecastro/vela/blob/main/CONTRIBUTING.md) in the repository,
+and AI coding agents get a summary in [`AGENTS.md`](https://github.com/allandecastro/vela/blob/main/AGENTS.md). See
+[Architecture](../advanced/architecture.md) for the solution layout, and the
+[open issues](https://github.com/allandecastro/vela/issues) for work to pick up.
 
 ## Build and test
 
-```powershell
+```bash
 dotnet build Vela.sln -c Release
-dotnet test Vela.sln -c Release
+dotnet test Vela.sln -c Release      # Windows
 ```
 
-### Test stack and coverage
+The runtime, the harness and their tests target `net462`, which `dotnet test` runs on Windows only. On macOS and
+Linux, run the `net10.0` test projects with `dotnet test` and the `net462` ones with Mono and the xUnit console
+runner (see `CONTRIBUTING.md`).
 
-The test project uses:
+The step builder surface (`src/Vela.Plugins/Steps/StepApi.cs` and `StepBuilder.Impl.cs`) is generated from
+`tools/codegen/Vela.StepApiGen/MessageModel.cs`: change the model, then run
+`dotnet run --project tools/codegen/Vela.StepApiGen` (CI runs it with `-- --check`). See
+[Add a typed plugin message](extending-plugins.md).
 
-1. `xUnit` for unit tests
-2. `Moq` for mocks
-3. `Microsoft.NET.Test.Sdk` for `dotnet test`
-4. `coverlet.collector` for code coverage
-
-Run coverage (Cobertura) with:
-
-```powershell
-dotnet test .\tests\Vela.Tests\Vela.Tests.csproj `
-  -c Release `
-  --collect:"XPlat Code Coverage"
-```
-
-CI enforces a **branch-coverage gate** (via `coverlet.msbuild`) on five areas: the **diff engine** (plan/apply
-idempotence), the **in-memory harness**, the **plugin runtime** (`Vela.Plugins`), the **analyzers** and the **code
-fixes**. The run fails if branch coverage drops below the threshold. CI runs each test project once and collects
-its coverage on that same run (the plugin runtime merges the `Vela.Tests` and `Vela.Testing.Tests` runs); a new
-`*.Tests` project must be added to `ci.yml`, or the job fails. A gated test project must reference
-`coverlet.msbuild`, otherwise the threshold is silently ignored. Reproduce a gate locally, e.g. the diff engine:
+The build smoke test (`Generate_ThenDotnetBuild_Succeeds`) packs the framework as 1.0.0, scaffolds a solution with
+`vela init` and builds it. It runs in CI; locally, clear the cached 1.0.0 packages first, or the build compiles
+against an old framework:
 
 ```bash
-dotnet test tests/Vela.Cli.Tests/Vela.Cli.Tests.csproj -c Release \
-  -p:CollectCoverage=true -p:ThresholdType=branch -p:ThresholdStat=total -p:Threshold=90 \
-  -p:Include="[Vela.Cli]Vela.Cli.DiffEngine%2c[Vela.Cli]Vela.Cli.DefinitionNormalizer"
+rm -rf ~/.nuget/packages/vela.{plugins,testing,messages}/1.0.0
+VELA_BUILD_SMOKE=1 dotnet test tests/Vela.Cli.Tests -c Release --filter "FullyQualifiedName~Generate_ThenDotnetBuild_Succeeds"
 ```
 
-Thresholds are set just below current coverage to catch regressions without churn; raise them as coverage improves.
-
-### Quality gates
-
-Two gate families guard the correctness-critical cores, and both follow the same policy:
-
-- **Branch coverage** (`ci.yml`) - diff engine, in-memory harness, plugin runtime (`Vela.Plugins`), analyzers and
-  code fixes.
-- **Mutation score** (`mutation.yml`, Stryker.NET) - the diff engine + normalizer, the harness query core and
-  security model, the CLI apply / Custom API / reader / steps / scanner / role-generation cores, the analyzers and
-  the plugin runtime (steps, context, DI / caching / localization). Weekly on every file; on a pull request, on the
-  files it changes (`--since:main`, 80 floor). Each area's configuration is `tests/stryker/<area>.yml` (see
-  [Mutation testing](../advanced/mutation-testing.md) for the full gated set).
-
-**Policy - 80% floor, ratcheted above it.** Every gated core stays at **≥ 80%** on *both* metrics; `80` is a hard
-minimum, never to be lowered below. On top of that floor the enforced threshold is **ratcheted to just under the
-current measured value** (≈2 pts), so it catches regressions without flaking - and is tightened as the score rises.
-Branch coverage is the easier metric (currently ~85-92%); mutation score is stricter (a surviving mutant means a
-test passed even though the code was broken), so it sits lower (~80% harness, ~90% diff engine). Treat the gate as
-a *regression detector*, not a target to write tests for: if a run dips under the floor, **kill a surviving
-mutant** (or add the missing test) to lift the score rather than relaxing the gate. See
-[Mutation testing](../advanced/mutation-testing.md) for the gated cores and their scores.
-
-The tools tests include an **opt-in build smoke test** (`Generate_ThenDotnetBuild_Succeeds`) that packs
-`Vela.Plugins`, scaffolds a solution via `vela init`, and runs `dotnet build` on it - the only test that
-actually compiles the generated C#. It always runs in CI; locally it is reported as skipped unless enabled
-(it restores/builds, so it needs the SDK and the Microsoft packages):
-
-```bash
-rm -rf ~/.nuget/packages/vela.plugins ~/.nuget/packages/vela.testing ~/.nuget/packages/vela.messages   # see cache note below
-VELA_BUILD_SMOKE=1 dotnet test tests/Vela.Cli.Tests --filter Generate_ThenDotnetBuild_Succeeds
-```
-
-> [!IMPORTANT]
-> The smoke test packs the framework into a local feed at version **1.0.0**, but the global NuGet cache
-> (`~/.nuget/packages/vela.plugins/1.0.0`, `.../vela.testing/1.0.0`, `.../vela.messages/1.0.0`) *shadows* that feed. If a stale 1.0.0 is
-> cached, the generated code is compiled against an **old framework** and you get misleading errors. Delete those
-> three cache folders before running the smoke test (or any manual compile of `vela init` / `vela add` output
-> against the local framework) so restore picks up the freshly packed sources.
-
-## Release
-
-Release artifacts are produced by the release pipeline and should include only the framework packages
-(`Vela.Messages`, `Vela.Plugins`, `Vela.Testing`) and the shared CLI tool (`Vela.Cli`).
-
-The packages follow [Semantic Versioning](https://semver.org/) and ship as two independent release lines: the
-**framework** (`Vela.Messages` + `Vela.Plugins` + `Vela.Testing`, versioned together) and the **CLI** (`Vela.Cli`). Record every
-notable change in `CHANGELOG.md` under **Unreleased** as you merge it; cutting a release means
-renaming that section (with a date) and pushing the line's tag - `framework-vX.Y.Z` or `cli-vX.Y.Z` - which
-packs and publishes only that line. See the changelog's *Versioning policy* section for the pre-1.0 rules.
+The documentation samples in `docs/samples/Vela.DocSamples` are part of `Vela.sln`: they build with the analyzers
+and their tests run, and the pages include them with `[!code-csharp[](...#region)]`. Build the site locally with
+`docfx docs/docfx.json --warningsAsErrors`, as the docs workflow does on every pull request.

@@ -12,7 +12,9 @@ namespace Vela.Analyzers
     /// CreateMultiple step (there is no prior row state before a create), a <c>WithPostImage(...)</c> on a Delete
     /// step (the row no longer exists afterwards), or any image on a message that supports none (RouteTo). The typed
     /// triggers (<c>OnCreate()</c>, ...) already prevent most of this through the builder's type-state, so this
-    /// targets the permissive <c>OnMessage(...)</c> path where the image methods are exposed unconditionally. The
+    /// targets the type-stated <c>On&lt;TRequest&gt;()</c> / <c>OnMessage&lt;TMessage&gt;()</c> paths, where the image
+    /// methods are exposed unconditionally and the message is known from the type (see
+    /// <see cref="FluentStep.TypeStatedMessage"/>). The
     /// rules come from <see cref="Vela.Steps.StepImageRules"/>, shared with the runtime (StepBuilder.EnsureImageAllowed)
     /// and the CLI scanner; the stage rules are left to those, since the stage is not always visible here.
     /// </summary>
@@ -29,18 +31,6 @@ namespace Vela.Analyzers
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
             description: "A pre-image on Create (no prior row state), a post-image on Delete (the row is gone) or any image on a message that supports none (RouteTo) can never be provided. The runtime and the CLI reject these; use the correct image for the message.");
-
-        // Display names for the messages whose image rules are modelled (lower-case key), so a permissive
-        // OnMessage("create") reports as "Create".
-        private static readonly ImmutableDictionary<string, string> MessageDisplayNames = new Dictionary<string, string>
-        {
-            ["create"] = "Create",
-            ["createmultiple"] = "CreateMultiple",
-            ["update"] = "Update",
-            ["updatemultiple"] = "UpdateMultiple",
-            ["delete"] = "Delete",
-            ["routeto"] = "RouteTo",
-        }.ToImmutableDictionary();
 
         // Typed trigger method names mapped to their message (OnCreate -> Create, ...).
         private static readonly ImmutableDictionary<string, string> TypedTriggerMessage = new Dictionary<string, string>
@@ -91,7 +81,7 @@ namespace Vela.Analyzers
                 return;
             }
 
-            string? message = ResolveMessage(member.Expression);
+            string? message = ResolveMessage(member.Expression, context.SemanticModel, context.CancellationToken);
             if (message is null)
             {
                 return; // message not determinable from the chain - do not guess
@@ -105,8 +95,8 @@ namespace Vela.Analyzers
         }
 
         // Walks the receiver spine looking for the trigger that set the message: a typed OnCreate()/OnDelete()/...
-        // or a permissive OnMessage("create"|...). Returns the message, or null if undeterminable.
-        private static string? ResolveMessage(ExpressionSyntax? receiver)
+        // or a type-stated On<CreateRequest>() / OnMessage<TMarker>(). Returns the message, or null if undeterminable.
+        private static string? ResolveMessage(ExpressionSyntax? receiver, SemanticModel model, System.Threading.CancellationToken cancellationToken)
         {
             foreach (ChainCall call in FluentStep.Spine(receiver))
             {
@@ -115,26 +105,13 @@ namespace Vela.Analyzers
                     return typedMessage;
                 }
 
-                if (call.MethodName == "OnMessage" && TryGetLiteralMessage(call.Invocation, out string permissiveMessage))
+                if (FluentStep.TypeStatedMessage(call, model, cancellationToken) is { } typeStated)
                 {
-                    return MessageDisplayNames.TryGetValue(permissiveMessage, out string? displayName) ? displayName : permissiveMessage;
+                    return typeStated;
                 }
             }
 
             return null;
-        }
-
-        private static bool TryGetLiteralMessage(InvocationExpressionSyntax invocation, out string message)
-        {
-            message = string.Empty;
-            SeparatedSyntaxList<ArgumentSyntax> arguments = invocation.ArgumentList.Arguments;
-            if (arguments.Count != 1 || arguments[0].Expression is not LiteralExpressionSyntax literal || !literal.IsKind(SyntaxKind.StringLiteralExpression))
-            {
-                return false;
-            }
-
-            message = literal.Token.ValueText.Trim().ToLowerInvariant();
-            return true;
         }
     }
 }

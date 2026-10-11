@@ -42,7 +42,7 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 
 - **Fluent base types** - declarative step registration and strongly-typed handlers for plugins and Custom APIs.
 - **Typed context helpers** - strongly-typed target/images, framework tracing, lightweight DI, and a TTL cache.
-- **Analyzers, code fixes and source generators** - bundled Roslyn analyzers (VELA001-VELA022) catch invalid step/column usage and plugin pitfalls at build time, several with an IDE code fix, and a source generator emits typed image projections and typed step contexts (`ctx.PreImage` / `ctx.PostImage`). Shipped inside `Vela.Plugins` - no extra reference or setup.
+- **Analyzers, code fixes and source generators** - bundled Roslyn analyzers (VELA001-VELA023) catch invalid step/column usage and plugin pitfalls at build time, several with an IDE code fix, and a source generator emits typed image projections and typed step contexts (`ctx.PreImage` / `ctx.PostImage`). Shipped inside `Vela.Plugins` - no extra reference or setup.
 - **`vela` CLI** - preview-first `plan` → `apply` of registrations, scaffolding (`vela init` / `vela add`), early-bound generation (`vela models`), and package signing.
 - **Idempotent apply** - safe upsert/delete of steps, Custom APIs, and images against a live environment.
 - **No-connection testing** - run plugins against an in-memory Dataverse with no live connection and no mocking-library dependency, with an **opt-in security model** (roles, privileges, business units, teams, sharing and relationship cascades) when you need it.
@@ -52,41 +52,30 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 
 | Package | Target | What it gives you |
 | --- | --- | --- |
-| `Vela.Plugins` | .NET Framework 4.6.2 | Runtime: fluent plugin/Custom API base types, typed context helpers, lightweight DI and caching. Bundles the Roslyn analyzers (VELA001-VELA022), their code fixes and source generators (typed image projections and step contexts). |
+| `Vela.Plugins` | .NET Framework 4.6.2 | Runtime: fluent plugin/Custom API base types, typed context helpers, lightweight DI and caching. Bundles the Roslyn analyzers (VELA001-VELA023), their code fixes and source generators (typed image projections and step contexts). |
+| `Vela.Messages` | .NET Framework 4.6.2, .NET 10.0 | Typed request/response base classes (`TypedRequest`, `CustomApiRequest`); a dependency of `Vela.Plugins`, usable alone from client code. |
 | `Vela.Cli` (command `vela`) | .NET 10.0 | Plan/apply, scaffolding and package signing for plugins and Custom APIs. |
 | `Vela.Testing` | .NET Framework 4.6.2 | Test harness: fake execution context + in-memory `IOrganizationService`, fluent strongly-typed builder. |
 
-> **Status** - Pre-1.0 and actively developed, published on NuGet.org. Reference `Vela.Plugins` (and `Vela.Testing` in your test project) with `dotnet add package`, and install the CLI with `dotnet tool install --global Vela.Cli`. Releases run over two lines: a `framework-vX.Y.Z` tag publishes `Vela.Plugins` + `Vela.Testing`, and `cli-vX.Y.Z` publishes `Vela.Cli`. See [`CHANGELOG.md`](CHANGELOG.md) for what's shipped and the versioning policy.
+> **Status** - Pre-1.0 and actively developed, published on NuGet.org. Reference `Vela.Plugins` (and `Vela.Testing` in your test project) with `dotnet add package`, and install the CLI with `dotnet tool install --global Vela.Cli`. Releases run over two lines: a `framework-vX.Y.Z` tag publishes `Vela.Messages` + `Vela.Plugins` + `Vela.Testing`, and `cli-vX.Y.Z` publishes `Vela.Cli`. See [`CHANGELOG.md`](CHANGELOG.md) for what's shipped and the versioning policy.
 
 ## Quickstart
 
-From an empty folder to registered, running steps in five commands:
-
-```powershell
-# 1. Install the CLI (.NET global tool - exposes the `vela` command)
+```bash
 dotnet tool install --global Vela.Cli
-
-# 2. Scaffold a build-ready solution (minimal; add --samples for worked examples), then add a plugin
-vela init --name ZavaSales --prefix Zava --publisher-prefix zava
-cd ZavaSales
+vela init --name ZavaSales --prefix Zava --publisher-prefix zava && cd ZavaSales   # minimal; --samples adds examples
 vela models --entities account --out src/Zava.Shared/Models/Generated --namespace Zava.Shared.Models.Generated --interactive
 vela add plugin AccountValidator --entity Account --filtering-attributes Name --project src/Zava.Plugins
-
-# 3. Build the plugin package into a .nupkg (the build packages it into artifacts/; not dotnet pack)
-dotnet build ZavaSales.sln -c Release
-
-# 4. Preview what would change in your environment (read-only)
-vela plan  --packages-dir artifacts --interactive
-
-# 5. Apply the changes (idempotent create/update/delete).
-#    apply writes by default: on a terminal it shows the plan and asks you to confirm.
-#    Add --auto-approve to skip the prompt in CI / unattended runs.
-#    On a very large org, raise the request timeout with --timeout <minutes> (default 10).
-vela apply --packages-dir artifacts --solution ZavaSales --interactive
+dotnet build ZavaSales.sln -c Release                                   # packs the plugin package into artifacts/
+vela plan  --packages-dir artifacts --solution ZavaSales --interactive  # read-only preview
+vela apply --packages-dir artifacts --solution ZavaSales --interactive  # asks before writing
 ```
 
-Then head to the **[documentation](https://allandecastro.github.io/vela/)** for guides on writing plugins,
-Custom APIs, dependency injection, caching, testing with `Vela.Testing`, and the `plan` / `apply` workflow.
+`--solution` names an existing Dataverse solution: it gives the package its publisher prefix. The
+[quickstart](https://allandecastro.github.io/vela/getting-started/quickstart.html) explains each step, and the
+**[documentation](https://allandecastro.github.io/vela/)** covers plugins, Custom APIs, testing with
+`Vela.Testing` and the `plan` / `apply` workflow. AI coding agents: start with [`AGENTS.md`](AGENTS.md) in this
+repository, or [`docs/llms.txt`](docs/llms.txt).
 
 ## Limitations
 

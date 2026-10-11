@@ -223,6 +223,46 @@ namespace Vela.Analyzers
         }
 
         /// <summary>
+        /// The message a type-stated trigger (<c>On&lt;TRequest&gt;()</c>, <c>OnAsyncOnly&lt;TRequest&gt;()</c>,
+        /// <c>OnMessage&lt;TMessage&gt;()</c>) names, when it is known statically: a <c>[SdkMessage("...")]</c> or
+        /// <c>[CustomMessage("...")]</c> on the type, else an SDK request type's name without its <c>Request</c> suffix
+        /// (<c>Microsoft.Xrm.Sdk.Messages.CreateRequest</c> is <c>Create</c>). Null for anything else, including a
+        /// generated request, which sets its <c>RequestName</c> in a constructor the analyzer does not run.
+        /// </summary>
+        public static string? TypeStatedMessage(ChainCall call, SemanticModel model, System.Threading.CancellationToken cancellationToken)
+        {
+            if (call.MethodName is not ("On" or "OnAsyncOnly" or "OnMessage")
+                || call.Name is not GenericNameSyntax generic
+                || generic.TypeArgumentList.Arguments.Count != 1
+                || model.GetTypeInfo(generic.TypeArgumentList.Arguments[0], cancellationToken).Type is not INamedTypeSymbol type)
+            {
+                return null;
+            }
+
+            foreach (AttributeData attribute in type.GetAttributes())
+            {
+                string? attributeName = attribute.AttributeClass?.ToDisplayString();
+                if ((attributeName == "Vela.Messages.SdkMessageAttribute" || attributeName == "Vela.Constants.CustomMessageAttribute")
+                    && attribute.ConstructorArguments.Length == 1
+                    && attribute.ConstructorArguments[0].Value is string declared)
+                {
+                    return declared;
+                }
+            }
+
+            string ns = type.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+            const string suffix = "Request";
+            if ((ns == "Microsoft.Xrm.Sdk.Messages" || ns == "Microsoft.Crm.Sdk.Messages")
+                && type.Name.Length > suffix.Length
+                && type.Name.EndsWith(suffix, System.StringComparison.Ordinal))
+            {
+                return type.Name.Substring(0, type.Name.Length - suffix.Length);
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// The column a selector lambda reads directly on its parameter (<c>a =&gt; a.Name</c>, through conversions),
         /// as the member-access node, or null for anything else (a nested path, a method call, a constant).
         /// </summary>

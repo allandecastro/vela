@@ -265,7 +265,7 @@ internal static class ModelsCommand
                     }
                     catch (Exception ex)
                     {
-                        Console.Error.WriteLine($"Warning: skipping entity '{name}' (could not read its metadata): {ex.Message}");
+                        Console.Error.WriteLine($"Warning: skipping entity '{name}' (could not read its metadata): {RedactSecrets(ex.Message)}");
                     }
                 }
 
@@ -319,36 +319,33 @@ internal static class ModelsCommand
 
             if (scope.AllMessages)
             {
-                // ALL mode: every non-private, non-Custom-API-backed message (filtered by the reader), minus any
-                // that already has an SDK request class (skipped here to avoid a duplicate/collision with the SDK
-                // type). Because the reader already drops Custom-API-backed messages, the developer's own authored
-                // Custom APIs never reach --messages (they surface only under --custom-apis, filtered above); no
-                // package-based exclusion is needed here. A single unreadable message is skipped with a warning
-                // rather than aborting the batch.
+                // ALL mode: every non-private, non-Custom-API-backed message (filtered by the reader), one contract per
+                // request it serves. A request that already has an SDK request class gets no duplicate class, only its
+                // entity-constrained On<Message>() over the SDK type (none for a curated trigger, which already
+                // exists on the builder). Because the reader already drops Custom-API-backed messages, the
+                // developer's own authored Custom APIs never reach --messages (they surface only under --custom-apis,
+                // filtered above); no package-based exclusion is needed here. A single unreadable message is skipped
+                // with a warning rather than aborting the batch.
                 List<SdkMessage> sdkMessages = new List<SdkMessage>();
                 foreach (GeneratableMessage candidate in SdkMessageReader.ListGeneratableMessages(service))
                 {
                     string name = candidate.Name;
-                    if (SdkMessageClassResolver.HasSdkRequestClass(name))
-                    {
-                        continue;
-                    }
-
                     try
                     {
                         // The classes are generated per request, under the name Dataverse executes: the Send
-                        // sdkmessage is executed as SendEmail, SendFax and SendTemplate.
+                        // sdkmessage is executed as SendEmail, SendFax and SendTemplate. A request the SDK already
+                        // ships gets only its step extension over the SDK type (PreferSdkType).
                         foreach (string requestName in SdkMessageReader.ListRequestNames(service, name))
                         {
-                            if (!SdkMessageClassResolver.HasSdkRequestClass(requestName))
+                            if (PreferSdkType(SdkMessageReader.ReadSdkMessage(service, requestName)) is { } contract)
                             {
-                                sdkMessages.Add(SdkMessageReader.ReadSdkMessage(service, requestName));
+                                sdkMessages.Add(contract);
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.Error.WriteLine($"Warning: skipping message '{name}' (could not read its contract): {ex.Message}");
+                        Console.Error.WriteLine($"Warning: skipping message '{name}' (could not read its contract): {RedactSecrets(ex.Message)}");
                     }
                 }
 
@@ -356,20 +353,27 @@ internal static class ModelsCommand
             }
             else if (scope.Messages.Length > 0)
             {
-                // Targeted: the user asked for these by name, so generate exactly them — never silently skipped. If
-                // one already has an SDK request class, warn (suggest the SDK type) but still generate the wrapper.
+                // Targeted: the user asked for these requests by their real name (what Execute takes), so generate
+                // exactly them — never silently skipped, never expanded. A request the SDK already ships gets only its
+                // step extension over the SDK type; a curated trigger gets nothing.
                 List<SdkMessage> sdkMessages = new List<SdkMessage>();
                 // The names are SDK request names (SendEmail), the ones Dataverse executes; an sdkmessage name whose
                 // requests are named otherwise (Send) is rejected by the reader with the names to use.
-                foreach (string name in scope.Messages)
+                foreach (string name in scope.Messages.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
-                    SdkMessage request = SdkMessageReader.ReadSdkMessage(service, name);
-                    if (SdkMessageClassResolver.HasSdkRequestClass(request.Name))
+                    SdkMessage? contract = PreferSdkType(SdkMessageReader.ReadSdkMessage(service, name));
+                    if (contract is null)
                     {
-                        Console.Error.WriteLine($"Warning: '{request.Name}' already has an SDK request class ({request.Name}Request); generating a duplicate. Prefer the SDK type via On<{request.Name}Request>().");
+                        Console.Error.WriteLine($"Note: '{name}' has a curated trigger (On{name}()) and an SDK request class; nothing to generate.");
+                        continue;
                     }
 
-                    sdkMessages.Add(request);
+                    if (contract.SdkRequestType is not null)
+                    {
+                        Console.Error.WriteLine($"Note: '{contract.Name}' ships in the SDK ({contract.SdkRequestType}); generating only its On{contract.Name}() step extension over that type.");
+                    }
+
+                    sdkMessages.Add(contract);
                 }
 
                 models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames(), logicalNames));
@@ -409,6 +413,20 @@ internal static class ModelsCommand
     // column by column, against the files already on disk. Reports drift (a column the live schema no longer has,
     // a retyped column, or a column added live) and returns ExitDriftDetected when anything is out of sync, so CI
     // can fail a stale model. Never writes. Verifies the C# early-bound entity model only.
+    // A request the SDK already ships keeps its SDK class: the generator emits only the step extension over it, and
+    // nothing at all for a curated trigger (OnCreate(), OnWinOpportunity(), ...), which the builder already has.
+    internal static SdkMessage? PreferSdkType(SdkMessage contract)
+    {
+        if (!SdkMessageClassResolver.TryGetSdkRequestTypeName(contract.Name, out string sdkType))
+        {
+            return contract;
+        }
+
+        return AddCommand.KnownMessages.Contains(contract.Name, StringComparer.OrdinalIgnoreCase)
+            ? null
+            : contract with { SdkRequestType = sdkType };
+    }
+
     private static int RunModelVerify(string[] args, bool interactive, string? solution, string[] entities, string ns, string outDir, bool dataAnnotations, bool json, bool ignoredScopes)
     {
         if (ignoredScopes)
@@ -659,7 +677,7 @@ internal static class ModelsCommand
                 catch (Exception ex)
                 {
                     unreadable.Add(logicalName);
-                    Console.Error.WriteLine($"Warning: skipping table '{logicalName}' (metadata read failed): {ex.Message}");
+                    Console.Error.WriteLine($"Warning: skipping table '{logicalName}' (metadata read failed): {RedactSecrets(ex.Message)}");
                     return null;
                 }
             }

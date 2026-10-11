@@ -23,15 +23,15 @@ internal static class AddCommand
     // shared models namespace ({prefix}.Shared.Models.Generated, where `vela models` writes) can be inferred.
 
     // SDK messages that have a dedicated On...() builder method, matched case-insensitively so the
-    // scaffold emits the strongly-typed call. Any other name is registered via .OnMessage("..."), which the
-    // analyzers flag (VELA006) for a modelled message. They are SDK request names: the sdkmessage a step registers on
-    // can be shorter (SendEmail runs as Send), see ResolveKnownMessage. The list is generated from the step builder's
-    // message model (Vela.Steps.TypedTriggers, linked as source), so it never drifts from the typed triggers.
+    // scaffold emits the strongly-typed call. Any other name is registered via its request type, On<XxxRequest>().
+    // They are SDK request names: the sdkmessage a step registers on can be shorter (SendEmail runs as Send), see
+    // ResolveKnownMessage. The list is generated from the step builder's message model (Vela.Steps.TypedTriggers,
+    // linked as source), so it never drifts from the typed triggers.
     internal static readonly string[] KnownMessages = Vela.Steps.TypedTriggers.Messages;
 
     // The typed On...() trigger for --message: a request name (SendEmail), or the sdkmessage it runs as (Send),
     // resolved through the table when several requests share it (Win is WinQuote on quote, WinOpportunity on
-    // opportunity). Null for a message with no typed trigger, registered with OnMessage("...").
+    // opportunity). Null for a message with no curated trigger, registered through its request type (RegistrationCall).
     internal static string? ResolveKnownMessage(string rawMessage, string entity)
     {
         string? known = KnownMessages.FirstOrDefault(m => string.Equals(m, rawMessage, StringComparison.OrdinalIgnoreCase));
@@ -370,6 +370,48 @@ internal static class AddCommand
     private static string MissingFilterMessage(string message) =>
         $"A {message} step needs a filtering attribute: pass --filtering-attributes <Column[,Column]> with the early-bound property name(s), e.g. --filtering-attributes Name. The step then fires only when the request sets one of them.";
 
+    // The trigger for --message: the curated On{Message}() when Vela models it, else On<XxxRequest>() over the
+    // message's request type - the SDK class (fully qualified, so no using is needed) when one ships, otherwise the
+    // request `vela models --messages` generates into the models namespace (a note says to generate it).
+    internal static string RegistrationCall(string? known, string message)
+    {
+        if (known is not null)
+        {
+            return $"On{known}()";
+        }
+
+        if (SdkMessageClassResolver.TryGetSdkRequestTypeName(message, out string sdkType))
+        {
+            return $"On<{sdkType}>()";
+        }
+
+        Console.Error.WriteLine($"Note: '{message}' is registered through On<{message}Request>(). Generate the request with 'vela models --messages {message}' (or '--custom-apis {message}' for a Custom API) if it does not exist yet.");
+        return $"On<{message}Request>()";
+    }
+
+    // The handler context for a registration call: the curated message's stage context, or the request-typed
+    // IMessagePre/PostContext<TRequest> of an On<TRequest>() trigger.
+    internal static string HandlerContextType(string registrationCall, string message, string entityType, bool postStage)
+    {
+        string stage = postStage ? "Post" : "Pre";
+        return TryGetRequestType(registrationCall, out string requestType)
+            ? $"IMessage{stage}Context<{requestType}>"
+            : $"I{message}{stage}Context<{entityType}>";
+    }
+
+    // The TRequest of an On<TRequest>() registration call.
+    internal static bool TryGetRequestType(string registrationCall, out string requestType)
+    {
+        requestType = string.Empty;
+        if (!registrationCall.StartsWith("On<", StringComparison.Ordinal) || !registrationCall.EndsWith(">()", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        requestType = registrationCall.Substring(3, registrationCall.Length - 6);
+        return true;
+    }
+
     private static int AddStep(string[] args, string name, string? entity, string projectDir)
     {
         if (string.IsNullOrWhiteSpace(entity))
@@ -385,7 +427,7 @@ internal static class AddCommand
 
         string? known = ResolveKnownMessage(rawMessage, entity);
         string message = known ?? rawMessage;
-        string registrationCall = known is null ? $"OnMessage(\"{message}\")" : $"On{message}()";
+        string registrationCall = RegistrationCall(known, message);
 
         string handler = (TryReadOption(args, "--handler") ?? $"Handle{message}").Trim();
         if (!IdentifierPattern.IsMatch(handler))
@@ -518,7 +560,7 @@ internal static class AddCommand
             string ns = $"{rootNamespace}.{entity}.CustomApis";
             string apiNamespace = $"{pluginsRoot}.{entity}.CustomApis";
             string relativePath = Path.Combine(entity!, "CustomApis", $"{testClass}.cs");
-            string content = AddCustomApiTestFile(ns, apiNamespace, testClass, name, uniqueName);
+            string content = AddCustomApiTestFile(ns, apiNamespace, testClass, name, uniqueName, requestType: $"{name}Request");
             return WriteFile(projectDir, relativePath, content, force, $"Custom API test {testClass} (for {name})", HasFlag(args, "--json"));
         }
     }
@@ -537,10 +579,10 @@ internal static class AddCommand
         }
 
         // Messages with a dedicated On...() builder method get the strongly-typed call; any other name is
-        // treated as a custom SDK message and registered through .OnMessage("...").
-        string? known = ResolveKnownMessage(rawMessage, entity);
+        // registered through its request type, On<XxxRequest>() (see RegistrationCall).
+        string? known = ResolveKnownMessage(rawMessage, entity!);
         string message = known ?? rawMessage;
-        string registrationCall = known is null ? $"OnMessage(\"{message}\")" : $"On{message}()";
+        string registrationCall = RegistrationCall(known, message);
 
         if (!TryResolveStageMode(args, out string stageCall, out string modeCall, out bool postStage, out string stageError))
         {
@@ -577,9 +619,9 @@ internal static class AddCommand
         }
 
         // The redesigned builder ends the chain with .Handle(...), bound to a named instance handler. A modelled
-        // message gets the strongly-typed post-stage context (I{Message}PostContext<TEntity>); a custom OnMessage
-        // step has no typed context, so its handler takes the plain ILocalPluginContext.
-        string handlerContextType = known is null ? "ILocalPluginContext" : $"I{message}{(postStage ? "Post" : "Pre")}Context<{entity}>";
+        // message gets the strongly-typed stage context (I{Message}PostContext<TEntity>); any other message gets
+        // the request-typed context of its On<XxxRequest>() trigger (IMessagePostContext<XxxRequest>).
+        string handlerContextType = HandlerContextType(registrationCall, message, entity!, postStage);
 
         string ns = $"{rootNamespace}.{entity}.Plugins";
         string relativePath = Path.Combine(entity!, "Plugins", $"{name}.cs");

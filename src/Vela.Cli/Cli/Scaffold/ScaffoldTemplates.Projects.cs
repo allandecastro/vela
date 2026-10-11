@@ -38,6 +38,12 @@ $$"""
     <PackageReference Include="System.Security.Cryptography.Xml" Version="{{CryptographyXmlVersion}}" />
   </ItemGroup>
 
+  <!-- The On<Message>() step extensions `vela models` writes to Messages/*.Steps.cs need Vela.Plugins: the plugin
+       projects compile them, not this one. -->
+  <ItemGroup>
+    <Compile Remove="Models\Generated\Messages\*.Steps.cs" />
+  </ItemGroup>
+
   <!-- Vela.Messages holds the SDK-only TypedRequest/TypedResponse base types and multi-targets net462;net10.0, so
        generated Custom API request/response contracts compile here and can be called from anywhere (plugins on
        net462, the ConsoleApp / integrations on net10.0). -->
@@ -93,6 +99,13 @@ $$"""
 
   <ItemGroup>
     <ProjectReference Include="..\{{sharedProjectName}}\{{sharedProjectName}}.csproj" />
+  </ItemGroup>
+
+  <!-- `vela models` (messages and Custom APIs) writes each message's On<Message>() step extension to
+       Messages/*.Steps.cs beside its contract. They extend the Vela.Plugins step builder, which the Shared project
+       does not reference, so the plugin project compiles them. -->
+  <ItemGroup>
+    <Compile Include="..\{{sharedProjectName}}\Models\Generated\Messages\*.Steps.cs" Link="Models\Generated\Messages\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!-- Register this assembly's early-bound entity types with the SDK serializer. Without it, passing an
