@@ -272,6 +272,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Fixed (Framework)
 
+- **`ctx.Response.id` resolves in a post-create test with an explicit trigger.** `PluginContextBuilder` filled
+  `OutputParameters["id"]` (and `Ids` for `CreateMultiple`) from the Target only when it derived the trigger from a
+  single-step plugin. A multi-step router, whose test states `OnCreate().Stage(PluginStages.PostOperation)`, saw
+  `Guid.Empty`, although Dataverse always sets it. The builder now fills them for any Create/CreateMultiple PostOperation
+  context, and keeps a value the test sets with `WithOutputParameter`.
+
 - **The harness runs a table-bound request on its table, with an empty `PrimaryEntityId` (#461, verified live).**
   The queue messages (`AddToQueue`, `RemoveFromQueue`, `PickFromQueue`, `RouteTo`, `ReleaseToQueue`) run on
   `queueitem` whatever their `Target`, the email requests on email, the team and list requests on team and list,
@@ -558,6 +564,18 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   `[LogicalEntityName("...")]`, so a Custom API authored from the generated model registers the same table.
 
 ### Fixed (CLI)
+
+- **The `vela init` samples no longer teach risky patterns (#444).** `AccountRelatedContactsPlugin` counted contacts
+  with a `RetrieveMultiple` capped at one page and cached the result in the organization-wide plugin cache, so one
+  user could read another user's privilege-filtered count. It now runs an aggregate count built with
+  `Query.For<Contact>().Count(...).ToFetchXml()` (what the README and the test already claimed), without caching,
+  and the [caching guide](docs/guides/caching.md) says what not to cache. The samples trace record ids instead of
+  names, emails and greetings, the tests select the columns they assert instead of `new ColumnSet(true)` (VELA013),
+  and each Custom API declares its unique name once as `UniqueName` (the estimate is the `PlaceholderEstimate`
+  constant). The router test seeds the new contact, so the duplicate check's self-exclusion is tested, and the router
+  uses `ctx.Response.id` for it. A new `PluginPipeline` test shows the step registration under test: it fails when
+  `FilterOn` names the wrong column. A stale comment about the initiating-user service now describes the current
+  user.
 
 - **`vela add` and `vela models` use the real message names (#461).** `vela add --message Send` (or `Win`,
   `Close`, ...) now renders the typed trigger (`OnSendEmail()`, and `OnWinQuote()` or `OnWinOpportunity()` from the
