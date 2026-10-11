@@ -432,13 +432,13 @@ public sealed class PlanApplyCommandTests : IDisposable
         // The package is deployed, identical, but outside the solution: the only operation is its add-to-solution.
         // That must neither flag a republish nor label the confirmation as a code change.
         string package = WritePackage("zava_Plugins");
-        string content = Convert.ToBase64String(File.ReadAllBytes(package));
         Guid packageId = Guid.NewGuid();
         FakeOrgService org = Org();
+        org.PackageFiles.Store(packageId, File.ReadAllBytes(package)); // the stored .nupkg (content reads back empty)
         Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
         org.OnRetrieveMultiple = q => q.EntityName switch
         {
-            "pluginpackage" => FakeOrgService.Collection(new Entity("pluginpackage", packageId) { ["name"] = "zava_Plugins", ["version"] = "1.0.0", ["content"] = content }),
+            "pluginpackage" => FakeOrgService.Collection(new Entity("pluginpackage", packageId) { ["name"] = "zava_Plugins", ["version"] = "1.0.0" }),
             "solution" => FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["publisherid"] = new EntityReference("publisher", Guid.NewGuid()) }),
             "solutioncomponentdefinition" => FakeOrgService.Collection(new Entity("solutioncomponentdefinition", Guid.NewGuid()) { ["primaryentityname"] = "pluginpackage", ["solutioncomponenttype"] = 10_090 }),
             _ => inner(q),

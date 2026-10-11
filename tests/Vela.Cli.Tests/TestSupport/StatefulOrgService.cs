@@ -26,6 +26,7 @@ internal sealed class StatefulOrgService : IOrganizationService
 {
     private readonly Dictionary<string, Dictionary<Guid, Entity>> _tables = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (string AssemblyName, string[] TypeNames)> _packageContents = new(StringComparer.OrdinalIgnoreCase);
+    private readonly PackageFileStore _packageFiles = new();
     private DateTime _clock = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     /// <summary>Every write in order, as "create:entity", "update:entity", "delete:entity" or "setstate:entity".</summary>
@@ -70,7 +71,15 @@ internal sealed class StatefulOrgService : IOrganizationService
         Entity row = Existing(entity.LogicalName, entity.Id);
         foreach (KeyValuePair<string, object> attribute in entity.Attributes)
         {
-            row[attribute.Key] = attribute.Value;
+            // Writing null clears the column: a Dataverse read no longer returns it.
+            if (attribute.Value == null)
+            {
+                row.Attributes.Remove(attribute.Key);
+            }
+            else
+            {
+                row[attribute.Key] = attribute.Value;
+            }
         }
 
         row["modifiedon"] = Tick();
@@ -110,6 +119,11 @@ internal sealed class StatefulOrgService : IOrganizationService
 
     public OrganizationResponse Execute(OrganizationRequest request)
     {
+        if (_packageFiles.TryExecute(request, out OrganizationResponse fileResponse))
+        {
+            return fileResponse;
+        }
+
         switch (request)
         {
             case ExecuteMultipleRequest batch:
@@ -172,9 +186,13 @@ internal sealed class StatefulOrgService : IOrganizationService
         return result;
     }
 
-    // The platform side of a package import: the package's assembly and plugin types appear (or are refreshed).
+    // The platform side of a package import: the uploaded .nupkg moves to the stored `package` file and `content`
+    // reads back empty (verified live); the package's assembly and plugin types appear (or are refreshed).
     private void ImportPackage(Entity package)
     {
+        _packageFiles.StoreUpload(package.Id, package);
+        package["content"] = string.Empty;
+
         string name = package.GetAttributeValue<string>("name");
         if (!_packageContents.TryGetValue(name, out (string AssemblyName, string[] TypeNames) contents))
         {
@@ -216,6 +234,12 @@ internal sealed class StatefulOrgService : IOrganizationService
         }
 
         Entity row = Clone(entity);
+        // Like a Dataverse read, a null column is simply absent from the row.
+        foreach (string nullColumn in row.Attributes.Where(a => a.Value == null).Select(a => a.Key).ToArray())
+        {
+            row.Attributes.Remove(nullColumn);
+        }
+
         row.Id = id;
         row[entity.LogicalName + "id"] = id;
         DateTime now = Tick();
