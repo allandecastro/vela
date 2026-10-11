@@ -219,7 +219,7 @@ public class ScaffoldTemplatesTests
         Assert.Contains("using Acme.Shared.Models.Generated;", code);
         Assert.Contains("public interface IAccountFollowUpService", code);
         Assert.Contains("public sealed class AccountFollowUpService(IOrganizationService service) : IAccountFollowUpService", code);
-        // Table-scoped services take the initiating-user IOrganizationService via a primary constructor.
+        // Table-scoped services take the current-user IOrganizationService via a primary constructor.
         Assert.Contains("private readonly IOrganizationService _service = service;", code);
         Assert.Contains("void Execute(Account target)", code);
     }
@@ -300,13 +300,47 @@ public class ScaffoldTemplatesTests
     }
 
     [Fact]
+    public void Samples_DoNotTeachRiskyPatterns()
+    {
+        // #444: newcomers copy the samples, so they must not cache privilege-filtered reads in the org-wide cache,
+        // count a page of rows, trace personal data or retrieve every column.
+        string relatedContacts = ScaffoldTemplates.AccountRelatedContactsPlugin("Zava");
+        Assert.DoesNotContain("IPluginCacheService", relatedContacts);
+        Assert.DoesNotContain(".Entities.Count", relatedContacts);
+        Assert.Contains(".Count(c => c.ContactId, \"contactcount\")", relatedContacts);
+        Assert.Contains(".ToFetchXml()", relatedContacts);
+
+        string router = ScaffoldTemplates.ContactRouterPlugin("Zava");
+        string sync = ScaffoldTemplates.AccountSyncRouterPlugin("Zava");
+        string contactSync = ScaffoldTemplates.ContactSyncPlugin("Zava");
+        foreach (string personal in new[] { "postImage.FirstName", "postImage.LastName", "preImage.LastName, ", "postImage.Name)", "preImage.Name)" })
+        {
+            Assert.DoesNotContain(personal, router);
+            Assert.DoesNotContain(personal, sync);
+        }
+
+        Assert.DoesNotContain("ctx.Trace(greetings.BuildGreeting", contactSync);
+
+        foreach (string tests in new[] { ScaffoldTemplates.SecurityExampleTests("Zava"), ScaffoldTemplates.AccountPostCreatePluginTests("Zava") })
+        {
+            Assert.DoesNotContain("new ColumnSet(true)", tests);
+        }
+
+        // One test drives the plugin through PluginPipeline, so a wrong FilterOn fails; the router test seeds the new
+        // contact, so the duplicate query's self-exclusion is exercised.
+        Assert.Contains("PluginPipeline.Empty().Register<AccountRelatedContactsPlugin>()", ScaffoldTemplates.AccountRelatedContactsPluginTests("Zava"));
+        Assert.Contains("Seed(\n                created,", ScaffoldTemplates.ContactRouterPluginTests("Zava").Replace("\r\n", "\n"));
+    }
+
+    [Fact]
     public void BoundCustomApi_IsBoundToEntity()
     {
         string code = ScaffoldTemplates.AccountEstimateValueCustomApi("Zava");
 
         Assert.Contains("class AccountEstimateValueCustomApi", code);
         Assert.Contains("BoundTo<Account>()", code);
-        Assert.Contains("RegisterCustomApi(\"zava_AccountEstimateValue\")", code);
+        Assert.Contains("public const string UniqueName = \"zava_AccountEstimateValue\";", code);
+        Assert.Contains("RegisterCustomApi(UniqueName)", code);
     }
 
     [Fact]
@@ -317,7 +351,8 @@ public class ScaffoldTemplatesTests
         Assert.Contains("namespace Zava.Plugins.Contact.CustomApis", code);
         Assert.Contains("class ContactValidateCustomApi", code);
         Assert.Contains("BoundTo<Contact>()", code);
-        Assert.Contains("RegisterCustomApi(\"zava_ContactValidate\")", code);
+        Assert.Contains("public const string UniqueName = \"zava_ContactValidate\";", code);
+        Assert.Contains("RegisterCustomApi(UniqueName)", code);
     }
 
     [Fact]
@@ -328,7 +363,8 @@ public class ScaffoldTemplatesTests
         Assert.Contains("namespace Zava.Integrations.Account.CustomApis", code);
         Assert.Contains("class AccountReconcileCustomApi", code);
         Assert.Contains("BoundTo<Account>()", code);
-        Assert.Contains("RegisterCustomApi(\"zava_AccountReconcile\")", code);
+        Assert.Contains("public const string UniqueName = \"zava_AccountReconcile\";", code);
+        Assert.Contains("RegisterCustomApi(UniqueName)", code);
     }
 
     [Fact]
@@ -351,7 +387,8 @@ public class ScaffoldTemplatesTests
         string code = ScaffoldTemplates.PingCustomApi("Zava");
 
         Assert.Contains("class PingCustomApi", code);
-        Assert.Contains("RegisterCustomApi(\"zava_Ping\"", code);
+        Assert.Contains("public const string UniqueName = \"zava_Ping\";", code);
+        Assert.Contains("RegisterCustomApi(UniqueName", code);
         Assert.DoesNotContain("BoundTo", code);
     }
 
@@ -410,9 +447,9 @@ public class ScaffoldTemplatesTests
 
         // Replacing the stub models needs --overwrite (vela models refuses to overwrite otherwise).
         Assert.Contains("  --namespace Zava.Shared.Models.Generated `\n  --overwrite\n", readme.Replace("\r\n", "\n"));
-        // The related-contacts sample runs a QueryExpression (Build()), not FetchXML.
+        // The related-contacts sample runs an aggregate FetchXML query from the typed builder.
         Assert.DoesNotContain("typed FetchXML builder", readme);
-        Assert.Contains("`Query.For<Contact>()...Build()`", readme);
+        Assert.Contains("`Query.For<Contact>().Count(...).ToFetchXml()`", readme);
         // The pipeline example passes secrets by variable name, not on the command line.
         string signed = ScaffoldTemplates.RootReadme(Options() with { ManagedIdentity = true });
         Assert.Contains("--pfx-base64-env CODE_SIGN_PFX_BASE64 --pfx-password-env CODE_SIGN_PFX_PASSWORD", signed);
@@ -438,14 +475,13 @@ public class ScaffoldTemplatesTests
     {
         string code = ScaffoldTemplates.AccountPostCreatePlugin("Zava");
         Assert.DoesNotContain("initiating", code);
-        Assert.Contains("current user's IOrganizationService (ctx.Service", code);
+        Assert.Contains("acts as the current user", code);
     }
 
     [Fact]
     public void Samples_DescribeHandle_NotHandler()   // A-78
     {
         Assert.DoesNotContain("Handler(", ScaffoldTemplates.ContactRouterPlugin("Zava"));
-        Assert.DoesNotContain("fetchxml", ScaffoldTemplates.AccountRelatedContactsPluginTests("Zava"), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -104,9 +104,9 @@ public class ProjectScaffolderTests
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp) with { PublisherPrefix = "zs" }));
 
             string root = Path.Combine(temp, "ZavaSales");
-            Assert.Contains("RegisterCustomApi(\"zs_AccountEstimateValue\")", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Account", "CustomApis", "AccountEstimateValueCustomApi.cs")));
-            Assert.Contains("ForMessage(\"zs_Ping\")", File.ReadAllText(Path.Combine(root, "tests", "Zava.Plugins.Tests", "GlobalCustomApis", "PingCustomApiTests.cs")));
-            Assert.Contains("RegisterCustomApi(\"zs_IntegrationHeartbeat\"", File.ReadAllText(Path.Combine(root, "src", "Zava.Integrations", "GlobalCustomApis", "IntegrationHeartbeatCustomApi.cs")));
+            Assert.Contains("UniqueName = \"zs_AccountEstimateValue\";", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Account", "CustomApis", "AccountEstimateValueCustomApi.cs")));
+            Assert.Contains("UniqueName = \"zs_Ping\";", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "GlobalCustomApis", "PingCustomApi.cs")));
+            Assert.Contains("UniqueName = \"zs_IntegrationHeartbeat\";", File.ReadAllText(Path.Combine(root, "src", "Zava.Integrations", "GlobalCustomApis", "IntegrationHeartbeatCustomApi.cs")));
             foreach (string csproj in new[] { Path.Combine("src", "Zava.Plugins", "Zava.Plugins.csproj"), Path.Combine("src", "Zava.Integrations", "Zava.Integrations.csproj"), Path.Combine("tests", "Zava.Plugins.Tests", "Zava.Plugins.Tests.csproj") })
             {
                 Assert.Contains("<VelaPublisherPrefix>zs</VelaPublisherPrefix>", File.ReadAllText(Path.Combine(root, csproj)));
@@ -123,7 +123,7 @@ public class ProjectScaffolderTests
 
             string root = Path.Combine(temp, "ZavaSales");
             Assert.DoesNotContain("VelaPublisherPrefix", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj")));
-            Assert.Contains("RegisterCustomApi(\"zava_AccountEstimateValue\")", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Account", "CustomApis", "AccountEstimateValueCustomApi.cs")));
+            Assert.Contains("UniqueName = \"zava_AccountEstimateValue\";", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Account", "CustomApis", "AccountEstimateValueCustomApi.cs")));
         });
     }
 

@@ -239,8 +239,6 @@ namespace {{prefix}}.Plugins.Contact.Services
 $$"""
 namespace {{prefix}}.Plugins.Account.Plugins
 {
-    using System;
-    using Vela.Caching;
     using Vela.Constants;
     using Vela.Context;
     using Vela.Plugin;
@@ -250,12 +248,10 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
-    /// Single-step plugin: after an account is updated, counts the contacts that reference it. The query is
+    /// Single-step plugin: after an account is renamed, counts the contacts that reference it. The query is
     /// authored with the TYPED query builder <c>Query.For&lt;Contact&gt;()</c> - table and column names are checked
-    /// at compile time (a typo won't build). The builder emits either FetchXML (<c>ToFetchXml()</c>) or a
-    /// <c>QueryExpression</c> (<c>Build()</c>); this sample runs the <c>QueryExpression</c>. The count is served
-    /// through the built-in <c>IPluginCacheService</c> (read-through, 5-minute TTL) so a hot account is not
-    /// re-queried on every update.
+    /// at compile time (a typo won't build) - and emitted as an aggregate FetchXML query (<c>ToFetchXml()</c>), so
+    /// Dataverse returns the count itself instead of a page of rows.
     /// </summary>
     public sealed partial class AccountRelatedContactsPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
@@ -265,7 +261,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
                 .PostOperation()
                 .Sync()
                 .FilterOn(a => a.Name)
-                .WithDescription("Counts the contacts related to an account after it is updated.")
+                .WithDescription("Counts the contacts related to an account after it is renamed.")
                 .Handle(OnAccountUpdated);
         }
 
@@ -273,20 +269,19 @@ namespace {{prefix}}.Plugins.Account.Plugins
         {
             Account target = ctx.GetTarget<Account>();
 
-            // Typed query -> a strongly-typed QueryExpression (use ToFetchXml() instead for FetchXML).
-            QueryExpression query = Query.For<Contact>()
-                .Select(c => c.FirstName, c => c.LastName)
+            // Aggregate count: one row with the total, so the result is not capped at a page of records (counting
+            // the rows of a plain RetrieveMultiple stops at the page size). Dataverse refuses an aggregate over more
+            // than 50,000 rows; page with RetrieveAll for tables that large.
+            string fetchXml = Query.For<Contact>()
+                .Count(c => c.ContactId, "contactcount")
                 .Where(c => c.ParentCustomerId, ConditionOperator.Equal, target.Id)
-                .Build();
+                .ToFetchXml();
 
-            // Read-through cache with a short TTL: the RetrieveMultiple only runs on a cache miss (or after the
-            // entry expires). Key by account so entries never collide. IPluginCacheService is a built-in,
-            // process-level service - no registration needed.
-            IPluginCacheService cache = ctx.GetRequiredService<IPluginCacheService>();
-            int count = cache.GetOrCreate(
-                $"account:related-contacts:{target.Id}",
-                TimeSpan.FromMinutes(5),
-                () => ctx.Service.RetrieveMultiple(query).Entities.Count);
+            // Not cached on purpose: ctx.Service reads as the calling user, so the count only holds the contacts
+            // that user may read, and it changes whenever a contact is added. The plugin cache is shared by every
+            // user of the organization; keep it for user-independent data (see the caching guide).
+            Entity result = ctx.Service.RetrieveMultiple(new FetchExpression(fetchXml)).Entities[0];
+            int count = (int)result.GetAttributeValue<AliasedValue>("contactcount").Value;
 
             ctx.Trace("Account {0} has {1} related contact(s).", target.Id, count);
         }
@@ -318,8 +313,8 @@ namespace {{prefix}}.Plugins.Account.Plugins
     {
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
-            // The default registrations already expose the current user's IOrganizationService (ctx.Service, which
-            // honours the step's impersonation); hand it
+            // The default registrations already expose the IOrganizationService that acts as the current user
+            // (ctx.Service / ctx.UserId: the caller, or the step's impersonated user); hand it
             // to the table-scoped service.
             services.AddScoped<IAccountFollowUpService>(r => new AccountFollowUpService(r.GetRequiredService<IOrganizationService>()));
         }
@@ -346,7 +341,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
             IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
 
             Guid taskId = followUp.CreateFollowUpTask(ctx.Response.id, postImage.Name);
-            ctx.Trace("Created follow-up task {0} for account '{1}'.", taskId, postImage.Name);
+            ctx.Trace("Created follow-up task {0} for account {1}.", taskId, ctx.Response.id);
         }
     }
 }
@@ -530,10 +525,11 @@ namespace {{prefix}}.Plugins.Contact.Plugins
         private void OnCreatePost(OnCreatePostContext ctx)
         {
             var postImage = ctx.PostImage;
-            ctx.Trace("Contact created: {0} {1}", postImage.FirstName, postImage.LastName);
+            // Trace ids, not names or emails: the plugin trace log is readable by administrators and kept for days.
+            ctx.Trace("Contact {0} created.", ctx.Response.id);
 
             IContactDuplicateService duplicates = ctx.GetRequiredService<IContactDuplicateService>();
-            Guid? duplicateId = duplicates.FindDuplicateByEmail(postImage.EMailAddress1, ctx.Request.Target.Id);
+            Guid? duplicateId = duplicates.FindDuplicateByEmail(postImage.EMailAddress1, ctx.Response.id);
             if (duplicateId.HasValue)
             {
                 ctx.Trace("Possible duplicate of contact {0} (same email).", duplicateId.Value);
@@ -544,7 +540,10 @@ namespace {{prefix}}.Plugins.Contact.Plugins
         private void OnUpdatePost(OnUpdatePostContext ctx)
         {
             var preImage = ctx.PreImage;
-            ctx.Trace("Contact last name changed from '{0}' to '{1}'", preImage.LastName, ctx.Request.Target.LastName);
+            if (preImage.LastName != ctx.Request.Target.LastName)
+            {
+                ctx.Trace("Contact {0} last name changed.", ctx.Request.Target.Id);
+            }
         }
     }
 }
@@ -569,9 +568,15 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     /// </summary>
     public sealed class AccountEstimateValueCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<EstimateValueRequest, EstimateValueResponse>(unsecureConfig, secureConfig)
     {
+        /// <summary>The unique name, shared by the registration, the request, the response and the tests.</summary>
+        public const string UniqueName = "{{apiPrefix ?? ApiPrefix(prefix)}}_AccountEstimateValue";
+
+        /// <summary>The value returned until real valuation logic replaces it.</summary>
+        public const decimal PlaceholderEstimate = 1000m;
+
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountEstimateValue")
+            RegisterCustomApi(UniqueName)
                 .DisplayName("Estimate Account Value")
                 .Description("Estimates a value for the bound account.")
                 .AsAction()
@@ -588,14 +593,14 @@ namespace {{prefix}}.Plugins.Account.CustomApis
             ctx.Trace("Estimating value for account {0}", request.AccountId);
 
             // Replace with real logic.
-            return new EstimateValueResponse { EstimatedValue = 1000m };
+            return new EstimateValueResponse { EstimatedValue = PlaceholderEstimate };
         }
     }
 
     /// <summary>Request parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
     public sealed class EstimateValueRequest : CustomApiRequest
     {
-        public EstimateValueRequest() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountEstimateValue")
+        public EstimateValueRequest() : base(AccountEstimateValueCustomApi.UniqueName)
         {
         }
 
@@ -617,7 +622,7 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     /// <summary>Response parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
     public sealed class EstimateValueResponse : CustomApiResponse
     {
-        public EstimateValueResponse() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountEstimateValue")
+        public EstimateValueResponse() : base(AccountEstimateValueCustomApi.UniqueName)
         {
         }
 
@@ -649,9 +654,12 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     /// </summary>
     public sealed class ContactValidateCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase<ContactValidateRequest, ContactValidateResponse>(unsecureConfig, secureConfig)
     {
+        /// <summary>The unique name, shared by the registration, the request, the response and the tests.</summary>
+        public const string UniqueName = "{{apiPrefix ?? ApiPrefix(prefix)}}_ContactValidate";
+
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactValidate")
+            RegisterCustomApi(UniqueName)
                 .DisplayName("Validate Contact")
                 .Description("Validates the bound contact's email address.")
                 .AsAction()
@@ -673,7 +681,7 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     /// <summary>Request parameters for <see cref="ContactValidateCustomApi"/>.</summary>
     public sealed class ContactValidateRequest : CustomApiRequest
     {
-        public ContactValidateRequest() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactValidate")
+        public ContactValidateRequest() : base(ContactValidateCustomApi.UniqueName)
         {
         }
 
@@ -687,7 +695,7 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     /// <summary>Response parameters for <see cref="ContactValidateCustomApi"/>.</summary>
     public sealed class ContactValidateResponse : CustomApiResponse
     {
-        public ContactValidateResponse() : base("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactValidate")
+        public ContactValidateResponse() : base(ContactValidateCustomApi.UniqueName)
         {
         }
 
@@ -713,9 +721,12 @@ namespace {{prefix}}.Plugins.GlobalCustomApis
     /// </summary>
     public sealed class PingCustomApi(string unsecureConfig, string secureConfig) : CustomApiBase(unsecureConfig, secureConfig)
     {
+        /// <summary>The unique name, shared by the registration and the tests.</summary>
+        public const string UniqueName = "{{apiPrefix ?? ApiPrefix(prefix)}}_Ping";
+
         protected override void RegisterCustomApi()
         {
-            RegisterCustomApi("{{apiPrefix ?? ApiPrefix(prefix)}}_Ping", Handle)
+            RegisterCustomApi(UniqueName, Handle)
                 .DisplayName("Ping")
                 .Description("Returns a pong message; useful for connectivity checks.")
                 .AsAction()

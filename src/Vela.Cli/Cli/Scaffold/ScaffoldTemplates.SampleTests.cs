@@ -19,20 +19,23 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
-    /// Tests <see cref="AccountRelatedContactsPlugin"/> against an in-memory Dataverse: seeds an account with two
-    /// contacts and asserts the plugin's typed query (<c>Query.For&lt;Contact&gt;()...Build()</c>, a QueryExpression)
-    /// counts them; the query runs through the harness's in-memory query engine.
+    /// Tests <see cref="AccountRelatedContactsPlugin"/> two ways. The first test runs the handler directly against an
+    /// in-memory Dataverse and asserts the count returned by its aggregate FetchXML query (the harness parses the
+    /// emitted FetchXML, so the string is exercised end to end). The second drives the plugin through
+    /// <see cref="PluginPipeline"/>, which applies the step registration the way Dataverse does: change
+    /// <c>FilterOn(a =&gt; a.Name)</c> to the wrong column and that test fails.
     /// </summary>
     public sealed class AccountRelatedContactsPluginTests
     {
         [Fact]
-        public void Counts_the_related_contacts_via_the_typed_query_builder()
+        public void Counts_the_related_contacts_with_an_aggregate_fetchxml_query()
         {
             Guid accountId = Guid.NewGuid();
             InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
                 new Account { Id = accountId, Name = "Zava" },
                 new Contact { Id = Guid.NewGuid(), FirstName = "Jane", ParentCustomerId = new EntityReference(Account.EntityLogicalNameValue, accountId) },
-                new Contact { Id = Guid.NewGuid(), FirstName = "John", ParentCustomerId = new EntityReference(Account.EntityLogicalNameValue, accountId) });
+                new Contact { Id = Guid.NewGuid(), FirstName = "John", ParentCustomerId = new EntityReference(Account.EntityLogicalNameValue, accountId) },
+                new Contact { Id = Guid.NewGuid(), FirstName = "Ada" }); // no parent account: not counted
 
             PluginContextBuilder<Account> builder = PluginContext.For<Account>()
                 .OnUpdate().Stage(PluginStages.PostOperation).Sync()
@@ -43,6 +46,23 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
             builder.Execute(new AccountRelatedContactsPlugin(string.Empty, string.Empty));
 
             Assert.Contains("has 2 related contact", builder.TraceCapture.Output);
+        }
+
+        [Fact]
+        public void Runs_only_when_the_account_name_changes()
+        {
+            // PluginContext.For<T>().Execute(...) calls the handler whatever the step's filtering columns, images or
+            // stage. PluginPipeline routes each write through the registered steps instead, so it tests the
+            // registration too. Empty().Register<T>() scopes it to this plugin (FromAssemblyOf<T>() takes them all).
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountRelatedContactsPlugin>();
+            Guid accountId = pipeline.Service.Create(new Account { Name = "Zava" });
+
+            pipeline.Service.Update(new Account { Id = accountId, Telephone1 = "555-0100" });
+            Assert.DoesNotContain(pipeline.ExecutionLog, e => e.PluginTypeName.EndsWith(nameof(AccountRelatedContactsPlugin)));
+
+            pipeline.Service.Update(new Account { Id = accountId, Name = "Zava (renamed)" });
+            PipelineExecutionEntry run = Assert.Single(pipeline.ExecutionLog, e => e.PluginTypeName.EndsWith(nameof(AccountRelatedContactsPlugin)));
+            Assert.Equal("Update", run.Message);
         }
     }
 }
@@ -214,15 +234,8 @@ namespace {{prefix}}.Plugins.Tests.Contact.Plugins
         [Fact]
         public void OnCreate_Flags_A_Possible_Duplicate_With_The_Same_Email()
         {
-            // Seed an existing contact that shares the email of the one being created.
-            InMemoryOrganizationService crm = new InMemoryOrganizationService();
-            Guid existingId = crm.Create(new Contact
-            {
-                FirstName = "Jane",
-                LastName = "Doe",
-                EMailAddress1 = "jane@zava.com",
-            });
-
+            // An existing contact shares the email of the one being created.
+            Guid existingId = Guid.NewGuid();
             Guid newContactId = Guid.NewGuid();
             Contact created = new Contact
             {
@@ -231,6 +244,13 @@ namespace {{prefix}}.Plugins.Tests.Contact.Plugins
                 LastName = "Doe",
                 EMailAddress1 = "jane@zava.com",
             };
+
+            // PostOperation runs after the row is written, so the new contact is already in Dataverse: seed it too,
+            // or the duplicate query's "not this contact" condition is never put to the test (it is seeded first, so
+            // a query that forgot the condition would report the new contact as its own duplicate).
+            InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
+                created,
+                new Contact { Id = existingId, FirstName = "Jane", LastName = "Doe", EMailAddress1 = "jane@zava.com" });
 
             PluginContextBuilder<Contact> builder = PluginContext.For<Contact>()
                 .OnCreate().Stage(PluginStages.PostOperation).Sync()
@@ -241,8 +261,9 @@ namespace {{prefix}}.Plugins.Tests.Contact.Plugins
 
             builder.Execute(new ContactRouterPlugin(string.Empty, string.Empty));
 
-            Assert.Contains("Contact created: Janet Doe", builder.TraceCapture.Output);
+            Assert.Contains("Contact " + newContactId + " created.", builder.TraceCapture.Output);
             Assert.Contains("Possible duplicate of contact " + existingId, builder.TraceCapture.Output);
+            Assert.DoesNotContain("Possible duplicate of contact " + newContactId, builder.TraceCapture.Output);
         }
     }
 }
@@ -268,12 +289,12 @@ namespace {{prefix}}.Plugins.Tests.Account.CustomApis
         public void Returns_An_Estimated_Value_For_The_Bound_Account()
         {
             AccountEstimateValueCustomApi api = new AccountEstimateValueCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountEstimateValue").Build();
+            LocalPluginContext context = PluginContext.ForMessage(AccountEstimateValueCustomApi.UniqueName).Build();
             context.PluginExecutionContext.InputParameters["AccountId"] = Guid.NewGuid();
 
             api.Execute(context.ServiceProvider);
 
-            Assert.Equal(1000m, context.PluginExecutionContext.OutputParameters["EstimatedValue"]);
+            Assert.Equal(AccountEstimateValueCustomApi.PlaceholderEstimate, context.PluginExecutionContext.OutputParameters["EstimatedValue"]);
         }
     }
 }
@@ -299,7 +320,7 @@ namespace {{prefix}}.Plugins.Tests.Contact.CustomApis
         public void Reports_The_Bound_Contact_As_Valid()
         {
             ContactValidateCustomApi api = new ContactValidateCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactValidate").Build();
+            LocalPluginContext context = PluginContext.ForMessage(ContactValidateCustomApi.UniqueName).Build();
             context.PluginExecutionContext.InputParameters["ContactId"] = Guid.NewGuid();
 
             api.Execute(context.ServiceProvider);
@@ -329,7 +350,7 @@ namespace {{prefix}}.Plugins.Tests.GlobalCustomApis
         public void Returns_Pong_With_The_Supplied_Message()
         {
             PingCustomApi api = new PingCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_Ping").Build();
+            LocalPluginContext context = PluginContext.ForMessage(PingCustomApi.UniqueName).Build();
             context.PluginExecutionContext.InputParameters["Message"] = "hello";
 
             api.Execute(context.ServiceProvider);
@@ -357,7 +378,7 @@ namespace {{prefix}}.Integrations.Tests.Account.CustomApis
         public void Returns_A_Reconciled_Status_For_The_Bound_Account()
         {
             AccountReconcileCustomApi api = new AccountReconcileCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_AccountReconcile").Build();
+            LocalPluginContext context = PluginContext.ForMessage(AccountReconcileCustomApi.UniqueName).Build();
             context.PluginExecutionContext.InputParameters["AccountId"] = Guid.NewGuid();
 
             api.Execute(context.ServiceProvider);
@@ -386,7 +407,7 @@ namespace {{prefix}}.Integrations.Tests.Contact.CustomApis
         {
             ContactExportCustomApi api = new ContactExportCustomApi(string.Empty, string.Empty);
             Guid contactId = Guid.NewGuid();
-            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_ContactExport").Build();
+            LocalPluginContext context = PluginContext.ForMessage(ContactExportCustomApi.UniqueName).Build();
             context.PluginExecutionContext.InputParameters["ContactId"] = contactId;
 
             api.Execute(context.ServiceProvider);
@@ -413,7 +434,7 @@ namespace {{prefix}}.Integrations.Tests.GlobalCustomApis
         public void Reports_A_Healthy_Status()
         {
             IntegrationHeartbeatCustomApi api = new IntegrationHeartbeatCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage("{{apiPrefix ?? ApiPrefix(prefix)}}_IntegrationHeartbeat").Build();
+            LocalPluginContext context = PluginContext.ForMessage(IntegrationHeartbeatCustomApi.UniqueName).Build();
 
             api.Execute(context.ServiceProvider);
 

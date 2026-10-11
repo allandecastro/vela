@@ -230,6 +230,20 @@ public sealed partial class StepBuilder<TEntity>
     // Every trigger records its message here: the request name it was declared with is kept for the typed context,
     // and the step registers on the real sdkmessage (OnSendEmail() -> Send, OnWinQuote() -> Win). A typed trigger
     // whose message Dataverse accepts on a single table also passes that table, checked by Build().
+    // On<TRequest>() / OnAsyncOnly<TRequest>() serve the messages without a typed trigger only: a message with one is
+    // registered through it (one way per message), so the chain fails here with the trigger to use.
+    private void SetTypedRequestMessage(string requestName, Type requestType, string trigger)
+    {
+        if (TypedTriggers.Find(requestName) is string typed)
+        {
+            throw new InvalidOperationException(
+                $"{requestName} has a typed trigger: register the step with {typed}() instead of {trigger}<{requestType.Name}>(). " +
+                $"{trigger}<TRequest>() is only for messages without one.");
+        }
+
+        SetMessage(requestName);
+    }
+
     private void SetMessage(string requestName, string? requiredEntity = null)
     {
         _definition.RequestName = requestName;

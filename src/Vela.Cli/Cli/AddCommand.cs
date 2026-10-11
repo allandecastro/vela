@@ -24,16 +24,10 @@ internal static class AddCommand
 
     // SDK messages that have a dedicated On...() builder method, matched case-insensitively so the
     // scaffold emits the strongly-typed call. Any other name is registered via .OnMessage("..."), which the
-    // analyzers flag (VELA006) for a modelled message - so this list must cover every typed trigger in StepApi
-    // (pinned by AddCommandTests.KnownMessages_CoverEveryTypedTriggerInStepApi). They are SDK request names: the
-    // sdkmessage a step registers on can be shorter (SendEmail runs as Send), see ResolveKnownMessage.
-    internal static readonly string[] KnownMessages =
-    [
-        "Create", "Update", "CreateMultiple", "UpdateMultiple", "Delete", "Retrieve", "RetrieveMultiple",
-        "Associate", "Disassociate", "Assign", "Merge", "GrantAccess", "ModifyAccess", "RevokeAccess",
-        "QualifyLead", "WinOpportunity", "LoseOpportunity", "ConvertSalesOrderToInvoice", "GenerateQuoteFromOpportunity", "AddToQueue", "RemoveFromQueue", "PickFromQueue", "RouteTo", "ReleaseToQueue", "SendEmail", "SendEmailFromTemplate", "DeliverIncomingEmail", "DeliverPromoteEmail", "AddMembersTeam", "RemoveMembersTeam", "AddListMembersList", "AddMemberList", "RemoveMemberList", "CloseIncident", "CancelContract", "CloneContract", "RetrievePrincipalAccess", "RetrieveSharedPrincipalsAndAccess",
-        "WinQuote",
-    ];
+    // analyzers flag (VELA006) for a modelled message. They are SDK request names: the sdkmessage a step registers on
+    // can be shorter (SendEmail runs as Send), see ResolveKnownMessage. The list is generated from the step builder's
+    // message model (Vela.Steps.TypedTriggers, linked as source), so it never drifts from the typed triggers.
+    internal static readonly string[] KnownMessages = Vela.Steps.TypedTriggers.Messages;
 
     // The typed On...() trigger for --message: a request name (SendEmail), or the sdkmessage it runs as (Send),
     // resolved through the table when several requests share it (Win is WinQuote on quote, WinOpportunity on

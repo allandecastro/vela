@@ -451,10 +451,12 @@ What the samples show:
 - `Account/Plugins/AccountPostCreatePluginTests.cs` - runs `AccountPostCreatePlugin` against an
   `InMemoryOrganizationService` and asserts the follow-up `task` it creates (subject + regarding object).
 - `Account/Plugins/AccountRelatedContactsPluginTests.cs` - runs `AccountRelatedContactsPlugin`, which counts an
-  account's related contacts with the **typed query builder** (`Query.For<Contact>()...Build()`, a
-  `QueryExpression` checked at compile time; `ToFetchXml()` emits FetchXML instead), and asserts the traced count.
+  account's related contacts with an aggregate query from the **typed query builder**
+  (`Query.For<Contact>().Count(...).ToFetchXml()`, checked at compile time), and asserts the traced count. A second
+  test drives the plugin through **`PluginPipeline`**, which applies the step registration (filtering columns,
+  images, stage) the way Dataverse does: an update that does not touch the account name does not run the plugin.
 - `Contact/Plugins/ContactRouterPluginTests.cs` - drives a specific step of the multi-step router and asserts
-  on the emitted traces via `TraceCapture`, seeding a duplicate contact first.
+  on the emitted traces via `TraceCapture`, seeding the new contact and a duplicate first.
 - `Account/CustomApis/AccountEstimateValueCustomApiTests.cs` - invokes the typed, bound Custom API and checks
   the mapped output parameter.
 - `Contact/CustomApis/ContactValidateCustomApiTests.cs` - invokes the typed, contact-bound Custom API.
@@ -466,7 +468,9 @@ What the samples show:
 {{integrationsTests}}
 A plugin with a `(unsecureConfig, secureConfig)` constructor is run with `.Execute(new MyPlugin("", ""))`;
 the trigger is auto-derived from a single-step plugin's own registration, while a multi-step router needs the
-step stated explicitly (`OnCreate().Stage(...).Mode(...)`) to select the handler under test.
+step stated explicitly (`OnCreate().Stage(...).Mode(...)`) to select the handler under test. `.Execute(...)`
+calls the handler directly, so it does not check the step's filtering columns or images: use `PluginPipeline`
+for that.
 
 
 """;
