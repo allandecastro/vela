@@ -21,6 +21,25 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (Framework)
+
+- **A step on a sibling table no longer diverts a business message from the store.** An opportunity `Win` step made
+  a `WinQuoteRequest` take the modelled path and return an empty response. The pipeline now checks the request's
+  primary entity with the same rules it uses to fire the steps.
+- **A `SetStateDynamicEntity` pre step that changes `State` or `Status` now changes the state written.** The inner
+  Update is built from the inputs as the PreValidation and PreOperation steps left them.
+- **With security on, a lookup with an empty id and no key now faults as a missing record** on Create and Update,
+  instead of persisting a dangling lookup. Only a lookup set by alternate key skips the check (it is resolved, and
+  checked, separately).
+- **Merge on a self-referential N:N drops the row that linked the subordinate to the master**, instead of turning it
+  into a master-to-master self-link.
+- **Deleting a record deletes its files.** `DeleteFile` on a file id whose record is gone now faults as not found,
+  instead of succeeding without any Write check.
+- **`RetryPolicy` re-checks `maxElapsed` after each wait.** When a wait overruns the budget (scheduling, a GC pause),
+  no further attempt starts and the last fault propagates.
+- The setup error for a plugin that declares nothing now names `RegisterPluginSteps()`, not the removed
+  `RegisterSteps`.
+
 ## [0.32.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Changed (breaking)
