@@ -14,7 +14,9 @@ public sealed class ImageProjectionGeneratorOutputTests
     private static string Normalize(string text) => text.Replace("\r\n", "\n");
 
     // The expected text is a raw string literal, so it takes the line endings of the checkout (CRLF on a Windows
-    // runner without .gitattributes) while the generator always emits LF: these helpers normalize both sides.
+    // runner without .gitattributes), and the generator's renderers use StringBuilder.AppendLine, which emits the
+    // platform newline. Neither side is LF by construction: Normalize folds both to LF (Source() for the generated
+    // text, the Assert* helpers for both sides).
     private static void AssertText(string expected, string actual) => Assert.Equal(Normalize(expected), Normalize(actual));
 
     private static void AssertContainsText(string expected, string actual) => Assert.Contains(Normalize(expected), Normalize(actual));
