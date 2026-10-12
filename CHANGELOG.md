@@ -37,23 +37,25 @@ All notable changes to Vela are documented here. The format is based on
   `On<SetStateRequest>()` registers on `SetStateDynamicEntity`, the message a state change fires, so VELA022 now
   reports only a type pinned with `[SdkMessage("SetState")]`. The test harness keeps
   `PluginContext.For<T>().OnMessage(...)` and `PluginContext.ForMessage(...)`.
-- **The test harness follows Dataverse in more edge cases, verified live (#451).** A test that relied on the old
-  harness behaviour now fails the way it would against Dataverse:
+- **The test harness follows Dataverse in more edge cases (#451).** A test that relied on the old harness
+  behaviour now fails the way it would against Dataverse:
   - `ne`, `not-in`, `not-like`, `not-begin-with` and `not-end-with` match rows whose column is null; `like` (even
-    `'%'`) and `ne-userid` no longer do. Distinct compares text case-insensitively.
+    `'%'`) and `ne-userid` no longer do. Distinct compares text case-insensitively. (Verified live.)
   - A record addressed by `KeyAttributes` that are not exactly one key declared with `WithAlternateKey` faults with
     `0x80060889`, also on a table with no key. A declared key that matches nothing faults with `0x80060891` (it was
-    `0x80040217`).
+    `0x80040217`). (Verified live.)
   - `QueryByAttribute` with a different number of values and attributes faults with `0x8004110F`; a missing value
-    was compared as null.
+    was compared as null. (Verified live.)
   - A query with no page size returns at most 5,000 rows with `MoreRecords`, and a larger page size is capped at
-    5,000. FetchXML `top` with `returntotalrecordcount` faults with `0x80040203`.
-  - An `Update` with `ownerid = null` faults with `0x80040203`; it reassigned the record to the caller.
+    5,000. FetchXML `top` with `returntotalrecordcount` faults with `0x80040203` (verified live).
+  - An `Update` with `ownerid = null` faults with `0x80040203`; it reassigned the record to the caller. (Verified
+    live.)
   - With security on, a lookup set by id to a missing record faults (`0x80040217` on Create, `0x80040502` on Update).
-  - Grant, Modify and Revoke access, and adding or removing a record-team member, fault with `0x80040217` on a record
-    that does not exist.
-  - A delete blocked by a Restrict relationship faults with `0x80040227`, and downloading a missing record or an
-    empty file column faults with `0x80040217`, instead of a bare `InvalidOperationException`.
+    (Verified live.)
+  - Grant, Modify and Revoke access (verified live), and adding or removing a record-team member, fault with
+    `0x80040217` on a record that does not exist.
+  - A delete blocked by a Restrict relationship faults with `0x80040227` (verified live), and downloading a missing
+    record or an empty file column faults with `0x80040217`, instead of a bare `InvalidOperationException`.
   - `SequentialIds.At(0)` and `SequentialIds.Starting(0)` throw: index 0 was `Guid.Empty`. An index above
     `SequentialIds.MaxIndex` throws `ArgumentOutOfRangeException` instead of `FormatException`.
   - `PluginContextBuilder.Execute` throws, naming the plugin, when reading the plugin's step registration fails. It
