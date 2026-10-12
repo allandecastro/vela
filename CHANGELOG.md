@@ -29,8 +29,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (Framework)
 
-- The one-way trigger error now names a generic request as C# spells it (`On<CreateRequest<Account>>()`), not by its
-  metadata name (``CreateRequest`1``).
+- Registration errors now name a generic request or message as C# spells it (`On<CreateRequest<Account>>()`,
+  `UnknownMessage<Account>`), not by its metadata name (``CreateRequest`1``): both the one-way trigger error and the
+  "Cannot resolve the message" error.
 - **A step on a sibling table no longer diverts a business message from the store.** An opportunity `Win` step made
   a `WinQuoteRequest` take the modelled path and return an empty response. The pipeline now checks the request's
   primary entity with the same rules it uses to fire the steps.

@@ -93,6 +93,19 @@ public sealed class OneWayStepTriggerTests
         Assert.DoesNotContain("`", ex.Message);
     }
 
+    [Fact]
+    public void An_unresolved_generic_message_is_named_as_CSharp_spells_it()
+    {
+        StepBuilder<TestAccount> builder = new();
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            () => ((IStepTrigger<TestAccount>)builder).OnMessage<UnknownMessage<TestAccount>>());
+        Assert.Contains("Cannot resolve the message for 'UnknownMessage<TestAccount>'", ex.Message);
+        Assert.DoesNotContain("`", ex.Message);
+    }
+
+    // Neither an OrganizationRequest nor marked [CustomMessage]/[SdkMessage]: its message cannot be resolved.
+    private sealed class UnknownMessage<T> { }
+
     private sealed class CreateThroughGenericRequest : EntityPluginBase<TestAccount>
     {
         public CreateThroughGenericRequest() : base(string.Empty, string.Empty) { }
