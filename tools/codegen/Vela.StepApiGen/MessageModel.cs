@@ -20,11 +20,11 @@ internal enum Images
 /// (<c>WithSubordinatePreImage</c> / <c>WithSubordinatePostImage</c>, registered against <c>SubordinateId</c>), under the
 /// same stage rules as <paramref name="Images"/>.</param>
 /// <param name="Relationship">Whether the stage configs expose <c>ForRelationship(...)</c> (Associate / Disassociate).</param>
-/// <param name="Entity">The only table Dataverse accepts a step on for this message (its single sdkmessagefilter that
-/// allows custom steps), or null when it is not limited to one. <c>Build()</c> rejects the trigger on any other
+/// <param name="Entities">The tables Dataverse accepts a step on for this message (its sdkmessagefilters that allow
+/// custom steps), or null when it is not limited to a known set. <c>Build()</c> rejects the trigger on any other
 /// table. The step registers on the sdkmessage held by the <c>PluginMessages.{Name}</c> constant, which differs from
 /// <c>Name</c> when the SDK request name is not the sdkmessage name (<c>OnWinQuote()</c> registers on <c>Win</c>).</param>
-internal sealed record Message(string Name, bool FilterOn = false, Images Images = Images.None, bool SubordinateImages = false, bool Relationship = false, string? Entity = null)
+internal sealed record Message(string Name, bool FilterOn = false, Images Images = Images.None, bool SubordinateImages = false, bool Relationship = false, string[]? Entities = null)
 {
     public bool HasPreImage(Stage stage) => Images is Images.Pre or Images.PreAndPost;
 
@@ -59,54 +59,54 @@ internal static class MessageModel
         new("Assign", Images: Images.PreAndPost),
         new("RevokeAccess"),
         // Sales lifecycle
-        new("QualifyLead", Entity: "lead"),
-        new("WinOpportunity", Entity: "opportunity"),
-        new("LoseOpportunity", Entity: "opportunity"),
-        new("ConvertSalesOrderToInvoice", Entity: "salesorder"),
-        new("GenerateQuoteFromOpportunity", Entity: "quote"),
+        new("QualifyLead", Entities: ["lead"]),
+        new("WinOpportunity", Entities: ["opportunity"]),
+        new("LoseOpportunity", Entities: ["opportunity"]),
+        new("ConvertSalesOrderToInvoice", Entities: ["salesorder"]),
+        new("GenerateQuoteFromOpportunity", Entities: ["quote"]),
         // Queues
-        new("AddToQueue", Entity: "queueitem"),
-        new("RemoveFromQueue", Entity: "queueitem"),
-        new("PickFromQueue", Entity: "queueitem"),
-        new("RouteTo", Entity: "queueitem"),
-        new("ReleaseToQueue", Entity: "queueitem"),
+        new("AddToQueue", Entities: ["queueitem"]),
+        new("RemoveFromQueue", Entities: ["queueitem"]),
+        new("PickFromQueue", Entities: ["queueitem"]),
+        new("RouteTo", Entities: ["queueitem"]),
+        new("ReleaseToQueue", Entities: ["queueitem"]),
         // Email
-        new("SendEmail", Entity: "email"),
-        new("SendEmailFromTemplate", Entity: "email"),
-        new("DeliverIncomingEmail", Entity: "email"),
-        new("DeliverPromoteEmail", Entity: "email"),
+        new("SendEmail", Entities: ["email"]),
+        new("SendEmailFromTemplate", Entities: ["email"]),
+        new("DeliverIncomingEmail", Entities: ["email"]),
+        new("DeliverPromoteEmail", Entities: ["email"]),
         // Membership
-        new("AddMembersTeam", Entity: "team"),
-        new("RemoveMembersTeam", Entity: "team"),
-        new("AddListMembersList", Entity: "list"),
-        new("AddMemberList", Entity: "list"),
-        new("RemoveMemberList", Entity: "list"),
+        new("AddMembersTeam", Entities: ["team"]),
+        new("RemoveMembersTeam", Entities: ["team"]),
+        new("AddListMembersList", Entities: ["list"]),
+        new("AddMemberList", Entities: ["list"]),
+        new("RemoveMemberList", Entities: ["list"]),
         // Case and contract
-        new("CloseIncident", Entity: "incident"),
-        new("CancelContract", Entity: "contract"),
-        new("CloneContract", Entity: "contract"),
+        new("CloseIncident", Entities: ["incident"]),
+        new("CancelContract", Entities: ["contract"]),
+        new("CloneContract", Entities: ["contract"]),
         // Access queries, quotes, orders, products, access and merge
         new("RetrievePrincipalAccess"),
         new("RetrieveSharedPrincipalsAndAccess"),
-        new("WinQuote", Entity: "quote"),
+        new("WinQuote", Entities: ["quote"]),
         new("ModifyAccess"),
         // Verified live: one Merge step takes images of the master (Target) and of the subordinate (SubordinateId).
         new("Merge", Images: Images.PreAndPost, SubordinateImages: true),
         // Marketing, pricing, goals, scheduling, email and product kits (#405). The tables are the sdkmessagefilters
-        // that allow custom steps on a 9.2 environment. Reschedule runs on several tables; UnlockSalesOrderPricing,
-        // UnlockInvoicePricing and RemoveProductFromKit on none (PluginMessages.GlobalMessages).
-        new("AddItemCampaign", Entity: "campaign"),
-        new("RemoveItemCampaign", Entity: "campaign"),
-        new("Recalculate", Entity: "goal"),
-        new("LockSalesOrderPricing", Entity: "salesorder"),
+        // that allow custom steps on a 9.2 environment. Reschedule runs on three tables (verified live);
+        // UnlockSalesOrderPricing, UnlockInvoicePricing and RemoveProductFromKit on none (PluginMessages.GlobalMessages).
+        new("AddItemCampaign", Entities: ["campaign"]),
+        new("RemoveItemCampaign", Entities: ["campaign"]),
+        new("Recalculate", Entities: ["goal"]),
+        new("LockSalesOrderPricing", Entities: ["salesorder"]),
         new("UnlockSalesOrderPricing"),
-        new("LockInvoicePricing", Entity: "invoice"),
+        new("LockInvoicePricing", Entities: ["invoice"]),
         new("UnlockInvoicePricing"),
-        new("Reschedule"),
-        new("ImmediateBook", Entity: "appointment"),
-        new("SendTemplate", Entity: "template"),
-        new("SendFax", Entity: "fax"),
-        new("AddProductToKit", Entity: "product"),
+        new("Reschedule", Entities: ["appointment", "serviceappointment", "recurringappointmentmaster"]),
+        new("ImmediateBook", Entities: ["appointment"]),
+        new("SendTemplate", Entities: ["template"]),
+        new("SendFax", Entities: ["fax"]),
+        new("AddProductToKit", Entities: ["product"]),
         new("RemoveProductFromKit"),
     ];
 

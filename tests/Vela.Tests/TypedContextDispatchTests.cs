@@ -52,7 +52,6 @@ namespace Vela.Tests
                 RegisterStep().OnMessage<CustomMarker>().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRetrievePrincipalAccess().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRetrieveSharedPrincipalsAndAccess().PostOperation().Sync().Handle(OnAny);
-                RegisterStep().OnReschedule().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnUnlockSalesOrderPricing().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnUnlockInvoicePricing().PostOperation().Sync().Handle(OnAny);
                 RegisterStep().OnRemoveProductFromKit().PostOperation().Sync().Handle(OnAny);
@@ -80,7 +79,6 @@ namespace Vela.Tests
         [InlineData(PluginMessages.Assign)]
         [InlineData(PluginMessages.RetrievePrincipalAccess)]
         [InlineData(PluginMessages.RetrieveSharedPrincipalsAndAccess)]
-        [InlineData(PluginMessages.Reschedule)]
         [InlineData(PluginMessages.UnlockSalesOrderPricing)]
         [InlineData(PluginMessages.UnlockInvoicePricing)]
         [InlineData(PluginMessages.RemoveProductFromKit)]
@@ -147,6 +145,9 @@ namespace Vela.Tests
             { "LockSalesOrderPricing", "LockSalesOrderPricing", "salesorder" },
             { "LockInvoicePricing", "LockInvoicePricing", "invoice" },
             { "ImmediateBook", "ImmediateBook", "appointment" },
+            { "Reschedule", "Reschedule", "appointment" },
+            { "Reschedule", "Reschedule", "serviceappointment" },
+            { "Reschedule", "Reschedule", "recurringappointmentmaster" },
             { "SendTemplate", "Send", "template" },
             { "SendFax", "Send", "fax" },
             { "AddProductToKit", "AddProductToKit", "product" },
@@ -161,6 +162,27 @@ namespace Vela.Tests
 
             Assert.Contains("OnWinQuote() registers on the 'Win' message of table 'quote'", error.Message);
             Assert.Contains("'opportunity'", error.Message);
+        }
+
+        // Reschedule has a sdkmessagefilter on the three appointment tables only (verified live): any other table
+        // would fail at apply on the missing filter.
+        [Fact]
+        public void Reschedule_on_a_table_other_than_the_appointment_ones_is_rejected()
+        {
+            InvalidOperationException error = Assert.Throws<InvalidOperationException>(() => new RescheduleAccountProbe().GetStepDefinitions());
+
+            Assert.Equal(
+                "OnReschedule() registers on the 'Reschedule' message of tables 'appointment', 'serviceappointment', 'recurringappointmentmaster' only, " +
+                "but this plugin's table is 'account'. Register the step from an EntityPluginBase<T> whose T is one of them.",
+                error.Message);
+        }
+
+        private sealed class RescheduleAccountProbe : EntityPluginBase<TestAccount>
+        {
+            public RescheduleAccountProbe() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnReschedule().PostOperation().Sync().Handle(ctx => { });
         }
 
         private sealed class WrongTableProbe : EntityPluginBase<TableEntity.Opportunity>
@@ -282,6 +304,8 @@ namespace Vela.Tests
             [EntityLogicalName("goal")] public sealed class Goal() : Entity("goal");
             [EntityLogicalName("invoice")] public sealed class Invoice() : Entity("invoice");
             [EntityLogicalName("appointment")] public sealed class Appointment() : Entity("appointment");
+            [EntityLogicalName("serviceappointment")] public sealed class ServiceAppointment() : Entity("serviceappointment");
+            [EntityLogicalName("recurringappointmentmaster")] public sealed class RecurringAppointmentMaster() : Entity("recurringappointmentmaster");
             [EntityLogicalName("template")] public sealed class Template() : Entity("template");
             [EntityLogicalName("fax")] public sealed class Fax() : Entity("fax");
             [EntityLogicalName("product")] public sealed class Product() : Entity("product");
@@ -305,6 +329,8 @@ namespace Vela.Tests
                 "goal" => new TableProbe<TableEntity.Goal>(trigger),
                 "invoice" => new TableProbe<TableEntity.Invoice>(trigger),
                 "appointment" => new TableProbe<TableEntity.Appointment>(trigger),
+                "serviceappointment" => new TableProbe<TableEntity.ServiceAppointment>(trigger),
+                "recurringappointmentmaster" => new TableProbe<TableEntity.RecurringAppointmentMaster>(trigger),
                 "template" => new TableProbe<TableEntity.Template>(trigger),
                 "fax" => new TableProbe<TableEntity.Fax>(trigger),
                 "product" => new TableProbe<TableEntity.Product>(trigger),
@@ -364,6 +390,7 @@ namespace Vela.Tests
                     case "LockSalesOrderPricing": step.OnLockSalesOrderPricing().PostOperation().Sync().Handle(OnAny); break;
                     case "LockInvoicePricing": step.OnLockInvoicePricing().PostOperation().Sync().Handle(OnAny); break;
                     case "ImmediateBook": step.OnImmediateBook().PostOperation().Sync().Handle(OnAny); break;
+                    case "Reschedule": step.OnReschedule().PostOperation().Sync().Handle(OnAny); break;
                     case "SendTemplate": step.OnSendTemplate().PostOperation().Sync().Handle(OnAny); break;
                     case "SendFax": step.OnSendFax().PostOperation().Sync().Handle(OnAny); break;
                     case "AddProductToKit": step.OnAddProductToKit().PostOperation().Sync().Handle(OnAny); break;
