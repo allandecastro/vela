@@ -85,6 +85,22 @@ public sealed class OneWayStepTriggerTests
         Assert.Contains("register the step with OnUpdate() instead of On<UpdateRequest>()", ex.Message);
     }
 
+    [Fact]
+    public void The_rejection_names_a_generic_request_as_CSharp_spells_it()
+    {
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => new CreateThroughGenericRequest().GetStepDefinitions());
+        Assert.Contains("register the step with OnCreate() instead of On<CreateRequest<TestAccount>>()", ex.Message);
+        Assert.DoesNotContain("`", ex.Message);
+    }
+
+    private sealed class CreateThroughGenericRequest : EntityPluginBase<TestAccount>
+    {
+        public CreateThroughGenericRequest() : base(string.Empty, string.Empty) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().On<Vela.Messages.CreateRequest<TestAccount>>().PostOperation().Sync().Handle(_ => { });
+    }
+
     private sealed class UpdateThroughTypedRequest : EntityPluginBase<TestAccount>
     {
         public UpdateThroughTypedRequest() : base(string.Empty, string.Empty) { }

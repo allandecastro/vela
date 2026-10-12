@@ -262,7 +262,7 @@ public sealed partial class StepBuilder<TEntity>
         if (trigger != null && TypedTriggers.Find(requestName) is string typed)
         {
             throw new InvalidOperationException(
-                $"{requestName} has a typed trigger: register the step with {typed}() instead of {trigger}<{typeof(TMessage).Name}>(). " +
+                $"{requestName} has a typed trigger: register the step with {typed}() instead of {trigger}<{ExpressionHelper.DisplayName(typeof(TMessage))}>(). " +
                 $"{trigger}<TRequest>() is only for messages without one.");
         }
 

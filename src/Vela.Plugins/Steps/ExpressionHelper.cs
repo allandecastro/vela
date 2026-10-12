@@ -14,6 +14,23 @@ namespace Vela.Steps;
 internal static class ExpressionHelper
 {
     /// <summary>
+    /// A type's name as C# spells it in an error message: <c>CreateRequest&lt;Account&gt;</c> rather than the
+    /// metadata name <c>CreateRequest`1</c>.
+    /// </summary>
+    public static string DisplayName(Type type)
+    {
+        if (!type.IsGenericType)
+        {
+            return type.Name;
+        }
+
+        string name = type.Name;
+        int tick = name.IndexOf('`');
+        return (tick < 0 ? name : name.Substring(0, tick))
+            + "<" + string.Join(", ", type.GetGenericArguments().Select(DisplayName)) + ">";
+    }
+
+    /// <summary>
     /// Resolves the Dataverse column a selector targets (<c>a =&gt; a.Name</c>): its <c>[AttributeLogicalName]</c>,
     /// or the lowercased property name. Used by FilterOn, the image selectors and the typed query helpers.
     /// </summary>
@@ -129,7 +146,7 @@ internal static class ExpressionHelper
         }
 
         throw new InvalidOperationException(
-            $"Cannot resolve the message for '{typeof(TMessage).Name}': it is neither an OrganizationRequest with a parameterless constructor that sets RequestName nor a type marked [CustomMessage(\"...\")] or [SdkMessage(\"...\")]. "
+            $"Cannot resolve the message for '{DisplayName(typeof(TMessage))}': it is neither an OrganizationRequest with a parameterless constructor that sets RequestName nor a type marked [CustomMessage(\"...\")] or [SdkMessage(\"...\")]. "
             + "Generate a typed request with 'vela models --messages <name>' (or '--custom-apis <name>') and use On<XxxRequest>(), or mark the type with [CustomMessage].");
     }
 
