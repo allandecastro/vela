@@ -160,6 +160,30 @@ public sealed class RegistrationMetadataTests
         Assert.Equal("score", DefinitionParser.ResolveStepKey(description, "renamed by an admin", Plugin));
     }
 
+    // PR #468 review: only the marker BuildStepDescription writes (the final non-whitespace line) is a key. A marker the
+    // developer's text quotes anywhere else is neither read as a key nor stripped from the description.
+    [Theory]
+    [InlineData("See [vela:stepkey=other] for history")]
+    [InlineData("[vela:stepkey=other]\nis how Vela tags a step")]
+    [InlineData("Tagged [vela:stepkey=other]")]
+    [InlineData("Tagged\n[vela:stepkey=other] later")]
+    [InlineData("Empty\n[vela:stepkey=]")]
+    public void A_marker_that_is_not_the_trailing_line_is_not_a_step_key(string description)
+    {
+        Assert.Null(DefinitionParser.ExtractStepKeyFromMarker(description));
+        Assert.Equal(description, DefinitionParser.StripStepKeyMarker(description));
+    }
+
+    [Theory]
+    [InlineData("[vela:stepkey=score]", "")]
+    [InlineData("recompute\r\n[vela:stepkey=score]\r\n", "recompute")]
+    [InlineData("recompute\n  [vela:stepkey=score]  \n\n", "recompute")]
+    public void The_trailing_marker_line_is_read_and_stripped(string description, string text)
+    {
+        Assert.Equal("score", DefinitionParser.ExtractStepKeyFromMarker(description));
+        Assert.Equal(text, DefinitionParser.StripStepKeyMarker(description));
+    }
+
     [Fact]
     public void StripStepKeyMarker_returns_the_trimmed_text_when_there_is_no_marker()
     {
