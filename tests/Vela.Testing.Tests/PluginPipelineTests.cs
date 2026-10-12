@@ -427,6 +427,21 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void ModelledMessage_WithOnlyASiblingTableStep_FallsThroughToTheStore()
+        {
+            // An opportunity Win step does not run for a WinQuoteRequest, so the request must reach the store (which
+            // reports it unmodelled) rather than the modelled path's empty no-op response.
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<OnOpportunityWon>();
+
+            Assert.Throws<MessageNotModelledException>(() => pipeline.Service.Execute(new WinQuoteRequest
+            {
+                QuoteClose = new Entity("quoteclose") { ["quoteid"] = new EntityReference("quote", Guid.NewGuid()) },
+                Status = new OptionSetValue(4)
+            }));
+            Assert.Empty(pipeline.GetAll("task"));
+        }
+
+        [Fact]
         public void FromAssembly_AutoDiscoversAndFiresPlugins()
         {
             PluginPipeline pipeline = PluginPipeline.FromAssemblyOf<FakeAuto>();
