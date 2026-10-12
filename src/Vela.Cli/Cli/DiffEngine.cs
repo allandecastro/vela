@@ -126,10 +126,40 @@ internal static class DiffEngine
     private static readonly (string Label, string Source)[] DerivedLabelFields =
         [("description", "name"), ("displayName", "uniqueName"), ("description", "uniqueName")];
 
+    // The comparison keys of a live definition and its local counterpart. A derived label is folded only when the
+    // local one is still its fallback (the normalizer copies the source verbatim when none is declared): a label the
+    // developer declared, even one differing from the source only in case, compares exactly on both sides.
+    private static (string Live, string Local) ComparisonKeys(JsonElement live, JsonElement local)
+    {
+        HashSet<(string Label, string Source)> fallbacks = FallbackLabels(local);
+        return (ComparisonKey(live, fallbacks), ComparisonKey(local, fallbacks));
+    }
+
+    private static HashSet<(string Label, string Source)> FallbackLabels(JsonElement local)
+    {
+        HashSet<(string Label, string Source)> fallbacks = [];
+        if (local.ValueKind != JsonValueKind.Object)
+        {
+            return fallbacks;
+        }
+
+        foreach ((string label, string source) in DerivedLabelFields)
+        {
+            if (local.TryGetProperty(label, out JsonElement labelValue) && labelValue.ValueKind == JsonValueKind.String
+                && local.TryGetProperty(source, out JsonElement sourceValue) && sourceValue.ValueKind == JsonValueKind.String
+                && string.Equals(labelValue.GetString(), sourceValue.GetString(), StringComparison.Ordinal))
+            {
+                fallbacks.Add((label, source));
+            }
+        }
+
+        return fallbacks;
+    }
+
     // A comparison-only serialization of a normalized definition: identical to the stored shape except the
     // case-folded fields are lower-cased, so a case-only drift compares equal. The stored Definition is untouched,
     // so apply still writes the authored casing.
-    private static string ComparisonKey(JsonElement definition)
+    private static string ComparisonKey(JsonElement definition, HashSet<(string Label, string Source)> fallbackLabels)
     {
         if (definition.ValueKind != JsonValueKind.Object)
         {
@@ -142,9 +172,9 @@ internal static class DiffEngine
         }
 
         // A label that defaults to a case-folded field (a step description to the step name, a Custom API display name
-        // and description to the unique name) inherits that field's casing, so fold it too while it is still the
-        // default. A label the developer wrote keeps comparing exactly.
-        foreach ((string label, string source) in DerivedLabelFields)
+        // and description to the unique name) inherits that field's casing, so fold it too while the local label is
+        // still the default. A label the developer wrote keeps comparing exactly.
+        foreach ((string label, string source) in fallbackLabels)
         {
             if (obj[label] is JsonValue labelValue && labelValue.TryGetValue(out string? labelText)
                 && obj[source] is JsonValue sourceValue && sourceValue.TryGetValue(out string? sourceText)
@@ -302,8 +332,7 @@ internal static class DiffEngine
                 continue;
             }
 
-            string beforeJson = ComparisonKey(before.Definition);
-            string afterJson = ComparisonKey(pair.Value.Definition);
+            (string beforeJson, string afterJson) = ComparisonKeys(before.Definition, pair.Value.Definition);
             if (!string.Equals(beforeJson, afterJson, StringComparison.Ordinal))
             {
                 changed.Add(new RegistrationChange(pair.Value.Kind, pair.Value.Type, before.Definition, pair.Value.Definition));
@@ -334,8 +363,7 @@ internal static class DiffEngine
             currentStepMatched[pairedCurrent[i]] = true;
             RegistrationItem localStep = localSteps[i];
             RegistrationItem currentStep = currentSteps[pairedCurrent[i]];
-            string beforeJson = ComparisonKey(currentStep.Definition);
-            string afterJson = ComparisonKey(localStep.Definition);
+            (string beforeJson, string afterJson) = ComparisonKeys(currentStep.Definition, localStep.Definition);
             if (!string.Equals(beforeJson, afterJson, StringComparison.Ordinal))
             {
                 changed.Add(new RegistrationChange(localStep.Kind, localStep.Type, currentStep.Definition, WithLiveStepKey(localStep, currentStep)));

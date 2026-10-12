@@ -341,6 +341,34 @@ public sealed class RegistrationMetadataTests
         Assert.Empty(Diff(new RegistrationItem("custom-api", ApiPlugin, local), new RegistrationItem("custom-api", ApiPlugin, live)).Changed);
     }
 
+    [Theory]   // PR #468 review
+    [InlineData("displayName")]
+    [InlineData("description")]
+    public void A_declared_label_differing_from_the_unique_name_only_in_case_is_a_change(string label)
+    {
+        // The live label is the legacy fallback (the unique name); the code now declares a label that differs from it
+        // only in case. It was declared, so it compares exactly and apply writes it.
+        JsonElement live = DefinitionNormalizer.NormalizeCustomApiDefinition(
+            Json(new { pluginTypeName = ApiPlugin, uniqueName = "zava_DoThing", displayName = "zava_DoThing", description = "zava_DoThing" }), Options);
+        JsonElement local = DefinitionNormalizer.NormalizeCustomApiDefinition(
+            JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["pluginTypeName"] = ApiPlugin, ["uniqueName"] = "zava_DoThing", [label] = "zava_dothing" }), Options);
+
+        RegistrationChange change = Assert.Single(Diff(new RegistrationItem("custom-api", ApiPlugin, local), new RegistrationItem("custom-api", ApiPlugin, live)).Changed);
+        Assert.Equal("zava_dothing", change.After.GetProperty(label).GetString());
+    }
+
+    [Fact]
+    public void A_declared_step_description_differing_from_the_step_name_only_in_case_is_a_change()   // PR #468 review
+    {
+        JsonElement local = LocalStep(description: null);
+        string name = local.GetProperty("name").GetString()!;
+        JsonElement declared = LocalStep(name.ToUpperInvariant());
+
+        // The live description is the fallback (the step name); the declared one differs only in case.
+        Assert.Single(Diff(new RegistrationItem("step", Plugin, declared), ReadStep(name, $"{name}\n[vela:stepkey=score]")).Changed);
+        Assert.Empty(Diff(new RegistrationItem("step", Plugin, local), ReadStep(name, $"{name.ToLowerInvariant()}\n[vela:stepkey=score]")).Changed);
+    }
+
     [Fact]
     public void Labels_too_long_for_dataverse_are_rejected()
     {
