@@ -75,27 +75,34 @@ internal static class StepIdentity
     }
 
     /// <summary>
-    /// The definitions that apply to this execution, from those matching its message, stage, mode and entity:
-    /// relationship-scoped Associate/Disassociate steps whose relationship is not the request's drop out, and when
-    /// several steps share the trigger, the executing step (<c>OwningExtension</c>) selects its own.
+    /// The definitions that apply to this execution, from those matching its message, stage, mode and entity. When
+    /// several steps share the trigger, the executing step (<c>OwningExtension</c>) selects its own first, and that
+    /// definition applies only when the request's relationship is in its scope: Associate/Disassociate registrations
+    /// are global, so every sibling row runs for every relationship. With a single match, or a legacy deployment whose
+    /// step names carry no key, the relationship scope alone decides.
     /// </summary>
-    /// <exception cref="InvalidPluginExecutionException">Several steps match and the executing step cannot be identified.</exception>
+    /// <exception cref="InvalidPluginExecutionException">Several steps apply and the executing step cannot be identified.</exception>
     public static List<StepDefinition> Select(List<StepDefinition> matches, ILocalPluginContext ctx, string pluginTypeName)
     {
-        List<StepDefinition> inScope = matches.Where(definition => IsInRelationshipScope(definition, ctx)).ToList();
-        if (inScope.Count <= 1)
+        if (matches.Count <= 1)
         {
-            return inScope;
+            return matches.Where(definition => IsInRelationshipScope(definition, ctx)).ToList();
         }
 
         string? stepName = ExecutingStepName(ctx);
         if (!string.IsNullOrEmpty(stepName))
         {
-            List<StepDefinition> owned = inScope.Where(definition => NameCarriesKey(stepName!, definition.StepKey)).ToList();
+            List<StepDefinition> owned = matches.Where(definition => NameCarriesKey(stepName!, definition.StepKey)).ToList();
             if (owned.Count == 1)
             {
-                return owned;
+                return owned.Where(definition => IsInRelationshipScope(definition, ctx)).ToList();
             }
+        }
+
+        List<StepDefinition> inScope = matches.Where(definition => IsInRelationshipScope(definition, ctx)).ToList();
+        if (inScope.Count <= 1)
+        {
+            return inScope;
         }
 
         throw new InvalidPluginExecutionException(
@@ -166,9 +173,15 @@ internal static class StepIdentity
         static string List(IEnumerable<string>? values) => string.Join(",",
             (values ?? Enumerable.Empty<string>()).Select(v => v.ToLowerInvariant()).OrderBy(v => v, StringComparer.Ordinal));
 
+        // Only an explicit request property (SubordinateId on a Merge) is part of the shape, so the keys of steps
+        // whose images use the message's own property stay what they were.
+        static string Property(string? messagePropertyName) => string.IsNullOrWhiteSpace(messagePropertyName)
+            ? string.Empty
+            : "@" + messagePropertyName!.Trim().ToLowerInvariant();
+
         static string Images(ImageDefinition[]? images) => string.Join(";",
             (images ?? Array.Empty<ImageDefinition>())
-                .Select(image => image.Alias + ":" + List(image.Attributes))
+                .Select(image => image.Alias + Property(image.MessagePropertyName) + ":" + List(image.Attributes))
                 .OrderBy(v => v, StringComparer.Ordinal));
 
         return $"filter={List(definition.FilteringAttributes)}|pre={Images(definition.PreImages)}|post={Images(definition.PostImages)}|rel={List(definition.Relationships)}";

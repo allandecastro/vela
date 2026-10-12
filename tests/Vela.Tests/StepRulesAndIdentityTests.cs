@@ -166,6 +166,37 @@ public sealed class StepRulesAndIdentityTests
     }
 
     [Fact]
+    public void A_sibling_relationship_row_does_not_run_another_scope_handler()
+    {
+        StepDefinition a = Step(key: "rel-a", relationships: ["rel_a"]);
+        StepDefinition b = Step(key: "rel-b", relationships: ["rel_b"]);
+        EntityReference rowA = new("sdkmessageprocessingstep", Guid.NewGuid()) { Name = "P - PostOpSync: rel-a" };
+        EntityReference rowB = new("sdkmessageprocessingstep", Guid.NewGuid()) { Name = "P - PostOpSync: rel-b" };
+
+        // Associate registrations are global: a rel_a request runs both rows, and only the rel-a row runs its handler.
+        Assert.Same(a, Assert.Single(StepIdentity.Select([a, b], Context("rel_a", rowA), "P")));
+        Assert.Empty(StepIdentity.Select([a, b], Context("rel_a", rowB), "P"));
+        Assert.Same(b, Assert.Single(StepIdentity.Select([a, b], Context("rel_b", rowB), "P")));
+        // A legacy deployment whose step names carry no key still falls back to the relationship scope.
+        Assert.Same(a, Assert.Single(StepIdentity.Select([a, b], Context("rel_a"), "P")));
+    }
+
+    [Fact]
+    public void Images_on_different_request_properties_get_distinct_keys()
+    {
+        StepDefinition target = Step(pre: [new ImageDefinition { Alias = "img", Attributes = ["name"] }]);
+        StepDefinition subordinate = Step(pre: [new ImageDefinition { Alias = "img", Attributes = ["name"], MessagePropertyName = "SubordinateId" }]);
+        target.Message = subordinate.Message = "Merge";
+
+        StepIdentity.AssignStepKeys([target, subordinate], "P");
+
+        Assert.NotEqual(target.StepKey, subordinate.StepKey);
+        Assert.Throws<InvalidOperationException>(() => StepIdentity.AssignStepKeys(
+            [Step(pre: [new ImageDefinition { Alias = "img", MessagePropertyName = "SubordinateId" }]),
+             Step(pre: [new ImageDefinition { Alias = "img", MessagePropertyName = "subordinateid" }])], "P"));
+    }
+
+    [Fact]
     public void An_asynchronous_step_is_identified_by_reading_its_row()
     {
         Guid stepId = Guid.NewGuid();
