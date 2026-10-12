@@ -108,6 +108,23 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void SetState_writes_the_Status_a_PreOperation_step_left_in_the_inputs()
+        {
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<OverrideStatus>().Seed(new Entity(FakeOwnable.EntityLogicalNameValue, id)
+            {
+                ["statecode"] = new OptionSetValue(0),
+                ["statuscode"] = new OptionSetValue(1),
+            });
+
+            pipeline.Service.Execute(new SetStateRequest { EntityMoniker = Record(id), State = new OptionSetValue(1), Status = new OptionSetValue(-1) });
+
+            Entity stored = pipeline.GetAll(FakeOwnable.EntityLogicalNameValue).Single();
+            Assert.Equal(1, stored.GetAttributeValue<OptionSetValue>("statecode").Value);
+            Assert.Equal(7, stored.GetAttributeValue<OptionSetValue>("statuscode").Value);
+        }
+
+        [Fact]
         public void Update_of_statecode_nests_SetStateDynamicEntity_and_lands_on_the_default_status()
         {
             Guid id = Guid.NewGuid();
@@ -260,6 +277,18 @@ namespace Vela.Testing.Tests
 
             private static string OwnerSuffix(Entity image) =>
                 image.GetAttributeValue<EntityReference>("ownerid")?.Id.ToString().Substring(32) ?? "none";
+        }
+
+        // Rewrites the Status of a state change at PreOperation, to a status the default would never pick.
+        public sealed class OverrideStatus : EntityPluginBase<FakeOwnable>
+        {
+            public OverrideStatus(string unsecure, string secure) : base(unsecure, secure) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnMessage<SetStateRequest>().PreOperation().Sync()
+                    .Handle((Action<ILocalPluginContext>)Override);
+
+            private void Override(ILocalPluginContext ctx) => ctx.PluginExecutionContext.InputParameters["Status"] = new OptionSetValue(7);
         }
 
         // Rejects a deactivation from its nested SetStateDynamicEntity PreOperation step.

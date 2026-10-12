@@ -86,6 +86,40 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Flags_blocking_on_a_configured_or_value_task()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using System.Threading.Tasks;
+    using Vela.Plugin;
+    public sealed class Account { }
+    public sealed class MyPlugin : EntityPluginBase<Account>
+    {
+        private void Handle(Task<int> pending, Task other, ValueTask<int> value, ValueTask plain)
+        {
+            {|#0:other.ConfigureAwait(false).GetAwaiter().GetResult()|};
+            int a = {|#1:pending.ConfigureAwait(false).GetAwaiter().GetResult()|};
+            {|#2:plain.ConfigureAwait(false).GetAwaiter().GetResult()|};
+            int b = {|#3:value.ConfigureAwait(false).GetAwaiter().GetResult()|};
+            int c = {|#4:value.GetAwaiter().GetResult()|};
+            {|#5:plain.GetAwaiter().GetResult()|};
+            {|#6:other.GetAwaiter().GetResult()|};
+        }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(
+            code,
+            Expected(0, "ConfiguredTaskAwaiter.GetResult", ParallelExecutionAnalyzer.BlocksOnTask),
+            Expected(1, "ConfiguredTaskAwaiter.GetResult", ParallelExecutionAnalyzer.BlocksOnTask),
+            Expected(2, "ConfiguredValueTaskAwaiter.GetResult", ParallelExecutionAnalyzer.BlocksOnTask),
+            Expected(3, "ConfiguredValueTaskAwaiter.GetResult", ParallelExecutionAnalyzer.BlocksOnTask),
+            Expected(4, "ValueTaskAwaiter.GetResult", ParallelExecutionAnalyzer.BlocksOnTask),
+            Expected(5, "ValueTaskAwaiter.GetResult", ParallelExecutionAnalyzer.BlocksOnTask),
+            Expected(6, "TaskAwaiter.GetResult", ParallelExecutionAnalyzer.BlocksOnTask));
+    }
+
+    [Fact]
     public async Task Flags_inside_a_lambda_of_a_plugin()
     {
         string code = Harness + @"

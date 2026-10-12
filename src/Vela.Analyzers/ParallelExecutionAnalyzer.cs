@@ -97,8 +97,10 @@ namespace Vela.Analyzers
                 case "ThreadPool" when InNamespace(type, "System.Threading") &&
                                        (method.Name == "QueueUserWorkItem" || method.Name == "UnsafeQueueUserWorkItem"):
                     return StartsParallelWork;
-                case "TaskAwaiter" or "ValueTaskAwaiter" when method.Name == "GetResult" &&
-                                                              InNamespace(type, "System.Runtime.CompilerServices"):
+                // task.GetAwaiter().GetResult(), and its ConfigureAwait(...).GetAwaiter().GetResult() form, whose
+                // awaiter is nested in ConfiguredTaskAwaitable / ConfiguredValueTaskAwaitable.
+                case "TaskAwaiter" or "ValueTaskAwaiter" or "ConfiguredTaskAwaiter" or "ConfiguredValueTaskAwaiter"
+                    when method.Name == "GetResult" && InNamespace(type, "System.Runtime.CompilerServices"):
                     return BlocksOnTask;
                 default:
                     return null;

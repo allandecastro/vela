@@ -21,8 +21,47 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (Framework)
+
+- **Breaking:** `OnReschedule()` now accepts only the tables Dataverse has a Reschedule filter for: `appointment`,
+  `serviceappointment` and `recurringappointmentmaster`. On any other table `Build()` rejects the step instead of
+  `vela apply` failing on the missing sdkmessagefilter.
+
 ### Fixed (Framework)
 
+- **A step on a sibling table no longer diverts a business message from the store.** An opportunity `Win` step made
+  a `WinQuoteRequest` take the modelled path and return an empty response. The pipeline now checks the request's
+  primary entity with the same rules it uses to fire the steps.
+- **On a `SetStateRequest`, a `SetStateDynamicEntity` pre step that changes `State` or `Status` now changes the
+  state written.** The inner Update is built from the inputs as the PreValidation and PreOperation steps left them.
+  (The `SetStateDynamicEntity` operation nested in an `Update` of `statecode` still writes the row's own values.)
+- **With security on, a lookup with an empty id and no key now faults as a missing record** on Create and Update,
+  instead of persisting a dangling lookup.
+- **A lookup set by alternate key is now checked like the same lookup set by id.** The key is resolved before the
+  existence and record-scoped `AppendTo` checks, so a caller with User or Business Unit `AppendTo` can no longer link
+  by key to a record outside that scope.
+- **Merge on a self-referential N:N drops the row that linked the subordinate to the master**, instead of turning it
+  into a master-to-master self-link.
+- **Deleting a record deletes its files.** `DeleteFile` on a file id whose record is gone now faults as not found,
+  instead of succeeding without any Write check.
+- **`RetryPolicy` re-checks `maxElapsed` after each wait.** When a wait overruns the budget (scheduling, a GC pause),
+  no further attempt starts and the last fault propagates.
+- The setup error for a plugin that declares nothing now names `RegisterPluginSteps()`, not the removed
+  `RegisterSteps`.
+- Associate/Disassociate steps scoped to different relationships no longer run a handler twice: the executing step
+  now picks its own definition before the relationship scope is checked.
+- Two steps whose images share an alias and columns but read different request properties (`Target` and
+  `SubordinateId` on Merge) now get distinct step keys instead of being rejected. Existing step keys are unchanged.
+- VELA008 now flags two chains with the same constant `ForRelationship(...)` scope, and a constant
+  `WithStepKey(...)` used twice in a plugin. It also compares a type-stated trigger under the sdkmessage it
+  registers on, so `On<SendEmailRequest>()` and `On<SendFaxRequest>()` collide on `Send`.
+- VELA011 now covers readonly `IList`, `IDictionary`, `Collection<T>`, `ObservableCollection<T>`,
+  `KeyedCollection<TKey, TItem>`, `PriorityQueue<TElement, TPriority>`, `NameValueCollection`, `StringCollection`
+  and `OrderedDictionary` fields.
+- VELA021 now names the alias the fallback read needs: `ctx.GetPreImage<T>("SubordinatePreImage")` for a skipped
+  subordinate image, and the custom alias when there is one. The parameterless form read the master image.
+- VELA024 now flags `ConfigureAwait(...).GetAwaiter().GetResult()` on `Task`, `Task<T>`, `ValueTask` and
+  `ValueTask<T>`.
 - **`WithStepKey(...)` rejects a key that cannot be persisted.** A key is stored in a one-line
   `[vela:stepkey=...]` marker in the step description, so a key with a line break, another control character or
   `]` (such as `"phase\ntwo"`) could not be read back, and the step lost its stable identity. It now throws an
@@ -58,6 +97,7 @@ All notable changes to Vela are documented here. The format is based on
 - **The scaffolded AGENTS.md matches `--no-tests`.** It no longer names `Vela.Testing` or has a "Write a test"
   section when the solution has no test project.
 
+
 ## [0.32.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Changed (breaking)
@@ -74,23 +114,25 @@ All notable changes to Vela are documented here. The format is based on
   `On<SetStateRequest>()` registers on `SetStateDynamicEntity`, the message a state change fires, so VELA022 now
   reports only a type pinned with `[SdkMessage("SetState")]`. The test harness keeps
   `PluginContext.For<T>().OnMessage(...)` and `PluginContext.ForMessage(...)`.
-- **The test harness follows Dataverse in more edge cases, verified live (#451).** A test that relied on the old
-  harness behaviour now fails the way it would against Dataverse:
+- **The test harness follows Dataverse in more edge cases (#451).** A test that relied on the old harness
+  behaviour now fails the way it would against Dataverse:
   - `ne`, `not-in`, `not-like`, `not-begin-with` and `not-end-with` match rows whose column is null; `like` (even
-    `'%'`) and `ne-userid` no longer do. Distinct compares text case-insensitively.
+    `'%'`) and `ne-userid` no longer do. Distinct compares text case-insensitively. (Verified live.)
   - A record addressed by `KeyAttributes` that are not exactly one key declared with `WithAlternateKey` faults with
     `0x80060889`, also on a table with no key. A declared key that matches nothing faults with `0x80060891` (it was
-    `0x80040217`).
+    `0x80040217`). (Verified live.)
   - `QueryByAttribute` with a different number of values and attributes faults with `0x8004110F`; a missing value
-    was compared as null.
+    was compared as null. (Verified live.)
   - A query with no page size returns at most 5,000 rows with `MoreRecords`, and a larger page size is capped at
-    5,000. FetchXML `top` with `returntotalrecordcount` faults with `0x80040203`.
-  - An `Update` with `ownerid = null` faults with `0x80040203`; it reassigned the record to the caller.
+    5,000. FetchXML `top` with `returntotalrecordcount` faults with `0x80040203` (verified live).
+  - An `Update` with `ownerid = null` faults with `0x80040203`; it reassigned the record to the caller. (Verified
+    live.)
   - With security on, a lookup set by id to a missing record faults (`0x80040217` on Create, `0x80040502` on Update).
-  - Grant, Modify and Revoke access, and adding or removing a record-team member, fault with `0x80040217` on a record
-    that does not exist.
-  - A delete blocked by a Restrict relationship faults with `0x80040227`, and downloading a missing record or an
-    empty file column faults with `0x80040217`, instead of a bare `InvalidOperationException`.
+    (Verified live.)
+  - Grant, Modify and Revoke access (verified live), and adding or removing a record-team member, fault with
+    `0x80040217` on a record that does not exist.
+  - A delete blocked by a Restrict relationship faults with `0x80040227` (verified live), and downloading a missing
+    record or an empty file column faults with `0x80040217`, instead of a bare `InvalidOperationException`.
   - `SequentialIds.At(0)` and `SequentialIds.Starting(0)` throw: index 0 was `Guid.Empty`. An index above
     `SequentialIds.MaxIndex` throws `ArgumentOutOfRangeException` instead of `FormatException`.
   - `PluginContextBuilder.Execute` throws, naming the plugin, when reading the plugin's step registration fails. It

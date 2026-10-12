@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -260,6 +261,27 @@ namespace Vela.Analyzers
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// The sdkmessage a type-stated trigger registers on, as the runtime builder computes it: a
+        /// <c>[SdkMessage("...")]</c> on the type verbatim, else <see cref="TypeStatedMessage"/> mapped through
+        /// <c>SdkMessageNames</c> (<c>SendEmailRequest</c> and <c>SendFaxRequest</c> both register on <c>Send</c>,
+        /// <c>SetStateRequest</c> on <c>SetStateDynamicEntity</c>). Null when the message is not known statically.
+        /// </summary>
+        public static string? TypeStatedSdkMessage(ChainCall call, SemanticModel model, System.Threading.CancellationToken cancellationToken)
+        {
+            if (TypeStatedMessage(call, model, cancellationToken) is not { } message)
+            {
+                return null;
+            }
+
+            ITypeSymbol type = model.GetTypeInfo(((GenericNameSyntax)call.Name).TypeArgumentList.Arguments[0], cancellationToken).Type!;
+            AttributeData? pinned = type.GetAttributes().FirstOrDefault(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == "Vela.Messages.SdkMessageAttribute"
+                && attribute.ConstructorArguments.Length == 1
+                && attribute.ConstructorArguments[0].Value is string);
+            return pinned is not null ? (string)pinned.ConstructorArguments[0].Value! : Vela.Steps.SdkMessageNames.ToSdkMessage(message);
         }
 
         /// <summary>

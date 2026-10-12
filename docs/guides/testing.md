@@ -7,8 +7,9 @@ It has two levels:
 - `PluginPipeline` runs **the Dataverse pipeline in memory**: writes fire the registered steps, cascade, and roll
   back as on the platform.
 
-Both run on a stateful in-memory CRM (`InMemoryOrganizationService`), and both accept your own
-`IOrganizationService` when you need behaviour the fakes don't cover.
+`PluginContext` serves a hook-based fake `IOrganizationService` by default; pass an `InMemoryOrganizationService`
+(a stateful in-memory CRM) or your own service with `WithOrganizationService` when the plugin reads or writes data.
+`PluginPipeline` always runs on its own `InMemoryOrganizationService`.
 
 ```powershell
 dotnet add package Vela.Testing

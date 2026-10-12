@@ -175,6 +175,49 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Flags_a_readonly_field_holding_a_mutable_non_generic_object_model_or_specialized_collection()
+    {
+        // The non-generic mutable interfaces and the System.Collections.ObjectModel / Specialized collections are as
+        // writable as a List; ReadOnlyCollection (below) is not.
+        string code = Harness + @"
+namespace System.Collections.Generic { public class PriorityQueue<TElement, TPriority> { } }
+namespace Demo
+{
+    using System.Collections;
+    using System.Collections.Generic;
+    using System.Collections.ObjectModel;
+    using System.Collections.Specialized;
+    using Microsoft.Xrm.Sdk;
+    public sealed class ByName : KeyedCollection<string, string> { protected override string GetKeyForItem(string item) => item; }
+    public class MyPlugin : IPlugin
+    {
+        private static readonly IList {|#0:Items|} = new ArrayList();
+        private static readonly IDictionary {|#1:Map|} = new Hashtable();
+        private readonly Collection<string> {|#2:_collection|} = new Collection<string>();
+        private readonly ObservableCollection<string> {|#3:_observable|} = new ObservableCollection<string>();
+        private readonly KeyedCollection<string, string> {|#4:_keyed|} = new ByName();
+        private readonly PriorityQueue<string, int> {|#5:_queue|} = new PriorityQueue<string, int>();
+        private readonly NameValueCollection {|#6:_pairs|} = new NameValueCollection();
+        private readonly StringCollection {|#7:_strings|} = new StringCollection();
+        private readonly OrderedDictionary {|#8:_ordered|} = new OrderedDictionary();
+        private readonly ReadOnlyCollection<string> _view = new List<string>().AsReadOnly();
+        public void Execute(System.IServiceProvider sp) { }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(
+            code,
+            Expected("Items", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 0),
+            Expected("Map", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 1),
+            Expected("_collection", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 2),
+            Expected("_observable", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 3),
+            Expected("_keyed", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 4),
+            Expected("_queue", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 5),
+            Expected("_pairs", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 6),
+            Expected("_strings", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 7),
+            Expected("_ordered", MutablePluginStateAnalyzer.ReadOnlyMutableCollection, 8));
+    }
+
+    [Fact]
     public async Task Does_not_flag_readonly_arrays_read_only_concurrent_or_immutable_collections()
     {
         // Arrays (the usual fixed column lists), read-only views and the concurrent collections (thread-safe by

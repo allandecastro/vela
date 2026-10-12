@@ -319,6 +319,45 @@ public sealed class RetryPolicyTests
     }
 
     [Fact]
+    public void Execute_DoesNotRetry_WhenTheWaitOverranTheBudget()
+    {
+        // A 50 ms wait fits in the 200 ms budget, but this sleep overruns it: the wait ended past the budget, so no
+        // second attempt starts and the fault propagates.
+        int calls = 0;
+        TimeSpan? waited = null;
+
+        Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
+            RetryPolicy.Execute<int>(Ctx,
+                () => { calls++; throw Throttled(TimeSpan.FromMilliseconds(50)); },
+                retryOnTimeout: false,
+                maxAttempts: 3,
+                initialDelayMs: 0,
+                maxElapsed: TimeSpan.FromMilliseconds(200),
+                sleep: delay => { waited = delay; System.Threading.Thread.Sleep(TimeSpan.FromMilliseconds(300)); }));
+
+        Assert.Equal(TimeSpan.FromMilliseconds(50), waited);
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public void Execute_Retries_WhenTheWaitEndedWithinTheBudget()
+    {
+        // The same call with a sleep that keeps to its wait makes the second attempt.
+        int calls = 0;
+
+        int result = RetryPolicy.Execute(Ctx,
+            () => { calls++; if (calls == 1) { throw Throttled(TimeSpan.FromMilliseconds(50)); } return 5; },
+            retryOnTimeout: false,
+            maxAttempts: 3,
+            initialDelayMs: 0,
+            maxElapsed: TimeSpan.FromSeconds(10),
+            sleep: delay => System.Threading.Thread.Sleep(delay));
+
+        Assert.Equal(5, result);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
     public void Execute_RetriesWithinTheBudget()
     {
         int calls = 0;
