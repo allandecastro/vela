@@ -45,8 +45,8 @@ namespace Vela.Retry
     /// <para>
     /// <b>Time budget.</b> The cap bounds each wait, not their sum: <c>maxAttempts</c> waits of up to
     /// <see cref="MaxDelay"/> each can consume most of the ~2-minute plugin execution budget. Pass <c>maxElapsed</c>
-    /// to bound the whole call: a retry whose wait would end past that budget (measured from the first attempt) is not
-    /// made, and the last fault propagates.
+    /// to bound the whole call: a retry whose wait would end past that budget (measured from the first attempt), or
+    /// whose wait overran it, is not made, and the last fault propagates.
     /// </para>
     /// <para>
     /// <b>Transactions.</b> Inside a database transaction (a synchronous pre/post-operation step), a failed
@@ -82,7 +82,7 @@ namespace Vela.Retry
 
         // The retry loop. Private: every public entry point takes the context, so the transaction check cannot be
         // skipped by accident.
-        private static T ExecuteCore<T>(Func<T> operation, bool retryOnTimeout, int maxAttempts, int initialDelayMs, TimeSpan? maxElapsed)
+        private static T ExecuteCore<T>(Func<T> operation, bool retryOnTimeout, int maxAttempts, int initialDelayMs, TimeSpan? maxElapsed, Action<TimeSpan> sleep)
         {
             operation = operation ?? throw new ArgumentNullException(nameof(operation));
             if (maxAttempts < 1)
@@ -114,7 +114,14 @@ namespace Vela.Retry
                     && (!maxElapsed.HasValue || elapsed.Elapsed + delay <= maxElapsed.Value))
                 {
                     lastException = ex;
-                    Thread.Sleep(delay);
+                    sleep(delay);
+
+                    // A sleep can overrun (scheduling, a GC pause): when the wait actually ended past the budget, no
+                    // further attempt starts and the fault propagates.
+                    if (maxElapsed.HasValue && elapsed.Elapsed > maxElapsed.Value)
+                    {
+                        break;
+                    }
                 }
             }
 
@@ -137,8 +144,8 @@ namespace Vela.Retry
         /// <param name="initialDelayMs">Base backoff delay in milliseconds (must be non-negative).</param>
         /// <param name="maxElapsed">
         /// Optional time budget for the whole call, measured from the first attempt (must be non-negative). A retry
-        /// whose wait would end past it is not made and the last fault propagates. Null (the default) bounds only each
-        /// wait, by <see cref="MaxDelay"/>.
+        /// whose wait would end past it, or did end past it, is not made and the last fault propagates. Null (the
+        /// default) bounds only each wait, by <see cref="MaxDelay"/>.
         /// </param>
         /// <returns>Operation result.</returns>
         public static T Execute<T>(
@@ -148,6 +155,17 @@ namespace Vela.Retry
             int maxAttempts = 3,
             int initialDelayMs = 100,
             TimeSpan? maxElapsed = null)
+            => Execute(context, operation, retryOnTimeout, maxAttempts, initialDelayMs, maxElapsed, Thread.Sleep);
+
+        // The public entry point with the wait made explicit, so a test can make a wait overrun deterministically.
+        internal static T Execute<T>(
+            ILocalPluginContext context,
+            Func<T> operation,
+            bool retryOnTimeout,
+            int maxAttempts,
+            int initialDelayMs,
+            TimeSpan? maxElapsed,
+            Action<TimeSpan> sleep)
         {
             context = context ?? throw new ArgumentNullException(nameof(context));
             if (context.IsInTransaction && maxAttempts > 1)
@@ -156,7 +174,7 @@ namespace Vela.Retry
                 maxAttempts = 1;
             }
 
-            return ExecuteCore(operation, retryOnTimeout, maxAttempts, initialDelayMs, maxElapsed);
+            return ExecuteCore(operation, retryOnTimeout, maxAttempts, initialDelayMs, maxElapsed, sleep);
         }
 
         private static bool ShouldRetry(Exception exception, bool retryOnTimeout)
