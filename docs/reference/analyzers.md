@@ -113,13 +113,17 @@ The code fix removes the call.
 mode (the entity is fixed per plugin) - when their **filtering attributes**, their **images**, their relationship
 scope (`ForRelationship(...)`) or an explicit **`WithStepKey(...)`** differ: each is deployed as its own Dataverse
 step, and the executing step selects its handler. Two chains in the same `RegisterPluginSteps()` that share the
-trigger, list the same `FilterOn(...)` columns and the same images (alias and columns, in any order), and carry
-neither `WithStepKey(...)` nor `ForRelationship(...)` resolve to the same step key, and the runtime rejects them at
-registration; those are flagged. The rank (`WithExecutionOrder`) does not tell steps apart.
+trigger, list the same `FilterOn(...)` columns, the same images (alias and columns, in any order) and the same
+`ForRelationship(...)` scope, and carry no `WithStepKey(...)`, resolve to the same step key, and the runtime rejects
+them at registration; those are flagged. So is a `WithStepKey(...)` used twice in the plugin (case-insensitive),
+whatever the triggers: step keys must be unique within a plugin. The rank (`WithExecutionOrder`) does not tell steps
+apart. A type-stated trigger is compared under the sdkmessage it registers on: `On<SendEmailRequest>()` and
+`On<SendFaxRequest>()` both register on `Send`.
 
-Only complete chains whose message, stage, filters and images are statically readable are compared: a chain whose
-`FilterOn` or image takes something other than a literal column selector (`a => a.Name`) is skipped rather than
-guessed.
+Only complete chains whose message, stage, filters, images, relationships and step key are statically readable are
+compared: a chain whose `FilterOn` or image takes something other than a literal column selector (`a => a.Name`), or
+whose `ForRelationship(...)` or `WithStepKey(...)` takes something other than a constant string, is skipped rather
+than guessed.
 
 **Fix:** give one of the steps a `WithStepKey("...")`, or keep one step and branch inside the handler on what
 actually changed:

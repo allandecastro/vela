@@ -114,6 +114,69 @@ namespace Demo
         await Verify.VerifyAnalyzerAsync(code);
     }
 
+    private static DiagnosticResult DuplicateKey(string key) =>
+        new DiagnosticResult(Vela.Analyzers.DuplicateStepTriggerAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithMessage($"This plugin already registers a step with the step key '{key}'; step keys must be unique within a plugin")
+            .WithLocation(0);
+
+    [Fact]
+    public async Task Flags_a_step_key_used_twice_on_one_trigger_whatever_the_filters()
+    {
+        string code = InRegister(
+            "OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).WithStepKey(\"same\")",
+            "OnUpdate().PostOperation().Sync().FilterOn(a => a.Phone).WithStepKey({|#0:\" SAME \"|})");
+        await Verify.VerifyAnalyzerAsync(code, DuplicateKey("SAME"));
+    }
+
+    [Fact]
+    public async Task Flags_a_constant_step_key_used_twice_on_different_triggers()
+    {
+        string code = InRegister(
+            "OnUpdate().PostOperation().Sync().FilterOn(Selector).WithStepKey(Key)",
+            "OnAssociate().PreOperation().Async().WithStepKey({|#0:Key|})").Replace(
+            "public void RegisterPluginSteps()",
+            "private const string Key = \"shared\";\n        private static readonly Expression<Func<Account, object>> Selector = a => a.Name;\n        public void RegisterPluginSteps()");
+        await Verify.VerifyAnalyzerAsync(code, DuplicateKey("shared"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_different_step_keys_or_a_key_that_is_not_constant()
+    {
+        await Verify.VerifyAnalyzerAsync(InRegister(
+            "OnUpdate().PostOperation().Sync().WithStepKey(\"first\")",
+            "OnUpdate().PostOperation().Sync().WithStepKey(\"second\")"));
+        await Verify.VerifyAnalyzerAsync(InRegister(
+            "OnUpdate().PostOperation().Sync().WithStepKey(\"first\")",
+            "OnUpdate().PostOperation().Sync().WithStepKey(Dynamic)").Replace(
+            "public void RegisterPluginSteps()",
+            "private static readonly string Dynamic = \"first\";\n        public void RegisterPluginSteps()"));
+    }
+
+    [Fact]
+    public async Task Flags_two_steps_with_the_same_relationship_scope_in_any_order_and_case()
+    {
+        string code = InRegister(
+            "OnAssociate().PostOperation().Sync().ForRelationship(\"account_contacts\", Partners)",
+            "{|#0:OnAssociate|}().PostOperation().Sync().ForRelationship(\"Account_Partners\", \"ACCOUNT_CONTACTS\")").Replace(
+            "public void RegisterPluginSteps()",
+            "private const string Partners = \"account_partners\";\n        public void RegisterPluginSteps()");
+        await Verify.VerifyAnalyzerAsync(code,
+            new DiagnosticResult(Vela.Analyzers.DuplicateStepTriggerAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+                .WithLocation(0)
+                .WithArguments("message 'associate' at postoperation (sync)"));
+    }
+
+    [Fact]
+    public async Task Does_not_compare_a_relationship_scope_that_is_not_constant()
+    {
+        string code = InRegister(
+            "OnAssociate().PostOperation().Sync().ForRelationship(\"account_contacts\")",
+            "OnAssociate().PostOperation().Sync().ForRelationship(Dynamic)").Replace(
+            "public void RegisterPluginSteps()",
+            "private static readonly string Dynamic = \"account_contacts\";\n        public void RegisterPluginSteps()");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
     [Fact]
     public async Task Does_not_compare_a_step_whose_filter_is_not_a_literal_selector()
     {

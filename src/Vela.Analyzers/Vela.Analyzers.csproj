@@ -22,6 +22,8 @@
   <ItemGroup>
     <!-- Step image capabilities, shared as source with the runtime builder and the CLI (VELA007). -->
     <Compile Include="..\Vela.Plugins\Steps\StepImageRules.cs" Link="Shared\StepImageRules.cs" />
+    <!-- Request name -> sdkmessage, shared with the runtime builder so VELA008 keys a type-stated trigger as it deploys. -->
+    <Compile Include="..\Vela.Plugins\Steps\SdkMessageNames.cs" Link="Shared\SdkMessageNames.cs" />
   </ItemGroup>
 
   <ItemGroup>
