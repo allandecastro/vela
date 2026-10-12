@@ -401,8 +401,11 @@ internal static class OutputWriter
     // Scrubs credential values out of any text before it reaches stderr / CI logs. A connection string embeds
     // ClientSecret=... / Password=... (see CommandLineOptions.BuildClientSecretConnectionString) and the SDK / its
     // LastError can echo it verbatim in an exception message, so redact defense-in-depth on the way out.
+    // A value may be quoted ("..." or '...', with a doubled quote as the escape, per DbConnectionStringBuilder), so
+    // ClientSecret="abc;def" is one value: a quoted value is consumed up to its closing quote, and an unterminated one
+    // to the end of the text, so no suffix after an embedded ';' can leak. An unquoted value runs to the next ';'.
     private static readonly Regex SecretPattern = new Regex(
-        @"(?i)\b(ClientSecret|Password|Secret)\s*=\s*([^;\r\n]*)",
+        @"(?i)\b(ClientSecret|Password|Secret)\s*=\s*(""(?:[^""]|"""")*""?|'(?:[^']|'')*'?|[^;\r\n]*)",
         RegexOptions.Compiled);
 
     internal static string RedactSecrets(string? text) =>
