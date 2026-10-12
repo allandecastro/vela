@@ -1449,6 +1449,30 @@ namespace Demo
     }
 
     [Fact]
+    public void A_subordinate_alias_is_escaped_in_the_generated_documentation()
+    {
+        string source = @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountMergeAmp : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMerge().PostOperation().Sync()
+                .WithSubordinatePreImage(""a&b<c>"", a => a.Name)
+                .Handle(OnMerged);
+        private void OnMerged() { }
+    }
+}
+";
+        string output = RunAndConcat(source);
+
+        Assert.Contains("Read this via ctx.PreImageAs&lt;T&gt;(\"a&amp;b&lt;c&gt;\").", output);
+        Assert.DoesNotContain(output.Split('\n'),
+            line => line.TrimStart().StartsWith("///", StringComparison.Ordinal) && line.Contains("a&b", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Emits_a_projection_for_a_marker_OnMessage_without_VELA021()
     {
         ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"

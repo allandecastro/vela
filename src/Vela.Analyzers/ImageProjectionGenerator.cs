@@ -772,6 +772,9 @@ namespace Vela.Analyzers
             return $"ctx.Get{role}<T>({argument})";
         }
 
+        // Text embedded in a generated XML doc comment: an alias is free text, so & and < must not reach it raw.
+        private static string XmlEscape(string text) => text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+
         private static string RoleKey(bool isPre, bool isSubordinate) => (isSubordinate ? "Subordinate" : string.Empty) + (isPre ? "Pre" : "Post");
 
         // The alias argument a subordinate image read passes: its default alias is not the one PreImageAs/PostImageAs
@@ -948,7 +951,7 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent)}/// Generated projection: exposes only the columns this step captured in {(model.IsSubordinate ? "WithSubordinatePreImage/WithSubordinatePostImage" : "WithPreImage/WithPostImage")}(...).");
             sb.AppendLine($"{Pad(indent)}/// A column the step did not capture is absent here (reading it is a compile error, not a silent null);");
             sb.AppendLine(model.IsSubordinate
-                ? $"{Pad(indent)}/// add it to the capture to read it. Read this via ctx.{(model.IsPre ? "PreImageAs" : "PostImageAs")}&lt;T&gt;({SubordinateAliasArgument(model, model.IsPre ? "SubordinatePreImage" : "SubordinatePostImage").Substring(2)})."
+                ? $"{Pad(indent)}/// add it to the capture to read it. Read this via ctx.{(model.IsPre ? "PreImageAs" : "PostImageAs")}&lt;T&gt;({XmlEscape(SubordinateAliasArgument(model, model.IsPre ? "SubordinatePreImage" : "SubordinatePostImage").Substring(2))})."
                 : $"{Pad(indent)}/// add it to the capture to read it. Read this via ctx.PreImageAs&lt;T&gt;() / ctx.PostImageAs&lt;T&gt;().");
             sb.AppendLine($"{Pad(indent)}/// </summary>");
             sb.AppendLine($"{Pad(indent)}public sealed class {model.TypeName} : global::Vela.Context.IImageProjection");
@@ -970,7 +973,7 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent + 1)}/// <summary>");
             sb.AppendLine($"{Pad(indent + 1)}/// Widens this captured-columns projection to the full early-bound image (Id, logical name and every");
             sb.AppendLine($"{Pad(indent + 1)}/// attribute the image carried). Explicit on purpose: prefer reading the projection directly; cast only");
-            sb.AppendLine($"{Pad(indent + 1)}/// when a service needs the whole entity. Equivalent to ctx.{(model.IsPre ? "GetPreImage" : "GetPostImage")}&lt;{model.EntityType}&gt;({ReadAlias(model)})");
+            sb.AppendLine($"{Pad(indent + 1)}/// when a service needs the whole entity. Equivalent to ctx.{(model.IsPre ? "GetPreImage" : "GetPostImage")}&lt;{model.EntityType}&gt;({XmlEscape(ReadAlias(model))})");
             sb.AppendLine($"{Pad(indent + 1)}/// (both go through Entity.ToEntity, so the Id is preserved); returns null for an absent image.");
             sb.AppendLine($"{Pad(indent + 1)}/// </summary>");
             sb.AppendLine($"{Pad(indent + 1)}public static explicit operator {model.EntityType}({model.TypeName}? projection)");
