@@ -175,6 +175,16 @@ public sealed class RegistrationMetadataTests
     }
 
     [Theory]
+    [InlineData("phase-two [v2")]
+    [InlineData("credit.review_2")]
+    public void A_valid_step_key_round_trips_through_the_description_marker(string key)
+    {
+        string description = $"Recompute\n{DefinitionParser.StepKeyMarker(key)}";
+        Assert.Equal(key, DefinitionParser.ExtractStepKeyFromMarker(description));
+        Assert.Equal("Recompute", DefinitionParser.StripStepKeyMarker(description));
+    }
+
+    [Theory]
     [InlineData("[vela:stepkey=score]", "")]
     [InlineData("recompute\r\n[vela:stepkey=score]\r\n", "recompute")]
     [InlineData("recompute\n  [vela:stepkey=score]  \n\n", "recompute")]

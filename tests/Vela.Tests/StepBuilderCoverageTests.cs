@@ -58,6 +58,28 @@ public sealed class StepBuilderCoverageTests
         Assert.Contains("[CustomMessage", ex.Message);
     }
 
+    // The key is persisted in a one-line [vela:stepkey=...] marker: a line break, a control character or ']' would
+    // break it, and the step would lose its stable identity (PR #509 review).
+    [Theory]
+    [InlineData("phase\ntwo")]
+    [InlineData("phase\r\ntwo")]
+    [InlineData("phase\ttwo")]
+    [InlineData("phase]two")]
+    public void WithStepKey_rejects_a_key_the_marker_cannot_hold(string key)
+    {
+        ArgumentException ex = Assert.Throws<ArgumentException>(() => Trigger(New()).OnDelete().PostOperation().Sync().WithStepKey(key));
+        Assert.Contains("cannot contain a line break, a control character or ']'", ex.Message);
+    }
+
+    [Fact]
+    public void WithStepKey_keeps_a_valid_key()
+    {
+        StepBuilder<TestAccount> builder = New();
+        Trigger(builder).OnDelete().PostOperation().Sync().WithStepKey(" phase-two [v2 ").Handle(InstanceHandler);
+
+        Assert.Equal("phase-two [v2", builder.Build().StepKey);
+    }
+
     [Fact]
     public void Handle_and_config_guards_and_trimming()
     {

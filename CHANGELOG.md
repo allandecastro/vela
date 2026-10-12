@@ -21,6 +21,13 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (Framework)
+
+- **`WithStepKey(...)` rejects a key that cannot be persisted.** A key is stored in a one-line
+  `[vela:stepkey=...]` marker in the step description, so a key with a line break, another control character or
+  `]` (such as `"phase\ntwo"`) could not be read back, and the step lost its stable identity. It now throws an
+  `ArgumentException` that says why.
+
 ### Fixed (CLI)
 
 - **A quoted secret is masked whole.** The error and log redactor read a connection-string value only up to the
