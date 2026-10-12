@@ -27,8 +27,9 @@ the message.
 
 Vela attaches a default set of dimensions to every entry, from the execution context:
 `CorrelationId`, `MessageName`, `Stage`, `Mode`, `Depth`, `PrimaryEntityName`, `PrimaryEntityId`, `PluginType`
-(the plugin/Custom API class), and `Method` (the handler method currently running). Query and correlate on these
-in Application Insights.
+(the plugin/Custom API class), and `Method` (the handler method currently running; present when Vela dispatches to
+a handler method, absent for a Custom API that overrides `Execute`). Query and correlate on these in Application
+Insights.
 
 Add your own with a scope - they apply to every log written until the handle is disposed, and nest:
 
@@ -50,10 +51,10 @@ ctx.LogMetric("OrdersProcessed", 1);
 ctx.LogMetric("LinesImported", lines.Count, new Dictionary<string, object?> { ["Source"] = "ERP" });
 ```
 
-Sends an Application Insights custom metric (`customMetrics`) when the environment exports telemetry, and always
-writes a `[Metric] name=value` line to the plug-in trace log. The value is a `long`: the platform's metric API only
-takes integers. The metric carries the default dimensions plus the properties you pass, converted to invariant
-strings. Scope properties from `BeginLogScope` are not copied onto metrics; pass them explicitly.
+Writes a `[Metric] name=value` line to the plug-in trace log and passes the metric to the platform logger's
+`LogMetric`. The value is a `long`: the platform's metric API only takes integers. The metric carries the default
+dimensions plus the properties you pass, converted to invariant strings. Scope properties from `BeginLogScope` are
+not copied onto metrics; pass them explicitly.
 
 ## Trace vs Log
 
@@ -68,8 +69,8 @@ Insights, and the automatic ones list only metadata (message, stage, ids, column
 
 The integration is safe either way and never throws for telemetry reasons:
 
-- **Configured** - logs flow to Application Insights at their level, with the default + scope dimensions; metrics
-  become custom metrics.
+- **Configured** - Vela hands logs and metrics to the platform logger, which writes them to Application Insights
+  as described in [Microsoft's documentation](https://learn.microsoft.com/power-apps/developer/data-platform/application-insights-ilogger).
 - **Not configured** - the Application Insights channel is a no-op; entries still land in the plug-in trace log
   (when the environment's trace-log setting is on), so debugging via the Plugin Trace Viewer keeps working.
 

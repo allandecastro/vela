@@ -345,6 +345,12 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (Framework)
 
+- **The telemetry guide and `LogMetric` docs describe what Vela does and defer to Microsoft for the rest (#465).**
+  `LogMetric` writes the `[Metric]` trace-log line and hands the metric to the platform logger; what reaches
+  Application Insights is the platform's, as [Microsoft documents it](https://learn.microsoft.com/power-apps/developer/data-platform/application-insights-ilogger).
+  The `Method` dimension is documented as present only when Vela dispatches to a handler method. Checked against a
+  live environment exporting to Application Insights: entries arrive at their level, formatted, with Vela's default
+  and scope dimensions.
 - **The depth guard and `RetryPolicy` are documented as Microsoft describes them (#450).** The `maxDepth` guard is a
   last-resort backstop (at the default it only stops a chain Dataverse aborts anyway; Microsoft advises against logic
   that depends on `Depth`), and the plugins guide has a new [Preventing recursion](docs/guides/plugins.md#preventing-recursion)

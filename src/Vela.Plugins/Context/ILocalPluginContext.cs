@@ -238,8 +238,8 @@ namespace Vela.Context
         IDisposable BeginLogScope(IReadOnlyDictionary<string, object?> properties);
 
         /// <summary>
-        /// Emits a custom metric to Application Insights (when configured), with the default dimensions plus
-        /// <paramref name="properties"/> (as invariant strings), and a <c>[Metric]</c> line to the plug-in trace log.
+        /// Writes a <c>[Metric]</c> line to the plug-in trace log and passes the metric to the platform logger's
+        /// <c>LogMetric</c>, with the default dimensions plus <paramref name="properties"/> (as invariant strings).
         /// Never throws for telemetry reasons.
         /// </summary>
         /// <param name="name">Metric name.</param>
