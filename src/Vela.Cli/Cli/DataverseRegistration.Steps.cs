@@ -529,7 +529,7 @@ internal static partial class DataverseRegistration
     // The step description: the developer's text (WithDescription), or the step name when none is declared, followed
     // by a stable [vela:stepkey=...] marker on its own line (B4). The marker lets a later read recover the step key
     // even if the display name is changed, so the step's identity survives a rename; ExtractStepKeyFromMarker reads
-    // the last marker, so the developer's text may come first.
+    // only a marker on the final line, so a marker quoted in the developer's text is never taken for a key.
     internal static string BuildStepDescription(StepApplyDefinition definition)
 {
     string text = string.IsNullOrWhiteSpace(definition.Description) ? BuildStepName(definition) : definition.Description.Trim();

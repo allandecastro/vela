@@ -408,9 +408,10 @@ namespace {{prefix}}.Plugins.Account.Plugins
             // (contract). Register them the same way from the matching EntityPluginBase<T> with RegisterStep().On<Message>().
         }
 
-        // ctx.Request.Target is the early-bound Account; ctx.Response.id is the new record id (Post step).
+        // ctx.Request.Target is the early-bound Account; ctx.Response.id is the new record id (Post step). Trace
+        // ids, not column values: a trace also reaches telemetry, and a column such as Name can be personal data.
         private void OnCreate(ICreatePostContext<Account> ctx)
-            => ctx.Trace("Create {0} -> id {1}", ctx.Request.Target.Name, ctx.Response.id);
+            => ctx.Trace("Create -> id {0}", ctx.Response.id);
 
         // ctx.Request.Target carries the columns that changed on this update.
         private void OnUpdate(IUpdatePostContext<Account> ctx)

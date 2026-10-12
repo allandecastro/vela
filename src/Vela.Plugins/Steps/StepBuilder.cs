@@ -190,8 +190,18 @@ public sealed partial class StepBuilder<TEntity>
             throw new ArgumentNullException(nameof(stepKey));
         }
 
+        // The key is persisted in a one-line "[vela:stepkey=...]" marker in the step description, so it cannot hold a
+        // line break, another control character or the marker's closing ']'.
+        string key = stepKey.Trim();
+        if (key.IndexOf(']') >= 0 || key.Any(char.IsControl))
+        {
+            throw new ArgumentException(
+                $"Step key '{key}' cannot contain a line break, a control character or ']': it is stored in a one-line [vela:stepkey=...] marker.",
+                nameof(stepKey));
+        }
+
         MarkSetOnce(SetOnceModifier.StepKey, "WithStepKey");
-        _definition.StepKey = stepKey.Trim();
+        _definition.StepKey = key;
     }
 
     private void SetHandler(string methodName)

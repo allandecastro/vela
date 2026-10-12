@@ -385,24 +385,88 @@ public class ProjectScaffolderTests
     [Fact]
     public void AgentsGuide_Snippets_AreTheCompiledDocSamples()
     {
-        // Every line of the guide's C# blocks must appear in docs/samples/Vela.DocSamples/AgentsGuideSamples.cs,
-        // which CI compiles with the analyzers and runs, so the guide cannot drift from code that builds.
+        // Every top-level member (class, test method) of the guide's C# blocks must appear in
+        // docs/samples/Vela.DocSamples/AgentsGuideSamples.cs as one contiguous run of lines, and the members in the
+        // guide's order. CI compiles and runs that file with the analyzers, so the guide cannot drift from code that
+        // builds: a reordered, missing or extra line in a member fails here (PR #487 review).
         string? pluginsProject = FindRepoProject("Vela.Plugins");
         Assert.NotNull(pluginsProject);
         string repoRoot = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(pluginsProject)!, "..", ".."));
-        string compiled = File.ReadAllText(Path.Combine(repoRoot, "docs", "samples", "Vela.DocSamples", "AgentsGuideSamples.cs"));
+        string[] compiled = NormalizedLines(File.ReadAllText(Path.Combine(repoRoot, "docs", "samples", "Vela.DocSamples", "AgentsGuideSamples.cs")));
 
-        string guide = ScaffoldTemplates.AgentsGuide(Options("unused"));
-        string[] blocks = guide.Split("```");
-        string[] csharpLines = blocks
-            .Where(block => block.StartsWith("csharp", StringComparison.Ordinal))
-            .SelectMany(block => block.Substring("csharp".Length).Split('\n'))
-            .Select(line => line.Trim())
-            .Where(line => line.Length > 0)
-            .ToArray();
+        string[][] members = GuideCSharpMembers(ScaffoldTemplates.AgentsGuide(Options("unused")));
 
-        Assert.NotEmpty(csharpLines);
-        Assert.All(csharpLines, line => Assert.Contains(line, compiled));
+        Assert.NotEmpty(members);
+        int searchFrom = 0;
+        foreach (string[] member in members)
+        {
+            int at = IndexOfRun(compiled, member, searchFrom);
+            Assert.True(at >= 0, $"This AGENTS.md snippet is not, in order and contiguous, in AgentsGuideSamples.cs:\n{string.Join("\n", member)}");
+            searchFrom = at + member.Length;
+        }
+    }
+
+    [Fact]
+    public void AgentsGuide_drift_check_rejects_a_reordered_snippet()
+    {
+        // The check above must catch a guide whose lines all exist in the sample but in another order.
+        string[] compiled = NormalizedLines("class A\n{\n    .FilterOn(a => a.X)\n    .Handle(On);\n}\n");
+        string[][] reordered = GuideCSharpMembers("```csharp\nclass A\n{\n    .Handle(On);\n    .FilterOn(a => a.X)\n}\n```");
+        string[][] same = GuideCSharpMembers("```csharp\nclass A\n{\n    .FilterOn(a => a.X)\n    .Handle(On);\n}\n```");
+
+        Assert.Equal(-1, IndexOfRun(compiled, Assert.Single(reordered), 0));
+        Assert.Equal(0, IndexOfRun(compiled, Assert.Single(same), 0));
+    }
+
+    private static string[] NormalizedLines(string text)
+        => text.Replace("\r\n", "\n").Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
+
+    // The guide's ```csharp blocks split into top-level members: a member starts at an unindented line after a blank line.
+    private static string[][] GuideCSharpMembers(string guide)
+    {
+        List<string[]> members = [];
+        string[] blocks = guide.Replace("\r\n", "\n").Split("```");
+        foreach (string block in blocks.Where(b => b.StartsWith("csharp", StringComparison.Ordinal)))
+        {
+            List<string> current = [];
+            bool previousBlank = true;
+            foreach (string line in block.Substring("csharp".Length).Split('\n'))
+            {
+                bool blank = line.Trim().Length == 0;
+                if (!blank && previousBlank && !char.IsWhiteSpace(line[0]) && current.Count > 0)
+                {
+                    members.Add([.. current]);
+                    current = [];
+                }
+
+                if (!blank)
+                {
+                    current.Add(line.Trim());
+                }
+
+                previousBlank = blank;
+            }
+
+            if (current.Count > 0)
+            {
+                members.Add([.. current]);
+            }
+        }
+
+        return [.. members];
+    }
+
+    private static int IndexOfRun(string[] haystack, string[] run, int from)
+    {
+        for (int i = from; i + run.Length <= haystack.Length; i++)
+        {
+            if (haystack.AsSpan(i, run.Length).SequenceEqual(run))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     [Fact]
@@ -416,6 +480,12 @@ public class ProjectScaffolderTests
             string agents = File.ReadAllText(path);
             Assert.DoesNotContain("Zava.Plugins.Tests", agents);
             Assert.DoesNotContain("dotnet test", agents);
+            // PR #487 review: no Vela.Testing reference nor test project, so no test guidance either.
+            Assert.DoesNotContain("Vela.Testing", agents);
+            Assert.DoesNotContain("## Write a test", agents);
+            Assert.DoesNotContain("PluginPipeline", agents);
+            Assert.Contains("(`Vela.Plugins` and the `vela` CLI)", agents);
+            Assert.Contains("## Write a Custom API", agents);
 
             // An edited AGENTS.md is kept by a later --force run (the manifest only rewrites files Vela still owns).
             File.WriteAllText(path, "my own instructions");

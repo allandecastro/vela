@@ -16,13 +16,16 @@ internal static partial class ScaffoldTemplates
         string testCommand = options.IncludeTests
             ? $"dotnet test tests/{prefix}.Plugins.Tests -c Release   # net48: on macOS/Linux run the test dll with Mono + xunit.console instead\n"
             : string.Empty;
+        // With --no-tests the solution has no test project and no Vela.Testing reference, so the guide names neither.
+        string packages = options.IncludeTests ? "`Vela.Plugins`, `Vela.Testing` and the `vela` CLI" : "`Vela.Plugins` and the `vela` CLI";
+        string testSection = options.IncludeTests ? "\n" + TestSection : string.Empty;
 
         return
 $$"""
 # AGENTS.md
 
 Instructions for AI coding agents in this Dataverse solution, scaffolded by `vela init`. It uses Vela
-(`Vela.Plugins`, `Vela.Testing` and the `vela` CLI). Docs: https://allandecastro.github.io/vela/
+({{packages}}). Docs: https://allandecastro.github.io/vela/
 
 ## Layout
 
@@ -135,7 +138,13 @@ public sealed class EstimateValueResponse : CustomApiResponse
 
 The unique name carries the publisher prefix. Parameter names are plain identifiers (letters, digits,
 underscores). `Build()` rejects what Dataverse refuses, such as a function without a response property.
+{{testSection}}
+""";
+    }
 
+    // The AGENTS.md "Write a test" section, written only when the scaffold has a test project.
+    private const string TestSection =
+""""
 ## Write a test
 
 ```csharp
@@ -165,6 +174,5 @@ public void Estimates_A_Value()
 `PluginPipeline` runs every registered step around each request, as Dataverse does (stages, filters, images,
 transactions, async steps after the commit). Read stored rows with `pipeline.GetAll("account")`. For a single
 handler, `PluginContext.For<Account>().WithTarget(...).Execute<AccountCreditPlugin>()` runs one step directly.
-""";
-    }
+"""";
 }

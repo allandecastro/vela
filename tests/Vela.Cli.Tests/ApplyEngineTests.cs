@@ -343,6 +343,156 @@ public class ApplyEngineTests
         Assert.Empty(svc.Deleted);
     }
 
+    [Fact]
+    public void ApplyDiff_keeps_a_created_steps_disable_in_its_creates_batch_at_chunk_size_one()   // PR #491 review
+    {
+        // --batch-size 1 must not split the create and its disable into two ExecuteMultiple calls: a crash between them
+        // would leave the new step enabled. The pair forms one chunk; every other write keeps its own chunk.
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = PluginType }),
+                "sdkmessage" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid())),
+                _ => new EntityCollection(),
+            },
+            OnRetrieve = (e, id, _) => new Entity(e, id),
+        };
+
+        JsonElement enabled = Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-a" });
+        JsonElement disabled = Json(new
+        {
+            pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-b", enabled = false,
+            preImages = new[] { new { alias = "pre", attributes = new[] { "name" } } },
+        });
+        var diff = new RegistrationDiff(["Zava.Plugins"], ["Zava.Plugins"],
+            [new RegistrationItem("step", PluginType, enabled), new RegistrationItem("step", PluginType, disabled)], [], [], [], []);
+
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false, batchChunkSize: 1);
+
+        Assert.Collection(svc.Batches,
+            b => Assert.IsType<CreateRequest>(Assert.Single(b.Requests)),
+            b => Assert.Collection(b.Requests,
+                r => Assert.Equal("sdkmessageprocessingstep", Assert.IsType<CreateRequest>(r).Target.LogicalName),
+                r => Assert.Equal(1, Assert.IsType<UpdateRequest>(r).Target.GetAttributeValue<OptionSetValue>("statecode").Value)),
+            b => Assert.Equal("sdkmessageprocessingstepimage", Assert.IsType<CreateRequest>(Assert.Single(b.Requests)).Target.LogicalName));
+    }
+
+    [Theory]
+    [InlineData(1, new[] { 1, 2, 2 })]   // a pair overflows a chunk of 1: it forms a chunk of two
+    [InlineData(2, new[] { 1, 2, 2 })]   // [a] + [b, b-state] would overflow 2: the pair opens a fresh chunk
+    [InlineData(3, new[] { 3, 2 })]      // [a, b, b-state] + [c, c-state] would overflow 3
+    [InlineData(5, new[] { 5 })]
+    public void BuildBatchChunks_never_splits_a_create_from_its_state_update(int chunkSize, int[] expectedSizes)
+    {
+        BatchOwner a = new("a", "A", "step", 0, null), b = new("b", "B", "step", 1, null), c = new("c", "C", "step", 2, null);
+        CapturedOperation Op(BatchOwner owner, int seq, string category) => new(new OrganizationRequest(), owner, seq, category, isDelete: false);
+        List<CapturedOperation> ops = [Op(a, 0, "step"), Op(b, 0, "step"), Op(b, 1, "state"), Op(c, 0, "step"), Op(c, 1, "state")];
+
+        List<List<CapturedOperation>> chunks = DataverseRegistration.BuildBatchChunks(ops, chunkSize);
+
+        Assert.Equal(expectedSizes, chunks.Select(x => x.Count).ToArray());
+        Assert.Equal(ops, chunks.SelectMany(x => x));
+        Assert.All(chunks.SelectMany(x => x.Select((op, i) => (op, i, x))), t =>
+        {
+            if (t.op.Category == "state")
+            {
+                Assert.True(t.i > 0 && ReferenceEquals(t.x[t.i - 1].Owner, t.op.Owner));
+            }
+        });
+    }
+
+    // A removed Custom API implemented by our plugin type at capture time; later reads see implementationAtFlush.
+    private static (TestSupport.FakeOrgService Svc, Guid ApiId, Guid ParamId) RemovedCustomApiService(Guid ourTypeId, Guid? implementationAtFlush)
+    {
+        Guid apiId = Guid.NewGuid();
+        Guid paramId = Guid.NewGuid();
+        int apiReads = 0;
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = q => q.EntityName switch
+            {
+                "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", ourTypeId) { ["typename"] = "Zava.Plugins.ScoreApi" }),
+                "customapi" => TestSupport.FakeOrgService.Collection(new Entity("customapi", apiId)),
+                "customapirequestparameter" => TestSupport.FakeOrgService.Collection(new Entity("customapirequestparameter", paramId)),
+                _ => new EntityCollection(),
+            },
+            OnRetrieve = (entity, id, _) =>
+            {
+                if (entity == "customapi")
+                {
+                    // The first read is the capture-time check; any later read is the re-check right before the deletes.
+                    Guid? implementation = apiReads++ == 0 ? ourTypeId : implementationAtFlush;
+                    return new Entity("customapi", id) { ["plugintypeid"] = implementation is Guid t ? new EntityReference("plugintype", t) : null };
+                }
+
+                return new Entity(entity, id);
+            },
+        };
+        return (svc, apiId, paramId);
+    }
+
+    private static RegistrationDiff RemovedApiDiff() => new RegistrationDiff(["Zava.Plugins"], ["Zava.Plugins"], [],
+        [new RegistrationItem("custom-api", "Zava.Plugins.ScoreApi", Json(new { pluginTypeName = "Zava.Plugins.ScoreApi", uniqueName = "zava_Score" }))],
+        [], [], []);
+
+    [Fact]
+    public void ApplyDiff_rechecks_a_removed_custom_apis_owner_right_before_the_batched_deletes()   // PR #491 review
+    {
+        // The API was ours when its deletes were captured, but another solution took it over before the flush: neither
+        // its parameters nor the API itself may be deleted, and the run fails with the ownership message.
+        Guid ourTypeId = Guid.NewGuid();
+        (TestSupport.FakeOrgService svc, _, _) = RemovedCustomApiService(ourTypeId, implementationAtFlush: Guid.NewGuid());
+
+        TextWriter originalError = Console.Error;
+        Console.SetError(new StringWriter());
+        InvalidOperationException ex;
+        try
+        {
+            ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.ApplyDiff(svc, RemovedApiDiff(), [], null, [], verbose: false));
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+
+        Assert.Equal(DataverseRegistration.CustomApiNoLongerOursMessage("zava_Score"), ex.Message);
+        Assert.Empty(svc.Deleted);
+    }
+
+    [Fact]
+    public void ApplyDiff_rechecks_a_removed_custom_api_detached_before_the_batched_deletes()   // PR #491 review
+    {
+        Guid ourTypeId = Guid.NewGuid();
+        (TestSupport.FakeOrgService svc, _, _) = RemovedCustomApiService(ourTypeId, implementationAtFlush: null);
+
+        TextWriter originalError = Console.Error;
+        Console.SetError(new StringWriter());
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => DataverseRegistration.ApplyDiff(svc, RemovedApiDiff(), [], null, [], verbose: false));
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+
+        Assert.Empty(svc.Deleted);
+    }
+
+    [Fact]
+    public void ApplyDiff_deletes_a_removed_custom_api_still_owned_at_flush_time()
+    {
+        Guid ourTypeId = Guid.NewGuid();
+        (TestSupport.FakeOrgService svc, Guid apiId, Guid paramId) = RemovedCustomApiService(ourTypeId, implementationAtFlush: ourTypeId);
+
+        DataverseRegistration.ApplyDiff(svc, RemovedApiDiff(), [], null, [], verbose: false);
+
+        Assert.Equal([("customapirequestparameter", paramId), ("customapi", apiId)], svc.Deleted);
+    }
+
     // A Custom API whose implementing class was renamed: same uniqueName, the live row implemented by the old type.
     private static readonly Guid OldTypeId = Guid.NewGuid();
     private static readonly Guid NewTypeId = Guid.NewGuid();

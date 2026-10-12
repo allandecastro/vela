@@ -23,6 +23,20 @@ public sealed class OutputWriterRedactionTests
         Assert.Contains("=***", redacted);
     }
 
+    // A quoted value may contain ';' (and a doubled quote as its escape): the whole quoted value is masked, and the
+    // keys after it survive. An unterminated quote masks the rest of the text rather than leaking a suffix.
+    [Theory]
+    [InlineData("ClientId=abc;ClientSecret=\"abc;def\";Url=https://x", "ClientId=abc;ClientSecret=***;Url=https://x")]
+    [InlineData("ClientId=abc;ClientSecret='abc;def';Url=https://x", "ClientId=abc;ClientSecret=***;Url=https://x")]
+    [InlineData("Password=\"a\"\"b;c\";User=admin", "Password=***;User=admin")]
+    [InlineData("Password='a''b;c';User=admin", "Password=***;User=admin")]
+    [InlineData("failed: ClientSecret=\"abc;def", "failed: ClientSecret=***")]
+    [InlineData("failed: ClientSecret='abc;def", "failed: ClientSecret=***")]
+    public void RedactSecrets_masks_the_whole_quoted_value(string text, string expected)
+    {
+        Assert.Equal(expected, OutputWriter.RedactSecrets(text));
+    }
+
     [Fact]
     public void RedactSecrets_keeps_non_secret_text_and_other_key_values()
     {

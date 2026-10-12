@@ -120,26 +120,9 @@ internal static class DefinitionParser
     /// <summary>The stable step-key marker to embed in a step's description.</summary>
     internal static string StepKeyMarker(string stepKey) => $"{StepKeyMarkerPrefix}{stepKey}{StepKeyMarkerSuffix}";
 
-    /// <summary>Extracts the step key from the stable marker in <paramref name="text"/>, or null when absent.</summary>
+    /// <summary>Extracts the step key from the trailing step-key marker in <paramref name="text"/>, or null when absent.</summary>
     internal static string? ExtractStepKeyFromMarker(string? text)
-    {
-        if (string.IsNullOrEmpty(text))
-        {
-            return null;
-        }
-
-        // The marker is the description's suffix, after the developer's own text (WithDescription). Take the LAST one,
-        // so a description that happens to quote a marker cannot shadow the real key.
-        int start = text!.LastIndexOf(StepKeyMarkerPrefix, StringComparison.Ordinal);
-        if (start < 0)
-        {
-            return null;
-        }
-
-        start += StepKeyMarkerPrefix.Length;
-        int end = text.IndexOf(StepKeyMarkerSuffix, start, StringComparison.Ordinal);
-        return end < 0 ? null : text.Substring(start, end - start);
-    }
+        => TrySplitTrailingStepKeyMarker(text, out _, out string? key) ? key : null;
 
     /// <summary>
     /// The human-readable part of a live step description: the text before the trailing step-key marker, trimmed
@@ -152,8 +135,34 @@ internal static class DefinitionParser
             return string.Empty;
         }
 
-        int start = description!.LastIndexOf(StepKeyMarkerPrefix, StringComparison.Ordinal);
-        return (start < 0 ? description : description.Substring(0, start)).Trim();
+        return TrySplitTrailingStepKeyMarker(description, out string text, out _) ? text : description!.Trim();
+    }
+
+    // BuildStepDescription writes the marker as the description's last line, after the developer's text. Only a
+    // complete marker that is the final non-whitespace line counts: a marker quoted anywhere else in the text (on an
+    // earlier line, or mid-line) is the developer's own text, never a key, and is never stripped.
+    private static bool TrySplitTrailingStepKeyMarker(string? description, out string text, out string? key)
+    {
+        text = string.Empty;
+        key = null;
+        if (string.IsNullOrEmpty(description))
+        {
+            return false;
+        }
+
+        string trimmed = description!.TrimEnd();
+        int lineStart = trimmed.LastIndexOf('\n') + 1;
+        string lastLine = trimmed.Substring(lineStart).Trim();
+        if (!lastLine.StartsWith(StepKeyMarkerPrefix, StringComparison.Ordinal)
+            || !lastLine.EndsWith(StepKeyMarkerSuffix, StringComparison.Ordinal)
+            || lastLine.Length <= StepKeyMarkerPrefix.Length + StepKeyMarkerSuffix.Length)
+        {
+            return false;
+        }
+
+        key = lastLine.Substring(StepKeyMarkerPrefix.Length, lastLine.Length - StepKeyMarkerPrefix.Length - StepKeyMarkerSuffix.Length);
+        text = trimmed.Substring(0, lineStart).Trim();
+        return true;
     }
 
     /// <summary>

@@ -160,6 +160,40 @@ public sealed class RegistrationMetadataTests
         Assert.Equal("score", DefinitionParser.ResolveStepKey(description, "renamed by an admin", Plugin));
     }
 
+    // PR #468 review: only the marker BuildStepDescription writes (the final non-whitespace line) is a key. A marker the
+    // developer's text quotes anywhere else is neither read as a key nor stripped from the description.
+    [Theory]
+    [InlineData("See [vela:stepkey=other] for history")]
+    [InlineData("[vela:stepkey=other]\nis how Vela tags a step")]
+    [InlineData("Tagged [vela:stepkey=other]")]
+    [InlineData("Tagged\n[vela:stepkey=other] later")]
+    [InlineData("Empty\n[vela:stepkey=]")]
+    public void A_marker_that_is_not_the_trailing_line_is_not_a_step_key(string description)
+    {
+        Assert.Null(DefinitionParser.ExtractStepKeyFromMarker(description));
+        Assert.Equal(description, DefinitionParser.StripStepKeyMarker(description));
+    }
+
+    [Theory]
+    [InlineData("phase-two [v2")]
+    [InlineData("credit.review_2")]
+    public void A_valid_step_key_round_trips_through_the_description_marker(string key)
+    {
+        string description = $"Recompute\n{DefinitionParser.StepKeyMarker(key)}";
+        Assert.Equal(key, DefinitionParser.ExtractStepKeyFromMarker(description));
+        Assert.Equal("Recompute", DefinitionParser.StripStepKeyMarker(description));
+    }
+
+    [Theory]
+    [InlineData("[vela:stepkey=score]", "")]
+    [InlineData("recompute\r\n[vela:stepkey=score]\r\n", "recompute")]
+    [InlineData("recompute\n  [vela:stepkey=score]  \n\n", "recompute")]
+    public void The_trailing_marker_line_is_read_and_stripped(string description, string text)
+    {
+        Assert.Equal("score", DefinitionParser.ExtractStepKeyFromMarker(description));
+        Assert.Equal(text, DefinitionParser.StripStepKeyMarker(description));
+    }
+
     [Fact]
     public void StripStepKeyMarker_returns_the_trimmed_text_when_there_is_no_marker()
     {
@@ -315,6 +349,34 @@ public sealed class RegistrationMetadataTests
             Json(new { pluginTypeName = ApiPlugin, uniqueName = "zava_DoThing" }), Options);
 
         Assert.Empty(Diff(new RegistrationItem("custom-api", ApiPlugin, local), new RegistrationItem("custom-api", ApiPlugin, live)).Changed);
+    }
+
+    [Theory]   // PR #468 review
+    [InlineData("displayName")]
+    [InlineData("description")]
+    public void A_declared_label_differing_from_the_unique_name_only_in_case_is_a_change(string label)
+    {
+        // The live label is the legacy fallback (the unique name); the code now declares a label that differs from it
+        // only in case. It was declared, so it compares exactly and apply writes it.
+        JsonElement live = DefinitionNormalizer.NormalizeCustomApiDefinition(
+            Json(new { pluginTypeName = ApiPlugin, uniqueName = "zava_DoThing", displayName = "zava_DoThing", description = "zava_DoThing" }), Options);
+        JsonElement local = DefinitionNormalizer.NormalizeCustomApiDefinition(
+            JsonSerializer.SerializeToElement(new Dictionary<string, object> { ["pluginTypeName"] = ApiPlugin, ["uniqueName"] = "zava_DoThing", [label] = "zava_dothing" }), Options);
+
+        RegistrationChange change = Assert.Single(Diff(new RegistrationItem("custom-api", ApiPlugin, local), new RegistrationItem("custom-api", ApiPlugin, live)).Changed);
+        Assert.Equal("zava_dothing", change.After.GetProperty(label).GetString());
+    }
+
+    [Fact]
+    public void A_declared_step_description_differing_from_the_step_name_only_in_case_is_a_change()   // PR #468 review
+    {
+        JsonElement local = LocalStep(description: null);
+        string name = local.GetProperty("name").GetString()!;
+        JsonElement declared = LocalStep(name.ToUpperInvariant());
+
+        // The live description is the fallback (the step name); the declared one differs only in case.
+        Assert.Single(Diff(new RegistrationItem("step", Plugin, declared), ReadStep(name, $"{name}\n[vela:stepkey=score]")).Changed);
+        Assert.Empty(Diff(new RegistrationItem("step", Plugin, local), ReadStep(name, $"{name.ToLowerInvariant()}\n[vela:stepkey=score]")).Changed);
     }
 
     [Fact]
