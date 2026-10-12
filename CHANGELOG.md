@@ -21,13 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Changed (Framework)
+## [0.33.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Changed (breaking)
 
 - **Breaking:** `OnReschedule()` now accepts only the tables Dataverse has a Reschedule filter for: `appointment`,
   `serviceappointment` and `recurringappointmentmaster`. On any other table `Build()` rejects the step instead of
   `vela apply` failing on the missing sdkmessagefilter.
 
-### Fixed (Framework)
+### Fixed
 
 - Registration errors now name a generic request or message as C# spells it (`On<CreateRequest<Account>>()`,
   `UnknownMessage<Account>`), not by its metadata name (``CreateRequest`1``): both the one-way trigger error and the
@@ -70,7 +72,9 @@ All notable changes to Vela are documented here. The format is based on
   `]` (such as `"phase\ntwo"`) could not be read back, and the step lost its stable identity. It now throws an
   `ArgumentException` that says why.
 
-### Fixed (CLI)
+## [0.24.1] - 2026-10-12 (Vela.Cli)
+
+### Fixed
 
 - **A quoted secret is masked whole.** The error and log redactor read a connection-string value only up to the
   next `;`, so `ClientSecret="abc;def"` printed as `ClientSecret=***;def"`. A quoted value (`"..."` or `'...'`, with
@@ -99,7 +103,6 @@ All notable changes to Vela are documented here. The format is based on
 - **The `vela init` samples trace ids only.** The message reference's `OnCreate` traced the account name.
 - **The scaffolded AGENTS.md matches `--no-tests`.** It no longer names `Vela.Testing` or has a "Write a test"
   section when the solution has no test project.
-
 
 ## [0.32.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

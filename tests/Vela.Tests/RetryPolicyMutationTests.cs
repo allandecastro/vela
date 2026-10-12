@@ -162,20 +162,25 @@ public sealed class RetryPolicyMutationTests
     [Fact]
     public void Execute_FirstBackoff_NeverExceedsTheInitialDelay()
     {
-        // The first wait is a random point in [0, initialDelayMs]. With a budget 50 ms above that ceiling the first
-        // retry always fits; a larger exponent (a wait up to 4x the initial delay) would overrun it most of the time.
-        for (int run = 0; run < 10; run++)
+        // The first wait is a random point in [0, initialDelayMs]; a larger exponent would ask for up to 4x the initial
+        // delay. The wait is captured instead of slept, so the check does not depend on the host's timer resolution.
+        for (int run = 0; run < 50; run++)
         {
             int calls = 0;
+            TimeSpan? waited = null;
 
             int result = RetryPolicy.Execute(Ctx,
                 () => { calls++; if (calls == 1) { throw Fault("throttled", NumberOfRequestsCode); } return run; },
+                retryOnTimeout: false,
                 maxAttempts: 2,
                 initialDelayMs: 100,
-                maxElapsed: TimeSpan.FromMilliseconds(150));
+                maxElapsed: TimeSpan.FromSeconds(10),
+                sleep: delay => waited = delay);
 
             Assert.Equal(run, result);
             Assert.Equal(2, calls);
+            Assert.NotNull(waited);
+            Assert.InRange(waited!.Value, TimeSpan.Zero, TimeSpan.FromMilliseconds(100));
         }
     }
 }
