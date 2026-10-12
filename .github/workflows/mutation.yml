@@ -7,8 +7,9 @@ name: Mutation Testing
 #
 # - Weekly and on demand: every area, on all of its files, gated by the area's `break` threshold. A manual run can
 #   name the areas to run (the `areas` input, e.g. `gh workflow run mutation.yml -f areas=analyzers`).
-# - On a pull request: only the areas whose files the PR changes, and only the mutants of the changed files
-#   (`--since:main`), gated at the 80 floor. An incremental run scores a handful of mutants, so it is gated at the
+# - On a pull request: only the areas whose files the PR changes (every area when it changes the shared setup:
+#   areas.json, select-areas.ps1, this workflow or .config/dotnet-tools.json), and only the mutants of the changed
+#   files (`--since:main`), gated at the 80 floor. An incremental run scores a handful of mutants, so it is gated at the
 #   floor rather than at the area's ratcheted threshold.
 #
 # Stryker is pinned in .config/dotnet-tools.json (`dotnet tool restore`), so a Stryker release cannot move the scores
@@ -27,6 +28,8 @@ on:
     paths:
       - 'src/**'
       - 'tests/stryker/**'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/mutation.yml'
 
 # A newer push to the same PR cancels its running mutation jobs; scheduled and manual runs never cancel each other.
 concurrency:

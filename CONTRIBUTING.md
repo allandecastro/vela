@@ -13,7 +13,7 @@ Vela.sln
 src/
   Vela.Plugins/     # Plugin runtime (net462): base types, step builder, contexts, DI, caching, Custom APIs
   Vela.Messages/    # Typed request/response base classes (net462 + net10.0), referenced by Vela.Plugins
-  Vela.Analyzers/   # Roslyn analyzers VELA001-VELA022 and the image/step-context source generator (netstandard2.0)
+  Vela.Analyzers/   # Roslyn analyzers VELA001-VELA024 and the image/step-context source generator (netstandard2.0)
   Vela.CodeFixes/   # IDE code fixes, packed inside Vela.Plugins with the analyzers
   Vela.Testing/     # Test harness (net462): in-memory Dataverse, PluginContext, PluginPipeline
   Vela.Cli/         # The vela tool (net10.0): plan/apply, init/add, models, sign, logs
@@ -64,7 +64,8 @@ The runtime, harness and their tests target `net462`. `dotnet build` works on ev
 
 ```bash
 mono ~/.nuget/packages/xunit.runner.console/2.9.2/tools/net462/xunit.console.exe \
-  tests/Vela.Tests/bin/Release/net462/Vela.Tests.dll
+  tests/Vela.Tests/bin/Release/net462/Vela.Tests.dll tests/Vela.Testing.Tests/bin/Release/net462/Vela.Testing.Tests.dll \
+  docs/samples/Vela.DocSamples/bin/Release/net462/Vela.DocSamples.dll
 ```
 
 The console runner is not a dependency of any project: fetch the `xunit.runner.console` package once (for

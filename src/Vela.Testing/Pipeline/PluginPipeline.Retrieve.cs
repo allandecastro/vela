@@ -93,14 +93,11 @@ namespace Vela.Testing
             return invocation;
         }
 
-        // A null entity name asks whether the message has any step at all.
+        // Whether an enabled step would fire for the message on this entity, by FireStage's rules. A null or empty
+        // entity name asks whether the message has any step at all.
         private bool HasSteps(string message, string? entityName)
         {
-            return _registrations.Any(registration => registration.Step.Enabled
-                && string.Equals(registration.Step.Message, message, StringComparison.OrdinalIgnoreCase)
-                && (entityName == null
-                    || string.IsNullOrEmpty(registration.Step.EntityLogicalName)
-                    || string.Equals(registration.Step.EntityLogicalName, entityName, StringComparison.OrdinalIgnoreCase)));
+            return _registrations.Any(registration => StepMatches(registration.Step, message, entityName));
         }
 
         private static string QueryEntityName(QueryBase query)

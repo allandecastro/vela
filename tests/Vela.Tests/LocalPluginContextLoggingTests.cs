@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Threading;
 using Microsoft.Xrm.Sdk.PluginTelemetry;
 using Microsoft.Xrm.Sdk;
 using Moq;
@@ -173,7 +175,18 @@ public sealed class LocalPluginContextLoggingTests
         PluginContextBuilder builder = Builder();
         LocalPluginContext ctx = new(builder.BuildServiceProvider(), "Zava.Plugins.AccountPlugin");
 
-        ctx.LogMetric("Latency", 2, new Dictionary<string, object?> { ["Region"] = "eu", ["Stage"] = 99, [""] = "ignored", ["Ratio"] = 1.5 });
+        // Under a comma-decimal culture, so the "1.5" below proves the dimension is formatted invariantly.
+        CultureInfo original = Thread.CurrentThread.CurrentCulture;
+        try
+        {
+            Thread.CurrentThread.CurrentCulture = new CultureInfo("fr-FR");
+            Assert.Equal("1,5", 1.5.ToString(CultureInfo.CurrentCulture));
+            ctx.LogMetric("Latency", 2, new Dictionary<string, object?> { ["Region"] = "eu", ["Stage"] = 99, [""] = "ignored", ["Ratio"] = 1.5 });
+        }
+        finally
+        {
+            Thread.CurrentThread.CurrentCulture = original;
+        }
 
         Assert.Equal("[Metric] Latency=2", Assert.Single(builder.TraceCapture.Traces));
         Assert.Empty(builder.LogCapture.Entries);

@@ -210,7 +210,7 @@ namespace Vela.Testing
             {
                 throw new InvalidOperationException(
                     $"Plugin '{pluginType.FullName}' declares no step and no Custom API, so registering it would add nothing " +
-                    $"that can fire. Declare its steps in RegisterSteps (or its Custom API definition).");
+                    $"that can fire. Declare its steps in RegisterPluginSteps() (or its Custom API definition).");
             }
 
             return this;

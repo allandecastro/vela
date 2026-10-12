@@ -373,8 +373,9 @@ namespace Vela.Testing
         // 0x80040217 "Entity 'X' With Id = ... Does Not Exist", Update faults 0x80040502 "X does not exist."), so the
         // AppendTo check below never runs against a missing record. Security off keeps dangling lookups: a
         // single-plugin PluginContext commonly writes a lookup to a Target it never seeded. The system columns the
-        // store fills or re-derives (owner, created/modified by, organization) are not checked, and a lookup set by
-        // key is resolved, and checked, separately.
+        // store fills or re-derives (owner, created/modified by, organization) are not checked. A lookup set by key
+        // reaches this check already resolved to its record's id (WithResolvedLookupKeys), so an empty id here is a
+        // lookup to no record and faults.
         private void DemandLookupTargetsExist(Entity entity, bool onCreate)
         {
             // Configured security, not the acting identity: SYSTEM cannot point a lookup at a missing record either.
@@ -386,9 +387,8 @@ namespace Vela.Testing
             foreach (KeyValuePair<string, object> attribute in entity.Attributes)
             {
                 if (attribute.Value is not EntityReference target
-                    || target.Id == Guid.Empty
                     || SystemReferenceColumns.Contains(attribute.Key)
-                    || (onCreate && target.Id == entity.Id && string.Equals(target.LogicalName, entity.LogicalName, StringComparison.OrdinalIgnoreCase))
+                    || (onCreate && target.Id != Guid.Empty && target.Id == entity.Id && string.Equals(target.LogicalName, entity.LogicalName, StringComparison.OrdinalIgnoreCase))
                     || StoredOrNull(target.LogicalName, target.Id) != null)
                 {
                     continue;
@@ -535,12 +535,14 @@ namespace Vela.Testing
 
         // Merge moves the subordinate's N:N associations to the master (verified live): each intersect row naming
         // the subordinate names the master instead, unless the master already has that association, in which case
-        // the subordinate's row is dropped.
+        // the subordinate's row is dropped. On a self-referential N:N, a row linking the subordinate to the master
+        // would become a master-to-master self-link, so it is dropped too.
         private void MoveIntersectRows(string entityName, Guid fromId, Guid toId)
         {
             foreach (RelationshipRegistry.ManyToMany m2m in AllManyToManyRelationships())
             {
                 Dictionary<Guid, Entity> intersect = Table(m2m.IntersectEntity);
+                bool selfReferential = string.Equals(m2m.FirstEntity, m2m.SecondEntity, StringComparison.OrdinalIgnoreCase);
                 foreach ((string attribute, string otherAttribute) in new[] { (m2m.FirstAttribute, m2m.SecondAttribute), (m2m.SecondAttribute, m2m.FirstAttribute) })
                 {
                     string side = attribute == m2m.FirstAttribute ? m2m.FirstEntity : m2m.SecondEntity;
@@ -555,7 +557,7 @@ namespace Vela.Testing
                         bool masterHasIt = intersect.Values.Any(existing =>
                             EntityValues.AreEqual(EntityValues.GetValue(existing, attribute), toId)
                             && EntityValues.AreEqual(EntityValues.GetValue(existing, otherAttribute), other));
-                        if (masterHasIt)
+                        if (masterHasIt || (selfReferential && EntityValues.AreEqual(other, toId)))
                         {
                             intersect.Remove(row.Id);
                         }

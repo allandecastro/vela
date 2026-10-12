@@ -37,7 +37,9 @@ artifact:
   and only the mutants in the changed files (`--since:main`), gated at the **80**
   floor. An incremental run scores a handful of mutants, so it is gated at the floor
   rather than at the area's ratcheted threshold. A `plan` job picks the areas
-  (`tests/stryker/select-areas.ps1`).
+  (`tests/stryker/select-areas.ps1`). A pull request that changes the shared setup
+  (`tests/stryker/areas.json`, the selector, `mutation.yml` or the Stryker version
+  pinned in `.config/dotnet-tools.json`) runs every area.
 
 ## Policy: measure-first, then ratchet
 
@@ -49,7 +51,7 @@ The gate is a **regression detector**, not a target to write tests for.
   threshold is set, then the enforced `--break-at` is pinned just under the measured
   value (about 2 points). It catches regressions without flaking on timeout-variance,
   and is tightened as the score rises. No gate is ever set below 80: a core measured
-  close to the floor is gated at 80 exactly (e.g. `cli-apply` at ~80.3% / gate 80).
+  less than 2 points above the floor is gated at 80 exactly.
 - **Work-in-progress code is excluded, not counted.** A preview feature that is not
   mutation-gated yet (today: the web-resource branches of `apply`) is wrapped in
   `// Stryker disable all : <reason>` ... `// Stryker restore all` with the reason.

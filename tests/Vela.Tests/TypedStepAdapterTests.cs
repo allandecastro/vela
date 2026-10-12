@@ -126,9 +126,14 @@ public sealed class TypedStepAdapterTests
     public void The_untyped_handle_overload_binds_the_handler()
     {
         bool ran = false;
-        StepDefinition d = Single(s => ((IStepConfig<TestAccount>)s.On<PingRequest>().PreOperation().Sync()).Handle(new Action<Vela.Context.ILocalPluginContext>(_ => ran = true)));
+        DelegatePlugin plugin = new(s => ((IStepConfig<TestAccount>)s.On<PingRequest>().PreOperation().Sync()).Handle(new Action<Vela.Context.ILocalPluginContext>(_ => ran = true)));
+        StepDefinition d = Assert.Single(plugin.GetStepDefinitions());
 
         Assert.Equal((PluginStages.PreOperation, ExecutionMode.Synchronous), (d.Stage, d.Mode));
-        Assert.False(ran);
+        Assert.False(ran); // registering does not run the handler
+
+        plugin.Execute(new Vela.Testing.PluginContextBuilder<TestAccount>().WithRequest(new PingRequest()).Stage(PluginStages.PreOperation).Sync().BuildServiceProvider());
+
+        Assert.True(ran); // executing the step runs the handler the overload bound
     }
 }

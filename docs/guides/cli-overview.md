@@ -98,7 +98,7 @@ solution's publisher, so you can align a scaffold with the solution before the f
 ```bash
 vela solution show ZavaSales -i            # prints: zava
 vela solution show ZavaSales -i --json     # {"solution":"ZavaSales","publisherPrefix":"zava"}
-vela init --name ZavaSales --prefix "$(vela solution show ZavaSales -i)"
+vela init --name ZavaSales --prefix Zava --publisher-prefix "$(vela solution show ZavaSales -i)"
 ```
 
 It is read-only. `show` is its only subcommand.

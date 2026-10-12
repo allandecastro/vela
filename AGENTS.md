@@ -34,7 +34,8 @@ On macOS and Linux, build first, then run them with Mono and the xUnit console r
 
 ```bash
 mono ~/.nuget/packages/xunit.runner.console/2.9.2/tools/net462/xunit.console.exe \
-  tests/Vela.Tests/bin/Release/net462/Vela.Tests.dll tests/Vela.Testing.Tests/bin/Release/net462/Vela.Testing.Tests.dll
+  tests/Vela.Tests/bin/Release/net462/Vela.Tests.dll tests/Vela.Testing.Tests/bin/Release/net462/Vela.Testing.Tests.dll \
+  docs/samples/Vela.DocSamples/bin/Release/net462/Vela.DocSamples.dll
 ```
 
 When the scaffold (`ProjectScaffolder`, `ScaffoldTemplates*`, `AddCommand`) changes, run the build smoke test. It
@@ -84,8 +85,9 @@ A new typed message touches more files: [docs/contributing/extending-plugins.md]
   `### Fixed (Framework)`, `### Changed (CLI, breaking)`, `### Added (CLI)`, `### Fixed (CLI)`.
 - **Web resources are a work-in-progress preview** (`--webresources`, `DataverseRegistration.WebResources.cs`, the
   client-side scaffold): exclude them from coverage and mutation gates, and don't invest in them.
-- **Plugin TFM**: the libraries and the scaffolded plugin projects target net462. Plugin *packages* fail to
-  register above net471, so never move a plugin project above net471, whatever Microsoft's docs recommend.
+- **Plugin TFM**: the libraries target net462; the plugin projects scaffolded by `vela init` target net48. Plugin
+  *packages* above net471 register only on Dataverse 9.2.26092 or later, so net471 is the fallback for a plugin
+  project deployed to an older environment.
 - **Dataverse behaviour**: don't infer it from Microsoft docs alone; several documented behaviours were disproved on
   a live environment (images on `*Multiple`, `FilterOn` on Create, the owner/state Update split). Code comments and
   CHANGELOG entries mark live-verified facts ("verified live"); keep them and say so when a claim is unverified.
