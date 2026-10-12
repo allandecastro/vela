@@ -1010,8 +1010,19 @@ namespace Vela.Testing
         }
 
         // Removes a single record from the store with no cascade — the default remover, and the primitive the
-        // pipeline's remover ends with after firing the record's Delete plugins.
-        internal void RemoveRecordDirect(string entityName, Guid id) => Table(entityName).Remove(id);
+        // pipeline's remover ends with after firing the record's Delete plugins. The record's file blobs go with it,
+        // so a stale file id is unknown afterwards.
+        internal void RemoveRecordDirect(string entityName, Guid id)
+        {
+            Table(entityName).Remove(id);
+            foreach (Guid fileId in _files
+                .Where(file => file.Value.RecordId == id && string.Equals(file.Value.EntityLogicalName, entityName, StringComparison.OrdinalIgnoreCase))
+                .Select(file => file.Key)
+                .ToList())
+            {
+                _files.Remove(fileId);
+            }
+        }
 
 
         public EntityCollection RetrieveMultiple(QueryBase query)
@@ -2014,22 +2025,21 @@ namespace Vela.Testing
         private OrganizationResponse DeleteFile(OrganizationRequest request)
         {
             Guid fileId = GetParam<Guid>(request, "FileId");
-            if (!_files.TryGetValue(fileId, out FileBlob? blob))
+            // A file whose record is gone is unknown too (one uploaded to a record deleted mid-upload): without the
+            // record there is nothing to check Write against.
+            Entity? record = _files.TryGetValue(fileId, out FileBlob? blob) ? StoredOrNull(blob.EntityLogicalName, blob.RecordId) : null;
+            if (blob == null || record == null)
             {
                 throw PlatformFault.Create(ObjectDoesNotExist, $"File with Id = {fileId:D} Does Not Exist");
             }
 
             // Deleting a file clears its File column: it needs Write on that record (and on the column when it is
             // secured), and touches no other column or table, even one holding the same Guid.
-            Entity? record = StoredOrNull(blob.EntityLogicalName, blob.RecordId);
-            if (record != null)
+            DemandAccess(blob.EntityLogicalName, Privilege.Write, record);
+            DemandSecuredColumnWrites(new Entity(blob.EntityLogicalName, blob.RecordId) { [blob.AttributeName] = null });
+            if (record.GetAttributeValue<Guid?>(blob.AttributeName) == fileId)
             {
-                DemandAccess(blob.EntityLogicalName, Privilege.Write, record);
-                DemandSecuredColumnWrites(new Entity(blob.EntityLogicalName, blob.RecordId) { [blob.AttributeName] = null });
-                if (record.GetAttributeValue<Guid?>(blob.AttributeName) == fileId)
-                {
-                    record.Attributes.Remove(blob.AttributeName);
-                }
+                record.Attributes.Remove(blob.AttributeName);
             }
 
             _files.Remove(fileId);

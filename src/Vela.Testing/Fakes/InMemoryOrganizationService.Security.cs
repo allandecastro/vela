@@ -386,9 +386,9 @@ namespace Vela.Testing
             foreach (KeyValuePair<string, object> attribute in entity.Attributes)
             {
                 if (attribute.Value is not EntityReference target
-                    || target.Id == Guid.Empty
+                    || (target.Id == Guid.Empty && target.KeyAttributes != null && target.KeyAttributes.Count > 0)
                     || SystemReferenceColumns.Contains(attribute.Key)
-                    || (onCreate && target.Id == entity.Id && string.Equals(target.LogicalName, entity.LogicalName, StringComparison.OrdinalIgnoreCase))
+                    || (onCreate && target.Id != Guid.Empty && target.Id == entity.Id && string.Equals(target.LogicalName, entity.LogicalName, StringComparison.OrdinalIgnoreCase))
                     || StoredOrNull(target.LogicalName, target.Id) != null)
                 {
                     continue;
@@ -535,12 +535,14 @@ namespace Vela.Testing
 
         // Merge moves the subordinate's N:N associations to the master (verified live): each intersect row naming
         // the subordinate names the master instead, unless the master already has that association, in which case
-        // the subordinate's row is dropped.
+        // the subordinate's row is dropped. On a self-referential N:N, a row linking the subordinate to the master
+        // would become a master-to-master self-link, so it is dropped too.
         private void MoveIntersectRows(string entityName, Guid fromId, Guid toId)
         {
             foreach (RelationshipRegistry.ManyToMany m2m in AllManyToManyRelationships())
             {
                 Dictionary<Guid, Entity> intersect = Table(m2m.IntersectEntity);
+                bool selfReferential = string.Equals(m2m.FirstEntity, m2m.SecondEntity, StringComparison.OrdinalIgnoreCase);
                 foreach ((string attribute, string otherAttribute) in new[] { (m2m.FirstAttribute, m2m.SecondAttribute), (m2m.SecondAttribute, m2m.FirstAttribute) })
                 {
                     string side = attribute == m2m.FirstAttribute ? m2m.FirstEntity : m2m.SecondEntity;
@@ -555,7 +557,7 @@ namespace Vela.Testing
                         bool masterHasIt = intersect.Values.Any(existing =>
                             EntityValues.AreEqual(EntityValues.GetValue(existing, attribute), toId)
                             && EntityValues.AreEqual(EntityValues.GetValue(existing, otherAttribute), other));
-                        if (masterHasIt)
+                        if (masterHasIt || (selfReferential && EntityValues.AreEqual(other, toId)))
                         {
                             intersect.Remove(row.Id);
                         }
