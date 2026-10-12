@@ -15,7 +15,7 @@ By default the scaffold is **minimal**: the structure and nothing to delete. It 
 ZavaSales/
   ZavaSales.sln
   src/
-    Zava.Shared/            # early-bound models + shared services (net462;net10.0); empty until `vela models`
+    Zava.Shared/            # early-bound models + shared services (net48;net10.0); empty until `vela models`
     Zava.Plugins/           # plugin package -> builds a Dataverse plugin-package .nupkg; empty until `vela add`
     Zava.WebResources/      # opt-in TypeScript form scripts / web resources (add with --web-resources)
   tests/

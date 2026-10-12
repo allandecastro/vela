@@ -1,12 +1,12 @@
 # Vela
 
-> Vela is a framework (Vela.Plugins, .NET Framework 4.6.2), a CLI (Vela.Cli, command `vela`) and an in-memory test harness (Vela.Testing) for Microsoft Dataverse plugins and Custom APIs, with a preview-first `vela plan` then `vela apply` workflow. Steps are declared in code with a type-state fluent builder; Roslyn analyzers (VELA001-VELA024) reject invalid registrations at build time.
+> Vela is a framework (Vela.Plugins, .NET Framework 4.6.2, for plug-ins on 4.6.2 through 4.8), a CLI (Vela.Cli, command `vela`) and an in-memory test harness (Vela.Testing) for Microsoft Dataverse plugins and Custom APIs, with a preview-first `vela plan` then `vela apply` workflow. Steps are declared in code with a type-state fluent builder; Roslyn analyzers (VELA001-VELA024) reject invalid registrations at build time.
 
 Key facts: plugin classes are `sealed partial` with a primary constructor `(string unsecureConfig, string secureConfig)`; Create/Update steps require `FilterOn(...)`; the handler context exposes `ctx.Service`, `ctx.SystemService` and `ctx.AsUser(id)`; `vela plan` and `vela apply` take `--solution <uniquename>`; `vela plan --json` and `vela help --json` are machine-readable. A project scaffolded by `vela init` has its own AGENTS.md.
 
 ## Getting started
 
-- [Install](https://raw.githubusercontent.com/allandecastro/vela/main/docs/getting-started/install.md): install the vela CLI and the prerequisites (.NET 10 SDK, Mono for net462 tests outside Windows, an existing solution)
+- [Install](https://raw.githubusercontent.com/allandecastro/vela/main/docs/getting-started/install.md): install the vela CLI and the prerequisites (.NET 10 SDK, Mono for .NET Framework tests outside Windows, an existing solution)
 - [Quickstart](https://raw.githubusercontent.com/allandecastro/vela/main/docs/getting-started/quickstart.md): from an empty folder to deployed steps: init, build, plan, apply
 - [Initialize a solution](https://raw.githubusercontent.com/allandecastro/vela/main/docs/getting-started/initialize-a-solution.md): what vela init scaffolds and where to edit
 

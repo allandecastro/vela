@@ -14,7 +14,7 @@ internal static partial class ScaffoldTemplates
             ? $"- `tests/{prefix}.Plugins.Tests`: xUnit tests on the in-memory harness (`Vela.Testing`), no Dataverse connection.\n"
             : string.Empty;
         string testCommand = options.IncludeTests
-            ? $"dotnet test tests/{prefix}.Plugins.Tests -c Release   # net462: on macOS/Linux run the test dll with Mono + xunit.console instead\n"
+            ? $"dotnet test tests/{prefix}.Plugins.Tests -c Release   # net48: on macOS/Linux run the test dll with Mono + xunit.console instead\n"
             : string.Empty;
 
         return
@@ -27,8 +27,9 @@ Instructions for AI coding agents in this Dataverse solution, scaffolded by `vel
 ## Layout
 
 - `src/{{prefix}}.Shared`: early-bound models (`Models/Generated`, regenerate with `vela models`) and shared services.
-- `src/{{prefix}}.Plugins`: plugins and Custom APIs. Targets .NET Framework 4.6.2; keep it at net471 or below
-  (plugin packages built above it fail to register). The Release build packs a plugin package into `artifacts/`.
+- `src/{{prefix}}.Plugins`: plugins and Custom APIs. Targets .NET Framework 4.8, the version Microsoft supports
+  (never net481). Plugin packages above net471 register only on Dataverse 9.2.26092 or later; on an older
+  environment, drop to net471. The Release build packs a plugin package into `artifacts/`.
 {{testsLine}}
 ## Commands
 

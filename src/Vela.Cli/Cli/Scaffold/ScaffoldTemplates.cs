@@ -30,7 +30,7 @@ internal static partial class ScaffoldTemplates
     // advisories (NU1903); pin the patched build in the projects that reference the client (Shared, ConsoleApp).
     public const string CryptographyXmlVersion = "8.0.4";
 
-    // .NET Framework Dataverse SDK reference assemblies for plugin (net462) compilation.
+    // .NET Framework Dataverse SDK reference assemblies for plugin (net48) compilation.
     public const string CrmCoreAssembliesVersion = "9.0.2.59";
 
     // Test stack for the generated *.Plugins.Tests project. These (and Vela.Plugins / Vela.Testing) resolve

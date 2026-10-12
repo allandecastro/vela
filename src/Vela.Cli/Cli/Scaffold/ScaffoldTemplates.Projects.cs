@@ -10,19 +10,16 @@ $$"""
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- net462 is consumed by the plugin projects; net10.0 by the ConsoleApp. -->
-    <TargetFrameworks>net462;net10.0</TargetFrameworks>
+    <!-- net48 is consumed by the plugin projects; net10.0 by the ConsoleApp. -->
+    <TargetFrameworks>net48;net10.0</TargetFrameworks>
     <RootNamespace>{{options.Prefix}}.Shared</RootNamespace>
     <AssemblyName>{{options.Prefix}}.Shared</AssemblyName>
   </PropertyGroup>
 
-  <!-- net462: the plugin sandbox provides the SDK, so these reference assemblies are PrivateAssets. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net462'">
+  <!-- net48: the plugin sandbox provides the SDK, so these reference assemblies are PrivateAssets. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <PackageReference Include="Microsoft.CrmSdk.CoreAssemblies" Version="{{CrmCoreAssembliesVersion}}" PrivateAssets="all" />
-    <!-- .NET Framework 4.6.2 has no in-box System.ValueTuple; the generated Roles class exposes grant tuples.
-         Compile-time reference only (the type forwards to mscorlib on the 4.7.2+ Dataverse sandbox at runtime). -->
-    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
-    <!-- `vela models` emits [StringLength]/[Range] DataAnnotations by default; on net462 those types live in the
+    <!-- `vela models` emits [StringLength]/[Range] DataAnnotations by default; on net48 those types live in the
          System.ComponentModel.DataAnnotations framework assembly, which is not referenced by default. -->
     <Reference Include="System.ComponentModel.DataAnnotations" />
     <!-- Pin the patched System.Security.Cryptography.Xml (a transitive SDK dependency ships an advisory version,
@@ -46,7 +43,7 @@ $$"""
 
   <!-- Vela.Messages holds the SDK-only TypedRequest/TypedResponse base types and multi-targets net462;net10.0, so
        generated Custom API request/response contracts compile here and can be called from anywhere (plugins on
-       net462, the ConsoleApp / integrations on net10.0). -->
+       net48, the ConsoleApp / integrations on net10.0). -->
   <ItemGroup>
     <PackageReference Include="Vela.Messages" Version="{{options.CoreVersion}}" />
   </ItemGroup>
@@ -64,7 +61,10 @@ $$"""
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net462</TargetFramework>
+    <!-- .NET Framework 4.8 is the version Microsoft supports and recommends for plug-ins (4.8.1 is not supported).
+         Plugin packages above net471 register only on Dataverse 9.2.26092 or later; on an older environment, set
+         net471 here until it is updated. -->
+    <TargetFramework>net48</TargetFramework>
     <RootNamespace>{{projectName}}</RootNamespace>
     <AssemblyName>{{projectName}}</AssemblyName>
     <PackageId>{{projectName}}</PackageId>
@@ -92,7 +92,7 @@ $$"""
     <PackageReference Include="Microsoft.CrmSdk.CoreAssemblies" Version="{{CrmCoreAssembliesVersion}}" PrivateAssets="all" />
     <PackageReference Include="Microsoft.PowerApps.MSBuild.Plugin" Version="{{PluginSdkVersion}}" PrivateAssets="all" />
     <PackageReference Include="Vela.Plugins" Version="{{coreVersion}}" />
-    <!-- HttpClient on net462 binds against this GAC facade; without it, outbound HTTP (e.g. a managed-identity
+    <!-- HttpClient on .NET Framework binds against this GAC facade; without it, outbound HTTP (e.g. a managed-identity
          call) fails to compile/load. Harmless when unused. -->
     <Reference Include="System.Net.Http" />
   </ItemGroup>
@@ -183,8 +183,8 @@ $$"""
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Plugins target net462, so their tests do too (Vela.Testing is a net462 package). -->
-    <TargetFramework>net462</TargetFramework>
+    <!-- Plugins target net48, so their tests do too (Vela.Testing is a net462 package, consumable from net48). -->
+    <TargetFramework>net48</TargetFramework>
     <RootNamespace>{{testProjectName}}</RootNamespace>
     <AssemblyName>{{testProjectName}}</AssemblyName>
     <IsPackable>false</IsPackable>{{PublisherPrefixProperty(publisherPrefix)}}

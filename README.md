@@ -20,7 +20,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/C%23-239120?style=for-the-badge&logo=csharp&logoColor=white" alt="C#" />
-  <img src="https://img.shields.io/badge/.NET_Framework_4.6.2-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET Framework 4.6.2" />
+  <img src="https://img.shields.io/badge/.NET_Framework_4.6.2--4.8-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET Framework 4.6.2-4.8" />
   <img src="https://img.shields.io/badge/.NET_10-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 10" />
   <img src="https://img.shields.io/badge/Microsoft_Dataverse-107C10?style=for-the-badge&logo=microsoft&logoColor=white" alt="Microsoft Dataverse" />
   <img src="https://img.shields.io/badge/Power_Platform-742774?style=for-the-badge&logo=microsoftpowerplatform&logoColor=white" alt="Power Platform" />
@@ -56,6 +56,10 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 | `Vela.Messages` | .NET Framework 4.6.2, .NET 10.0 | Typed request/response base classes (`TypedRequest`, `CustomApiRequest`); a dependency of `Vela.Plugins`, usable alone from client code. |
 | `Vela.Cli` (command `vela`) | .NET 10.0 | Plan/apply, scaffolding and package signing for plugins and Custom APIs. |
 | `Vela.Testing` | .NET Framework 4.6.2 | Test harness: fake execution context + in-memory `IOrganizationService`, fluent strongly-typed builder. |
+
+The libraries target .NET Framework 4.6.2 so any supported plug-in project can reference them. Microsoft supports
+plug-ins on 4.6.2 through 4.8 and recommends 4.8 (4.8.1 is not supported); `vela init` scaffolds plugin projects on
+`net48`. See [Target framework](docs/guides/migrating.md#before-you-start) for the plugin-package caveat.
 
 > **Status** - Pre-1.0 and actively developed, published on NuGet.org. Reference `Vela.Plugins` (and `Vela.Testing` in your test project) with `dotnet add package`, and install the CLI with `dotnet tool install --global Vela.Cli`. Releases run over two lines: a `framework-vX.Y.Z` tag publishes `Vela.Messages` + `Vela.Plugins` + `Vela.Testing`, and `cli-vX.Y.Z` publishes `Vela.Cli`. See [`CHANGELOG.md`](CHANGELOG.md) for what's shipped and the versioning policy.
 
