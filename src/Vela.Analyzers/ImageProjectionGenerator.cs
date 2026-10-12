@@ -34,7 +34,7 @@ namespace Vela.Analyzers
         internal static readonly DiagnosticDescriptor NotGeneratedRule = new DiagnosticDescriptor(
             id: NotGeneratedDiagnosticId,
             title: "Typed image projection not generated",
-            messageFormat: "No typed projection is generated for this {0}(...): {1}; read the full image with ctx.Get{2}<T>() instead, or fix the capture",
+            messageFormat: "No typed projection is generated for this {0}(...): {1}; read the full image with {2} instead, or fix the capture",
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
@@ -69,7 +69,7 @@ namespace Vela.Analyzers
                 static (spc, pair) => Emit(spc, pair.Left, pair.Right));
 
             context.RegisterSourceOutput(skipped,
-                static (spc, skip) => spc.ReportDiagnostic(Diagnostic.Create(NotGeneratedRule, skip.ToLocation(), skip.Method, skip.Reason, IsPreImageMethod(skip.Method) ? "PreImage" : "PostImage")));
+                static (spc, skip) => spc.ReportDiagnostic(Diagnostic.Create(NotGeneratedRule, skip.ToLocation(), skip.Method, skip.Reason, skip.Accessor)));
         }
 
         /// <summary>
@@ -138,12 +138,16 @@ namespace Vela.Analyzers
             }
 
             // Arguments: optional leading string alias, then the column selector lambdas.
-            (string? alias, bool aliasUnresolved, List<LambdaExpressionSyntax> selectors, bool opaqueColumns) = SplitArguments(invocation, model, cancellationToken);
+            (string? alias, string? aliasExpression, List<LambdaExpressionSyntax> selectors, bool opaqueColumns) = SplitArguments(invocation, model, cancellationToken);
+            bool aliasUnresolved = aliasExpression is not null && alias is null;
+            // The plain read a skipped capture falls back to, with the alias it must name: a subordinate image never
+            // has the master's default alias, and a custom alias must be passed.
+            string accessor = FullImageAccessor(isPre, isSubordinate, alias, aliasExpression);
             if (opaqueColumns)
             {
                 // A column argument that is not an inline lambda (a selector held in a variable, an array): the
                 // captured columns are not known here, so a projection would be wrong or incomplete.
-                return ProjectionResult.Skipped(invocation, method, "a column argument is not an inline selector lambda");
+                return ProjectionResult.Skipped(invocation, method, accessor, "a column argument is not an inline selector lambda");
             }
 
             if (selectors.Count == 0)
@@ -156,7 +160,7 @@ namespace Vela.Analyzers
             {
                 // An alias that is not a compile-time constant: the image's runtime key is unknown here, so a typed
                 // projection could not read it. Generate nothing rather than a context that reads null.
-                return ProjectionResult.Skipped(invocation, method, "its image alias is not a compile-time constant");
+                return ProjectionResult.Skipped(invocation, method, accessor, "its image alias is not a compile-time constant");
             }
 
             // Message + stage from the chain that precedes this call.
@@ -166,7 +170,7 @@ namespace Vela.Analyzers
                 // A chain split across locals legitimately hides its trigger here, so only a chain that starts at
                 // RegisterStep() in this expression (whose trigger cannot be read) is reported.
                 return FluentStep.SpineHasCall(member.Expression, "RegisterStep")
-                    ? ProjectionResult.Skipped(invocation, method, "the step's message or stage cannot be read from the chain")
+                    ? ProjectionResult.Skipped(invocation, method, accessor, "the step's message or stage cannot be read from the chain")
                     : default;
             }
 
@@ -181,7 +185,7 @@ namespace Vela.Analyzers
                     // reported here.
                     return reportedElsewhere
                         ? default
-                        : ProjectionResult.Skipped(invocation, method, $"'{selector}' does not select a column property of the entity");
+                        : ProjectionResult.Skipped(invocation, method, accessor, $"'{selector}' does not select a column property of the entity");
                 }
 
                 columns.Add(column.Value);
@@ -453,10 +457,12 @@ namespace Vela.Analyzers
         // literal or a const); an explicit alias that is not constant cannot be known here, so it is reported as
         // unresolved and no projection is generated (a context reading the default alias would read null).
         // Any other argument (a selector in a variable, an explicit array) is an opaque column list.
-        private static (string? Alias, bool AliasUnresolved, List<LambdaExpressionSyntax> Selectors, bool OpaqueColumns) SplitArguments(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
+        // The alias is its constant value when it is one; AliasExpression is the source text of the alias argument
+        // (null when there is none), so a non-constant alias can still be named.
+        private static (string? Alias, string? AliasExpression, List<LambdaExpressionSyntax> Selectors, bool OpaqueColumns) SplitArguments(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
         {
             string? alias = null;
-            bool unresolved = false;
+            string? aliasExpression = null;
             bool opaque = false;
             List<LambdaExpressionSyntax> selectors = new List<LambdaExpressionSyntax>();
 
@@ -470,15 +476,9 @@ namespace Vela.Analyzers
 
                 if (model.GetTypeInfo(argument.Expression, cancellationToken).Type?.SpecialType == SpecialType.System_String)
                 {
+                    aliasExpression = argument.Expression.ToString();
                     Optional<object?> constant = model.GetConstantValue(argument.Expression, cancellationToken);
-                    if (constant.HasValue && constant.Value is string text)
-                    {
-                        alias = text;
-                    }
-                    else
-                    {
-                        unresolved = true;
-                    }
+                    alias = constant.HasValue && constant.Value is string text ? text : null;
                 }
                 else
                 {
@@ -486,7 +486,7 @@ namespace Vela.Analyzers
                 }
             }
 
-            return (alias, unresolved, selectors, opaque);
+            return (alias, aliasExpression, selectors, opaque);
         }
 
         // The projected column a selector reads, or null. reportedElsewhere is true when the selector is a mistake an
@@ -760,6 +760,21 @@ namespace Vela.Analyzers
             }
         }
 
+        // "ctx.GetPreImage<T>()" for the master default alias, otherwise the read naming the image's alias: its literal
+        // when constant, the alias argument's own expression when not, the subordinate default alias when none is given.
+        private static string FullImageAccessor(bool isPre, bool isSubordinate, string? alias, string? aliasExpression)
+        {
+            string role = isPre ? "PreImage" : "PostImage";
+            string argument = !string.IsNullOrEmpty(alias) ? SymbolDisplay.FormatLiteral(alias!, quote: true)
+                : alias is null && aliasExpression is not null ? aliasExpression
+                : isSubordinate ? SymbolDisplay.FormatLiteral("Subordinate" + role, quote: true)
+                : string.Empty;
+            return $"ctx.Get{role}<T>({argument})";
+        }
+
+        // Text embedded in a generated XML doc comment: an alias is free text, so & and < must not reach it raw.
+        private static string XmlEscape(string text) => text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+
         private static string RoleKey(bool isPre, bool isSubordinate) => (isSubordinate ? "Subordinate" : string.Empty) + (isPre ? "Pre" : "Post");
 
         // The alias argument a subordinate image read passes: its default alias is not the one PreImageAs/PostImageAs
@@ -935,7 +950,9 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent)}/// <summary>");
             sb.AppendLine($"{Pad(indent)}/// Generated projection: exposes only the columns this step captured in {(model.IsSubordinate ? "WithSubordinatePreImage/WithSubordinatePostImage" : "WithPreImage/WithPostImage")}(...).");
             sb.AppendLine($"{Pad(indent)}/// A column the step did not capture is absent here (reading it is a compile error, not a silent null);");
-            sb.AppendLine($"{Pad(indent)}/// add it to the capture to read it. Read this via ctx.PreImageAs&lt;T&gt;() / ctx.PostImageAs&lt;T&gt;().");
+            sb.AppendLine(model.IsSubordinate
+                ? $"{Pad(indent)}/// add it to the capture to read it. Read this via ctx.{(model.IsPre ? "PreImageAs" : "PostImageAs")}&lt;T&gt;({XmlEscape(SubordinateAliasArgument(model, model.IsPre ? "SubordinatePreImage" : "SubordinatePostImage").Substring(2))})."
+                : $"{Pad(indent)}/// add it to the capture to read it. Read this via ctx.PreImageAs&lt;T&gt;() / ctx.PostImageAs&lt;T&gt;().");
             sb.AppendLine($"{Pad(indent)}/// </summary>");
             sb.AppendLine($"{Pad(indent)}public sealed class {model.TypeName} : global::Vela.Context.IImageProjection");
             sb.AppendLine($"{Pad(indent)}{{");
@@ -956,7 +973,7 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent + 1)}/// <summary>");
             sb.AppendLine($"{Pad(indent + 1)}/// Widens this captured-columns projection to the full early-bound image (Id, logical name and every");
             sb.AppendLine($"{Pad(indent + 1)}/// attribute the image carried). Explicit on purpose: prefer reading the projection directly; cast only");
-            sb.AppendLine($"{Pad(indent + 1)}/// when a service needs the whole entity. Equivalent to ctx.{(model.IsPre ? "GetPreImage" : "GetPostImage")}&lt;{model.EntityType}&gt;({ReadAlias(model)})");
+            sb.AppendLine($"{Pad(indent + 1)}/// when a service needs the whole entity. Equivalent to ctx.{(model.IsPre ? "GetPreImage" : "GetPostImage")}&lt;{model.EntityType}&gt;({XmlEscape(ReadAlias(model))})");
             sb.AppendLine($"{Pad(indent + 1)}/// (both go through Entity.ToEntity, so the Id is preserved); returns null for an absent image.");
             sb.AppendLine($"{Pad(indent + 1)}/// </summary>");
             sb.AppendLine($"{Pad(indent + 1)}public static explicit operator {model.EntityType}({model.TypeName}? projection)");
@@ -1178,11 +1195,11 @@ namespace Vela.Analyzers
             public ProjectionModel? Model { get; }
             public SkippedProjection? Skip { get; }
 
-            public static ProjectionResult Skipped(InvocationExpressionSyntax invocation, string method, string reason)
+            public static ProjectionResult Skipped(InvocationExpressionSyntax invocation, string method, string accessor, string reason)
             {
                 SyntaxNode name = ((MemberAccessExpressionSyntax)invocation.Expression).Name;
                 FileLinePositionSpan line = name.GetLocation().GetLineSpan();
-                return new ProjectionResult(new SkippedProjection(line.Path, name.Span, line.Span, method, reason));
+                return new ProjectionResult(new SkippedProjection(line.Path, name.Span, line.Span, method, accessor, reason));
             }
 
             public bool Equals(ProjectionResult other) => Nullable.Equals(Model, other.Model) && Nullable.Equals(Skip, other.Skip);
@@ -1196,8 +1213,9 @@ namespace Vela.Analyzers
         // pins a syntax tree) so it stays equatable across incremental runs.
         private readonly struct SkippedProjection : System.IEquatable<SkippedProjection>
         {
-            public SkippedProjection(string path, TextSpan span, LinePositionSpan lineSpan, string method, string reason)
+            public SkippedProjection(string path, TextSpan span, LinePositionSpan lineSpan, string method, string accessor, string reason)
             {
+                Accessor = accessor;
                 Path = path;
                 Span = span;
                 LineSpan = lineSpan;
@@ -1210,11 +1228,13 @@ namespace Vela.Analyzers
             public LinePositionSpan LineSpan { get; }
             public string Method { get; }
             public string Reason { get; }
+            // The full-image read the warning recommends instead, with the alias it must name.
+            public string Accessor { get; }
 
             public Location ToLocation() => Location.Create(Path, Span, LineSpan);
 
             public bool Equals(SkippedProjection other) =>
-                Path == other.Path && Span == other.Span && LineSpan == other.LineSpan && Method == other.Method && Reason == other.Reason;
+                Path == other.Path && Span == other.Span && LineSpan == other.LineSpan && Method == other.Method && Accessor == other.Accessor && Reason == other.Reason;
 
             public override bool Equals(object? obj) => obj is SkippedProjection other && Equals(other);
 

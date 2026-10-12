@@ -1392,6 +1392,86 @@ namespace Demo
         Assert.Contains("not an inline selector lambda", warning.GetMessage());
     }
 
+    [Theory]
+    [InlineData("WithSubordinatePreImage(Column)", "ctx.GetPreImage<T>(\"SubordinatePreImage\")")]
+    [InlineData("WithSubordinatePostImage(Column)", "ctx.GetPostImage<T>(\"SubordinatePostImage\")")]
+    [InlineData("WithSubordinatePreImage(\"dupBefore\", Column)", "ctx.GetPreImage<T>(\"dupBefore\")")]
+    [InlineData("WithSubordinatePostImage(Dynamic, a => a.Name)", "ctx.GetPostImage<T>(Dynamic)")]
+    [InlineData("WithPreImage(\"before\", Column)", "ctx.GetPreImage<T>(\"before\")")]
+    [InlineData("WithPreImage(Dynamic, a => a.Name)", "ctx.GetPreImage<T>(Dynamic)")]
+    [InlineData("WithPostImage(Column)", "ctx.GetPostImage<T>()")]
+    public void VELA021_recommends_the_full_image_read_with_the_alias_the_image_needs(string capture, string accessor)
+    {
+        // A subordinate image never has the master's default alias, so the plain read must name it.
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using System;
+    using System.Linq.Expressions;
+    using Vela.Plugin;
+    public sealed partial class AccountMergeSkip : EntityPluginBase<Account>
+    {
+        private static readonly Expression<Func<Account, object>> Column = a => a.Name;
+        private static readonly string Dynamic = ""dyn"";
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMerge().PostOperation().Sync()." + capture + @".Handle(OnMerged);
+        private void OnMerged() { }
+    }
+}
+");
+
+        Diagnostic warning = Assert.Single(diagnostics, d => d.Id == ImageProjectionGenerator.NotGeneratedDiagnosticId);
+        Assert.EndsWith("; read the full image with " + accessor + " instead, or fix the capture", warning.GetMessage(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_subordinate_projection_documents_the_read_with_its_alias()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountMergeDoc : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMerge().PostOperation().Sync()
+                .WithSubordinatePreImage(a => a.Name)
+                .WithSubordinatePostImage(""dupAfter"", a => a.Name)
+                .Handle(OnMerged);
+        private void OnMerged() { }
+    }
+}
+");
+
+        Assert.Contains("Read this via ctx.PreImageAs&lt;T&gt;(\"SubordinatePreImage\").", output);
+        Assert.Contains("Read this via ctx.PostImageAs&lt;T&gt;(\"dupAfter\").", output);
+        Assert.DoesNotContain("Read this via ctx.PreImageAs&lt;T&gt;() / ctx.PostImageAs&lt;T&gt;().", output);
+    }
+
+    [Fact]
+    public void A_subordinate_alias_is_escaped_in_the_generated_documentation()
+    {
+        string source = @"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountMergeAmp : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMerge().PostOperation().Sync()
+                .WithSubordinatePreImage(""a&b<c>"", a => a.Name)
+                .Handle(OnMerged);
+        private void OnMerged() { }
+    }
+}
+";
+        string output = RunAndConcat(source);
+
+        Assert.Contains("Read this via ctx.PreImageAs&lt;T&gt;(\"a&amp;b&lt;c&gt;\").", output);
+        Assert.DoesNotContain(output.Split('\n'),
+            line => line.TrimStart().StartsWith("///", StringComparison.Ordinal) && line.Contains("a&b", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Emits_a_projection_for_a_marker_OnMessage_without_VELA021()
     {

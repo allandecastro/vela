@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Client;
 using Vela.Constants;
 using Vela.Context;
 using Vela.Plugin;
@@ -92,9 +94,19 @@ namespace Vela.Tests
                 RegisterStep().OnUnlockSalesOrderPricing().PostOperation().Sync().Handle(ctx => { });
                 RegisterStep().OnUnlockInvoicePricing().PostOperation().Sync().Handle(ctx => { });
                 RegisterStep().OnRemoveProductFromKit().PostOperation().Sync().Handle(ctx => { });
-                // Control: Reschedule runs on several tables (appointment, serviceappointment, ...), not on none.
-                RegisterStep().OnReschedule().PostOperation().Sync().Handle(ctx => { });
             }
+        }
+
+        [EntityLogicalName("appointment")]
+        private sealed class TestAppointment() : Entity("appointment");
+
+        // Control: Reschedule runs on the appointment tables, not on none, so it keeps its table.
+        private sealed class ReschedulePlugin : EntityPluginBase<TestAppointment>
+        {
+            public ReschedulePlugin() : base(string.Empty, string.Empty) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnReschedule().PostOperation().Sync().Handle(ctx => { });
         }
 
         // UnlockSalesOrderPricing, UnlockInvoicePricing and RemoveProductFromKit have a single "none"
@@ -107,7 +119,7 @@ namespace Vela.Tests
             Assert.Equal(string.Empty, defs.Single(d => d.Message == PluginMessages.UnlockSalesOrderPricing).EntityLogicalName);
             Assert.Equal(string.Empty, defs.Single(d => d.Message == PluginMessages.UnlockInvoicePricing).EntityLogicalName);
             Assert.Equal(string.Empty, defs.Single(d => d.Message == PluginMessages.RemoveProductFromKit).EntityLogicalName);
-            Assert.Equal("account", defs.Single(d => d.Message == PluginMessages.Reschedule).EntityLogicalName);
+            Assert.Equal("appointment", Assert.Single(new ReschedulePlugin().GetStepDefinitions()).EntityLogicalName);
         }
 
         private sealed class AssignPlugin : EntityPluginBase<TestAccount>

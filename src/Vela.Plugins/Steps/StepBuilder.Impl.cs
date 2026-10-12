@@ -433,7 +433,7 @@ namespace Vela.Steps
         IUnlockSalesOrderPricingStages<TEntity> IStepTrigger<TEntity>.OnUnlockSalesOrderPricing() { SetMessage(PluginMessages.UnlockSalesOrderPricing); return this; }
         ILockInvoicePricingStages<TEntity> IStepTrigger<TEntity>.OnLockInvoicePricing() { SetMessage(PluginMessages.LockInvoicePricing, "invoice"); return this; }
         IUnlockInvoicePricingStages<TEntity> IStepTrigger<TEntity>.OnUnlockInvoicePricing() { SetMessage(PluginMessages.UnlockInvoicePricing); return this; }
-        IRescheduleStages<TEntity> IStepTrigger<TEntity>.OnReschedule() { SetMessage(PluginMessages.Reschedule); return this; }
+        IRescheduleStages<TEntity> IStepTrigger<TEntity>.OnReschedule() { SetMessage(PluginMessages.Reschedule, "appointment", "serviceappointment", "recurringappointmentmaster"); return this; }
         IImmediateBookStages<TEntity> IStepTrigger<TEntity>.OnImmediateBook() { SetMessage(PluginMessages.ImmediateBook, "appointment"); return this; }
         ISendTemplateStages<TEntity> IStepTrigger<TEntity>.OnSendTemplate() { SetMessage(PluginMessages.SendTemplate, "template"); return this; }
         ISendFaxStages<TEntity> IStepTrigger<TEntity>.OnSendFax() { SetMessage(PluginMessages.SendFax, "fax"); return this; }

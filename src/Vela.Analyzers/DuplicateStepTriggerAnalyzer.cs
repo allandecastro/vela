@@ -10,10 +10,13 @@ namespace Vela.Analyzers
 {
     /// <summary>
     /// Flags two step registrations in one plugin that share a trigger - message + stage + mode (the entity is fixed
-    /// per plugin) - and cannot be told apart: the same <c>FilterOn(...)</c> columns, the same images, and neither
-    /// carries a <c>WithStepKey(...)</c> or <c>ForRelationship(...)</c>. Several steps may share a trigger when one of
-    /// those differs; two that do not resolve to the same step key and the runtime rejects them ("cannot be told
-    /// apart"). Only complete chains (ending in <c>Handle</c>) whose message, stage, filters and images are statically
+    /// per plugin) - and cannot be told apart: the same <c>FilterOn(...)</c> columns, the same images and the same
+    /// <c>ForRelationship(...)</c> scope, and neither carries a <c>WithStepKey(...)</c>. Several steps may share a
+    /// trigger when one of those differs; two that do not resolve to the same step key and the runtime rejects them
+    /// ("cannot be told apart"). Also flags a literal <c>WithStepKey(...)</c> used twice in the plugin, which the
+    /// runtime rejects whatever the triggers. A type-stated trigger is keyed by the sdkmessage it registers on
+    /// (<c>On&lt;SendEmailRequest&gt;()</c> and <c>On&lt;SendFaxRequest&gt;()</c> both on <c>Send</c>). Only complete
+    /// chains (ending in <c>Handle</c>) whose message, stage, filters, images, relationships and key are statically
     /// readable are compared; anything the analyzer cannot read is skipped, so it never guesses.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
@@ -24,7 +27,7 @@ namespace Vela.Analyzers
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
             title: "Duplicate step trigger in a plugin",
-            messageFormat: "This plugin already registers a step for {0} with the same filtering attributes and images; give one a WithStepKey(...), or merge them",
+            messageFormat: "This plugin already registers a step for {0} with the same filtering attributes, images and relationship scope; give one a WithStepKey(...), or merge them",
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
@@ -52,7 +55,17 @@ namespace Vela.Analyzers
             ["PostOperation"] = "postoperation",
         }.ToImmutableDictionary();
 
-        public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
+        // Same rule, the step key case: the runtime rejects a step key used twice within a plugin, on any trigger.
+        private static readonly DiagnosticDescriptor DuplicateKeyRule = new DiagnosticDescriptor(
+            id: DiagnosticId,
+            title: "Duplicate step key in a plugin",
+            messageFormat: "This plugin already registers a step with the step key '{0}'; step keys must be unique within a plugin",
+            category: "Vela.Usage",
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true,
+            description: "A WithStepKey(\"...\") names the Dataverse step a chain is deployed as. Two chains of one plugin with the same key (compared case-insensitively) collide, whatever their triggers, and fail at registration. Give each step its own key.");
+
+        public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule, DuplicateKeyRule);
 
         public override void Initialize(AnalysisContext context)
         {
@@ -85,6 +98,7 @@ namespace Vela.Analyzers
             }
 
             var seen = new Dictionary<string, string>(System.StringComparer.Ordinal); // trigger key -> display
+            var keys = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);   // literal step keys
             foreach (InvocationExpressionSyntax invocation in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 if (invocation.Expression is not MemberAccessExpressionSyntax member || member.Name.Identifier.ValueText != "Handle")
@@ -97,14 +111,25 @@ namespace Vela.Analyzers
                     continue;
                 }
 
+                if (!TryResolveShape(member.Expression, context.SemanticModel, context.CancellationToken, out string shape, out string? stepKey, out Location keyLocation))
+                {
+                    continue; // a filter, image, relationship or step key not readable
+                }
+
+                if (stepKey is not null)
+                {
+                    // A keyed step is deployed under its key alone: only another step with the same key collides.
+                    if (!keys.Add(stepKey))
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(DuplicateKeyRule, keyLocation, stepKey));
+                    }
+
+                    continue;
+                }
+
                 if (!TryResolveTrigger(member.Expression, context.SemanticModel, context.CancellationToken, out string message, out string stage, out string mode, out Location location, out string display))
                 {
                     continue; // undeterminable trigger - skip rather than guess
-                }
-
-                if (!TryResolveShape(member.Expression, out string shape))
-                {
-                    continue; // explicitly told apart (step key / relationship), or filters/images not readable
                 }
 
                 string key = message + "|" + stage + "|" + mode + "|" + shape;
@@ -138,7 +163,7 @@ namespace Vela.Analyzers
                     message = typed!;
                     location = call.Name.GetLocation();
                 }
-                else if (message.Length == 0 && FluentStep.TypeStatedMessage(call, model, cancellationToken) is { } typeStated)
+                else if (message.Length == 0 && FluentStep.TypeStatedSdkMessage(call, model, cancellationToken) is { } typeStated)
                 {
                     message = typeStated.ToLowerInvariant();
                     location = call.Name.GetLocation();
@@ -168,26 +193,49 @@ namespace Vela.Analyzers
             return true;
         }
 
-        // What tells a step apart from another on the same trigger: its FilterOn(...) columns and its images (alias and
-        // columns). Returns false - never compared - for a chain with WithStepKey(...) or ForRelationship(...), which
-        // the author distinguished explicitly, or whose filters/images are not literal column selectors.
-        private static bool TryResolveShape(ExpressionSyntax? receiver, out string shape)
+        // What tells a step apart from another on the same trigger: its FilterOn(...) columns, its images (kind, alias
+        // and columns) and its ForRelationship(...) scope, or its WithStepKey(...), which alone identifies a keyed step
+        // (stepKey, trimmed, with the location of its argument). Returns false - never compared - for a chain whose key
+        // is not a constant string or, for a keyless chain, whose filters or images are not literal column selectors
+        // or whose relationships are not constant strings.
+        private static bool TryResolveShape(ExpressionSyntax? receiver, SemanticModel model, System.Threading.CancellationToken cancellationToken, out string shape, out string? stepKey, out Location keyLocation)
         {
             shape = string.Empty;
+            stepKey = null;
+            keyLocation = Location.None;
             var filters = new List<string>();
             var images = new List<string>();
+            var relationships = new List<string>();
+            bool readable = true;
             foreach (ChainCall call in FluentStep.Spine(receiver))
             {
+                SeparatedSyntaxList<ArgumentSyntax> arguments = call.Invocation.ArgumentList.Arguments;
                 switch (call.MethodName)
                 {
                     case "WithStepKey":
-                    case "ForRelationship":
-                        return false;
-                    case "FilterOn":
-                        if (!TryReadColumns(call.Invocation.ArgumentList.Arguments, 0, filters))
+                        if (arguments.Count != 1 || ConstantString(arguments[0].Expression, model, cancellationToken) is not { } key)
                         {
                             return false;
                         }
+
+                        stepKey = key.Trim();
+                        keyLocation = arguments[0].GetLocation();
+                        break;
+                    case "ForRelationship":
+                        foreach (ArgumentSyntax argument in arguments)
+                        {
+                            if (ConstantString(argument.Expression, model, cancellationToken) is not { } relationship)
+                            {
+                                readable = false;
+                                break;
+                            }
+
+                            relationships.Add(relationship.Trim().ToLowerInvariant());
+                        }
+
+                        break;
+                    case "FilterOn":
+                        readable &= TryReadColumns(arguments, 0, filters);
 
                         break;
                     case "WithPreImage":
@@ -195,14 +243,14 @@ namespace Vela.Analyzers
                     case "WithSubordinatePreImage":
                     case "WithSubordinatePostImage":
                         string kind = call.MethodName.Replace("With", string.Empty).Replace("Image", string.Empty).ToLowerInvariant();
-                        SeparatedSyntaxList<ArgumentSyntax> arguments = call.Invocation.ArgumentList.Arguments;
                         string alias = call.MethodName.Replace("With", string.Empty);
                         int first = 0;
                         if (arguments.Count > 0 && arguments[0].Expression is not LambdaExpressionSyntax)
                         {
                             if (arguments[0].Expression is not LiteralExpressionSyntax literal || !literal.IsKind(SyntaxKind.StringLiteralExpression))
                             {
-                                return false;
+                                readable = false;
+                                break;
                             }
 
                             alias = literal.Token.ValueText;
@@ -212,7 +260,8 @@ namespace Vela.Analyzers
                         var columns = new List<string>();
                         if (!TryReadColumns(arguments, first, columns))
                         {
-                            return false;
+                            readable = false;
+                            break;
                         }
 
                         columns.Sort(System.StringComparer.Ordinal);
@@ -221,10 +270,27 @@ namespace Vela.Analyzers
                 }
             }
 
+            if (stepKey is not null)
+            {
+                return true;
+            }
+
+            if (!readable)
+            {
+                return false;
+            }
+
             filters.Sort(System.StringComparer.Ordinal);
             images.Sort(System.StringComparer.Ordinal);
-            shape = "filter=" + string.Join(",", filters) + "|images=" + string.Join(";", images);
+            relationships.Sort(System.StringComparer.Ordinal);
+            shape = "filter=" + string.Join(",", filters) + "|images=" + string.Join(";", images) + "|rel=" + string.Join(",", relationships);
             return true;
+        }
+
+        private static string? ConstantString(ExpressionSyntax expression, SemanticModel model, System.Threading.CancellationToken cancellationToken)
+        {
+            Optional<object?> constant = model.GetConstantValue(expression, cancellationToken);
+            return constant.HasValue && constant.Value is string text ? text : null;
         }
 
         private static bool TryReadColumns(SeparatedSyntaxList<ArgumentSyntax> arguments, int first, List<string> columns)

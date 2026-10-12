@@ -21,6 +21,12 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (Framework)
+
+- **Breaking:** `OnReschedule()` now accepts only the tables Dataverse has a Reschedule filter for: `appointment`,
+  `serviceappointment` and `recurringappointmentmaster`. On any other table `Build()` rejects the step instead of
+  `vela apply` failing on the missing sdkmessagefilter.
+
 ### Fixed (Framework)
 
 - **A step on a sibling table no longer diverts a business message from the store.** An opportunity `Win` step made
@@ -42,6 +48,20 @@ All notable changes to Vela are documented here. The format is based on
   no further attempt starts and the last fault propagates.
 - The setup error for a plugin that declares nothing now names `RegisterPluginSteps()`, not the removed
   `RegisterSteps`.
+- Associate/Disassociate steps scoped to different relationships no longer run a handler twice: the executing step
+  now picks its own definition before the relationship scope is checked.
+- Two steps whose images share an alias and columns but read different request properties (`Target` and
+  `SubordinateId` on Merge) now get distinct step keys instead of being rejected. Existing step keys are unchanged.
+- VELA008 now flags two chains with the same constant `ForRelationship(...)` scope, and a constant
+  `WithStepKey(...)` used twice in a plugin. It also compares a type-stated trigger under the sdkmessage it
+  registers on, so `On<SendEmailRequest>()` and `On<SendFaxRequest>()` collide on `Send`.
+- VELA011 now covers readonly `IList`, `IDictionary`, `Collection<T>`, `ObservableCollection<T>`,
+  `KeyedCollection<TKey, TItem>`, `PriorityQueue<TElement, TPriority>`, `NameValueCollection`, `StringCollection`
+  and `OrderedDictionary` fields.
+- VELA021 now names the alias the fallback read needs: `ctx.GetPreImage<T>("SubordinatePreImage")` for a skipped
+  subordinate image, and the custom alias when there is one. The parameterless form read the master image.
+- VELA024 now flags `ConfigureAwait(...).GetAwaiter().GetResult()` on `Task`, `Task<T>`, `ValueTask` and
+  `ValueTask<T>`.
 
 ## [0.32.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
