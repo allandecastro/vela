@@ -69,8 +69,8 @@ Insights, and the automatic ones list only metadata (message, stage, ids, column
 
 The integration is safe either way and never throws for telemetry reasons:
 
-- **Configured** - Vela hands logs and metrics to the platform logger, which writes them to Application Insights
-  as described in [Microsoft's documentation](https://learn.microsoft.com/power-apps/developer/data-platform/application-insights-ilogger).
+- **Configured** - Vela hands logs and metrics to the platform logger. What reaches Application Insights from
+  there is up to the platform; see [Microsoft's documentation](https://learn.microsoft.com/power-apps/developer/data-platform/application-insights-ilogger).
 - **Not configured** - the Application Insights channel is a no-op; entries still land in the plug-in trace log
   (when the environment's trace-log setting is on), so debugging via the Plugin Trace Viewer keeps working.
 
