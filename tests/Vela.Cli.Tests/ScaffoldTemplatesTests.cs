@@ -330,6 +330,11 @@ public class ScaffoldTemplatesTests
 
         Assert.DoesNotContain("ctx.Trace(greetings.BuildGreeting", contactSync);
 
+        // PR #484 review: the message reference traces only ids, never a column value of the record.
+        string messageReference = ScaffoldTemplates.AccountMessageReference("Zava");
+        Assert.DoesNotContain("Target.Name", messageReference);
+        Assert.DoesNotMatch(@"ctx\.Request\.Target\.(?!Id\b)\w+", messageReference);
+
         foreach (string tests in new[] { ScaffoldTemplates.SecurityExampleTests("Zava"), ScaffoldTemplates.AccountPostCreatePluginTests("Zava") })
         {
             Assert.DoesNotContain("new ColumnSet(true)", tests);
