@@ -199,6 +199,23 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Deleting_the_record_deletes_its_files_so_DeleteFile_on_a_stale_id_faults()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            Guid account = crm.Create(new Entity("account"));
+            Guid kept = crm.Create(new Entity("account"));
+            Guid fileId = UploadFile(crm, "account", account, "vela_document");
+            Guid keptFile = UploadFile(crm, "account", kept, "vela_document");
+
+            crm.Delete("account", account);
+
+            Assert.Equal(unchecked((int)0x80040217), ErrorCode(() => crm.Execute(new OrganizationRequest("DeleteFile") { Parameters = { ["FileId"] = fileId } })));
+            // Another record's file is untouched.
+            crm.Execute(new OrganizationRequest("DeleteFile") { Parameters = { ["FileId"] = keptFile } });
+        }
+
+
+        [Fact]
         public void DeleteFile_needs_write_access_on_the_record()
         {
             Guid account = Guid.NewGuid();
@@ -252,6 +269,75 @@ namespace Vela.Testing.Tests
             Assert.Equal(unchecked((int)0x80040502), ErrorCode(() => crm.Update(new Entity("account", account) { ["parentaccountid"] = missing })));
 
             crm.Update(new Entity("account", account) { ["parentaccountid"] = new EntityReference("account", crm.Create(new Entity("account"))) });
+        }
+
+        [Fact]
+        public void With_security_on_a_lookup_with_an_empty_id_and_no_key_faults_as_missing()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("all", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Read, Privilege.Write, Privilege.Append, Privilege.AppendTo))
+                    .User(Alice, SalesBu, "all"));
+            Guid account = crm.Create(new Entity("account") { ["name"] = "A" });
+            EntityReference empty = new EntityReference("account", Guid.Empty);
+
+            Assert.Equal(unchecked((int)0x80040217), ErrorCode(() => crm.Create(new Entity("account") { ["parentaccountid"] = empty })));
+            Assert.Equal(unchecked((int)0x80040502), ErrorCode(() => crm.Update(new Entity("account", account) { ["parentaccountid"] = empty })));
+            Assert.False(crm.Retrieve("account", account, new ColumnSet(true)).Contains("parentaccountid"));
+        }
+
+        [Fact]
+        public void With_security_on_a_lookup_set_by_key_is_resolved_not_rejected_as_missing()
+        {
+            InMemoryOrganizationService crm = new InMemoryOrganizationService()
+                .WithAlternateKey("account", "accountnumber")
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("all", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Read, Privilege.Write, Privilege.Append, Privilege.AppendTo))
+                    .User(Alice, SalesBu, "all"));
+            Guid parent = crm.Create(new Entity("account") { ["accountnumber"] = "P-1" });
+
+            Guid child = crm.Create(new Entity("account") { ["parentaccountid"] = new EntityReference("account", "accountnumber", "P-1") });
+
+            Assert.Equal(parent, crm.Retrieve("account", child, new ColumnSet("parentaccountid")).GetAttributeValue<EntityReference>("parentaccountid").Id);
+        }
+
+        [Fact]
+        public void A_lookup_set_by_key_is_checked_against_the_AppendTo_scope_of_the_record_it_names()
+        {
+            // Alice has AppendTo on her own accounts only. The parent belongs to someone else, so linking to it is
+            // denied by key exactly as by id (the key is resolved before the record-scoped check).
+            Guid parent = Guid.NewGuid();
+            Guid mine = Guid.NewGuid();
+            InMemoryOrganizationService crm = new InMemoryOrganizationService()
+                .WithAlternateKey("account", "accountnumber")
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("scoped", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Read, Privilege.Write, Privilege.Append)
+                        .Grant("account", AccessLevel.User, Privilege.AppendTo))
+                    .User(Alice, SalesBu, "scoped"))
+                .Seed(
+                    OwnedBy(new Entity("account", parent) { ["accountnumber"] = "P-1" }, Guid.NewGuid()),
+                    OwnedBy(new Entity("account", mine) { ["accountnumber"] = "M-1" }, Alice));
+
+            int byId = ErrorCode(() => crm.Create(new Entity("account") { ["parentaccountid"] = new EntityReference("account", parent) }));
+            int byKey = ErrorCode(() => crm.Create(new Entity("account") { ["parentaccountid"] = new EntityReference("account", "accountnumber", "P-1") }));
+            int updateByKey = ErrorCode(() => crm.Update(new Entity("account", mine) { ["parentaccountid"] = new EntityReference("account", "accountnumber", "P-1") }));
+
+            Assert.Equal(byId, byKey);
+            Assert.Equal(byId, updateByKey);
+            Assert.False(crm.Retrieve("account", mine, new ColumnSet(true)).Contains("parentaccountid"));
+
+            // Her own account is in scope, by key too.
+            Guid child = crm.Create(new Entity("account") { ["parentaccountid"] = new EntityReference("account", "accountnumber", "M-1") });
+            Assert.Equal(mine, crm.Retrieve("account", child, new ColumnSet("parentaccountid")).GetAttributeValue<EntityReference>("parentaccountid").Id);
         }
 
         [Fact]
@@ -357,6 +443,28 @@ namespace Vela.Testing.Tests
                 .OrderBy(row => row.Item2)
                 .ToList();
             Assert.Equal(new[] { (master, lead), (master, sharedLead) }.OrderBy(row => row.Item2), rows);
+        }
+
+        [Fact]
+        public void Merge_on_a_self_referential_N_to_N_drops_the_row_linking_the_subordinate_to_the_master()
+        {
+            Guid master = Guid.NewGuid();
+            Guid subordinate = Guid.NewGuid();
+            Guid other = Guid.NewGuid();
+            InMemoryOrganizationService crm = new InMemoryOrganizationService()
+                .WithManyToMany("account_peers", "accountpeers", "account", "accountidone", "account", "accountidtwo")
+                .Seed(
+                    new Entity("account", master) { ["name"] = "Master" },
+                    new Entity("account", subordinate) { ["name"] = "Sub" },
+                    new Entity("account", other) { ["name"] = "Other" });
+            Relationship peers = new Relationship("account_peers");
+            crm.Associate("account", subordinate, peers, new EntityReferenceCollection { new EntityReference("account", master), new EntityReference("account", other) });
+
+            crm.Execute(new MergeRequest { Target = new EntityReference("account", master), SubordinateId = subordinate, UpdateContent = new Entity("account") });
+
+            Entity row = Assert.Single(crm.GetAll("accountpeers"));
+            Guid[] linked = new[] { row.GetAttributeValue<EntityReference>("accountidone").Id, row.GetAttributeValue<EntityReference>("accountidtwo").Id };
+            Assert.Equal(new[] { master, other }.OrderBy(id => id), linked.OrderBy(id => id));
         }
 
         // --- 14: scopes disposed out of order --------------------------------------------------------------

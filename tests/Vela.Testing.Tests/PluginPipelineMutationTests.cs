@@ -54,7 +54,7 @@ namespace Vela.Testing.Tests
         {
             InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => PluginPipeline.Empty().Register<PmNoSteps>());
 
-            Assert.Contains("Declare its steps in RegisterSteps (or its Custom API definition).", ex.Message);
+            Assert.Contains("Declare its steps in RegisterPluginSteps() (or its Custom API definition).", ex.Message);
         }
 
         // A Custom API whose definition is missing registers nothing: the setup fails with the "declares nothing"

@@ -256,15 +256,14 @@ namespace Vela.Testing
         {
             // Steps register on the sdkmessage, which differs from the request name for some business messages
             // (SendEmailRequest runs the Send steps, WinQuoteRequest the Win steps), and plugins see that name.
+            // Matching on the entity too keeps a step of a sibling table (an opportunity Win step for a
+            // WinQuoteRequest) from diverting the request away from the store.
             string message = SdkMessageNames.ToSdkMessage(request);
-            bool hasSteps = _registrations.Any(registration => registration.Step.Enabled
-                && string.Equals(registration.Step.Message, message, StringComparison.OrdinalIgnoreCase));
-            if (!hasSteps)
+            (string entityName, Guid entityId) = DerivePrimaryEntity(request);
+            if (!HasSteps(message, entityName))
             {
                 return _store.Execute(request);
             }
-
-            (string entityName, Guid entityId) = DerivePrimaryEntity(request);
 
             // The steps see (and may change) a copy of the request, so the caller's request object is never mutated
             // and a PreValidation/PreOperation change to an input reaches the main operation.

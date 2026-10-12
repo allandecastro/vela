@@ -19,23 +19,28 @@ namespace Vela.Testing
     // images) and runs the plugin, synchronously or after the commit for an asynchronous step.
     public sealed partial class PluginPipeline
     {
+        // Whether an enabled step runs for the message on this entity. A generic modelled message may not resolve a
+        // primary entity from the request (null or empty entityName); its steps then match by message alone.
+        // Likewise an entity-none step (empty logical name, an intentionally global step) matches any entity, and a
+        // global message (Associate/Disassociate: sdkmessagefilter "none") fires regardless of the entity the step
+        // was declared on - mirroring the runtime's ResolveSingleMatchingStep and the CLI's registration.
+        private static bool StepMatches(StepDefinition step, string message, string? entityName)
+        {
+            return step.Enabled
+                && string.Equals(step.Message, message, StringComparison.OrdinalIgnoreCase)
+                && (string.IsNullOrEmpty(entityName)
+                    || PluginMessages.IsGlobalMessage(message)
+                    || string.IsNullOrEmpty(step.EntityLogicalName)
+                    || string.Equals(step.EntityLogicalName, entityName, StringComparison.OrdinalIgnoreCase));
+        }
+
         private void FireStage(StageInvocation invocation, List<Action> asyncQueue)
         {
             CaptureOperationContext(invocation);
             List<PipelineRegistration> steps = _registrations
                 // A disabled step (.Disabled()) is registered but dormant: it never fires, as on a real org.
-                .Where(registration => registration.Step.Enabled
-                    && registration.Step.Stage == invocation.Stage
-                    && string.Equals(registration.Step.Message, invocation.Message, StringComparison.OrdinalIgnoreCase)
-                    // A generic modelled message may not resolve a primary entity from the request; match its
-                    // steps by (message, stage) alone in that case. Likewise an entity-none step (empty logical
-                    // name, an intentionally global step) matches any entity, and a global message
-                    // (Associate/Disassociate: sdkmessagefilter "none") fires regardless of the entity the step was
-                    // declared on - mirroring the runtime's ResolveSingleMatchingStep and the CLI's registration.
-                    && (string.IsNullOrEmpty(invocation.EntityLogicalName)
-                        || PluginMessages.IsGlobalMessage(invocation.Message)
-                        || string.IsNullOrEmpty(registration.Step.EntityLogicalName)
-                        || string.Equals(registration.Step.EntityLogicalName, invocation.EntityLogicalName, StringComparison.OrdinalIgnoreCase)))
+                .Where(registration => registration.Step.Stage == invocation.Stage
+                    && StepMatches(registration.Step, invocation.Message, invocation.EntityLogicalName))
                 .Where(registration => !string.Equals(invocation.Message, PluginMessages.Update, StringComparison.OrdinalIgnoreCase)
                     || FiltersMatch(registration.Step, invocation.ChangedAttributes))
                 .Where(registration => !_bypass.ShouldBypass(registration.Step))

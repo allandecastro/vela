@@ -65,21 +65,30 @@ namespace Vela.Testing
         // SetState, as the platform runs it (verified live): the request fires the SetStateDynamicEntity steps (never
         // the SetState ones), and its main operation is an Update of statecode/statuscode at the same depth that fires
         // the Update steps at PreOperation and PostOperation only. The SetStateDynamicEntity steps see the Status as
-        // sent (-1 = default); the Update Target carries the resolved status (see WithDefaultStatus).
+        // sent (-1 = default); the Update Target carries the resolved status (see WithDefaultStatus). The Update is
+        // built from the State and Status inputs as the pre stages left them, so a pre step that changes either one
+        // changes the state written.
         internal void ExecuteSetState(EntityReference target, OptionSetValue? state, OptionSetValue? status, ParameterCollection? sharedVariables = null)
         {
             RunOperation<object?>(asyncQueue =>
             {
-                Entity update = _store.SetStateUpdate(target, state, status);
+                EntityReference record = new EntityReference(target.LogicalName, _store.ResolveReference(target));
                 FireSetStateDynamicEntity(
-                    new EntityReference(update.LogicalName, update.Id),
+                    record,
                     state ?? new OptionSetValue(0),
                     status ?? new OptionSetValue(-1),
-                    () => UpdateBatch(new[] { update }, platformUpdate: true, asyncQueue),
+                    inputs =>
+                    {
+                        Entity update = _store.SetStateUpdate(record, OptionSetInput(inputs, "State"), OptionSetInput(inputs, "Status"));
+                        UpdateBatch(new[] { update }, platformUpdate: true, asyncQueue);
+                    },
                     asyncQueue);
                 return null;
             }, sharedVariables);
         }
+
+        private static OptionSetValue? OptionSetInput(ParameterCollection inputs, string name)
+            => inputs.TryGetValue(name, out object? value) ? value as OptionSetValue : null;
 
         // Assign, as the platform runs it (verified live): Assign PreValidation and PreOperation, then the main
         // operation, an ownerid Update at the same depth firing the Update steps at PreOperation and PostOperation
@@ -114,8 +123,9 @@ namespace Vela.Testing
         }
 
         // Fires the SetStateDynamicEntity steps around a state change: PreValidation and PreOperation, the main
-        // operation (which writes the state), then PostOperation. Images come from the record before and after it.
-        private void FireSetStateDynamicEntity(EntityReference record, OptionSetValue state, OptionSetValue status, Action mainOperation, List<Action> asyncQueue)
+        // operation (which writes the state, given the inputs as the pre stages left them), then PostOperation.
+        // Images come from the record before and after it.
+        private void FireSetStateDynamicEntity(EntityReference record, OptionSetValue state, OptionSetValue status, Action<ParameterCollection> mainOperation, List<Action> asyncQueue)
         {
             ParameterCollection inputs = new ParameterCollection
             {
@@ -136,7 +146,7 @@ namespace Vela.Testing
                 }
             }
 
-            mainOperation();
+            mainOperation(inputs);
 
             _store.TryGet(record.LogicalName, record.Id, out Entity? post);
             StageInvocation postInvocation = GenericInvocation(PluginMessages.SetStateDynamicEntity, PluginStages.PostOperation, record.LogicalName, record.Id, inputs, null);
@@ -179,7 +189,7 @@ namespace Vela.Testing
                     new EntityReference(row.LogicalName, row.Id),
                     state,
                     row.GetAttributeValue<OptionSetValue>("statuscode") ?? new OptionSetValue(-1),
-                    () => _store.Update(stateChange),
+                    _ => _store.Update(stateChange),
                     nestedQueue);
                 return null;
             });
