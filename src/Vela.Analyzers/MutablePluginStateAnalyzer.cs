@@ -39,6 +39,7 @@ namespace Vela.Analyzers
             "System.Collections.Generic.LinkedList`1",
             "System.Collections.Generic.Queue`1",
             "System.Collections.Generic.Stack`1",
+            "System.Collections.Generic.PriorityQueue`2",
             "System.Collections.Generic.ICollection`1",
             "System.Collections.Generic.IList`1",
             "System.Collections.Generic.IDictionary`2",
@@ -47,7 +48,15 @@ namespace Vela.Analyzers
             "System.Collections.Hashtable",
             "System.Collections.Queue",
             "System.Collections.Stack",
-            "System.Collections.SortedList");
+            "System.Collections.SortedList",
+            "System.Collections.IList",
+            "System.Collections.IDictionary",
+            "System.Collections.ObjectModel.Collection`1",
+            "System.Collections.ObjectModel.ObservableCollection`1",
+            "System.Collections.ObjectModel.KeyedCollection`2",
+            "System.Collections.Specialized.NameValueCollection",
+            "System.Collections.Specialized.StringCollection",
+            "System.Collections.Specialized.OrderedDictionary");
 
         private static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
             id: DiagnosticId,
