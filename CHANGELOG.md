@@ -21,11 +21,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries release on their separate tags
-(`cli-vX.Y.Z` / `framework-vX.Y.Z`).
+## [0.32.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
-### Changed (Framework, breaking)
-
+### Changed (breaking)
 
 - **`On<SendFaxRequest>()` and the request-typed forms of the 13 messages that gained a typed trigger now throw
   (#405).** Use the typed trigger (`OnSendFax()`, `OnRecalculate()`, ...); VELA023 offers the fix. See Added below.
@@ -240,7 +238,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   work on a copy, as on Dataverse where the request is serialized: read the id from the return value of `Create` (or
   `CreateMultipleResponse.Ids`), and the stored state from `pipeline.GetAll(...)`.
 
-### Added (Framework)
+### Added
 
 - **13 more typed triggers (#405):** `OnAddItemCampaign()`, `OnRemoveItemCampaign()` (campaign), `OnRecalculate()`
   (goal), `OnLockSalesOrderPricing()` (salesorder), `OnLockInvoicePricing()` (invoice), `OnImmediateBook()`
@@ -343,7 +341,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   scenario could not opt into strict security, register an access-team template or pre-share a record. A test now
   fails if any store configuration method has no pipeline counterpart.
 
-### Changed (Framework)
+### Changed
 
 - **The telemetry guide and `LogMetric` docs describe what Vela does and defer to Microsoft for the rest (#465).**
   `LogMetric` writes the `[Metric]` trace-log line and hands the metric to the platform logger; what reaches
@@ -388,7 +386,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   like VELA019, so test projects and tools are no longer flagged, and `new ColumnSet(AllColumns)` over a
   `const bool` no longer slips through.
 
-### Fixed (Framework)
+### Fixed
 
 - **Harness writes that fail leave nothing behind (#451).** An `Update` whose lookup key matches nothing used to
   merge its other columns first, and a multi-record `Associate` linked the records before the failing one. Both now
@@ -655,7 +653,9 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`CustomApiResponse` uses its API unique name.** The constructor ignored its `apiUniqueName` argument, so a typed
   Custom API response had no `ResponseName`. It now sets `ResponseName`, as `CustomApiRequest` sets `RequestName`.
 
-### Changed (CLI, breaking)
+## [0.24.0] - 2026-10-12 (Vela.Cli)
+
+### Changed (breaking)
 
 - **The generated `On<Message>()` step extensions move to `Messages/<Name>.Steps.cs`, compiled by the plugin
   projects.** They extend the `Vela.Plugins` step builder, but they were written into the contract file in the Shared
@@ -702,7 +702,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   0, so CI went green on an environment the next `apply` would change again. It now exits 5 (drift), with mode
   `apply-not-converged` and the remaining diff in `summary` / `diff`.
 
-### Added (CLI)
+### Added
 
 - **`vela init` writes an `AGENTS.md`** at the solution root: instructions for AI coding agents on how to write a step
   (typed trigger, required `FilterOn`, images, `WithStepKey`, `ctx.Service` / `SystemService` / `AsUser`), a typed
@@ -742,7 +742,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
   named environment variable, so neither appears on the command line where other users of the host can read it.
   The generated signing target passes the password this way.
 
-### Changed (CLI)
+### Changed
 
 - **`vela init` scaffolds plugin projects on .NET Framework 4.8.** Microsoft confirmed 4.8 as the supported and
   recommended version for plug-ins (4.8.1 is not supported), so the generated `Plugins` and `Plugins.Tests`
@@ -767,7 +767,7 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 - **`vela add` rejects an option the kind does not use** (for example `add service --message`) instead of ignoring
   it, and `add step` no longer accepts `--force`, which it never used.
 
-### Fixed (CLI)
+### Fixed
 
 - **An unchanged plugin package is no longer republished on every `apply` (#492).** `plan` and `apply` compared
   the local package with the stored `pluginpackage.content`, which Dataverse empties once it has processed the
