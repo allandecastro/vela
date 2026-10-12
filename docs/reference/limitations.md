@@ -25,8 +25,9 @@ change.
 - **Managed identity is host-dependent.** `AcquireManagedIdentityToken(...)` works only where the runtime
   exposes `IManagedIdentityService`; otherwise it throws at call time (no early validation). Extended context
   members (`EnvironmentId`, `TenantId`, `IsApplicationUser`, …) are read through their SDK interfaces
-  (`IPluginExecutionContext2` to `IPluginExecutionContext7`) and are `null`/`false` when the host's context does not
-  implement that interface.
+  (`IPluginExecutionContext2` to `IPluginExecutionContext7`). When the host's context does not implement the
+  interface, each member keeps an empty default: `null` for the ids, `false` for the flags, an empty string for
+  `InitiatingUserAgent` and empty collections for the bulk image collections.
 - **Sandbox constraints.** No filesystem access (`System.IO.File` / `Directory` / `FileStream` throw at runtime -
   flagged by [VELA019](analyzers.md#vela019)); outbound HTTP is limited to an administrator-configured allow-list
   over TLS; and the whole synchronous pipeline must finish within a ~2-minute execution budget. See
