@@ -252,7 +252,7 @@ recognised), `--messages` generates no duplicate request/response, only its enti
 extension over the SDK type (`OnCloseQuote()` → `On<Microsoft.Crm.Sdk.Messages.CloseQuoteRequest>()`, compiling on
 `Quote` only). A request with a curated trigger (`Create`, `QualifyLead`, `WinOpportunity`, ...) generates nothing:
 the builder already has it. The Shared project needs no new reference: it compiles the SDK message types from
-`Microsoft.CrmSdk.CoreAssemblies` (net462) and the Dataverse client (net10.0) it already uses.
+`Microsoft.CrmSdk.CoreAssemblies` (net48) and the Dataverse client (net10.0) it already uses.
 
 **One class per request, not per sdkmessage.** Several requests can share one sdkmessage, each for its own entity
 and with its own fields: `Close` serves `CloseIncident` (incident, `IncidentResolution`) and `CloseQuote` (quote,

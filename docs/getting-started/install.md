@@ -4,11 +4,11 @@
 
 ## Prerequisites
 
-- **.NET 10 SDK.** The CLI is a `net10.0` tool, and the SDK also builds the `net462` plugin projects on any OS
+- **.NET 10 SDK.** The CLI is a `net10.0` tool, and the SDK also builds the `net48` plugin projects on any OS
   (it brings the .NET Framework reference assemblies).
-- **Mono, to run plugin tests outside Windows.** Plugins and their `Vela.Testing` tests target `net462`, and
-  `dotnet test` runs a `net462` test project on Windows only. On macOS and Linux, install Mono (`brew install mono`,
-  or your distribution's `mono-complete`) and run the built test assembly with the xUnit console runner:
+- **Mono, to run plugin tests outside Windows.** Plugins and their `Vela.Testing` tests target `net48`, and
+  `dotnet test` runs a .NET Framework test project on Windows only. On macOS and Linux, install Mono
+  (`brew install mono`, or your distribution's `mono-complete`) and run the built test assembly with the xUnit console runner:
   `mono ~/.nuget/packages/xunit.runner.console/<version>/tools/net462/xunit.console.exe <tests>.dll`
   (add the `xunit.runner.console` package to the test project to get it). Building needs no Mono.
 - **A Dataverse solution and its publisher.** `vela apply --solution <uniqueName>` deploys into an existing

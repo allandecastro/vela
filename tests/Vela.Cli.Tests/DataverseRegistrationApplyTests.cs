@@ -406,6 +406,43 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
+    public void UpsertPluginPackage_explains_the_legacy_package_cap_when_Dataverse_rejects_a_package_above_net471()
+    {
+        var fault = new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Import failed.");
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => new EntityCollection(),
+            OnCreate = _ => throw fault,
+        };
+
+        var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", BuildPluginNupkg("net48"));
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false));
+
+        Assert.Contains("'acme_Pkg', which targets net48: Import failed.", ex.Message);
+        Assert.Contains("register only on Dataverse 9.2.26092 or later", ex.Message);
+        Assert.Contains("<TargetFramework>net471</TargetFramework>", ex.Message);
+        Assert.Same(fault, ex.InnerException);
+    }
+
+    [Fact]
+    public void UpsertPluginPackage_rethrows_a_rejection_as_is_when_the_package_is_within_the_legacy_cap()
+    {
+        var fault = new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Import failed.");
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => new EntityCollection(),
+            OnCreate = _ => throw fault,
+        };
+
+        var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", BuildPluginNupkg("net471"));
+        var ex = Assert.Throws<FaultException<OrganizationServiceFault>>(
+            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false));
+
+        Assert.Same(fault, ex);
+    }
+
+    [Fact]
     public void UpsertPluginPackage_updates_when_content_changed_even_if_version_matches()
     {
         byte[] oldBytes = Encoding.UTF8.GetBytes("pkg-old");
@@ -1306,6 +1343,19 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     {
         string nuspec = $"<package xmlns=\"http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd\"><metadata><id>{nuspecId}</id><version>1.0.0</version></metadata></package>";
         return BuildZip(new Dictionary<string, string> { [$"{packageName}.nuspec"] = nuspec });
+    }
+
+    private string BuildPluginNupkg(string tfm)
+    {
+        string zipPath = Path.Combine(Path.GetTempPath(), "vela-apply-test-" + Guid.NewGuid().ToString("N") + ".nupkg");
+        using (ZipArchive zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        using (Stream entry = zip.CreateEntry($"lib/{tfm}/Acme.Plugins.dll").Open())
+        {
+            entry.Write(Encoding.UTF8.GetBytes("dll"));
+        }
+
+        _tempPaths.Add(zipPath);
+        return zipPath;
     }
 
     private string BuildZip(IReadOnlyDictionary<string, string> entries)

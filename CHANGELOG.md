@@ -738,6 +738,13 @@ The CLI-line entries (Added / Changed / Fixed) and the Framework-line entries re
 
 ### Changed (CLI)
 
+- **`vela init` scaffolds plugin projects on .NET Framework 4.8.** Microsoft confirmed 4.8 as the supported and
+  recommended version for plug-ins (4.8.1 is not supported), so the generated `Plugins` and `Plugins.Tests`
+  projects target `net48` and `Shared` targets `net48;net10.0`. The `net471` cap on plugin packages came from a
+  platform bug that Dataverse 9.2.26092 fixes. The scanner no longer warns about `net472`/`net48` packages; it
+  warns above `net48` instead. When Dataverse rejects a package above `net471` (an environment older than the fix),
+  `vela apply` names the target framework and says to drop to `net471`. A package shipping several `net4x` builds
+  still prefers the highest one at or below `net471`, so it registers on every environment.
 - **`vela init` is minimal by default (breaking).** It now writes the `Shared` and `Plugins` projects and an empty
   `Plugins.Tests` project (unless `--no-tests`), with no sample code, so a new solution deploys nothing until you
   add your own plugin. It builds, tests and plans unedited. The previous rich scaffold is `vela init --samples`;

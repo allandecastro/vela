@@ -45,11 +45,11 @@ public class ScaffoldTemplatesTests
         Assert.Contains("<GeneratePackageOnBuild>true</GeneratePackageOnBuild>", csproj);
         // The build (not `dotnet pack`) produces the plugin package; PackageOutputPath drops it in artifacts/.
         Assert.Contains("<PackageOutputPath>$(MSBuildProjectDirectory)\\..\\..\\artifacts</PackageOutputPath>", csproj);
-        Assert.Contains("net462", csproj);
+        Assert.Contains("<TargetFramework>net48</TargetFramework>", csproj);
         // Early-bound entities passed to ctx.UserService inside a plugin need the assembly marked as a proxy-types
         // assembly, or the sandbox throws a SerializationException at runtime.
         Assert.Contains("<AssemblyAttribute Include=\"Microsoft.Xrm.Sdk.Client.ProxyTypesAssemblyAttribute\" />", csproj);
-        // HttpClient on net462 binds against the System.Net.Http GAC facade; the scaffold references it so an
+        // HttpClient on .NET Framework binds against the System.Net.Http GAC facade; the scaffold references it so an
         // outbound (e.g. managed-identity) call compiles and loads out of the box.
         Assert.Contains("<Reference Include=\"System.Net.Http\" />", csproj);
     }
@@ -97,11 +97,11 @@ public class ScaffoldTemplatesTests
     }
 
     [Fact]
-    public void SharedCsproj_ReferencesDataAnnotations_SoGeneratedModelsCompileOnNet462()
+    public void SharedCsproj_ReferencesDataAnnotations_SoGeneratedModelsCompileOnNet48()
     {
         string csproj = ScaffoldTemplates.SharedCsproj(Options());
 
-        // `vela models` emits [StringLength]/[Range] DataAnnotations by default; net462 must reference the
+        // `vela models` emits [StringLength]/[Range] DataAnnotations by default; net48 must reference the
         // System.ComponentModel.DataAnnotations framework assembly or the generated models fail to compile.
         Assert.Contains("System.ComponentModel.DataAnnotations", csproj);
     }

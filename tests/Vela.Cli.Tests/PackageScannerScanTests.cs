@@ -103,6 +103,8 @@ public sealed class PackageScannerScanTests : IDisposable
     [InlineData(new[] { "net462", "net472" }, "net462")]              // ...but not above the net471 package cap
     [InlineData(new[] { "net471", "net48" }, "net471")]
     [InlineData(new[] { "net48", "netstandard2.0" }, "net48")]       // an over-cap net4x still beats netstandard
+    [InlineData(new[] { "net48", "net481" }, "net48")]               // a supported net4x beats an unsupported one
+    [InlineData(new[] { "net481", "netstandard2.0" }, "net481")]     // ...and an unsupported one still beats netstandard
     [InlineData(new[] { "net8.0", "netstandard2.0" }, "netstandard2.0")] // netstandard over a non-loadable net8
     [InlineData(new[] { "net8.0", "" }, "")]                          // a flat lib/ (no TFM folder) over net8
     [InlineData(new[] { "", "netstandard2.0" }, "netstandard2.0")]     // ...but under netstandard
@@ -112,21 +114,36 @@ public sealed class PackageScannerScanTests : IDisposable
     }
 
     [Theory]
-    [InlineData("net462", false)]
-    [InlineData("net47", false)]
-    [InlineData("net471", false)]
-    [InlineData("net472", true)]
-    [InlineData("net48", true)]
-    [InlineData("net481", true)]
-    [InlineData("netstandard2.0", false)]
-    [InlineData("net8.0", false)]
-    [InlineData("", false)]
-    [InlineData("net4", false)]      // no version digits
-    [InlineData("net4721", false)]   // more than three digits: not a net4x moniker
-    [InlineData("net4x8", false)]    // not all digits (would not parse)
-    public void ExceedsPluginPackageFrameworkCap_flags_frameworks_above_net471(string tfm, bool expected)
+    [InlineData("net462", false, false)]
+    [InlineData("net47", false, false)]
+    [InlineData("net471", false, false)]
+    [InlineData("net472", true, false)]
+    [InlineData("net48", true, false)]
+    [InlineData("net481", true, true)]
+    [InlineData("netstandard2.0", false, false)]
+    [InlineData("net8.0", false, false)]
+    [InlineData("", false, false)]
+    [InlineData("net4", false, false)]      // no version digits
+    [InlineData("net4721", false, false)]   // more than three digits: not a net4x moniker
+    [InlineData("net4x8", false, false)]    // not all digits (would not parse)
+    public void Framework_caps_compare_net4x_versions(string tfm, bool aboveLegacyPackageCap, bool aboveSupported)
     {
-        Assert.Equal(expected, PackageScanner.ExceedsPluginPackageFrameworkCap(tfm));
+        Assert.Equal(aboveLegacyPackageCap, PackageScanner.ExceedsLegacyPluginPackageCap(tfm));
+        Assert.Equal(aboveSupported, PackageScanner.ExceedsSupportedFramework(tfm));
+    }
+
+    [Fact]
+    public void PackageTargetFramework_reads_the_chosen_lib_folder_or_null()
+    {
+        string nupkg = BuildNupkg(
+            ("lib/netstandard2.0/Zava.Plugins.dll", DummyDll),
+            ("lib/net48/Zava.Plugins.dll", DummyDll));
+        string notAZip = Path.Combine(Path.GetTempPath(), "vela-tfm-" + Guid.NewGuid().ToString("N") + ".nupkg");
+        File.WriteAllText(notAZip, "not a zip");
+        _tempPaths.Add(notAZip);
+
+        Assert.Equal("net48", PackageScanner.PackageTargetFramework(nupkg));
+        Assert.Null(PackageScanner.PackageTargetFramework(notAZip));
     }
 
     [Theory]

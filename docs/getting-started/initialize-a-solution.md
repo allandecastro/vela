@@ -14,7 +14,7 @@ This creates a **minimal** `ZavaSales/`, with the `.sln` at the root and sibling
 ZavaSales/
   ZavaSales.sln
   src/
-    Zava.Shared/            # early-bound models + shared services (net462;net10.0); empty until `vela models`
+    Zava.Shared/            # early-bound models + shared services (net48;net10.0); empty until `vela models`
     Zava.Plugins/           # plugin package -> builds a Dataverse plugin-package .nupkg; empty until `vela add`
   tests/
     Zava.Plugins.Tests/     # xunit tests using Vela.Testing - no connection (omit with --no-tests)

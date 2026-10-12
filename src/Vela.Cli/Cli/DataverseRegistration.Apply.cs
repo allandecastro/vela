@@ -356,7 +356,7 @@ internal static partial class DataverseRegistration
         create["name"] = desiredPackageName;
         create["version"] = package.Version;
         create["content"] = packageContent;
-        return service.Create(create);
+        return WithPackageFrameworkHint(package, desiredPackageName, () => service.Create(create));
     }
 
     // Skip a no-op Update: if the stored package is already this one, updating would only bump modifiedon (Last
@@ -376,8 +376,30 @@ internal static partial class DataverseRegistration
     // "PluginPackage version cannot be updated" (verified live), which used to fail apply mid-run whenever the
     // package version was bumped. The stored version therefore keeps its first value (see PluginPackageMatches).
     update["content"] = packageContent;
-    service.Update(update);
-    return existing.Id;
+    return WithPackageFrameworkHint(package, desiredPackageName, () =>
+    {
+        service.Update(update);
+        return existing.Id;
+    });
+}
+
+    // Dataverse older than 9.2.26092 rejects plugin packages above net471, with an error that does not name the
+    // target framework. When the package targets above it, say so and give the way out.
+    private static Guid WithPackageFrameworkHint(PluginPackagePayload package, string packageName, Func<Guid> write)
+{
+    try
+    {
+        return write();
+    }
+    catch (FaultException<OrganizationServiceFault> ex)
+        when (PackageScanner.PackageTargetFramework(package.PackagePath) is { } tfm && PackageScanner.ExceedsLegacyPluginPackageCap(tfm))
+    {
+        throw new InvalidOperationException(
+            $"Dataverse rejected plugin package '{packageName}', which targets {tfm}: {ex.Message} Plugin packages above " +
+            $"{PackageScanner.LegacyPluginPackageFrameworkCap} register only on Dataverse 9.2.26092 or later. On an older " +
+            $"environment, set <TargetFramework>{PackageScanner.LegacyPluginPackageFrameworkCap}</TargetFramework> in the " +
+            "plugin project and rebuild.", ex);
+    }
 }
 
     // Read-only counterpart of EnsurePluginPackages: true if any plugin package would be created or republished.

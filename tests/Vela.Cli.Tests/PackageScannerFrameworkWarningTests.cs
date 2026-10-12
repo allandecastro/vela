@@ -60,18 +60,20 @@ public sealed class PackageScannerFrameworkWarningTests : IDisposable
     }
 
     [Fact]
-    public void A_package_above_net471_warns_that_Dataverse_will_reject_it()
+    public void A_package_above_net48_warns_that_Dataverse_does_not_support_it()
     {
-        string stderr = ExtractCapturingStderr(Nupkg("lib/net48/Zava.Plugins.dll"));
+        string stderr = ExtractCapturingStderr(Nupkg("lib/net481/Zava.Plugins.dll"));
 
-        Assert.Contains("targets net48", stderr);
-        Assert.Contains("above net471", stderr);
-        Assert.Contains("<TargetFramework>net462</TargetFramework>", stderr); // the fix
+        Assert.Contains("targets net481", stderr);
+        Assert.Contains("up to .NET Framework 4.8", stderr);
+        Assert.Contains("<TargetFramework>net48</TargetFramework>", stderr); // the fix
     }
 
-    [Fact]
-    public void A_registrable_framework_does_not_warn()
+    [Theory]
+    [InlineData("lib/net462/Zava.Plugins.dll")]
+    [InlineData("lib/net48/Zava.Plugins.dll")] // above the legacy package cap: apply explains it only if Dataverse rejects it
+    public void A_supported_framework_does_not_warn(string entry)
     {
-        Assert.Equal(string.Empty, ExtractCapturingStderr(Nupkg("lib/net462/Zava.Plugins.dll")));
+        Assert.Equal(string.Empty, ExtractCapturingStderr(Nupkg(entry)));
     }
 }

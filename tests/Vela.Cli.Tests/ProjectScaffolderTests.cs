@@ -600,7 +600,7 @@ public class ProjectScaffolderTests
         // Heavy integration test: restores + builds a generated --samples solution end to end, which is the only thing
         // that actually compiles the generated C#, then runs its generated tests and scans the packages as `vela plan`
         // does. Opt-in (VELA_BUILD_SMOKE=1) so the default suite stays fast and offline; needs the .NET SDK plus
-        // network/cache for the Microsoft SDK packages (and mono to run the net462 tests off Windows).
+        // network/cache for the Microsoft SDK packages (and mono to run the net48 tests off Windows).
         RunInTempDir(temp =>
         {
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp) with { ManagedIdentity = true }));
@@ -754,11 +754,11 @@ public class ProjectScaffolderTests
         }
     }
 
-    // Runs every generated net462 test assembly: `dotnet test` on Windows, the xunit console under mono elsewhere.
+    // Runs every generated net48 test assembly: `dotnet test` on Windows, the xunit console under mono elsewhere.
     private static void RunGeneratedTests(string root)
     {
         string[] assemblies = Directory.GetDirectories(Path.Combine(root, "tests"))
-            .Select(dir => Path.Combine(dir, "bin", "Release", "net462", Path.GetFileName(dir) + ".dll"))
+            .Select(dir => Path.Combine(dir, "bin", "Release", "net48", Path.GetFileName(dir) + ".dll"))
             .ToArray();
         Assert.NotEmpty(assemblies);
         foreach (string assembly in assemblies)
