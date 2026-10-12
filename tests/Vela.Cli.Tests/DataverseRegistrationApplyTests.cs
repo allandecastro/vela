@@ -425,6 +425,62 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Assert.Same(fault, ex.InnerException);
     }
 
+    [Fact]   // PR #503 review
+    public void UpsertPluginPackage_explains_the_legacy_package_cap_when_the_fault_is_wrapped()
+    {
+        // ServiceClient often wraps the platform fault in an outer exception: the hint still applies.
+        var fault = new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Import failed.");
+        var wrapped = new InvalidOperationException("ServiceClient error.", fault);
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => new EntityCollection(),
+            OnCreate = _ => throw wrapped,
+        };
+
+        var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", BuildPluginNupkg("net472"));
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false));
+
+        Assert.Contains("'acme_Pkg', which targets net472: Import failed.", ex.Message);
+        Assert.Contains("register only on Dataverse 9.2.26092 or later", ex.Message);
+        Assert.Same(wrapped, ex.InnerException);
+    }
+
+    [Fact]   // PR #503 review
+    public void UpsertPluginPackage_says_net481_is_unsupported_rather_than_blaming_the_legacy_cap()
+    {
+        var fault = new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Import failed.");
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => new EntityCollection(),
+            OnCreate = _ => throw fault,
+        };
+
+        var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", BuildPluginNupkg("net481"));
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false));
+
+        Assert.Contains("'acme_Pkg', which targets net481: Import failed.", ex.Message);
+        Assert.Contains("Dataverse supports plug-ins up to .NET Framework 4.8 (net48)", ex.Message);
+        Assert.Contains("<TargetFramework>net48</TargetFramework>", ex.Message);
+        Assert.DoesNotContain("9.2.26092", ex.Message);
+    }
+
+    [Fact]
+    public void UpsertPluginPackage_rethrows_a_non_fault_error_as_is_even_above_the_legacy_cap()
+    {
+        var error = new TimeoutException("The request timed out.");
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => new EntityCollection(),
+            OnCreate = _ => throw error,
+        };
+
+        var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", BuildPluginNupkg("net48"));
+        Assert.Same(error, Assert.Throws<TimeoutException>(
+            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false)));
+    }
+
     [Fact]
     public void UpsertPluginPackage_rethrows_a_rejection_as_is_when_the_package_is_within_the_legacy_cap()
     {
