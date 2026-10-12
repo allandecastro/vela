@@ -177,8 +177,14 @@ public sealed class StepRulesAndIdentityTests
         Assert.Same(a, Assert.Single(StepIdentity.Select([a, b], Context("rel_a", rowA), "P")));
         Assert.Empty(StepIdentity.Select([a, b], Context("rel_a", rowB), "P"));
         Assert.Same(b, Assert.Single(StepIdentity.Select([a, b], Context("rel_b", rowB), "P")));
-        // A legacy deployment whose step names carry no key still falls back to the relationship scope.
+        // No identity, or a step deployed before step keys, still falls back to the relationship scope.
         Assert.Same(a, Assert.Single(StepIdentity.Select([a, b], Context("rel_a"), "P")));
+        EntityReference legacy = new("sdkmessageprocessingstep", Guid.NewGuid()) { Name = "P - PostOpSync: Update of account" };
+        Assert.Same(a, Assert.Single(StepIdentity.Select([a, b], Context("rel_a", legacy), "P")));
+        // A row naming an unknown key is stale: it must not run whichever definition is in scope.
+        EntityReference stale = new("sdkmessageprocessingstep", Guid.NewGuid()) { Name = "P - PostOpSync: rel-c" };
+        InvalidPluginExecutionException error = Assert.Throws<InvalidPluginExecutionException>(() => StepIdentity.Select([a, b], Context("rel_a", stale), "P"));
+        Assert.Contains("the executing step 'P - PostOpSync: rel-c'", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -191,6 +197,12 @@ public sealed class StepRulesAndIdentityTests
         StepIdentity.AssignStepKeys([target, subordinate], "P");
 
         Assert.NotEqual(target.StepKey, subordinate.StepKey);
+        // An alias cannot mimic the request property: a Target image named "img@subordinateid" is not the
+        // SubordinateId image named "img".
+        StepDefinition lookalike = Step(pre: [new ImageDefinition { Alias = "img@subordinateid", Attributes = ["name"] }]);
+        StepDefinition real = Step(pre: [new ImageDefinition { Alias = "img", Attributes = ["name"], MessagePropertyName = "SubordinateId" }]);
+        StepIdentity.AssignStepKeys([lookalike, real], "P");
+        Assert.NotEqual(lookalike.StepKey, real.StepKey);
         Assert.Throws<InvalidOperationException>(() => StepIdentity.AssignStepKeys(
             [Step(pre: [new ImageDefinition { Alias = "img", MessagePropertyName = "SubordinateId" }]),
              Step(pre: [new ImageDefinition { Alias = "img", MessagePropertyName = "subordinateid" }])], "P"));

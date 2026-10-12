@@ -99,8 +99,11 @@ internal static class StepIdentity
             }
         }
 
+        // The scope alone decides only when the executing step is not identified at all, or is a step deployed before
+        // step keys (its name ends in the trigger's message, not a key). A row naming an unknown key is a stale
+        // deployment: running whichever definition happens to be in scope would run the wrong handler.
         List<StepDefinition> inScope = matches.Where(definition => IsInRelationshipScope(definition, ctx)).ToList();
-        if (inScope.Count <= 1)
+        if (inScope.Count <= 1 && (string.IsNullOrEmpty(stepName) || IsKeylessName(stepName!, matches[0])))
         {
             return inScope;
         }
@@ -129,6 +132,16 @@ internal static class StepIdentity
         }
 
         return definition.Relationships.Any(name => string.Equals(name, relationship.SchemaName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // "{plugin} - {lifecycle}: {message}[ of {entity}]": the name vela apply gave a step before step keys existed.
+    private static bool IsKeylessName(string stepName, StepDefinition definition)
+    {
+        string name = stepName.Trim();
+        string message = definition.Message ?? string.Empty;
+        string entity = definition.EntityLogicalName ?? string.Empty;
+        return name.EndsWith(": " + message, StringComparison.OrdinalIgnoreCase)
+            || (entity.Length > 0 && name.EndsWith(": " + message + " of " + entity, StringComparison.OrdinalIgnoreCase));
     }
 
     // "{plugin} - {lifecycle}: {stepKey}": the key follows the last ": ".
@@ -173,18 +186,26 @@ internal static class StepIdentity
         static string List(IEnumerable<string>? values) => string.Join(",",
             (values ?? Enumerable.Empty<string>()).Select(v => v.ToLowerInvariant()).OrderBy(v => v, StringComparer.Ordinal));
 
-        // Only an explicit request property (SubordinateId on a Merge) is part of the shape, so the keys of steps
-        // whose images use the message's own property stay what they were.
-        static string Property(string? messagePropertyName) => string.IsNullOrWhiteSpace(messagePropertyName)
-            ? string.Empty
-            : "@" + messagePropertyName!.Trim().ToLowerInvariant();
-
         static string Images(ImageDefinition[]? images) => string.Join(";",
             (images ?? Array.Empty<ImageDefinition>())
-                .Select(image => image.Alias + Property(image.MessagePropertyName) + ":" + List(image.Attributes))
+                .Select(image => image.Alias + ":" + List(image.Attributes))
                 .OrderBy(v => v, StringComparer.Ordinal));
 
-        return $"filter={List(definition.FilteringAttributes)}|pre={Images(definition.PreImages)}|post={Images(definition.PostImages)}|rel={List(definition.Relationships)}";
+        // An explicit request property (SubordinateId on a Merge), as its own length-prefixed component, so no alias
+        // can mimic it. Only images with one add it, so the keys of steps whose images use the message's own
+        // property stay what they were.
+        static IEnumerable<string> Properties(string kind, ImageDefinition[]? images) => (images ?? Array.Empty<ImageDefinition>())
+            .Where(image => !string.IsNullOrWhiteSpace(image.MessagePropertyName))
+            .Select(image =>
+            {
+                string property = image.MessagePropertyName.Trim().ToLowerInvariant();
+                return $"{kind}{image.Alias.Length}:{image.Alias}{property.Length}:{property}";
+            });
+
+        string shape = $"filter={List(definition.FilteringAttributes)}|pre={Images(definition.PreImages)}|post={Images(definition.PostImages)}|rel={List(definition.Relationships)}";
+        string[] properties = Properties("pre", definition.PreImages).Concat(Properties("post", definition.PostImages))
+            .OrderBy(v => v, StringComparer.Ordinal).ToArray();
+        return properties.Length == 0 ? shape : shape + "|props=" + string.Join(";", properties);
     }
 
     private static string Hash(string seed)
