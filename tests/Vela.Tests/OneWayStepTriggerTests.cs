@@ -85,6 +85,35 @@ public sealed class OneWayStepTriggerTests
         Assert.Contains("register the step with OnUpdate() instead of On<UpdateRequest>()", ex.Message);
     }
 
+    [Fact]
+    public void The_rejection_names_a_generic_request_as_CSharp_spells_it()
+    {
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => new CreateThroughGenericRequest().GetStepDefinitions());
+        Assert.Contains("register the step with OnCreate() instead of On<CreateRequest<TestAccount>>()", ex.Message);
+        Assert.DoesNotContain("`", ex.Message);
+    }
+
+    [Fact]
+    public void An_unresolved_generic_message_is_named_as_CSharp_spells_it()
+    {
+        StepBuilder<TestAccount> builder = new();
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            () => ((IStepTrigger<TestAccount>)builder).OnMessage<UnknownMessage<TestAccount>>());
+        Assert.Contains("Cannot resolve the message for 'UnknownMessage<TestAccount>'", ex.Message);
+        Assert.DoesNotContain("`", ex.Message);
+    }
+
+    // Neither an OrganizationRequest nor marked [CustomMessage]/[SdkMessage]: its message cannot be resolved.
+    private sealed class UnknownMessage<T> { }
+
+    private sealed class CreateThroughGenericRequest : EntityPluginBase<TestAccount>
+    {
+        public CreateThroughGenericRequest() : base(string.Empty, string.Empty) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().On<Vela.Messages.CreateRequest<TestAccount>>().PostOperation().Sync().Handle(_ => { });
+    }
+
     private sealed class UpdateThroughTypedRequest : EntityPluginBase<TestAccount>
     {
         public UpdateThroughTypedRequest() : base(string.Empty, string.Empty) { }
