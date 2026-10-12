@@ -86,9 +86,7 @@ internal static partial class DataverseRegistration
         EntityReference? implementation = service.Retrieve("customapi", apiId.Value, new ColumnSet("plugintypeid"))?.GetAttributeValue<EntityReference>("plugintypeid");
         if (implementation == null || !ourPluginTypeIds.Values.Contains(implementation.Id))
         {
-            throw new InvalidOperationException(
-                $"Custom API '{definition.UniqueName}' is no longer implemented by a plugin type of the assemblies being applied, as when the plan was computed. " +
-                "Vela will not delete it; re-run plan/apply against the current environment.");
+            throw new InvalidOperationException(CustomApiNoLongerOursMessage(definition.UniqueName));
         }
 
         DeleteCustomApiRequestParameters(service, apiId.Value);
@@ -96,6 +94,10 @@ internal static partial class DataverseRegistration
         DeleteIfExists(service, "customapi", apiId.Value);
     }
 }
+
+    internal static string CustomApiNoLongerOursMessage(string uniqueName)
+        => $"Custom API '{uniqueName}' is no longer implemented by a plugin type of the assemblies being applied, as when the plan was computed. " +
+           "Vela will not delete it; re-run plan/apply against the current environment.";
 
     // isFunction, bindingType, the bound entity, allowedCustomProcessingStepType and workflowSdkStepEnabled are
     // fixed when a Custom API is created; Dataverse silently ignores attempts to change them on Update (no error,

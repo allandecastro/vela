@@ -92,6 +92,9 @@ internal static partial class DataverseRegistration
             List<CapturedOperation> children = capturing.Operations.Where(IsChildDelete).ToList();
             List<CapturedOperation> secureConfigs = capturing.Operations.Where(o => o.Category == "secure-config").ToList();
             List<CapturedOperation> parents = capturing.Operations.Where(o => !IsChildDelete(o) && o.Category != "secure-config").ToList();
+            // DeleteCustomApi checked the API's owner during capture, but its deletes run only now: re-check right before
+            // the first destructive tier, so an API taken over or detached in between is not deleted.
+            parents.RemoveAll(op => !CustomApiDeleteStillOwned(service, op, ourPluginTypeIds, report, skip));
             ExecuteBatchTier(service, children, chunkSize, report, skip);
             ExecuteBatchTier(service, parents, chunkSize, report, skip);
             ExecuteBatchTier(service, secureConfigs, chunkSize, report, skip);
@@ -99,6 +102,41 @@ internal static partial class DataverseRegistration
         }
 
         RecordOutcomes(owners, report, progress, planned);
+    }
+
+    // True unless op is the delete of a Custom API that is no longer implemented by a plugin type of the assemblies
+    // being applied. Such an owner is recorded as failed and skipped, so neither its parameters nor the API are deleted.
+    // An API already gone has nothing to protect: its deletes are idempotent.
+    private static bool CustomApiDeleteStillOwned(
+        IOrganizationService service,
+        CapturedOperation op,
+        IReadOnlyDictionary<string, Guid> ourPluginTypeIds,
+        BatchApplyReport report,
+        HashSet<string> skip)
+    {
+        if (!op.IsDelete || op.Category != "custom-api" || op.Request is not DeleteRequest delete)
+        {
+            return true;
+        }
+
+        EntityReference? implementation;
+        try
+        {
+            implementation = service.Retrieve("customapi", delete.Target.Id, new ColumnSet("plugintypeid"))?.GetAttributeValue<EntityReference>("plugintypeid");
+        }
+        catch (Exception ex) when (ExtractFault(ex).ErrorCode == ObjectDoesNotExistErrorCode)
+        {
+            return true;
+        }
+
+        if (implementation != null && ourPluginTypeIds.Values.Contains(implementation.Id))
+        {
+            return true;
+        }
+
+        report.RecordFailure(op, new OrganizationServiceFault { Message = CustomApiNoLongerOursMessage(op.Owner.ReportGroup) });
+        skip.Add(op.Owner.Id);
+        return false;
     }
 
     private static bool IsChildDelete(CapturedOperation op)
@@ -256,15 +294,10 @@ internal static partial class DataverseRegistration
         BatchApplyReport report,
         HashSet<string> skipOwners)
     {
-        if (chunkSize < 1)
-        {
-            chunkSize = 1;
-        }
-
-        for (int start = 0; start < ops.Count; start += chunkSize)
+        foreach (List<CapturedOperation> chunk in BuildBatchChunks(ops, chunkSize))
         {
             List<CapturedOperation> live = new List<CapturedOperation>();
-            foreach (CapturedOperation op in ops.Skip(start).Take(chunkSize))
+            foreach (CapturedOperation op in chunk)
             {
                 if (skipOwners.Contains(op.Owner.Id))
                 {
@@ -340,6 +373,43 @@ internal static partial class DataverseRegistration
             }
         }
     }
+
+    // Slices a tier into ExecuteMultiple chunks of at most chunkSize requests, except that a created step's disable (a
+    // "state" op) always shares its create's chunk: split across two calls, a crash between them would leave the new
+    // step enabled on live traffic (#445). Such a pair opens a fresh chunk when it does not fit the current one, and
+    // with chunkSize 1 it forms a chunk of two, well under the 1000-request cap.
+    internal static List<List<CapturedOperation>> BuildBatchChunks(List<CapturedOperation> ops, int chunkSize)
+    {
+        if (chunkSize < 1)
+        {
+            chunkSize = 1;
+        }
+
+        List<List<CapturedOperation>> chunks = new List<List<CapturedOperation>>();
+        List<CapturedOperation> current = new List<CapturedOperation>();
+        for (int i = 0; i < ops.Count; i++)
+        {
+            int unitSize = i + 1 < ops.Count && IsStateOf(ops[i + 1], ops[i]) ? 2 : 1;
+            if (current.Count > 0 && current.Count + unitSize > chunkSize)
+            {
+                chunks.Add(current);
+                current = new List<CapturedOperation>();
+            }
+
+            current.AddRange(ops.Skip(i).Take(unitSize));
+            i += unitSize - 1;
+        }
+
+        if (current.Count > 0)
+        {
+            chunks.Add(current);
+        }
+
+        return chunks;
+    }
+
+    private static bool IsStateOf(CapturedOperation state, CapturedOperation row)
+        => state.Category == "state" && ReferenceEquals(state.Owner, row.Owner);
 
     private static void FallbackOneByOne(
         IOrganizationService service,
