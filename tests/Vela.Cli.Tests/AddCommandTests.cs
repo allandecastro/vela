@@ -345,19 +345,56 @@ public class AddCommandTests
     [Theory]
     [InlineData("SetState", "Microsoft.Crm.Sdk.Messages.SetStateRequest")]
     [InlineData("setstate", "Microsoft.Crm.Sdk.Messages.SetStateRequest")]
-    [InlineData("SetStateDynamicEntity", "SetStateDynamicEntityRequest")]
-    public void Add_Plugin_UnmodelledMessage_RendersRequestTypedTrigger(string message, string requestType)
+    // An sdkmessage other requests run as maps to the request on the entity's table (PR #480 review): there is no
+    // SetStateDynamicEntityRequest nor CloseRequest, so neither is synthesized.
+    [InlineData("SetStateDynamicEntity", "Microsoft.Crm.Sdk.Messages.SetStateRequest")]
+    [InlineData("Close", "Microsoft.Crm.Sdk.Messages.CloseQuoteRequest", "Quote")]
+    [InlineData("Publish", "Microsoft.Crm.Sdk.Messages.PublishDuplicateRuleRequest", "DuplicateRule")]
+    [InlineData("Publish", "Microsoft.Crm.Sdk.Messages.PublishXmlRequest")]
+    public void Add_Plugin_UnmodelledMessage_RendersRequestTypedTrigger(string message, string requestType, string entity = "Account")
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            int exit = AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", message, "--project", project, "--force"]);
+            int exit = AddCommand.Run(["plugin", "AccountStep", "--entity", entity, "--message", message, "--project", project, "--force"]);
             Assert.Equal(ExitSuccess, exit);
 
-            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
+            string content = File.ReadAllText(Path.Combine(dir, entity, "Plugins", "AccountStep.cs"));
             Assert.Contains($"RegisterStep().On<{requestType}>()", content);
             Assert.Contains($"IMessagePostContext<{requestType}> ctx", content);
         });
     }
+
+    [Theory]   // PR #480 review
+    [InlineData("Close", "Account", "'Close' runs only as CloseIncident on incident, CloseQuote on quote, none of them on Account.")]
+    [InlineData("Execute", "Account", "'Execute' is the sdkmessage of several requests (ExecuteCampaignActivity, ExecuteFetch).")]
+    public void ResolveRequestName_rejects_an_sdkmessage_with_no_single_request_for_the_table(string message, string entity, string expected)
+    {
+        Assert.Null(AddCommand.ResolveRequestName(message, entity, out string error));
+        Assert.StartsWith(expected, error);
+    }
+
+    [Theory]
+    [InlineData("Close", "Quote", "CloseQuote")]
+    [InlineData("Close", "Incident", "CloseIncident")]
+    [InlineData("SetStateDynamicEntity", "Account", "SetState")]
+    [InlineData("CloseQuote", "Quote", "CloseQuote")]
+    [InlineData("acme_DoThing", "Account", "acme_DoThing")]
+    public void ResolveRequestName_maps_an_sdkmessage_to_the_request_on_the_table(string message, string entity, string expected)
+        => Assert.Equal(expected, AddCommand.ResolveRequestName(message, entity, out _));
+
+    [Fact]
+    public void Add_Plugin_fails_on_an_sdkmessage_that_does_not_run_on_the_entity()   // PR #480 review
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", "Close", "--project", project]));
+            Assert.False(File.Exists(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs")));
+        });
+    }
+
+    [Fact]
+    public void ResolveKnownMessage_does_not_map_close_on_quote_to_the_incident_trigger()   // PR #480 review
+        => Assert.Null(AddCommand.ResolveKnownMessage("Close", "Quote"));
 
     // Every message with a typed builder method (including the Tier-2 Merge / sharing messages) renders the
     // strongly-typed On...() call rather than the generic request-typed On<TRequest>().

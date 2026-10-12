@@ -33,20 +33,43 @@ internal static class AddCommand
     // resolved through the table when several requests share it (Win is WinQuote on quote, WinOpportunity on
     // opportunity). Null for a message with no curated trigger, registered through its request type (RegistrationCall).
     internal static string? ResolveKnownMessage(string rawMessage, string entity)
+        => ResolveRequestName(rawMessage, entity, out _) is { } request ? FindKnownMessage(request) : null;
+
+    private static string? FindKnownMessage(string request)
+        => KnownMessages.FirstOrDefault(m => string.Equals(m, request, StringComparison.OrdinalIgnoreCase));
+
+    // The request --message names. A request name (SendEmail, CloseQuote), or a name that is no other request's
+    // sdkmessage (Create, a custom API), is itself. An sdkmessage the platform runs other requests as (Close, Send,
+    // SetStateDynamicEntity) is the request of that sdkmessage on the entity's table, or the one bound to no table:
+    // Close on quote is CloseQuote, SetStateDynamicEntity is SetState. No request type is ever synthesized from such an
+    // sdkmessage (there is no CloseRequest), so when none of its requests runs on the table, or several could, this is
+    // null and error says which request names to pass instead.
+    internal static string? ResolveRequestName(string rawMessage, string entity, out string error)
     {
-        string? known = KnownMessages.FirstOrDefault(m => string.Equals(m, rawMessage, StringComparison.OrdinalIgnoreCase));
-        if (known is not null)
+        error = string.Empty;
+        if (FindKnownMessage(rawMessage) is { } known)
         {
             return known;
         }
 
-        string[] candidates = Vela.Steps.SdkMessageNames.RequestNamesFor(rawMessage)
-            .Select(request => KnownMessages.FirstOrDefault(m => string.Equals(m, request, StringComparison.OrdinalIgnoreCase)))
-            .OfType<string>()
-            .ToArray();
-        return candidates.Length == 1
-            ? candidates[0]
-            : candidates.FirstOrDefault(m => string.Equals(Vela.Steps.SdkMessageNames.PrimaryEntityOf(m), entity, StringComparison.OrdinalIgnoreCase));
+        string[] requests = Vela.Steps.SdkMessageNames.RequestNamesFor(rawMessage).OrderBy(r => r, StringComparer.Ordinal).ToArray();
+        if (requests.Length == 0)
+        {
+            return rawMessage;
+        }
+
+        string[] onTable = requests.Where(r => string.Equals(Vela.Steps.SdkMessageNames.PrimaryEntityOf(r), entity, StringComparison.OrdinalIgnoreCase)).ToArray();
+        string[] candidates = onTable.Length > 0 ? onTable : requests.Where(r => Vela.Steps.SdkMessageNames.PrimaryEntityOf(r) is null).ToArray();
+        if (candidates.Length == 1)
+        {
+            return candidates[0];
+        }
+
+        string Describe(string request) => Vela.Steps.SdkMessageNames.PrimaryEntityOf(request) is { } table ? $"{request} on {table}" : request;
+        error = candidates.Length == 0
+            ? $"'{rawMessage}' runs only as {string.Join(", ", requests.Select(Describe))}, none of them on {entity}. Check --entity, or pass --message with one of these request names."
+            : $"'{rawMessage}' is the sdkmessage of several requests ({string.Join(", ", candidates)}). Pass --message with the request name.";
+        return null;
     }
 
     public static int Run(string[] args)
@@ -425,8 +448,14 @@ internal static class AddCommand
             return Fail($"Invalid --message '{rawMessage}'. Use an SDK message name (letters, digits, '_'; not starting with a digit).", ExitInvalidArguments, includeUsage: false);
         }
 
-        string? known = ResolveKnownMessage(rawMessage, entity);
-        string message = known ?? rawMessage;
+        string? request = ResolveRequestName(rawMessage, entity, out string messageError);
+        if (request is null)
+        {
+            return Fail(messageError, ExitInvalidArguments, includeUsage: false);
+        }
+
+        string? known = FindKnownMessage(request);
+        string message = known ?? request;
         string registrationCall = RegistrationCall(known, message);
 
         string handler = (TryReadOption(args, "--handler") ?? $"Handle{message}").Trim();
@@ -580,8 +609,14 @@ internal static class AddCommand
 
         // Messages with a dedicated On...() builder method get the strongly-typed call; any other name is
         // registered through its request type, On<XxxRequest>() (see RegistrationCall).
-        string? known = ResolveKnownMessage(rawMessage, entity!);
-        string message = known ?? rawMessage;
+        string? request = ResolveRequestName(rawMessage, entity!, out string messageError);
+        if (request is null)
+        {
+            return Fail(messageError, ExitInvalidArguments, includeUsage: false);
+        }
+
+        string? known = FindKnownMessage(request);
+        string message = known ?? request;
         string registrationCall = RegistrationCall(known, message);
 
         if (!TryResolveStageMode(args, out string stageCall, out string modeCall, out bool postStage, out string stageError))
