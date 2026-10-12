@@ -308,6 +308,39 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void A_lookup_set_by_key_is_checked_against_the_AppendTo_scope_of_the_record_it_names()
+        {
+            // Alice has AppendTo on her own accounts only. The parent belongs to someone else, so linking to it is
+            // denied by key exactly as by id (the key is resolved before the record-scoped check).
+            Guid parent = Guid.NewGuid();
+            Guid mine = Guid.NewGuid();
+            InMemoryOrganizationService crm = new InMemoryOrganizationService()
+                .WithAlternateKey("account", "accountnumber")
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("scoped", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Read, Privilege.Write, Privilege.Append)
+                        .Grant("account", AccessLevel.User, Privilege.AppendTo))
+                    .User(Alice, SalesBu, "scoped"))
+                .Seed(
+                    OwnedBy(new Entity("account", parent) { ["accountnumber"] = "P-1" }, Guid.NewGuid()),
+                    OwnedBy(new Entity("account", mine) { ["accountnumber"] = "M-1" }, Alice));
+
+            int byId = ErrorCode(() => crm.Create(new Entity("account") { ["parentaccountid"] = new EntityReference("account", parent) }));
+            int byKey = ErrorCode(() => crm.Create(new Entity("account") { ["parentaccountid"] = new EntityReference("account", "accountnumber", "P-1") }));
+            int updateByKey = ErrorCode(() => crm.Update(new Entity("account", mine) { ["parentaccountid"] = new EntityReference("account", "accountnumber", "P-1") }));
+
+            Assert.Equal(byId, byKey);
+            Assert.Equal(byId, updateByKey);
+            Assert.False(crm.Retrieve("account", mine, new ColumnSet(true)).Contains("parentaccountid"));
+
+            // Her own account is in scope, by key too.
+            Guid child = crm.Create(new Entity("account") { ["parentaccountid"] = new EntityReference("account", "accountnumber", "M-1") });
+            Assert.Equal(mine, crm.Retrieve("account", child, new ColumnSet("parentaccountid")).GetAttributeValue<EntityReference>("parentaccountid").Id);
+        }
+
+        [Fact]
         public void With_security_off_a_lookup_may_still_point_at_a_record_the_test_never_seeded()
         {
             InMemoryOrganizationService crm = new InMemoryOrganizationService();

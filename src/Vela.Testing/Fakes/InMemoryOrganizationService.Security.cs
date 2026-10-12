@@ -373,8 +373,9 @@ namespace Vela.Testing
         // 0x80040217 "Entity 'X' With Id = ... Does Not Exist", Update faults 0x80040502 "X does not exist."), so the
         // AppendTo check below never runs against a missing record. Security off keeps dangling lookups: a
         // single-plugin PluginContext commonly writes a lookup to a Target it never seeded. The system columns the
-        // store fills or re-derives (owner, created/modified by, organization) are not checked, and a lookup set by
-        // key is resolved, and checked, separately.
+        // store fills or re-derives (owner, created/modified by, organization) are not checked. A lookup set by key
+        // reaches this check already resolved to its record's id (WithResolvedLookupKeys), so an empty id here is a
+        // lookup to no record and faults.
         private void DemandLookupTargetsExist(Entity entity, bool onCreate)
         {
             // Configured security, not the acting identity: SYSTEM cannot point a lookup at a missing record either.
@@ -386,7 +387,6 @@ namespace Vela.Testing
             foreach (KeyValuePair<string, object> attribute in entity.Attributes)
             {
                 if (attribute.Value is not EntityReference target
-                    || (target.Id == Guid.Empty && target.KeyAttributes != null && target.KeyAttributes.Count > 0)
                     || SystemReferenceColumns.Contains(attribute.Key)
                     || (onCreate && target.Id != Guid.Empty && target.Id == entity.Id && string.Equals(target.LogicalName, entity.LogicalName, StringComparison.OrdinalIgnoreCase))
                     || StoredOrNull(target.LogicalName, target.Id) != null)

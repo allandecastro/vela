@@ -495,11 +495,15 @@ namespace Vela.Testing
 
             EnsureWritable(entity.LogicalName);
             DemandCreate(entity);
-            DemandLookupTargetsExist(entity, onCreate: true);
-            DemandLookupAppends(entity, null);
+
+            // A lookup set by key is resolved first, so the existence and record-scoped AppendTo checks run against
+            // the record it names, exactly as for the same lookup set by id.
+            Entity resolved = WithResolvedLookupKeys(entity);
+            DemandLookupTargetsExist(resolved, onCreate: true);
+            DemandLookupAppends(resolved, null);
             DemandSecuredColumnWrites(entity);
 
-            Entity stored = EntityValues.Clone(entity);
+            Entity stored = EntityValues.Clone(resolved);
             if (stored.Id == Guid.Empty)
             {
                 stored.Id = _idSequence();
@@ -510,7 +514,6 @@ namespace Vela.Testing
                 throw RecordAlreadyExists(stored.LogicalName, stored.Id);
             }
 
-            ResolveLookupKeyReferences(stored);
             _autoNumbers.Apply(stored);
             _systemFields.ApplyOnCreate(entity, stored, Actor(), _clock(), NextVersion());
             RealignOwningBusinessUnit(stored);
@@ -627,6 +630,23 @@ namespace Vela.Testing
         // concrete-id EntityReference at write time, so the persisted lookup points at a real record and later
         // joins/reads find it - matching Dataverse, which resolves a key-addressed lookup on write. A key that
         // matches no record throws the platform not-found fault (ResolveReference), like relating to a missing record.
+        // The entity with every lookup set by key resolved to its record id: the entity itself when it has none, else
+        // a copy, so the caller's entity is never changed.
+        private Entity WithResolvedLookupKeys(Entity entity)
+        {
+            if (!entity.Attributes.Any(attribute => attribute.Value is EntityReference reference
+                && reference.Id == Guid.Empty
+                && reference.KeyAttributes != null
+                && reference.KeyAttributes.Count > 0))
+            {
+                return entity;
+            }
+
+            Entity resolved = EntityValues.Clone(entity);
+            ResolveLookupKeyReferences(resolved);
+            return resolved;
+        }
+
         private void ResolveLookupKeyReferences(Entity entity)
         {
             foreach (string attribute in entity.Attributes.Keys.ToArray())
@@ -923,8 +943,11 @@ namespace Vela.Testing
                 DemandAccess(entity.LogicalName, Privilege.Assign, stored);
             }
 
-            DemandLookupTargetsExist(entity, onCreate: false);
-            DemandLookupAppends(entity, stored);
+            // A lookup set by key is resolved first (a key that matches nothing throws before the stored row
+            // changes), so the existence and record-scoped AppendTo checks run against the record it names.
+            Entity resolved = WithResolvedLookupKeys(entity);
+            DemandLookupTargetsExist(resolved, onCreate: false);
+            DemandLookupAppends(resolved, stored);
             DemandSecuredColumnWrites(entity);
 
             // Dataverse Update merges the supplied attributes onto the existing record. The merge is built on a copy
@@ -932,7 +955,7 @@ namespace Vela.Testing
             // validated there: a lookup key that matches nothing or a duplicate alternate key throws before the
             // stored row changes.
             Entity candidate = EntityValues.Clone(stored);
-            foreach (KeyValuePair<string, object> attribute in entity.Attributes)
+            foreach (KeyValuePair<string, object> attribute in resolved.Attributes)
             {
                 candidate[attribute.Key] = EntityValues.CloneValue(attribute.Value);
             }
@@ -945,7 +968,6 @@ namespace Vela.Testing
                 candidate[SystemFieldApplier.StatusCode] = new OptionSetValue(DefaultStatus(entity.LogicalName, state.Value));
             }
 
-            ResolveLookupKeyReferences(candidate);
             _alternateKeys.Enforce(candidate, Table(entity.LogicalName).Values);
 
             foreach (KeyValuePair<string, object> attribute in candidate.Attributes)

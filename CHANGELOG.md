@@ -26,11 +26,14 @@ All notable changes to Vela are documented here. The format is based on
 - **A step on a sibling table no longer diverts a business message from the store.** An opportunity `Win` step made
   a `WinQuoteRequest` take the modelled path and return an empty response. The pipeline now checks the request's
   primary entity with the same rules it uses to fire the steps.
-- **A `SetStateDynamicEntity` pre step that changes `State` or `Status` now changes the state written.** The inner
-  Update is built from the inputs as the PreValidation and PreOperation steps left them.
+- **On a `SetStateRequest`, a `SetStateDynamicEntity` pre step that changes `State` or `Status` now changes the
+  state written.** The inner Update is built from the inputs as the PreValidation and PreOperation steps left them.
+  (The `SetStateDynamicEntity` operation nested in an `Update` of `statecode` still writes the row's own values.)
 - **With security on, a lookup with an empty id and no key now faults as a missing record** on Create and Update,
-  instead of persisting a dangling lookup. Only a lookup set by alternate key skips the check (it is resolved, and
-  checked, separately).
+  instead of persisting a dangling lookup.
+- **A lookup set by alternate key is now checked like the same lookup set by id.** The key is resolved before the
+  existence and record-scoped `AppendTo` checks, so a caller with User or Business Unit `AppendTo` can no longer link
+  by key to a record outside that scope.
 - **Merge on a self-referential N:N drops the row that linked the subordinate to the master**, instead of turning it
   into a master-to-master self-link.
 - **Deleting a record deletes its files.** `DeleteFile` on a file id whose record is gone now faults as not found,
