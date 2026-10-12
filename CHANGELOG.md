@@ -21,6 +21,36 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (CLI)
+
+- **A quoted secret is masked whole.** The error and log redactor read a connection-string value only up to the
+  next `;`, so `ClientSecret="abc;def"` printed as `ClientSecret=***;def"`. A quoted value (`"..."` or `'...'`, with
+  a doubled quote as the escape) is now masked up to its closing quote, and an unterminated one to the end of the
+  text.
+- **A created step's disable is never split from its create.** With `--batch-size 1`, or at a chunk boundary, the
+  update that disables a just-created `.Disabled()` step went out in another `ExecuteMultiple` than the create, so a
+  crash between the two left the new step enabled. The pair now always shares one request.
+- **A removed Custom API is re-checked right before its batched delete.** Its owner was checked when the deletes
+  were collected, but they ran later. An API detached or taken over by another plugin type in between is now left
+  in place, with its parameters, and the run fails with the ownership message.
+- **An unchanged plugin package over 4 MB compares as unchanged when Dataverse reports no chunking support.**
+  The stored file is then downloaded in one block, as Dataverse requires, instead of 4 MB blocks.
+- **A step key is read only from the trailing `[vela:stepkey=...]` line.** A marker quoted elsewhere in a
+  `WithDescription(...)` text was taken for the step's key, and the description cut at it.
+- **A declared label that differs from its fallback only in case is a change.** A Custom API display name or
+  description, or a step description, declared as `zava_dothing` for the unique name `zava_DoThing` compared equal
+  to a live `zava_DoThing`, so `plan` hid the change. Only a label still at its fallback is compared without case.
+- **`vela add --message` resolves an sdkmessage to the request on the entity's table.** `--message Close` on
+  `Quote` produced `OnCloseIncident()`, and `--message SetStateDynamicEntity` an `On<SetStateDynamicEntityRequest>()`
+  that does not exist. They now give `On<CloseQuoteRequest>()` and `On<SetStateRequest>()`. An sdkmessage with no
+  request on the table (`Close` on `Account`), or with several (`Execute`), fails with the request names to pass.
+- **The plugin package framework hint covers a wrapped fault and net481.** A rejection wrapped by `ServiceClient`
+  missed the net472-net48 hint, and a net481 package was told it registers on Dataverse 9.2.26092 or later. net481
+  now gets its own message: Dataverse supports plug-ins up to net48.
+- **The `vela init` samples trace ids only.** The message reference's `OnCreate` traced the account name.
+- **The scaffolded AGENTS.md matches `--no-tests`.** It no longer names `Vela.Testing` or has a "Write a test"
+  section when the solution has no test project.
+
 ## [0.32.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Changed (breaking)
