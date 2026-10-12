@@ -176,7 +176,9 @@ shapes are flagged:
 - a writable auto-property (`{ get; set; }`, also with a `private set`): its backing field is a writable field;
 - a `readonly` field holding a mutable collection (`List<T>`, `Dictionary<TKey, TValue>`, `HashSet<T>`, the other
   `System.Collections.Generic` collections, `IList<T>` / `ICollection<T>` / `IDictionary<TKey, TValue>` / `ISet<T>`,
-  and the non-generic `ArrayList` / `Hashtable`): `readonly` freezes the reference, not the contents;
+  the non-generic `ArrayList` / `Hashtable` / `IList` / `IDictionary`, `Collection<T>` / `ObservableCollection<T>` /
+  `KeyedCollection<TKey, TItem>`, and `NameValueCollection` / `StringCollection` / `OrderedDictionary`): `readonly`
+  freezes the reference, not the contents;
 - a primary-constructor parameter that a member reads or writes: the compiler stores it in a writable field.
 
 `const`, `readonly` and `static readonly` fields of immutable values, get-only and `init` auto-properties, arrays (the
@@ -393,7 +395,8 @@ plugin / Custom API type on:
 
 - work started on another thread: `Task.Run`, `Task.Factory.StartNew`, `Parallel.For` / `ForEach` / `Invoke`, PLINQ
   `AsParallel()`, `ThreadPool.QueueUserWorkItem`, `new Thread(...)`;
-- blocking on a task: `.Result`, `.Wait()`, `Task.WaitAll` / `WaitAny`, `GetAwaiter().GetResult()`.
+- blocking on a task: `.Result`, `.Wait()`, `Task.WaitAll` / `WaitAny`, `GetAwaiter().GetResult()` (also after
+  `ConfigureAwait(...)`, on a `Task` or a `ValueTask`).
 
 Types are matched by namespace (`System.Threading`, `System.Threading.Tasks`, `System.Linq`), so a look-alike
 `Task` of another library is not flagged. Like VELA019, code outside a plugin type (tests, tools, a nested helper
