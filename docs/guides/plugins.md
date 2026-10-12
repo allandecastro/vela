@@ -495,9 +495,9 @@ private void OnCreditLimit(OnCreditLimitContext ctx)
 ```
 
 It needs an entity Target (Create/Update; Delete, Assign and SetState carry an `EntityReference` and throw) and a
-pre-image holding the column, or it throws; a column absent from the Target counts as unchanged. It works at
-PreOperation and PostOperation alike. It never compares with a post-image, which already holds the new value, and
-it is unavailable on Create, which has no prior state. Strings compare exactly (case included) and multi-select
+pre-image holding the column, or it throws; a column absent from the Target counts as unchanged. It works at any
+stage that has a registered pre-image (PreValidation, PreOperation and PostOperation). It never compares with a
+post-image, which already holds the new value, and it is unavailable on Create, which has no prior state. Strings compare exactly (case included) and multi-select
 choices as sets.
 [VELA009](../reference/analyzers.md#vela009) flags a `HasChanged` with no pre-image or on an uncaptured column.
 
