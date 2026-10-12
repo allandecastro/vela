@@ -163,7 +163,7 @@ namespace Demo
     public void A_projection_result_compares_both_its_model_and_its_skip_reason()
     {
         LinePositionSpan line = new LinePositionSpan(new LinePosition(1, 2), new LinePosition(1, 15));
-        object Skip(string reason) => Create("SkippedProjection", "Plugin0.cs", new TextSpan(10, 13), line, "WithPostImage", reason);
+        object Skip(string reason) => Create("SkippedProjection", "Plugin0.cs", new TextSpan(10, 13), line, "WithPostImage", "ctx.GetPostImage<T>()", reason);
         object Skipped(string reason) => Activator.CreateInstance(Nested("ProjectionResult"),
             BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { Skip(reason) }, null)!;
         object Model(string typeName) => Create("ProjectionModel",
@@ -186,12 +186,13 @@ namespace Demo
     {
         LinePositionSpan line = new LinePositionSpan(new LinePosition(1, 2), new LinePosition(1, 15));
         AssertFieldwiseEquality(
-            () => new object?[] { "Plugin0.cs", new TextSpan(10, 13), line, "WithPostImage", "reason" },
+            () => new object?[] { "Plugin0.cs", new TextSpan(10, 13), line, "WithPostImage", "ctx.GetPostImage<T>()", "reason" },
             "SkippedProjection",
             a => With(a, 0, "Plugin1.cs"),
             a => With(a, 1, new TextSpan(11, 13)),
             a => With(a, 2, new LinePositionSpan(new LinePosition(2, 2), new LinePosition(2, 15))),
             a => With(a, 3, "WithPreImage"),
-            a => With(a, 4, "another reason"));
+            a => With(a, 4, "ctx.GetPostImage<T>(\"SubordinatePostImage\")"),
+            a => With(a, 5, "another reason"));
     }
 }
