@@ -633,10 +633,16 @@ internal static partial class DataverseRegistration
         return false;
     }
 
+    // Without chunking support Dataverse serves the file only as one block covering the whole file (as
+    // FileColumnExtensions.DownloadFile does), so the 4 MB block size applies to chunked downloads only. An absent flag
+    // means chunking is supported.
+    bool chunked = !download.Results.Contains("IsChunkingSupported") || download.Results["IsChunkingSupported"] is not bool supported || supported;
+    long blockSize = chunked ? PackageDownloadBlockSize : Math.Max(packageBytes.LongLength, 1);
+
     long offset = 0;
     while (offset < packageBytes.LongLength)
     {
-        long length = Math.Min(PackageDownloadBlockSize, packageBytes.LongLength - offset);
+        long length = Math.Min(blockSize, packageBytes.LongLength - offset);
         DownloadBlockResponse block = (DownloadBlockResponse)service.Execute(new DownloadBlockRequest
         {
             FileContinuationToken = download.FileContinuationToken,
@@ -655,7 +661,7 @@ internal static partial class DataverseRegistration
     return true;
 }
 
-    // The largest block DownloadBlock serves (4 MB).
+    // The largest block a chunked DownloadBlock serves (4 MB).
     private const long PackageDownloadBlockSize = 4L * 1024 * 1024;
 
     internal static Entity? GetPluginPackage(IOrganizationService service, string packageName)

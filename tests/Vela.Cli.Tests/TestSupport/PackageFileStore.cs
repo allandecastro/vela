@@ -21,6 +21,10 @@ internal sealed class PackageFileStore
     /// <summary>Every block download served, as (offset, length).</summary>
     public List<(long Offset, long Length)> BlockDownloads { get; } = new();
 
+    /// <summary>What InitializeFileBlocksDownload reports as IsChunkingSupported. When false, like the platform, a
+    /// DownloadBlock must request the whole file in one block from offset 0.</summary>
+    public bool ChunkingSupported { get; set; } = true;
+
     public void Store(Guid packageId, byte[] bytes) => _files[packageId] = bytes;
 
     /// <summary>Stores the package a pluginpackage write uploads (its base64 `content`), if it carries one.</summary>
@@ -52,12 +56,19 @@ internal sealed class PackageFileStore
                         ["FileContinuationToken"] = init.Target.Id.ToString(),
                         ["FileSizeInBytes"] = file.LongLength,
                         ["FileName"] = "package.nupkg",
-                        ["IsChunkingSupported"] = true,
+                        ["IsChunkingSupported"] = ChunkingSupported,
                     },
                 };
                 return true;
             case DownloadBlockRequest block:
                 byte[] stored = _files[Guid.Parse(block.FileContinuationToken)];
+                if (!ChunkingSupported && (block.Offset != 0 || block.BlockLength < stored.LongLength))
+                {
+                    throw new FaultException<OrganizationServiceFault>(
+                        new OrganizationServiceFault { Message = "Chunking is not supported: download the whole file in one block." },
+                        "Chunking is not supported: download the whole file in one block.");
+                }
+
                 long length = Math.Min(block.BlockLength, stored.LongLength - block.Offset);
                 BlockDownloads.Add((block.Offset, length));
                 response = new DownloadBlockResponse { Results = { ["Data"] = stored.AsSpan((int)block.Offset, (int)length).ToArray() } };

@@ -668,6 +668,33 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Assert.Equal(new long[] { 0, 4L * 1024 * 1024, 8L * 1024 * 1024 }, svc.PackageFiles.BlockDownloads.Select(b => b.Offset));
     }
 
+    [Theory]   // PR #494 review
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ComputePackagePublishActions_downloads_the_whole_file_in_one_block_when_chunking_is_not_supported(bool lastByteDiffers)
+    {
+        // A non-chunked download must request the whole file in one block: a 4 MB block would be refused, and an
+        // unchanged package over 4 MB would be republished on every run.
+        byte[] local = new byte[(5 * 1024 * 1024) + 7];
+        new Random(494).NextBytes(local);
+        byte[] stored = (byte[])local.Clone();
+        if (lastByteDiffers)
+        {
+            stored[^1] ^= 0xFF;
+        }
+
+        string path = NewTempFile(local);
+        var existing = new Entity("pluginpackage", Guid.NewGuid()) { ["version"] = "1.0.0" };
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        svc.PackageFiles.ChunkingSupported = false;
+        svc.PackageFiles.Store(existing.Id, stored);
+
+        IReadOnlyList<PackagePublishAction> actions = DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null, new List<string>());
+
+        Assert.Equal(lastByteDiffers, actions.Count == 1);
+        Assert.Equal([(0L, local.LongLength)], svc.PackageFiles.BlockDownloads);
+    }
+
     [Fact]
     public void UpsertPluginPackage_throws_when_package_file_missing()
     {
