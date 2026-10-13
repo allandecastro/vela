@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Vela.Cli;
+using Vela.Cli.Tests.TestSupport;
 using Xunit;
 
 namespace Vela.Cli.Tests;
@@ -52,6 +53,41 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         RegistrationItem api = Assert.Single(state.Items, i => i.Kind == "custom-api");
         Assert.Equal("SamplePluginFixture.SampleCustomApi", api.Type);
         Assert.Equal("sample_DoThing", api.Definition.GetProperty("uniqueName").GetString());
+        // The fixture declares a request type name, so it is recorded as typed, beside the item and not in its shape.
+        Assert.Equal(new[] { "sample_DoThing" }, state.TypedCustomApiUniqueNames);
+        Assert.False(api.Definition.TryGetProperty("requestTypeName", out _));
+    }
+
+    [Fact]
+    public void Only_typed_authored_custom_apis_are_excluded_lightweight_ones_are_kept()
+    {
+        // A typed Custom API (CustomApiBase<TRequest, TResponse>) already has its request class in code; a lightweight
+        // one (RegisterCustomApi(name, handler)) has none, so ALL-mode --custom-apis must keep generating it.
+        RegistrationState state = RegistrationFactory.State(
+            RegistrationFactory.CustomApi(new { uniqueName = "zava_Typed" }, "Zava.TypedApi"),
+            RegistrationFactory.CustomApi(new { uniqueName = "zava_Light" }, "Zava.LightApi")) with
+        {
+            TypedCustomApiUniqueNames = ["ZAVA_TYPED"],
+        };
+
+        HashSet<string> excludedNames = CustomApiReader.TypedAuthoredCustomApiUniqueNames(state);
+        HashSet<string> lightweight = CustomApiReader.LightweightAuthoredCustomApiUniqueNames(state);
+        IReadOnlyList<string> kept = CustomApiReader.ExcludeAuthoredCustomApis(new[] { "zava_Typed", "zava_Light", "other_Api" }, excludedNames, out int excluded);
+
+        Assert.Equal(new[] { "zava_Typed" }, excludedNames.ToArray());
+        Assert.Equal(new[] { "zava_Light" }, lightweight.ToArray());
+        Assert.Equal(1, excluded);
+        Assert.Equal(new[] { "zava_Light", "other_Api" }, kept.ToArray());
+    }
+
+    [Fact]
+    public void A_scan_without_the_typed_list_excludes_nothing()
+    {
+        // No typed list (e.g. a state built by hand): every authored API counts as lightweight, none is excluded.
+        RegistrationState state = RegistrationFactory.State(RegistrationFactory.CustomApi(new { uniqueName = "zava_Light" }));
+
+        Assert.Empty(CustomApiReader.TypedAuthoredCustomApiUniqueNames(state));
+        Assert.Equal(new[] { "zava_Light" }, CustomApiReader.LightweightAuthoredCustomApiUniqueNames(state).ToArray());
     }
 
     [Fact]
@@ -63,7 +99,7 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         string nupkg = BuildNupkg("SamplePluginFixture.dll", "SamplePluginFixture");
 
         RegistrationState state = PackageScanner.BuildLocalStateFromPackages(OptionsFor(nupkg), Web, _temps);
-        HashSet<string> authored = CustomApiReader.AuthoredCustomApiUniqueNames(state);
+        HashSet<string> authored = CustomApiReader.TypedAuthoredCustomApiUniqueNames(state);
 
         Assert.Contains("sample_DoThing", authored);
 

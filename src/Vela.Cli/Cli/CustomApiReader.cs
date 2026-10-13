@@ -146,11 +146,30 @@ internal static class CustomApiReader
             .ToList();
     }
 
-    // The unique names of every Custom API authored in the scanned package(s), from the normalized "custom-api" items.
-    // Case-insensitive so it matches the environment's uniquename regardless of casing.
-    internal static HashSet<string> AuthoredCustomApiUniqueNames(RegistrationState state)
+    // The unique names of the TYPED Custom APIs authored in the scanned package(s) (CustomApiBase<TRequest, TResponse>):
+    // the developer already has their request/response classes, so ALL-mode --custom-apis skips them. A lightweight
+    // Custom API (RegisterCustomApi(name, handler)) has no request class in code and is not returned, so it is still
+    // generated. Case-insensitive so it matches the environment's uniquename regardless of casing.
+    internal static HashSet<string> TypedAuthoredCustomApiUniqueNames(RegistrationState state)
     {
+        HashSet<string> typed = new HashSet<string>(state.TypedCustomApiUniqueNames ?? [], StringComparer.OrdinalIgnoreCase);
         HashSet<string> names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        names.UnionWith(AllAuthoredCustomApiUniqueNames(state).Where(typed.Contains));
+        return names;
+    }
+
+    // The unique names of the lightweight Custom APIs authored in the scanned package(s): authored, but with no request
+    // class in code, so ALL-mode --custom-apis keeps generating them (reported in a note).
+    internal static HashSet<string> LightweightAuthoredCustomApiUniqueNames(RegistrationState state)
+    {
+        HashSet<string> names = new HashSet<string>(AllAuthoredCustomApiUniqueNames(state), StringComparer.OrdinalIgnoreCase);
+        names.ExceptWith(state.TypedCustomApiUniqueNames ?? []);
+        return names;
+    }
+
+    // Every authored Custom API unique name, from the normalized "custom-api" items.
+    private static IEnumerable<string> AllAuthoredCustomApiUniqueNames(RegistrationState state)
+    {
         foreach (RegistrationItem item in state.Items)
         {
             if (!string.Equals(item.Kind, "custom-api", StringComparison.Ordinal))
@@ -163,15 +182,13 @@ internal static class CustomApiReader
                 string? uniqueName = el.GetString();
                 if (!string.IsNullOrWhiteSpace(uniqueName))
                 {
-                    names.Add(uniqueName!);
+                    yield return uniqueName!;
                 }
             }
         }
-
-        return names;
     }
 
-    // Drops the developer's own authored Custom APIs from the ALL-mode name list (they already have those classes).
+    // Drops the developer's own typed Custom APIs from the ALL-mode name list (they already have those classes).
     // Returns the kept names in the original order; excludedCount reports how many were removed. Factored out so the
     // exclusion is unit-testable without a live connection.
     internal static IReadOnlyList<string> ExcludeAuthoredCustomApis(IEnumerable<string> allNames, ISet<string> authoredUniqueNames, out int excludedCount)

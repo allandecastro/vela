@@ -41,6 +41,7 @@ internal static class PackageScanner
     List<PluginPackagePayload> packagePayloads = [];
     Dictionary<string, string> secureConfigNameByStepKey = new(StringComparer.Ordinal);
     List<string> unmanagedPluginTypes = [];
+    List<string> typedCustomApis = [];
 
     // An isolated load context that resolves the package's assemblies (and their siblings) from the temp
     // folders by *bytes*, so no .dll file is ever locked - on Windows Assembly.LoadFrom would hold the file
@@ -120,12 +121,19 @@ internal static class PackageScanner
                     throw new InvalidOperationException(BuildIntrospectionFailure(packagePath, type, "the Custom API definition", error));
                 }
 
-                JsonElement normalized = NormalizeCustomApiDefinition(JsonSerializer.SerializeToElement(definition, jsonOptions), jsonOptions);
+                JsonElement rawApi = JsonSerializer.SerializeToElement(definition, jsonOptions);
+                JsonElement normalized = NormalizeCustomApiDefinition(rawApi, jsonOptions);
                 if (DataverseRegistration.GetCustomApiLabelLengthError(DefinitionParser.ParseCustomApiDefinition(normalized)) is { } labelError)
                 {
                     throw new InvalidOperationException($"Plugin '{type.FullName}': {labelError}");
                 }
                 items.Add(new RegistrationItem("custom-api", type.FullName ?? type.Name, normalized));
+                // Only the typed builder sets a request type name; it is recorded beside the item, outside the diffed shape.
+                if (!string.IsNullOrWhiteSpace(TryGetString(rawApi, "requestTypeName"))
+                    && TryGetString(normalized, "uniqueName") is { Length: > 0 } typedUniqueName)
+                {
+                    typedCustomApis.Add(typedUniqueName);
+                }
             }
         }
     }
@@ -152,7 +160,8 @@ internal static class PackageScanner
         Items: items.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
         Diagnostics: [],
         SecureConfigNameByStepKey: secureConfigNameByStepKey,
-        UnmanagedPluginTypes: [.. unmanagedPluginTypes.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)]);
+        UnmanagedPluginTypes: [.. unmanagedPluginTypes.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)],
+        TypedCustomApiUniqueNames: [.. typedCustomApis.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.Ordinal)]);
     }
     finally
     {

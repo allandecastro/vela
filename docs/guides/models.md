@@ -21,7 +21,7 @@ vela models --custom-apis zava_Recalculate --interactive
 # ...or every Custom API in the environment, with no value
 vela models --custom-apis --interactive
 
-# ...every Custom API except the ones you authored in code (pass your built package)
+# ...every Custom API except the typed ones you authored in code (pass your built package)
 vela models --custom-apis --package bin/Release/Zava.Plugins.nupkg --interactive
 
 # typed Request/Response classes for specific SDK messages (into Messages/)
@@ -233,10 +233,13 @@ always present. See [Write a Custom API](custom-apis.md).
 
 **Scoping.** With **no value**, `--custom-apis` generates *every* Custom API in the environment (the platform's own
 included, often hundreds of files) and prints a warning. Narrow it with a targeted list (`--custom-apis a,b,c`,
-never filtered) or exclude the ones you authored in code by passing your built package (`--package <file.nupkg>` /
-`-p`, repeatable; `--packages-dir <folder>`; `--package-assembly <name>` to disambiguate): their unique names are
-scanned from the package (the same offline scan `plan`/`apply` use) and removed, with a note of how many were
-excluded.
+never filtered) or exclude the typed ones you authored in code by passing your built package (`--package
+<file.nupkg>` / `-p`, repeatable; `--packages-dir <folder>`; `--package-assembly <name>` to disambiguate): their
+unique names are scanned from the package (the same offline scan `plan`/`apply` use) and removed, with a note of how
+many were excluded. Only typed Custom APIs (`CustomApiBase<TRequest, TResponse>`) are excluded, because their
+request/response classes are already in your code. A lightweight Custom API (`CustomApiBase` with
+`RegisterCustomApi(name, handler)`) has no request class, so it is still generated from the environment, with a
+note of how many were kept.
 
 ## SDK message classes (`--messages`)
 

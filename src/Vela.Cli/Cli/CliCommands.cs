@@ -82,7 +82,7 @@ internal static class CliCommands
 
     private static readonly CliOption[] ModelsPackageInputs =
     [
-        new("--package", CliOptionKind.Value, "Built plugin package(s): with a bare --custom-apis, excludes the Custom APIs you authored (repeatable).", "file.nupkg", ["-p"]),
+        new("--package", CliOptionKind.Value, "Built plugin package(s): with a bare --custom-apis, excludes the typed Custom APIs you authored (repeatable).", "file.nupkg", ["-p"]),
         new("--packages-dir", CliOptionKind.Value, "A folder of .nupkg packages, used like --package.", "folder"),
         new("--package-assembly", CliOptionKind.Value, "The primary assembly inside the package(s).", "name.dll"),
     ];
