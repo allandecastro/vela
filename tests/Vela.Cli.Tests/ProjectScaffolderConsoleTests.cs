@@ -47,6 +47,35 @@ public class ProjectScaffolderConsoleTests
         });
     }
 
+    [Fact]
+    public void Readme_agents_guide_and_next_steps_show_the_same_models_command()
+    {
+        RunInTempDir(temp =>
+        {
+            TextWriter original = Console.Out;
+            StringWriter captured = new();
+            Console.SetOut(captured);
+            try
+            {
+                // Minimal scaffold (no samples): the one whose next steps start with `vela models`.
+                Assert.Equal(0, ProjectScaffolder.Generate(Options(temp) with { IncludeSamples = false, IncludeIntegrations = false, IncludeConsole = false }));
+            }
+            finally
+            {
+                Console.SetOut(original);
+            }
+
+            const string Models = "vela models --entities account,contact --project src/Zava.Shared/Zava.Shared.csproj";
+            string readme = File.ReadAllText(Path.Combine(temp, "ZavaSales", "README.md"));
+            string agents = File.ReadAllText(Path.Combine(temp, "ZavaSales", "AGENTS.md"));
+            foreach (string text in new[] { readme, agents, captured.ToString() })
+            {
+                Assert.Contains(Models, text);
+                Assert.DoesNotContain("--namespace", text);
+            }
+        });
+    }
+
     private static void RunInTempDir(Action<string> action)
     {
         string temp = Path.Combine(Path.GetTempPath(), "vela-scaffold-" + Guid.NewGuid().ToString("N"));
