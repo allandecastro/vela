@@ -166,6 +166,28 @@ public sealed class CliCommandsTests
     }
 
     [Fact]
+    public void Solution_show_examples_feed_the_publisher_prefix_to_a_publisher_prefix_option()
+    {
+        // `solution show` prints the publisher prefix: `init --prefix` is the namespace prefix, so an init example
+        // must take it through --publisher-prefix (add customapi/test --prefix is the publisher prefix).
+        string[] examples = [.. CliCommands.All.SelectMany(c => c.Examples ?? []).Where(e => e.Contains("solution show", StringComparison.Ordinal))];
+
+        Assert.Contains(examples, e => e.StartsWith("vela init ", StringComparison.Ordinal));
+        foreach (string example in examples)
+        {
+            if (example.StartsWith("vela init ", StringComparison.Ordinal))
+            {
+                Assert.Contains("--publisher-prefix \"$(vela solution show", example);
+                Assert.DoesNotContain("--prefix \"$(vela solution show", example);
+            }
+            else
+            {
+                Assert.StartsWith("vela add customapi ", example);
+            }
+        }
+    }
+
+    [Fact]
     public void Help_shows_aliases_notes_and_examples()
     {
         string logs = CaptureOut(() => CliCommands.PrintCommandHelp("trace"));

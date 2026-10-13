@@ -209,7 +209,7 @@ internal static class StepInjector
     }
 
     // The member names selected by a chain's FilterOn(...) call (e => e.Name, c => c.Telephone1, ...).
-    private static HashSet<string> FilterColumns(string chain)
+    internal static HashSet<string> FilterColumns(string chain)
     {
         HashSet<string> columns = new(StringComparer.Ordinal);
         Match call = FilterOnCall.Match(chain);

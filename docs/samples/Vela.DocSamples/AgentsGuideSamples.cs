@@ -1,17 +1,14 @@
 // Compiled copies of the snippets in the AGENTS.md that `vela init` scaffolds
 // (ScaffoldTemplates.AgentsGuide in src/Vela.Cli). Keep the two in sync: when a snippet changes here, change it
-// there too.
+// there too. Each namespace block below is one C# block of the guide and carries exactly that block's usings
+// (Vela.DocSamples.Models stands for the scaffold's {prefix}.Shared.Models.Generated), so the guide's usings are
+// the ones this file proves sufficient.
 namespace Vela.DocSamples
 {
-    using System;
     using Microsoft.Xrm.Sdk;
     using Vela.Context;
-    using Vela.CustomApi;
     using Vela.DocSamples.Models;
-    using Vela.Messages;
     using Vela.Plugin;
-    using Vela.Testing;
-    using Xunit;
 
     // ---- A plugin with two steps on one table ----
     public sealed partial class AccountCreditPlugin(string unsecureConfig, string secureConfig)
@@ -45,6 +42,15 @@ namespace Vela.DocSamples
         private void OnCreditLimitChanged(IUpdatePostContext<Account> ctx) =>
             ctx.Service.Update(new Account { Id = ctx.PrimaryEntityId, Description = "Credit limit reviewed." });
     }
+
+}
+
+namespace Vela.DocSamples
+{
+    using System;
+    using Vela.Context;
+    using Vela.CustomApi;
+    using Vela.Messages;
 
     // ---- A typed Custom API ----
     public sealed class EstimateValueApi(string unsecureConfig, string secureConfig)
@@ -81,6 +87,17 @@ namespace Vela.DocSamples
 
         public decimal Value { get => Get<decimal>(); set => Set(value); }
     }
+
+}
+
+namespace Vela.DocSamples
+{
+    using System;
+    using Microsoft.Xrm.Sdk;
+    using Vela.Context;
+    using Vela.DocSamples.Models;
+    using Vela.Testing;
+    using Xunit;
 
     // ---- Tests ----
     public sealed class AgentsGuideSampleTests
