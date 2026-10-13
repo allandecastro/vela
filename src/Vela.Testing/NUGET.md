@@ -24,7 +24,7 @@ public class AccountPostCreateTests
     [Fact]
     public void Creates_A_Follow_Up_Task()
     {
-        // One plugin against a fake context: the trigger is derived from the plugin's single step.
+        // One plugin against a fake context: the trigger comes from the plugin's registration.
         var crm = new InMemoryOrganizationService();
         PluginContext.For<Account>()
             .WithTarget(new Account { Name = "Zava" })
