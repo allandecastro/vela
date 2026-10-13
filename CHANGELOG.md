@@ -30,6 +30,19 @@ All notable changes to Vela are documented here. The format is based on
   `Relationship`, the same whichever end the caller started from; on a self-referential relationship `Target` is
   this side. The plugins guide (Relationship scope) now documents this.
 
+- `PipelineExecutionEntry.HandlerInvoked` and `PipelineExecutionEntry.SkipReason` report whether a step's handler ran.
+  An entry in `PluginPipeline.ExecutionLog` means the platform invoked the step. `HandlerInvoked` is `true` only once
+  the handler is actually called. When Vela's runtime skips the handler (a `.ForRelationship(...)` scope that does
+  not match, `.SkipWhenDepthAbove(n)`, the plugin-level depth guard), `SkipReason` holds the line it traced; a failure
+  before the handler (constructor, service registration) leaves `HandlerInvoked` `false` with no `SkipReason`.
+  `ToString()` also shows a handler that did not run.
+
+### Fixed (Framework)
+
+- `PluginPipeline.ExecutionLog` was documented as the steps that fired, but it also listed steps whose handler
+  Vela's runtime skipped, with nothing to tell them apart. Those entries now carry `HandlerInvoked = false` (see
+  above), and the docs say an entry means "invoked by the platform".
+
 ### Added (CLI)
 
 - **`vela init --integrations`** adds the `{prefix}.Integrations` plugin project, and its `{prefix}.Integrations.Tests`

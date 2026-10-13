@@ -63,6 +63,8 @@ namespace Vela.CustomApi
         /// <returns>The typed response parameters.</returns>
         protected abstract TResponse Execute(ILocalPluginContext ctx, TRequest request);
 
+        private protected override bool DispatchesToHandler => true;
+
         /// <summary>
         /// Executes the plugin by mapping input parameters to request, executing, and mapping response to output parameters.
         /// </summary>
@@ -70,6 +72,7 @@ namespace Vela.CustomApi
         protected sealed override void ExecuteDataversePlugin(ILocalPluginContext ctx)
         {
             var request = MapInputToRequest(ctx);
+            ReportHandlerInvoked(ctx);
             var response = Execute(ctx, request);
             MapResponseToOutput(ctx, response);
         }
