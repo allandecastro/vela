@@ -21,6 +21,13 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (CLI)
+
+- `vela models --custom-apis` with `--package`/`--packages-dir` now excludes only the **typed** Custom APIs authored
+  in the package (`CustomApiBase<TRequest, TResponse>`, whose request/response classes are already in your code).
+  Lightweight Custom APIs (`RegisterCustomApi(name, handler)`) have no request class, so they are generated again
+  from the environment, with a note of how many were kept.
+
 ## [0.33.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Changed (breaking)

@@ -87,6 +87,18 @@ public sealed class PluginContractScanTests : IDisposable
             names);
     }
 
+    [Fact]
+    public void Cli_scanner_marks_only_the_typed_custom_api_as_typed()
+    {
+        // The real framework builders: CustomApiBase<TRequest, TResponse> sets a request type name, the lightweight
+        // RegisterCustomApi(name, handler) does not. `vela models --custom-apis` excludes only the typed one.
+        RegistrationState state = Scan();
+
+        Assert.Equal(new[] { "contract_ScoreAccount" }, state.TypedCustomApiUniqueNames);
+        Assert.Equal(new[] { "contract_ScoreAccount" }, CustomApiReader.AuthoredCustomApiUniqueNames(state).ToArray());
+        Assert.Equal(new[] { "contract_ExportContacts" }, CustomApiReader.LightweightAuthoredCustomApiUniqueNames(state).ToArray());
+    }
+
     private RegistrationState Scan() =>
         PackageScanner.BuildLocalStateFromPackages(ContractFixturePackage.Options([_nupkg]), Web, _temps);
 

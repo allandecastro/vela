@@ -67,11 +67,11 @@ internal static class ModelsCommand
 
         // Bare `--custom-apis` generates EVERY Custom API in the environment, which includes the platform's own
         // (hundreds of files). That surprises callers who expected only their own, so warn up front and point at
-        // the ways to narrow it. (`--package`/`--packages-dir` already excludes the Custom APIs authored in code.)
+        // the ways to narrow it. (`--package`/`--packages-dir` already excludes the typed Custom APIs authored in code.)
         bool excludesAuthored = HasFlag(args, "--package") || HasFlag(args, "--packages-dir");
         if (scope.AllCustomApis && !excludesAuthored)
         {
-            Console.Error.WriteLine("Warning: --custom-apis with no value generates every Custom API in the environment, including system ones (this can be hundreds of files). Pass --custom-apis <a,b,c> to target specific ones, or --package/--packages-dir to exclude the Custom APIs you authored in code.");
+            Console.Error.WriteLine("Warning: --custom-apis with no value generates every Custom API in the environment, including system ones (this can be hundreds of files). Pass --custom-apis <a,b,c> to target specific ones, or --package/--packages-dir to exclude the typed Custom APIs you authored in code.");
         }
 
         string outDir = Path.GetFullPath(TryReadOption(args, "--out") ?? ".");
@@ -175,6 +175,7 @@ internal static class ModelsCommand
         // from the package (see PackageScanner's SECURITY note), so don't run it when nothing would consume the names
         // (targeted --custom-apis is never filtered; --messages excludes Custom-API-backed messages by itself).
         HashSet<string> authoredCustomApis = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> lightweightCustomApis = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (scope.AllCustomApis && packagePaths.Count > 0)
         {
             List<string> tempDirectories = new List<string>();
@@ -199,6 +200,7 @@ internal static class ModelsCommand
                 JsonSerializerOptions scanJson = new JsonSerializerOptions(JsonSerializerDefaults.Web);
                 RegistrationState scanned = IsolatedPackageScan.Scan(scanOptions, scanJson, tempDirectories);
                 authoredCustomApis = CustomApiReader.AuthoredCustomApiUniqueNames(scanned);
+                lightweightCustomApis = CustomApiReader.LightweightAuthoredCustomApiUniqueNames(scanned);
             }
             catch (Exception ex)
             {
@@ -296,8 +298,9 @@ internal static class ModelsCommand
                 {
                     // Bare --custom-apis = every Custom API in the environment. Read them all in a few paged queries
                     // (one per table) and join in memory, instead of one-plus-two round-trips per API, which times
-                    // out on large environments (#211). Then drop any the developer authored in the provided
-                    // package(s) (they already have those classes). No package = nothing excluded.
+                    // out on large environments (#211). Then drop the typed Custom APIs the developer authored in the
+                    // provided package(s) (they already have those request/response classes); lightweight ones have
+                    // no request class in code and are kept. No package = nothing excluded.
                     IReadOnlyList<CustomApiMessage> all = CustomApiReader.ReadAllCustomApis(service);
                     ISet<string> kept = new HashSet<string>(
                         CustomApiReader.ExcludeAuthoredCustomApis(all.Select(m => m.UniqueName), authoredCustomApis, out int excludedCount),
@@ -305,7 +308,13 @@ internal static class ModelsCommand
                     customApiMessages = all.Where(m => kept.Contains(m.UniqueName)).ToArray();
                     if (excludedCount > 0)
                     {
-                        Console.Error.WriteLine($"Excluding {excludedCount} Custom API(s) authored in the provided package(s).");
+                        Console.Error.WriteLine($"Excluding {excludedCount} typed Custom API(s) authored in the provided package(s).");
+                    }
+
+                    int lightweightKept = customApiMessages.Count(m => lightweightCustomApis.Contains(m.UniqueName));
+                    if (lightweightKept > 0)
+                    {
+                        Console.Error.WriteLine($"Keeping {lightweightKept} lightweight Custom API(s) authored in the provided package(s) (no request class in code).");
                     }
                 }
                 else

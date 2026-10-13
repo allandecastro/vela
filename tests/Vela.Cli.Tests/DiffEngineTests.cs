@@ -317,6 +317,25 @@ public class DiffEngineTests
         // The stored payload apply writes keeps the authored casing (only the comparison folded case).
         Assert.Equal("zava_DoThing", JsonReaderTestHelper.UniqueName(change));
     }
+
+    [Fact]
+    public void The_typed_custom_api_marker_never_reaches_the_diff()
+    {
+        // The scan records which Custom APIs are typed (request class in code) for `vela models`, beside the items.
+        // The request type name is dropped by the normalizer and the side list is not compared, so a typed local API
+        // converges with its live read (which has neither): plan/apply stay idempotent.
+        RegistrationItem local = NormalizedCustomApi(new { uniqueName = "zava_DoThing", isFunction = false, requestTypeName = "Zava.DoThingRequest", responseTypeName = "Zava.DoThingResponse" });
+        RegistrationItem live = NormalizedCustomApi(new { uniqueName = "zava_DoThing", isFunction = false });
+        RegistrationState localState = State(local) with { TypedCustomApiUniqueNames = ["zava_DoThing"] };
+
+        RegistrationDiff diff = DiffEngine.BuildDiff(localState, State(live));
+
+        Assert.False(local.Definition.TryGetProperty("requestTypeName", out _));
+        Assert.Equal(local.Definition.GetRawText(), live.Definition.GetRawText());
+        Assert.Empty(diff.Added);
+        Assert.Empty(diff.Removed);
+        Assert.Empty(diff.Changed);
+    }
 }
 
 internal static class JsonReaderTestHelper
