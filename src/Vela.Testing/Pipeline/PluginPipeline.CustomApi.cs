@@ -36,7 +36,7 @@ namespace Vela.Testing
             }
 
             OrganizationRequest inputs = CopyRequest(request);
-            (string Name, Guid Id) mainEntity = CustomApiPrimaryEntity(definition, request);
+            (string Name, Guid Id) mainEntity = CustomApiRequestValidator.PrimaryEntity(definition, request.Parameters);
 
             return RunOperation(asyncQueue =>
             {

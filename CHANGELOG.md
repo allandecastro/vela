@@ -38,6 +38,11 @@ All notable changes to Vela are documented here. The format is based on
   same faults as `PluginPipeline`: a missing required input (`0x80040203`), an input of the wrong type or an
   undeclared one (`0x80040315`), a bound API without its `Target`. `.WithoutRequestValidation()` turns it off for a
   test that sends an invalid request on purpose.
+- **Breaking:** a Custom API run through `PluginContext` (`Execute(api)` / `Build(api)`) sees the primary entity of
+  its binding, as with `PluginPipeline` (verified live): `PrimaryEntityName` `"none"` and an empty `PrimaryEntityId`
+  for a global API, the bound table and the `Target` id for an entity-bound API, the bound table and an empty id for
+  an entity-collection-bound API. It used to see the builder's default (`account`). `WithPrimaryEntity(...)` still
+  wins.
 
 ### Changed (Framework)
 

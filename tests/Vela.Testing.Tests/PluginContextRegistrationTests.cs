@@ -262,6 +262,64 @@ namespace Vela.Testing.Tests
             Assert.Equal("echo:", builder.Context.OutputParameters["Echo"]);
         }
 
+        // --- Custom API primary entity (verified live: global "none", bound the table [+ the Target id]) ---
+
+        [Fact]
+        public void CustomApi_Global_SeesNoneAndAnEmptyId()
+        {
+            PluginContextBuilder<Entity> builder = PluginContext.ForMessage("vela_PrimaryGlobal");
+
+            builder.Execute(new PrimaryEntityGlobalApi(string.Empty, string.Empty));
+
+            Assert.Equal("none", builder.Context.OutputParameters["PrimaryEntityName"]);
+            Assert.Equal(Guid.Empty, builder.Context.OutputParameters["PrimaryEntityId"]);
+        }
+
+        [Fact]
+        public void CustomApi_EntityBound_SeesTheBoundTableAndTheTargetId()
+        {
+            Guid id = Guid.NewGuid();
+            PluginContextBuilder<Entity> builder = PluginContext.ForMessage("vela_PrimaryBound")
+                .WithInputParameter("Target", new EntityReference("account", id));
+
+            builder.Execute(new PrimaryEntityBoundApi(string.Empty, string.Empty));
+
+            Assert.Equal("account", builder.Context.OutputParameters["PrimaryEntityName"]);
+            Assert.Equal(id, builder.Context.OutputParameters["PrimaryEntityId"]);
+        }
+
+        [Fact]
+        public void CustomApi_CollectionBound_SeesTheBoundTableAndAnEmptyId()
+        {
+            PluginContextBuilder<Entity> builder = PluginContext.ForMessage("vela_PrimaryCollection");
+
+            builder.Execute(new PrimaryEntityCollectionApi(string.Empty, string.Empty));
+
+            Assert.Equal("account", builder.Context.OutputParameters["PrimaryEntityName"]);
+            Assert.Equal(Guid.Empty, builder.Context.OutputParameters["PrimaryEntityId"]);
+        }
+
+        [Fact]
+        public void CustomApi_WithPrimaryEntity_WinsOverTheBinding()
+        {
+            Guid id = Guid.NewGuid();
+            PluginContextBuilder<Entity> builder = PluginContext.ForMessage("vela_PrimaryGlobal").WithPrimaryEntity("contact", id);
+
+            builder.Execute(new PrimaryEntityGlobalApi(string.Empty, string.Empty));
+
+            Assert.Equal("contact", builder.Context.OutputParameters["PrimaryEntityName"]);
+            Assert.Equal(id, builder.Context.OutputParameters["PrimaryEntityId"]);
+        }
+
+        [Fact]
+        public void CustomApi_APlainBuild_KeepsTheBuildersPrimaryEntity()
+        {
+            // Without the plugin there is no definition to take the binding from.
+            LocalPluginContext ctx = PluginContext.ForMessage("vela_PrimaryGlobal").Build();
+
+            Assert.Equal("account", ctx.PrimaryEntityName);
+        }
+
         // --- What PluginContext does not apply, reported as a trace ---
 
         [Fact]

@@ -31,7 +31,9 @@ namespace Vela.Testing
         private bool _messageSet;
         private bool _stageSet;
         private bool _modeSet;
+        private bool _primaryEntityNameSet;
         private bool _primaryEntityIdSet;
+        private bool _customApiPrimaryEntity;
         private Guid _derivedPrimaryEntityId;
         private bool _requestValidation = true;
 
@@ -138,11 +140,13 @@ namespace Vela.Testing
 
         /// <summary>
         /// Overrides the primary entity name (and optionally its id). Without an id, <c>PrimaryEntityId</c> follows the
-        /// <c>Target</c> (see <see cref="WithTarget"/>).
+        /// <c>Target</c> (see <see cref="WithTarget"/>). Both win over the primary entity a Custom API derives from its
+        /// binding.
         /// </summary>
         public PluginContextBuilder<TEntity> WithPrimaryEntity(string logicalName, Guid? id = null)
         {
             Context.PrimaryEntityName = logicalName;
+            _primaryEntityNameSet = true;
             if (id.HasValue)
             {
                 Context.PrimaryEntityId = id.Value;
@@ -463,12 +467,13 @@ namespace Vela.Testing
         {
             if (plugin is CustomApiBase customApi)
             {
+                CustomApiDefinition definition = customApi.GetCustomApiDefinition();
                 if (_requestValidation)
                 {
-                    CustomApiDefinition definition = customApi.GetCustomApiDefinition();
                     CustomApiRequestValidator.Validate(definition.UniqueName, Context.InputParameters, definition);
                 }
 
+                ApplyCustomApiPrimaryEntity(definition);
                 return;
             }
 
@@ -704,12 +709,32 @@ namespace Vela.Testing
 
         private void TraceWarning(string message) => _tracingService.Trace("{0}", message);
 
+        // A Custom API's main operation sees the primary entity of its binding, as PluginPipeline gives it (verified
+        // live): "none" for a global API, the bound table for a bound one, with the Target id for an entity-bound API.
+        // What the test set with WithPrimaryEntity wins.
+        private void ApplyCustomApiPrimaryEntity(CustomApiDefinition definition)
+        {
+            (string name, Guid id) = CustomApiRequestValidator.PrimaryEntity(definition, Context.InputParameters);
+            if (!_primaryEntityNameSet)
+            {
+                Context.PrimaryEntityName = name;
+            }
+
+            bool idSetOnContext = Context.PrimaryEntityId != Guid.Empty && Context.PrimaryEntityId != _derivedPrimaryEntityId;
+            if (!_primaryEntityIdSet && !idSetOnContext)
+            {
+                Context.PrimaryEntityId = id;
+                _derivedPrimaryEntityId = id;
+                _customApiPrimaryEntity = true;
+            }
+        }
+
         // PrimaryEntityId follows the Target unless the test set it: the Target's id (an entity or a reference), and
         // Guid.Empty on a global message (Associate, ...) or without a Target. An id the test set, through
         // WithPrimaryEntity or on Context, is kept.
         private void ApplyPrimaryEntityId()
         {
-            if (_primaryEntityIdSet || (Context.PrimaryEntityId != Guid.Empty && Context.PrimaryEntityId != _derivedPrimaryEntityId))
+            if (_primaryEntityIdSet || _customApiPrimaryEntity || (Context.PrimaryEntityId != Guid.Empty && Context.PrimaryEntityId != _derivedPrimaryEntityId))
             {
                 return;
             }

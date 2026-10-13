@@ -74,7 +74,9 @@ input parameters come from it, so the test states no message name or parameter k
 stays for a message with no request type. Running a Custom API checks its request against its definition first,
 with the faults `PluginPipeline` raises: a missing required input (`0x80040203`), an input of the wrong type or an
 undeclared one (`0x80040315`), a bound API without its `Target`. A test that feeds the API an invalid request on
-purpose, to exercise the API's own checks, turns this off with `.WithoutRequestValidation()`.
+purpose, to exercise the API's own checks, turns this off with `.WithoutRequestValidation()`. The API's context
+has the primary entity of its binding, as in `PluginPipeline`: `"none"` for a global API, the bound table (and the
+Target id for an entity-bound one) otherwise; `WithPrimaryEntity(...)` overrides it.
 
 **What PluginContext does not apply.** `PluginContext` runs the handler of the step the trigger selects; it checks
 the message, stage, mode, entity and relationship scope, as the runtime dispatch does. It does not apply the rest of

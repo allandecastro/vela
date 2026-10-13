@@ -111,6 +111,25 @@ namespace Vela.Testing
             return (definition.BoundEntityLogicalName!, reference.Id);
         }
 
+        /// <summary>
+        /// The primary entity a Custom API's main operation sees on Dataverse (verified live): "none" and an empty id
+        /// for a global API, the bound entity and the Target's id for an entity-bound API, and the bound entity with an
+        /// empty id for an entity-collection-bound API.
+        /// </summary>
+        public static (string Name, Guid Id) PrimaryEntity(CustomApiDefinition? definition, ParameterCollection parameters)
+        {
+            if (definition == null || definition.BindingType == CustomApiBindingType.Global || string.IsNullOrEmpty(definition.BoundEntityLogicalName))
+            {
+                return ("none", Guid.Empty);
+            }
+
+            Guid id = definition.BindingType == CustomApiBindingType.Entity
+                && parameters.TryGetValue("Target", out object? target) && target is EntityReference reference
+                ? reference.Id
+                : Guid.Empty;
+            return (definition.BoundEntityLogicalName!, id);
+        }
+
         // The CLR type a declared parameter must carry, or null for a type name the harness does not know (no check).
         private static Type? ParameterClrType(CustomApiParameterDefinition parameter)
         {
