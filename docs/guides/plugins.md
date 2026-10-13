@@ -145,8 +145,20 @@ RegisterStep().OnAssociate().PostOperation().Sync()
 ```
 
 On these steps `ctx.PrimaryEntityName` is `"none"` and `ctx.PrimaryEntityId` is `Guid.Empty`, at every stage and
-mode. Read the ends of the link from `ctx.Request.Target` and `ctx.Request.RelatedEntities`, and the relationship
-from `ctx.Request.Relationship`.
+mode. The plugin's table (the `T` of `EntityPluginBase<T>`) does not filter them, and `ctx.Request.Target` is the
+record the caller passed, at either end of the link: associating contacts from an account gives `Target` = the
+account and `RelatedEntities` = the contacts, so a contact plugin's handler runs with an account `Target`. See
+[Associate and disassociate table rows](https://learn.microsoft.com/power-apps/developer/data-platform/org-service/entity-operations-associate-disassociate)
+for the requests themselves.
+
+`ctx.Sides()` splits the link by the plugin's table instead of by the caller's direction: `ThisSide` holds the
+records of `T`, `OtherSide` the records at the other end, and `Relationship` the relationship. When `Target` is a
+`T`, it is this side and every related record is the other side; otherwise the related records that are a `T` are
+this side, and `Target` with the remaining ones is the other side. On a self-referential relationship (both ends
+are `T`), `Target` is this side. On a relationship that does not involve `T` (a step without `ForRelationship`),
+`ThisSide` is empty.
+
+[!code-csharp[](../samples/Vela.DocSamples/RelationshipSidesSample.cs#plugin)]
 
 ### Depth limit per step
 
