@@ -479,7 +479,7 @@ namespace Vela.Testing
             }
 
             ResolveTrigger(plugin, definitions);
-            TraceUnappliedRegistration(definitions);
+            TraceUnappliedRegistration(definitions, plugin.GetType().FullName ?? plugin.GetType().Name);
         }
 
         private static StepDefinition[]? ReadStepDefinitions(IPlugin plugin)
@@ -629,9 +629,9 @@ namespace Vela.Testing
         // impersonation say (PluginPipeline applies them). Two of these make a test silently wrong, so they are
         // reported as a trace: an Update whose Target holds none of the filtered attributes (Dataverse would not run
         // the step), and a registered image the context does not carry (the handler reads null).
-        private void TraceUnappliedRegistration(StepDefinition[] definitions)
+        private void TraceUnappliedRegistration(StepDefinition[] definitions, string pluginTypeName)
         {
-            StepDefinition? step = ExecutingStep(definitions);
+            StepDefinition? step = ExecutingStep(definitions, pluginTypeName);
             if (step == null)
             {
                 return;
@@ -672,8 +672,9 @@ namespace Vela.Testing
         }
 
         // The step the dispatch would run for the context's trigger: the only match, or the one the executing step
-        // (OwningExtension) names when several share the trigger. Null when none resolves (the dispatch reports it).
-        private StepDefinition? ExecutingStep(StepDefinition[] definitions)
+        // (OwningExtension, by name or by id) names when several share the trigger, resolved by the runtime's own
+        // selection. Null when none resolves (the dispatch reports it).
+        private StepDefinition? ExecutingStep(StepDefinition[] definitions, string pluginTypeName)
         {
             List<StepDefinition> matches = definitions
                 .Where(d => string.Equals(d.Message, Context.MessageName, StringComparison.OrdinalIgnoreCase)
@@ -686,11 +687,16 @@ namespace Vela.Testing
                 return matches.FirstOrDefault();
             }
 
-            string? stepName = Context.OwningExtension?.Name;
-            List<StepDefinition> owned = string.IsNullOrEmpty(stepName)
-                ? new List<StepDefinition>()
-                : matches.Where(d => !string.IsNullOrEmpty(d.StepKey) && stepName!.EndsWith(d.StepKey, StringComparison.OrdinalIgnoreCase)).ToList();
-            return owned.Count == 1 ? owned[0] : null;
+            try
+            {
+                List<StepDefinition> selected = StepIdentity.Select(matches, new LocalPluginContext(BuildServiceProvider()), pluginTypeName);
+                return selected.Count == 1 ? selected[0] : null;
+            }
+            catch (Exception)
+            {
+                // No single step resolves (or its name cannot be read): the dispatch reports it, no warning here.
+                return null;
+            }
         }
 
         private static bool HasImage(EntityImageCollection images, EntityImageCollection[] bulkImages, string alias)

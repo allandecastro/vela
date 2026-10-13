@@ -345,6 +345,35 @@ namespace Vela.Testing.Tests
             Assert.StartsWith("Vela.Testing: step 'headcount' filters on numberofemployees", warning);
         }
 
+        [Fact]
+        public void StepsSharingTheTrigger_AnAsyncOwningExtensionWithOnlyAnId_IsResolvedByTheStepRow()
+        {
+            // An asynchronous step's OwningExtension carries the step id and a null name (verified live); the runtime
+            // reads the name from the sdkmessageprocessingstep row, and so does the warning's step selection.
+            Guid stepId = Guid.NewGuid();
+            InMemoryOrganizationService crm = new InMemoryOrganizationService();
+            crm.Create(new Entity("sdkmessageprocessingstep", stepId) { ["name"] = "SharedAsyncTriggerPlugin - Async: headcount" });
+            PluginContextBuilder<FakeAccount> builder = PluginContext.For<FakeAccount>()
+                .OnUpdate().Stage(PluginStages.PostOperation).Async()
+                .WithTarget(new FakeAccount { Name = "Zava" })
+                .WithOrganizationService(crm);
+            builder.Context.OwningExtension = new EntityReference("sdkmessageprocessingstep", stepId);
+
+            builder.Execute(new SharedAsyncTriggerPlugin());
+
+            string warning = Assert.Single(builder.TraceCapture.Traces, t => t.StartsWith("Vela.Testing:", StringComparison.Ordinal));
+            Assert.StartsWith("Vela.Testing: step 'headcount' filters on numberofemployees", warning);
+        }
+
+        private sealed class SharedAsyncTriggerPlugin() : EntityPluginBase<FakeAccount>(string.Empty, string.Empty)
+        {
+            protected override void RegisterPluginSteps()
+            {
+                RegisterStep().OnUpdate().PostOperation().Async().FilterOn(a => a.Name).WithStepKey("name").Handle(_ => { });
+                RegisterStep().OnUpdate().PostOperation().Async().FilterOn(a => a.NumberOfEmployees).WithStepKey("headcount").Handle(_ => { });
+            }
+        }
+
         private sealed class SharedTriggerPlugin() : EntityPluginBase<FakeAccount>(string.Empty, string.Empty)
         {
             protected override void RegisterPluginSteps()
