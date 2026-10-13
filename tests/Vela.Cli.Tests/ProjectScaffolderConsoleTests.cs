@@ -65,7 +65,7 @@ public class ProjectScaffolderConsoleTests
                 Console.SetOut(original);
             }
 
-            const string Models = "vela models --entities account,contact --project src/Zava.Shared/Zava.Shared.csproj";
+            const string Models = "vela models --entities account,contact --project src/Zava.Shared/Zava.Shared.csproj --interactive";
             string readme = File.ReadAllText(Path.Combine(temp, "ZavaSales", "README.md"));
             string agents = File.ReadAllText(Path.Combine(temp, "ZavaSales", "AGENTS.md"));
             foreach (string text in new[] { readme, agents, captured.ToString() })

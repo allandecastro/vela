@@ -30,7 +30,7 @@ All notable changes to Vela are documented here. The format is based on
 - The C# blocks of the scaffolded `AGENTS.md` now start with the `using` directives they need, so a block pasted
   into a file created by `vela add` compiles (the Custom API block failed without `using Vela.Messages;`).
 - The scaffolded README, `AGENTS.md` and the `vela init` next steps now show the same `vela models` command
-  (`--entities account,contact --project src/<Prefix>.Shared/<Prefix>.Shared.csproj`), instead of three variants.
+  (`--entities account,contact --project src/<Prefix>.Shared/<Prefix>.Shared.csproj --interactive`), instead of three variants.
 
 ## [0.33.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
