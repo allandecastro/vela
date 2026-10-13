@@ -50,12 +50,6 @@ internal static class ProjectScaffolder
             return Fail($"Target directory already exists and is not empty: {root}. Use --force to regenerate (your own and edited files are kept).", ExitInvalidArguments, includeUsage: false);
         }
 
-        if (options.ManagedIdentity && !options.IncludeIntegrations)
-        {
-            // stderr so it never pollutes the --json report on stdout.
-            Console.Error.WriteLine("Warning: --managed-identity applies to the Integrations project (vela init --samples), which is excluded; ignoring it.");
-        }
-
         List<PlannedFile> plan = Plan(options, out List<ProjectEntry> projects);
         WriteOutcome outcome = WritePlan(root, plan);
 
@@ -181,11 +175,17 @@ internal static class ProjectScaffolder
             Add(Path.Combine("src", pluginsName, "GlobalCustomApis", "PingCustomApi.cs"), PingCustomApi(prefix, apiPrefix));
         }
 
-        // ---- Integrations (--samples) ----
+        // ---- Integrations (--samples, --integrations or --managed-identity) ----
+        // A second plugin package. With --samples it ships its own demo plugins and Custom APIs; otherwise it is an
+        // empty package, like the minimal Plugins project, that registers nothing until you add to it.
         if (options.IncludeIntegrations)
         {
             AddProject(integrationsName, "src");
             Add(Path.Combine("src", integrationsName, $"{integrationsName}.csproj"), PluginCsproj(integrationsName, sharedName, options.CoreVersion, withSigningTarget: options.ManagedIdentity, publisherPrefix: recordedPublisherPrefix));
+        }
+
+        if (options.IncludeIntegrations && options.IncludeSamples)
+        {
             Add(Path.Combine("src", integrationsName, "Account", "Plugins", "AccountSyncRouterPlugin.cs"), AccountSyncRouterPlugin(prefix));
             Add(Path.Combine("src", integrationsName, "Account", "CustomApis", "AccountReconcileCustomApi.cs"), AccountReconcileCustomApi(prefix, apiPrefix));
             Add(Path.Combine("src", integrationsName, "Contact", "Plugins", "ContactSyncPlugin.cs"), ContactSyncPlugin(prefix));
@@ -212,11 +212,16 @@ internal static class ProjectScaffolder
             }
         }
 
-        // ---- Integrations.Tests (--samples, with tests) ----
+        // ---- Integrations.Tests (with Integrations, unless --no-tests) ----
+        // Empty without --samples, like the minimal Plugins.Tests project.
         if (options.IncludeIntegrations && options.IncludeTests)
         {
             AddProject(integrationsTestsName, "tests");
             Add(Path.Combine("tests", integrationsTestsName, $"{integrationsTestsName}.csproj"), TestsCsproj(integrationsTestsName, integrationsName, sharedName, options.CoreVersion, recordedPublisherPrefix));
+        }
+
+        if (options.IncludeIntegrations && options.IncludeTests && options.IncludeSamples)
+        {
             Add(Path.Combine("tests", integrationsTestsName, "Account", "CustomApis", "AccountReconcileCustomApiTests.cs"), AccountReconcileCustomApiTests(prefix, apiPrefix));
             Add(Path.Combine("tests", integrationsTestsName, "Contact", "CustomApis", "ContactExportCustomApiTests.cs"), ContactExportCustomApiTests(prefix, apiPrefix));
             Add(Path.Combine("tests", integrationsTestsName, "GlobalCustomApis", "IntegrationHeartbeatCustomApiTests.cs"), IntegrationHeartbeatCustomApiTests(prefix, apiPrefix));

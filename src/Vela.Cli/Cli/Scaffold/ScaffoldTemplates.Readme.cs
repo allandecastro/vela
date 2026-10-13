@@ -11,6 +11,16 @@ internal static partial class ScaffoldTemplates
         string testsLine = options.IncludeTests
             ? $"- `tests/{prefix}.Plugins.Tests` - unit tests with `Vela.Testing` (no Dataverse connection). Empty until you run `vela add test`.\n"
             : string.Empty;
+        // `vela init --integrations` (or --managed-identity) adds an empty second plugin package and its tests.
+        string integrationsLine = options.IncludeIntegrations
+            ? $"- `src/{prefix}.Integrations` - a second plugin package, same mechanics as Plugins. Empty until you add a plugin (`--project src/{prefix}.Integrations`).\n"
+            : string.Empty;
+        string integrationsTestsLine = options.IncludeIntegrations && options.IncludeTests
+            ? $"- `tests/{prefix}.Integrations.Tests` - unit tests for the Integrations package. Empty until you run `vela add test`.\n"
+            : string.Empty;
+        string signingSection = !options.IncludeIntegrations
+            ? string.Empty
+            : "\n" + (options.ManagedIdentity ? SigningSectionEnabled(prefix) : SigningSectionDisabled(prefix, "--managed-identity"));
         string webResourcesLine = options.IncludeWebResources
             ? $"- `src/{prefix}.WebResources` - a TypeScript web-resources project (preview); see its own README.\n"
             : string.Empty;
@@ -36,7 +46,7 @@ another folder to see worked examples of every pattern.
 
 - `src/{{prefix}}.Shared` - early-bound entity models and shared services, referenced by the plugin project. Empty until you run `vela models`.
 - `src/{{prefix}}.Plugins` - your plugin package. Builds a Dataverse plugin-package `.nupkg` (not a bare `.dll`). Empty until you add a plugin.
-{{testsLine}}{{webResourcesLine}}
+{{integrationsLine}}{{testsLine}}{{integrationsTestsLine}}{{webResourcesLine}}
 > **Restore source:** the projects reference `Vela.Plugins` / `Vela.Testing` from **nuget.org** (the default package source), so a plain `dotnet restore`/`build` works with no extra configuration.
 
 ## Next steps
@@ -51,7 +61,7 @@ Run these from the solution root:
 Until you add a plugin, the package registers nothing - `vela plan --packages-dir artifacts --solution {{options.SolutionName}}` simply reports no changes.
 
 {{publisherNote}}
-
+{{signingSection}}
 `vela init --force` regenerates the scaffold in place. It only overwrites or removes the files it generated that
 you have not edited since (it records them in `.vela/scaffold-manifest.json`; commit that file); your own files
 and edited ones are kept.
@@ -90,7 +100,7 @@ and edited ones are kept.
         // Signing is an Integrations-only concern, so the whole section is omitted when that project is excluded.
         string signingSection = !options.IncludeIntegrations
             ? string.Empty
-            : options.ManagedIdentity ? SigningSectionEnabled(prefix) : SigningSectionDisabled(prefix);
+            : options.ManagedIdentity ? SigningSectionEnabled(prefix) : SigningSectionDisabled(prefix, "--samples --managed-identity");
 
         return
 $$"""
@@ -409,13 +419,14 @@ vela sign --package artifacts/{{prefix}}.Integrations.1.0.0.nupkg `
 """;
 
     // README signing section when signing was not requested (but Integrations exists, so it is relevant).
-    private static string SigningSectionDisabled(string prefix) =>
+    // initFlags: the `vela init` flags that re-scaffold this solution with the signing step.
+    private static string SigningSectionDisabled(string prefix, string initFlags) =>
 $$"""
 ## Signing the plugin package
 
 The build does **not** sign the assembly. If the `{{prefix}}.Integrations` plugin uses a **managed identity**
 (and therefore needs publisher identity + tamper-evidence on the package), re-scaffold with
-`vela init <name> --samples --managed-identity --force` to add an opt-in, CI-gated signing step to the Integrations build, or
+`vela init <name> {{initFlags}} --force` to add an opt-in, CI-gated signing step to the Integrations build, or
 sign a packed `.nupkg` yourself:
 
 ```powershell

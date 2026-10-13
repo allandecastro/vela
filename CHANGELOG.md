@@ -21,6 +21,23 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added (Framework)
+
+- **`ctx.Sides()` on the Associate / Disassociate contexts** splits the link by the plugin's table instead of by the
+  caller's direction. These messages have no primary entity, so the `T` of `EntityPluginBase<T>` does not filter
+  them and `ctx.Request.Target` is whichever end the caller passed (associating contacts from an account gives an
+  account `Target` to a contact plugin). `Sides()` returns `ThisSide` (the records of `T`), `OtherSide` and
+  `Relationship`, the same whichever end the caller started from; on a self-referential relationship `Target` is
+  this side. The plugins guide (Relationship scope) now documents this.
+
+### Added (CLI)
+
+- **`vela init --integrations`** adds the `{prefix}.Integrations` plugin project, and its `{prefix}.Integrations.Tests`
+  project unless `--no-tests`, without `--samples`: an empty second plugin package with the same build setup as
+  `{prefix}.Plugins`. `--managed-identity` now implies it, so it adds the Integrations project with its signing step
+  instead of being ignored without `--samples`. With `--samples` the behaviour is unchanged. `--integrations` or
+  `--managed-identity` together with `--no-integrations` is refused.
+
 ### Fixed (CLI)
 
 - The `vela solution show` help example passed the publisher prefix to `vela init --prefix`, which is the namespace

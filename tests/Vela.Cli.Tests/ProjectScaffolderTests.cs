@@ -99,6 +99,72 @@ public class ProjectScaffolderTests
     }
 
     [Fact]
+    public void Generate_Integrations_WithoutSamples_AddsEmptyIntegrationsAndTestsProjects()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--integrations", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
+
+            string root = Path.Combine(temp, "ZavaSales");
+            string[] files = Directory.GetFiles(root, "*", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
+                .OrderBy(f => f, StringComparer.Ordinal)
+                .ToArray();
+
+            // The minimal layout plus the two Integrations project files: no demo plugin, Custom API or test.
+            Assert.Equal(
+                [
+                    ".gitignore",
+                    ".vela/scaffold-manifest.json",
+                    "AGENTS.md",
+                    "Directory.Build.props",
+                    "Directory.Packages.props",
+                    "README.md",
+                    "ZavaSales.sln",
+                    "src/Zava.Integrations/Zava.Integrations.csproj",
+                    "src/Zava.Plugins/Zava.Plugins.csproj",
+                    "src/Zava.Shared/Zava.Shared.csproj",
+                    "tests/Zava.Integrations.Tests/Zava.Integrations.Tests.csproj",
+                    "tests/Zava.Plugins.Tests/Zava.Plugins.Tests.csproj",
+                ],
+                files);
+
+            string sln = File.ReadAllText(Path.Combine(root, "ZavaSales.sln"));
+            Assert.Contains("src\\Zava.Integrations\\Zava.Integrations.csproj", sln);
+            Assert.Contains("tests\\Zava.Integrations.Tests\\Zava.Integrations.Tests.csproj", sln);
+            Assert.Contains("..\\..\\src\\Zava.Integrations\\Zava.Integrations.csproj", File.ReadAllText(Path.Combine(root, "tests", "Zava.Integrations.Tests", "Zava.Integrations.Tests.csproj")));
+            Assert.DoesNotContain("SignPluginPackage", File.ReadAllText(Path.Combine(root, "src", "Zava.Integrations", "Zava.Integrations.csproj")));
+
+            string readme = File.ReadAllText(Path.Combine(root, "README.md"));
+            Assert.Contains("`src/Zava.Integrations` - a second plugin package", readme);
+            Assert.Contains("`tests/Zava.Integrations.Tests`", readme);
+            Assert.Contains("vela init <name> --managed-identity --force", readme);
+        });
+    }
+
+    [Fact]
+    public void Generate_ManagedIdentity_WithoutSamples_AddsAnEmptyIntegrationsProjectWithTheSigningStep()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--managed-identity", "--no-tests", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
+
+            string root = Path.Combine(temp, "ZavaSales");
+            string integrations = Path.Combine(root, "src", "Zava.Integrations");
+            Assert.Contains("SignPluginPackage", File.ReadAllText(Path.Combine(integrations, "Zava.Integrations.csproj")));
+            Assert.DoesNotContain("SignPluginPackage", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj")));
+            Assert.Empty(Directory.GetFiles(integrations, "*.cs", SearchOption.AllDirectories));
+            Assert.False(Directory.Exists(Path.Combine(root, "tests")));
+
+            string readme = File.ReadAllText(Path.Combine(root, "README.md"));
+            Assert.Contains("This solution wires **opt-in** NuGet signing into the build of the **`Zava.Integrations`** project", readme);
+            Assert.DoesNotContain("Integrations.Tests", readme);
+        });
+    }
+
+    [Fact]
     public void Generate_PublisherPrefix_NamesTheSampleCustomApis_AndIsRecordedInTheProjects()   // A-50
     {
         RunInTempDir(temp =>
@@ -784,6 +850,37 @@ public class ProjectScaffolderTests
             }
 
             BuildTestAndScan(temp, root, expectedCustomApis: ["zava_Recalculate", "zava_Score"], minimumSteps: 5, maximumSteps: 5);
+        });
+    }
+
+    [OptInFact("VELA_BUILD_SMOKE=1")]
+    public void Generate_ThenDotnetBuild_Succeeds_MinimalWithIntegrations()
+    {
+        // `vela init --integrations --managed-identity` without --samples: the empty Integrations package (with its
+        // inert signing target) and its empty tests project must build and plan as generated, then take a plugin, a
+        // Custom API and a test like the Plugins pair does.
+        RunInTempDir(temp =>
+        {
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--publisher-prefix", "zava", "--integrations", "--managed-identity", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
+            string root = Path.Combine(temp, "ZavaSales");
+
+            BuildTestAndScan(temp, root, expectedCustomApis: [], minimumSteps: 0, maximumSteps: 0, runTests: false);
+            Assert.True(File.Exists(Path.Combine(root, "artifacts", "Zava.Integrations.1.0.0.nupkg")), "the empty Integrations package should still be built");
+
+            Directory.CreateDirectory(Path.Combine(root, "src", "Zava.Shared", "Models", "Generated"));
+            File.WriteAllText(Path.Combine(root, "src", "Zava.Shared", "Models", "Generated", "Account.cs"), ScaffoldTemplates.AccountModel("Zava"));
+            string integrations = Path.Combine(root, "src", "Zava.Integrations", "Zava.Integrations.csproj");
+            string integrationsTests = Path.Combine(root, "tests", "Zava.Integrations.Tests", "Zava.Integrations.Tests.csproj");
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountSync", "--entity", "Account", "--filtering-attributes", "Name", "--project", integrations]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Export", "--global", "--project", integrations]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "Export", "--kind", "customapi", "--project", integrationsTests]));
+
+            // Every generated tests project must run at least one test, so give the Plugins pair one too.
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountAssigned", "--entity", "Account", "--message", "Assign", "--project", Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj")]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountAssigned", "--entity", "Account", "--message", "Assign", "--project", Path.Combine(root, "tests", "Zava.Plugins.Tests", "Zava.Plugins.Tests.csproj")]));
+
+            BuildTestAndScan(temp, root, expectedCustomApis: ["zava_Export"], minimumSteps: 2, maximumSteps: 2);
         });
     }
 
