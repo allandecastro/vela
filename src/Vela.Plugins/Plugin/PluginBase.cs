@@ -106,6 +106,11 @@ namespace Vela.Plugin
                 localContext.TraceExecutionSnapshot("start", snapshotDetail);
 
                 EnforceDepth(localContext);
+                if (!DispatchesToHandler)
+                {
+                    ReportHandlerInvoked(localContext);
+                }
+
                 ExecuteDataversePlugin(localContext);
                 localContext.Trace("Execution completed in {0} ms.", stopwatch.ElapsedMilliseconds);
                 // A metadata snapshot would only repeat the start one; a full one shows the values the handler set.
@@ -331,6 +336,25 @@ namespace Vela.Plugin
             context.Trace("{0}", reason);
             (context as LocalPluginContext)?.ReportHandlerSkipped(reason);
         }
+
+        /// <summary>
+        /// Whether <see cref="ExecuteDataversePlugin"/> is Vela's own dispatch, which reports the handler call itself
+        /// (<see cref="EnterHandler"/>). When it is not (the plug-in overrides it), the override is the handler, and
+        /// <see cref="Execute"/> reports the call just before it.
+        /// </summary>
+        private protected virtual bool DispatchesToHandler => false;
+
+        // The handler-call boundary of Vela's dispatch: the "Method" telemetry dimension, the report to the test
+        // harness, and the handler-entry trace.
+        private protected void EnterHandler(ILocalPluginContext context, string? handlerName)
+        {
+            (context as LocalPluginContext)?.SetCurrentHandler(handlerName);
+            ReportHandlerInvoked(context);
+            TraceHandlerEntry(context, handlerName);
+        }
+
+        private protected static void ReportHandlerInvoked(ILocalPluginContext context)
+            => (context as LocalPluginContext)?.ReportHandlerInvoked();
 
         private void EnforceDepth(ILocalPluginContext context)
         {

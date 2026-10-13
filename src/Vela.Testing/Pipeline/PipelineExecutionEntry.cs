@@ -39,23 +39,32 @@ namespace Vela.Testing
         public int Depth { get; }
 
         /// <summary>
-        /// Whether the step's handler ran. An entry means the platform invoked the step; Vela's runtime can still decide
-        /// not to call the handler (a <c>.ForRelationship(...)</c> scope that does not match, <c>.SkipWhenDepthAbove(n)</c>,
-        /// the plugin-level depth guard), and then this is <c>false</c> and <see cref="SkipReason"/> says why.
+        /// Whether the step's handler was called. An entry means the platform invoked the step; the handler is not
+        /// called when Vela's runtime skips it (a <c>.ForRelationship(...)</c> scope that does not match,
+        /// <c>.SkipWhenDepthAbove(n)</c>, the plugin-level depth guard; <see cref="SkipReason"/> then says why) or when
+        /// the execution fails before reaching it (the plug-in's constructor, its service registration, the request
+        /// mapping). For a plug-in that does not derive from <c>PluginBase</c>, its <c>Execute</c> is the handler.
         /// </summary>
-        public bool HandlerInvoked => SkipReason == null;
+        public bool HandlerInvoked { get; private set; }
 
         /// <summary>
-        /// Why Vela's runtime did not call the handler (the line it traced), or <c>null</c> when the handler ran.
+        /// Why Vela's runtime skipped the handler (the line it traced), or <c>null</c> when it did not skip it.
         /// </summary>
         public string? SkipReason { get; private set; }
+
+        internal void MarkHandlerInvoked() => HandlerInvoked = true;
 
         internal void MarkHandlerSkipped(string reason) => SkipReason = reason;
 
         public override string ToString()
         {
             string entry = $"{Message}/{Stage} {EntityLogicalName} (depth {Depth}) -> {PluginTypeName}";
-            return HandlerInvoked ? entry : $"{entry} [handler not run: {SkipReason}]";
+            if (HandlerInvoked)
+            {
+                return entry;
+            }
+
+            return SkipReason == null ? $"{entry} [handler not run]" : $"{entry} [handler not run: {SkipReason}]";
         }
     }
 }

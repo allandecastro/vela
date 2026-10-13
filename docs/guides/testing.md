@@ -350,7 +350,9 @@ Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPo
 An `ExecutionLog` entry means the step was **invoked by the platform**, not that its handler ran. Vela's runtime
 can still skip the handler: a `.ForRelationship(...)` step is invoked for every relationship, and
 `.SkipWhenDepthAbove(n)` or the plugin-level depth guard stop it past a depth. Such an entry has `HandlerInvoked`
-set to `false` and `SkipReason` set to the line the runtime traced:
+set to `false` and `SkipReason` set to the line the runtime traced. (An execution that fails before reaching the
+handler, in the plugin's constructor or its service registration, also has `HandlerInvoked` `false`, with no
+`SkipReason`.)
 
 ```csharp
 pipeline.Service.Associate("account", accountId, new Relationship("account_partners"), contacts);

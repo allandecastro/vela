@@ -350,6 +350,63 @@ namespace Vela.Testing.Tests
             Assert.Equal("Depth guard triggered. Depth=2, MaxDepth=1", guarded.SkipReason);
         }
 
+        [Fact]
+        public void A_failure_before_the_handler_logs_the_step_with_its_handler_not_run()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<FailsBeforeHandler>();
+
+            Assert.Throws<InvalidPluginExecutionException>(() => pipeline.Service.Create(new FakeAccount { Name = "Zava" }));
+
+            PipelineExecutionEntry entry = Assert.Single(pipeline.ExecutionLog);
+            Assert.False(entry.HandlerInvoked);
+            Assert.Null(entry.SkipReason);
+            Assert.EndsWith("[handler not run]", entry.ToString());
+        }
+
+        [Fact]
+        public void Every_kind_of_handler_is_logged_as_invoked()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .Register<SumApi>().Register<SumTypedApi>().Register<OverridingApi>().Register<PmRawSteps>();
+
+            pipeline.Service.Execute(new OrganizationRequest("vela_Sum") { ["A"] = 1, ["B"] = 2 });
+            pipeline.Service.Execute(new OrganizationRequest("vela_SumTyped") { ["A"] = 1, ["B"] = 2 });
+            Assert.Equal("overridden", pipeline.Service.Execute(new OrganizationRequest("vela_Overriding")).Results["Result"]);
+            pipeline.Service.Create(new Entity("account") { ["name"] = "raw" });
+
+            Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName == typeof(SumApi).FullName);
+            Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName == typeof(SumTypedApi).FullName);
+            Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName == typeof(OverridingApi).FullName);
+            Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName == typeof(PmRawSteps).FullName);
+            Assert.All(pipeline.ExecutionLog, e => Assert.True(e.HandlerInvoked, e.ToString()));
+        }
+
+        private sealed class FailsBeforeHandler : EntityPluginBase<FakeAccount>
+        {
+            public FailsBeforeHandler(string unsecure, string secure) : base(unsecure, secure) { }
+
+            protected override void ConfigureServices(Vela.DI.SimpleServiceResolver services, ILocalPluginContext context)
+                => throw new InvalidPluginExecutionException("registration failed");
+
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnCreated);
+
+            private void OnCreated(ICreatePostContext<FakeAccount> ctx) => ctx.Trace("ran:fails");
+        }
+
+        // A lightweight Custom API whose ExecuteDataversePlugin override is the handler.
+        private sealed class OverridingApi : Vela.CustomApi.CustomApiBase
+        {
+            public OverridingApi(string unsecure, string secure) : base(unsecure, secure) { }
+
+            protected override void RegisterCustomApi()
+                => RegisterCustomApi("vela_Overriding", nameof(Unused)).AsAction().ResponseParameter<string>("Result");
+
+            protected override void ExecuteDataversePlugin(ILocalPluginContext ctx) => ctx.SetOutputParameter("Result", "overridden");
+
+            private void Unused(ILocalPluginContext ctx) { }
+        }
+
         private static EntityCollection AccountTargets(params Entity[] entities)
         {
             EntityCollection collection = new EntityCollection { EntityName = "account" };

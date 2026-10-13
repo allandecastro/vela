@@ -269,8 +269,7 @@ namespace Vela.Plugin
                     ?? BuildGenericMessageContextForType(parameterType, ctx)
                     ?? BuildTypedContext(TypedMessageOf(matchedDefinition), matchedDefinition.Stage, ctx)
                     ?? ctx;
-                (ctx as LocalPluginContext)?.SetCurrentHandler(runtimeHandler.Method.Name);
-                TraceHandlerEntry(ctx, runtimeHandler.Method.Name);
+                EnterHandler(ctx, runtimeHandler.Method.Name);
                 HandlerInvoker.InvokeDelegate(runtimeHandler, [delegateArgument]);
                 return;
             }
@@ -283,8 +282,7 @@ namespace Vela.Plugin
             object argument = BuildGenericMessageContext(matchedDefinition.HandlerMethodName!, ctx)
                 ?? BuildTypedContext(TypedMessageOf(matchedDefinition), matchedDefinition.Stage, ctx)
                 ?? ctx;
-            (ctx as LocalPluginContext)?.SetCurrentHandler(matchedDefinition.HandlerMethodName);
-            TraceHandlerEntry(ctx, matchedDefinition.HandlerMethodName);
+            EnterHandler(ctx, matchedDefinition.HandlerMethodName);
             InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
         }
 
@@ -303,6 +301,8 @@ namespace Vela.Plugin
 
             _registeredSteps.Add(stepBuilder);
         }
+
+        private protected override bool DispatchesToHandler => true;
 
         private protected override bool HasStepDepthLimit(ILocalPluginContext ctx)
         {

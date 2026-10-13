@@ -457,6 +457,12 @@ namespace Vela.Testing
             _contextStack.Push(context);
             try
             {
+                if (!(plugin is Vela.Plugin.PluginBase))
+                {
+                    // A plain IPlugin has no Vela dispatch to report through: its Execute is the handler.
+                    entry.MarkHandlerInvoked();
+                }
+
                 plugin.Execute(BuildProvider(context, entry));
             }
             finally
@@ -486,19 +492,21 @@ namespace Vela.Testing
                 [typeof(IOrganizationServiceFactory)] = factory,
                 [typeof(ITracingService)] = _trace,
                 [typeof(Microsoft.Xrm.Sdk.PluginTelemetry.ILogger)] = _logger,
-                // Not a platform service: Vela's runtime reports through it when it skips the handler, so the log
-                // entry can say the step was invoked but its handler did not run.
-                [typeof(Vela.Context.IHandlerSkipObserver)] = new EntrySkipObserver(entry),
+                // Not a platform service: Vela's runtime reports through it when it calls the handler or skips it, so
+                // the log entry can say whether the invoked step's handler ran.
+                [typeof(Vela.Context.IHandlerObserver)] = new EntryHandlerObserver(entry),
             };
 
             return new DictionaryServiceProvider(services);
         }
 
-        private sealed class EntrySkipObserver : Vela.Context.IHandlerSkipObserver
+        private sealed class EntryHandlerObserver : Vela.Context.IHandlerObserver
         {
             private readonly PipelineExecutionEntry _entry;
 
-            public EntrySkipObserver(PipelineExecutionEntry entry) => _entry = entry;
+            public EntryHandlerObserver(PipelineExecutionEntry entry) => _entry = entry;
+
+            public void HandlerInvoked() => _entry.MarkHandlerInvoked();
 
             public void HandlerSkipped(string reason) => _entry.MarkHandlerSkipped(reason);
         }
