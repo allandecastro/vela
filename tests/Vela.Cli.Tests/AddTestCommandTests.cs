@@ -195,6 +195,54 @@ public class AddTestCommandTests
     }
 
     [Fact]
+    public void PluginTest_MessageAlias_ResolvesToTheStepsRequest()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "EmailSent", "--entity", "Email", "--message", "SendEmail", "--project", plugins]));
+            // `Send` is the sdkmessage SendEmail runs as: it must find the OnSendEmail() step, not invent a SendRequest.
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "EmailSent", "--message", "Send", "--project", tests]));
+
+            string content = File.ReadAllText(Path.Combine(testsDir, "Email", "Plugins", "EmailSentTests.cs"));
+            Assert.Contains("public void Fires_On_SendEmail()", content);
+            Assert.Contains("new Microsoft.Crm.Sdk.Messages.SendEmailRequest", content);
+            Assert.DoesNotContain("SendRequest", content);
+        });
+    }
+
+    [Fact]
+    public void PluginTest_NoReadableStep_AndNoMessage_Fails()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            string folder = Path.Combine(Path.GetDirectoryName(plugins)!, "Account", "Plugins");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "AccountOpaque.cs"),
+                "namespace Acme.Plugins.Account.Plugins\n{\n    public sealed class AccountOpaque(string u, string s) : EntityPluginBase<Account>(u, s)\n    {\n" +
+                "        protected override void RegisterPluginSteps() => Steps.RegisterAll(this);\n    }\n}\n");
+
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["test", "AccountOpaque", "--project", tests]));
+            Assert.Empty(Directory.GetFiles(testsDir, "*.cs", SearchOption.AllDirectories));
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountOpaque", "--message", "Delete", "--project", tests]));
+        });
+    }
+
+    [Fact]
+    public void PluginTest_Disassociate_SeedsTheLink_InsteadOfAssociatingThroughThePipeline()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountUnlinked", "--entity", "Account", "--message", "Disassociate", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountUnlinked", "--project", tests]));
+
+            string content = File.ReadAllText(Path.Combine(testsDir, "Account", "Plugins", "AccountUnlinkedTests.cs"));
+            Assert.DoesNotContain("pipeline.Service.Associate(", content);
+            Assert.Contains("pipeline.Seed(new Entity(\"todo_intersect\", Guid.NewGuid())", content);
+        });
+    }
+
+    [Fact]
     public void PluginTest_UnknownPlugin_Fails()
     {
         RunInSolution((_, tests, testsDir) =>
@@ -284,6 +332,26 @@ public class AddTestCommandTests
             string content = File.ReadAllText(Path.Combine(testsDir, "GlobalCustomApis", "EstimatorTests.cs"));
             Assert.Contains("new Estimator(string.Empty, string.Empty)", content);
             Assert.Contains("PluginContext.ForMessage(\"zava_EstimateValue\")", content);
+        });
+    }
+
+    [Fact]
+    public void CustomApiTest_FindsAClassWithAConventionalConstructor()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            string apis = Path.Combine(Path.GetDirectoryName(plugins)!, "Account", "CustomApis");
+            Directory.CreateDirectory(apis);
+            File.WriteAllText(Path.Combine(apis, "ScoreAccountApi.cs"),
+                "namespace Acme.Plugins.Account.CustomApis\n{\n    public sealed class ScoreAccountApi : CustomApiBase<ScoreRequest, ScoreResponse>\n    {\n" +
+                "        public ScoreAccountApi(string u, string s) : base(u, s) { }\n\n" +
+                "        protected override void RegisterCustomApi() => RegisterCustomApi(\"acme_ScoreAccount\").AsFunction();\n    }\n}\n");
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "ScoreAccount", "--kind", "customapi", "--project", tests]));
+
+            string content = File.ReadAllText(Path.Combine(testsDir, "Account", "CustomApis", "ScoreAccountApiTests.cs"));
+            Assert.Contains("new ScoreAccountApi(string.Empty, string.Empty)", content);
+            Assert.Contains("PluginContext.ForRequest(new ScoreRequest", content);
         });
     }
 

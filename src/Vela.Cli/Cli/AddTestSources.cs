@@ -27,7 +27,8 @@ internal static class AddTestSources
         @"RegisterStep\s*\(\s*\)\s*\.\s*On(?:(?<typed>[A-Za-z]\w*)|\s*<\s*(?<request>[\w\.]+)\s*>)\s*\(\s*\)(?<rest>[^;]*);",
         RegexOptions.Compiled);
     private static readonly Regex EntityBase = new(@"EntityPluginBase\s*<\s*(?<entity>[\w\.]+)\s*>", RegexOptions.Compiled);
-    private static readonly Regex CustomApiBase = new(@"\bCustomApiBase\s*(?:<\s*(?<request>[\w\.]+)\s*,\s*(?<response>[\w\.]+)\s*>)?\s*\(", RegexOptions.Compiled);
+    // The base type, whether the class declares a primary constructor (": CustomApiBase(u, s)") or a conventional one.
+    private static readonly Regex CustomApiBase = new(@":\s*(?:[\w\.]+\.)?CustomApiBase\b\s*(?:<\s*(?<request>[\w\.]+)\s*,\s*(?<response>[\w\.]+)\s*>)?", RegexOptions.Compiled);
     private static readonly Regex RegisterCustomApiCall = new(@"\bRegisterCustomApi\s*\(\s*(?:(?<literal>"")|(?<name>[A-Za-z_][\w\.]*))", RegexOptions.Compiled);
 
     /// <summary>

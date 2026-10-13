@@ -118,8 +118,10 @@ namespace {{ns}}
                 $"{I}pipeline.Service.Execute(new Microsoft.Crm.Sdk.Messages.AssignRequest\n{I}{{\n" +
                 $"{I}    Target = new EntityReference({logical}, id),\n{I}    Assignee = new EntityReference(\"systemuser\", ownerId),\n{I}}});\n",
             "Associate" => relationship + $"{I}pipeline.Service.Associate({logical}, id, new Relationship(RelationshipName), related);\n",
+            // The existing link is seeded straight into the intersect table, so only Disassociate runs through the pipeline.
             "Disassociate" => relationship +
-                $"{I}pipeline.Service.Associate({logical}, id, new Relationship(RelationshipName), related);\n" +
+                $"{I}pipeline.Seed(new Entity(\"todo_intersect\", Guid.NewGuid())\n{I}{{\n" +
+                $"{I}    [\"todo_firstid\"] = new EntityReference({logical}, id),\n{I}    [\"todo_secondid\"] = new EntityReference({logical}, relatedId),\n{I}}});\n" +
                 $"{I}pipeline.Service.Disassociate({logical}, id, new Relationship(RelationshipName), related);\n",
             _ => null!,
         };

@@ -571,7 +571,7 @@ internal static class AddCommand
             (string ns, string folder) = TestPlacement(plugin.Namespace, pluginsRoot, rootNamespace, Path.Combine(entity!, "Plugins"));
             // A partial plugin may register its steps in another file: read every declaration of the class.
             List<AddTestSources.SourceClass> declarations = classes.Where(c => c.Name == plugin.Name && c.Namespace == plugin.Namespace).ToList();
-            if (!TryChoosePluginTestStep(args, plugin.Name, declarations, out PluginTestStep step, out string stepError))
+            if (!TryChoosePluginTestStep(args, plugin.Name, entity!, declarations, out PluginTestStep step, out string stepError))
             {
                 return Fail(stepError, ExitInvalidArguments, includeUsage: false);
             }
@@ -645,35 +645,56 @@ internal static class AddCommand
     // The step a plugin test drives: the --message one when given, else the plugin's first step (a note names the
     // others). Its FilterOn members are set by the test so the step fires; its request type serves a message the test
     // cannot drive through a dedicated service call.
-    private static bool TryChoosePluginTestStep(string[] args, string pluginName, List<AddTestSources.SourceClass> declarations, out PluginTestStep step, out string error)
+    private static bool TryChoosePluginTestStep(string[] args, string pluginName, string entity, List<AddTestSources.SourceClass> declarations, out PluginTestStep step, out string error)
     {
         error = string.Empty;
         List<AddTestSources.PluginStep> steps = declarations.SelectMany(AddTestSources.ReadSteps).ToList();
         string? rawMessage = TryReadOption(args, "--message")?.Trim();
         AddTestSources.PluginStep? chosen;
+        string message;
+        step = default;
         if (string.IsNullOrEmpty(rawMessage))
         {
             chosen = steps.FirstOrDefault();
+            if (chosen is null)
+            {
+                // Guessing a message would emit a test that can never see the step fire.
+                error = $"Could not read a step registration in {pluginName}. Pass --message <Message> with the message its step is registered on.";
+                return false;
+            }
+
             if (steps.Count > 1)
             {
-                Console.Error.WriteLine($"Note: {pluginName} registers {steps.Count} steps; the test drives the first ({chosen!.Message}). Pass --message to test another.");
+                Console.Error.WriteLine($"Note: {pluginName} registers {steps.Count} steps; the test drives the first ({chosen.Message}). Pass --message to test another.");
             }
+
+            message = chosen.Message;
         }
         else
         {
-            chosen = steps.FirstOrDefault(s => string.Equals(s.Message, rawMessage, StringComparison.OrdinalIgnoreCase));
+            if (!IdentifierPattern.IsMatch(rawMessage))
+            {
+                error = $"Invalid --message '{rawMessage}'. Use an SDK message name (letters, digits, '_'; not starting with a digit).";
+                return false;
+            }
+
+            // The request --message names, as for add plugin: an sdkmessage alias (Send) resolves to its request
+            // (SendEmail), which is what the plugin's typed trigger names.
+            string? request = ResolveRequestName(rawMessage, entity, out string messageError);
+            if (request is null)
+            {
+                error = messageError;
+                return false;
+            }
+
+            chosen = steps.FirstOrDefault(s => string.Equals(s.Message, request, StringComparison.OrdinalIgnoreCase))
+                ?? steps.FirstOrDefault(s => string.Equals(s.Message, rawMessage, StringComparison.OrdinalIgnoreCase));
             if (chosen is null && steps.Count > 0)
             {
-                Console.Error.WriteLine($"Note: no {rawMessage} step was found in {pluginName}; the test drives {rawMessage} anyway. Set the request it needs.");
+                Console.Error.WriteLine($"Note: no {request} step was found in {pluginName}; the test drives {request} anyway. Set the request it needs.");
             }
-        }
 
-        string message = chosen?.Message ?? rawMessage ?? "Create";
-        if (!IdentifierPattern.IsMatch(message))
-        {
-            error = $"Invalid --message '{message}'. Use an SDK message name (letters, digits, '_'; not starting with a digit).";
-            step = default;
-            return false;
+            message = chosen?.Message ?? request;
         }
 
         // A typed trigger's message is a request name; any other is the request type the trigger names (fully
