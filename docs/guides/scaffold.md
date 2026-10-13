@@ -17,9 +17,11 @@ ZavaSales/
   src/
     Zava.Shared/            # early-bound models + shared services (net48;net10.0); empty until `vela models`
     Zava.Plugins/           # plugin package -> builds a Dataverse plugin-package .nupkg; empty until `vela add`
+    Zava.Integrations/      # opt-in second plugin package, empty (add with --integrations)
     Zava.WebResources/      # opt-in TypeScript form scripts / web resources (add with --web-resources)
   tests/
     Zava.Plugins.Tests/     # xunit + Vela.Testing, no connection (omit with --no-tests); empty until `vela add test`
+    Zava.Integrations.Tests/ # with --integrations (omit with --no-tests); empty until `vela add test`
   .vela/scaffold-manifest.json  # what init wrote, so `--force` never touches your code (commit it)
   AGENTS.md                    # instructions for AI coding agents: steps, Custom APIs, tests, the CLI loop
   Directory.Build.props        # shared build settings for src/ and tests/
@@ -71,9 +73,12 @@ namespace matches its folder. Generate a samples solution next to your real one 
   `--samples` a derived value that is not a valid publisher prefix is refused.
 - `--samples` - add the demo code and the Integrations / ConsoleApp projects (see above). `--minimal` /
   `--no-demos` are accepted aliases of the default.
-- `--output` (default: `.`), `--no-tests`; with `--samples`: `--no-integrations`, `--no-console`, and
-  `--managed-identity` / `--mi` (wire an opt-in package-signing step into the Integrations project - see
-  [Sign the plugin package](signing.md)).
+- `--integrations` - add the `Zava.Integrations` plugin project (and `Zava.Integrations.Tests` unless `--no-tests`)
+  without `--samples`: a second, empty plugin package with the same build setup as `Zava.Plugins`. With `--samples`
+  it is included, with its demo code, unless `--no-integrations`; `--integrations` with `--no-integrations` is refused.
+- `--managed-identity` / `--mi` - wire an opt-in package-signing step into the Integrations project (see
+  [Sign the plugin package](signing.md)). It implies `--integrations`, and is refused with `--no-integrations`.
+- `--output` (default: `.`), `--no-tests`; with `--samples`: `--no-integrations`, `--no-console`.
 - `--core-version` (also `--core-version=X`) - the `Vela.Plugins` / `Vela.Testing` version the projects reference;
   default: the latest published framework version, resolved from nuget.org.
 - `--web-resources` - also scaffold the TypeScript web-resources project (see below); `--web-resources-namespace`

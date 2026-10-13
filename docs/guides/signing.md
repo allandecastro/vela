@@ -21,7 +21,7 @@ value from that variable, so it never appears on a command line, where other use
 sign` only accepts a PFX password as a command-line argument, so `vela sign` never gives it one: it opens the PFX
 itself and passes the tool a passwordless copy in an owner-only temporary file, deleted once signing ends.
 
-`vela init --samples --managed-identity` wires this into the build of the **Integrations** project: a `SignPluginPackage`
+`vela init --managed-identity` (which adds the Integrations project, with or without `--samples`) wires this into the build of the **Integrations** project: a `SignPluginPackage`
 MSBuild target runs after `Pack`, **inert until a certificate source is configured** and **skipped inside CI**
 (`GITHUB_ACTIONS` / `TF_BUILD`) so a pipeline owns its own sign step - no double-signing. Configure it with
 MSBuild properties, e.g. `dotnet build src/Zava.Integrations -c Release

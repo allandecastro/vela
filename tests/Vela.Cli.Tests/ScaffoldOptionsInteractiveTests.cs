@@ -120,6 +120,22 @@ public sealed class ScaffoldOptionsInteractiveTests
     }
 
     [Fact]
+    public void Interactive_IntegrationsFlag_WithoutSamples_KeepsTheProject_AndAsksForManagedIdentity()
+    {
+        // Prompts: demos(n), tests(default yes), managed-identity(y), web(n). No Integrations prompt: the flag asked for it.
+        bool ok = Parse("n\n\ny\nn\n",
+            ["--name", "DemoSol", "--prefix", "Demo", "--output", ".", "--interactive", "--integrations"],
+            out ScaffoldOptions options);
+
+        Assert.True(ok);
+        Assert.False(options.IncludeSamples);
+        Assert.True(options.IncludeIntegrations);
+        Assert.True(options.ManagedIdentity);
+        Assert.True(options.IncludeTests);
+        Assert.False(options.IncludeWebResources);
+    }
+
+    [Fact]
     public void Interactive_Demos_Yes_StillHonors_ExplicitNoTests()
     {
         // demos=yes must not resurrect a project excluded on the command line: --no-tests stays off, and the

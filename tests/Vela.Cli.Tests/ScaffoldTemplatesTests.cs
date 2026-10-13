@@ -464,7 +464,7 @@ public class ScaffoldTemplatesTests
         string readme = ScaffoldTemplates.RootReadme(Options());
 
         // Replacing the stub models needs --overwrite (vela models refuses to overwrite otherwise).
-        Assert.Contains("  --namespace Zava.Shared.Models.Generated `\n  --overwrite\n", readme.Replace("\r\n", "\n"));
+        Assert.Contains("  --project src/Zava.Shared/Zava.Shared.csproj `\n  --overwrite\n", readme.Replace("\r\n", "\n"));
         // The related-contacts sample runs an aggregate FetchXML query from the typed builder.
         Assert.DoesNotContain("typed FetchXML builder", readme);
         Assert.Contains("`Query.For<Contact>().Count(...).ToFetchXml()`", readme);

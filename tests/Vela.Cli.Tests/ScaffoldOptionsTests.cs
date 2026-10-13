@@ -285,6 +285,60 @@ public class ScaffoldOptionsTests
     }
 
     [Fact]
+    public void TryParse_Integrations_IncludesTheIntegrationsProject_WithoutTheSamples()
+    {
+        Assert.True(ScaffoldOptions.TryParse(["MySolution", "--integrations"], out ScaffoldOptions options, out _));
+
+        Assert.True(options.IncludeIntegrations);
+        Assert.False(options.IncludeSamples);
+        Assert.False(options.IncludeConsole);
+        Assert.False(options.ManagedIdentity);
+        Assert.True(options.IncludeTests);
+    }
+
+    [Fact]
+    public void TryParse_Default_HasNoIntegrationsProject()
+    {
+        Assert.True(ScaffoldOptions.TryParse(["MySolution"], out ScaffoldOptions options, out _));
+
+        Assert.False(options.IncludeIntegrations);
+    }
+
+    [Theory]
+    [InlineData("--managed-identity")]
+    [InlineData("--mi")]
+    public void TryParse_ManagedIdentity_ImpliesIntegrations(string flag)
+    {
+        Assert.True(ScaffoldOptions.TryParse(["MySolution", flag], out ScaffoldOptions options, out _));
+
+        Assert.True(options.ManagedIdentity);
+        Assert.True(options.IncludeIntegrations);
+        Assert.False(options.IncludeSamples);
+    }
+
+    [Fact]
+    public void TryParse_SamplesWithIntegrations_KeepsTheSamples()
+    {
+        Assert.True(ScaffoldOptions.TryParse(["MySolution", "--prefix", "Zava", "--samples", "--integrations"], out ScaffoldOptions options, out _));
+
+        Assert.True(options.IncludeSamples);
+        Assert.True(options.IncludeIntegrations);
+    }
+
+    [Theory]
+    [InlineData("--integrations")]
+    [InlineData("--managed-identity")]
+    [InlineData("--mi")]
+    public void TryParse_Rejects_IntegrationsRequest_WithNoIntegrations(string flag)
+    {
+        Assert.False(ScaffoldOptions.TryParse(["MySolution", flag, "--no-integrations"], out _, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+
+        Assert.False(ScaffoldOptions.TryParse(["MySolution", "--prefix", "Zava", "--samples", flag, "--no-integrations"], out _, out exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+    }
+
+    [Fact]
     public void TryParse_ResolvesPositionalName_AfterForceFlag()
     {
         // Boolean flags must not swallow a positional name (regression for the

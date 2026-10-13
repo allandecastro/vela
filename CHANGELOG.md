@@ -21,6 +21,23 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added (Framework)
+
+- **`ctx.Sides()` on the Associate / Disassociate contexts** splits the link by the plugin's table instead of by the
+  caller's direction. These messages have no primary entity, so the `T` of `EntityPluginBase<T>` does not filter
+  them and `ctx.Request.Target` is whichever end the caller passed (associating contacts from an account gives an
+  account `Target` to a contact plugin). `Sides()` returns `ThisSide` (the records of `T`), `OtherSide` and
+  `Relationship`, the same whichever end the caller started from; on a self-referential relationship `Target` is
+  this side. The plugins guide (Relationship scope) now documents this.
+
+### Added (CLI)
+
+- **`vela init --integrations`** adds the `{prefix}.Integrations` plugin project, and its `{prefix}.Integrations.Tests`
+  project unless `--no-tests`, without `--samples`: an empty second plugin package with the same build setup as
+  `{prefix}.Plugins`. `--managed-identity` now implies it, so it adds the Integrations project with its signing step
+  instead of being ignored without `--samples`. With `--samples` the behaviour is unchanged. `--integrations` or
+  `--managed-identity` together with `--no-integrations` is refused.
+
 ### Changed (CLI)
 
 - **`vela add test` reads the class under test from source**, in the projects the test project references (else the
@@ -35,6 +52,15 @@ All notable changes to Vela are documented here. The format is based on
   `Create`/`Update`. A second, skipped test is the skeleton for asserting what the plugin does.
 
 ### Fixed (CLI)
+
+- The `vela solution show` help example passed the publisher prefix to `vela init --prefix`, which is the namespace
+  prefix. It now feeds `vela init --publisher-prefix`, and a second example feeds `vela add customapi --prefix`.
+- The `AGENTS.md` that `vela init` writes no longer describes how to skip the `vela apply` confirmation; it says to
+  apply only when the user asks.
+- The C# blocks of the scaffolded `AGENTS.md` now start with the `using` directives they need, so a block pasted
+  into a file created by `vela add` compiles (the Custom API block failed without `using Vela.Messages;`).
+- The scaffolded README, `AGENTS.md` and the `vela init` next steps now show the same `vela models` command
+  (`--entities account,contact --project src/<Prefix>.Shared/<Prefix>.Shared.csproj --interactive`), instead of three variants.
 
 - **`vela add test --message Associate`/`Disassociate` no longer seeds an entity `Target`**: the test associates two
   records over a (TODO) many-to-many relationship through the pipeline. `Delete`, `Retrieve` and `Assign` act on a
