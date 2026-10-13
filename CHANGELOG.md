@@ -51,7 +51,7 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (CLI)
 
-- The bound Custom API test `vela add test --kind customapi --entity <Table>` scaffolds sets the request's `Target`
+- The bound Custom API test scaffolded by `vela add test --kind customapi --entity <Table>` sets the request's `Target`
   to a record of the bound table, which `PluginContext` now requires as Dataverse does.
 
 ## [0.33.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
