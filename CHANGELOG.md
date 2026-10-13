@@ -21,6 +21,14 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added (CLI)
+
+- **`vela init --integrations`** adds the `{prefix}.Integrations` plugin project, and its `{prefix}.Integrations.Tests`
+  project unless `--no-tests`, without `--samples`: an empty second plugin package with the same build setup as
+  `{prefix}.Plugins`. `--managed-identity` now implies it, so it adds the Integrations project with its signing step
+  instead of being ignored without `--samples`. With `--samples` the behaviour is unchanged. `--integrations` or
+  `--managed-identity` together with `--no-integrations` is refused.
+
 ## [0.33.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Changed (breaking)
