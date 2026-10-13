@@ -21,7 +21,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Changed (Framework, breaking)
+## [0.34.0] - 2026-10-13 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Changed (breaking)
 
 - **Breaking:** `PluginContext` resolves the trigger from the plugin's registration part by part. The message, stage
   and mode a test does not set come from the registered steps that match the parts it does set and the primary
@@ -44,7 +46,7 @@ All notable changes to Vela are documented here. The format is based on
   an entity-collection-bound API. It used to see the builder's default (`account`). `WithPrimaryEntity(...)` still
   wins.
 
-### Added (Framework)
+### Added
 
 - **`ctx.Sides()` on the Associate / Disassociate contexts** splits the link by the plugin's table instead of by the
   caller's direction. These messages have no primary entity, so the `T` of `EntityPluginBase<T>` does not filter
@@ -60,7 +62,7 @@ All notable changes to Vela are documented here. The format is based on
   before the handler (constructor, service registration) leaves `HandlerInvoked` `false` with no `SkipReason`.
   `ToString()` also shows a handler that did not run.
 
-### Changed (Framework)
+### Changed
 
 - `PluginContext` reads the step registration before running the plugin whatever the trigger, so an invalid
   registration fails with its own reason ("Could not read the step registration of ...") instead of the plugin's
@@ -70,13 +72,15 @@ All notable changes to Vela are documented here. The format is based on
   still runs the handler: use `PluginPipeline` to assert whether a step fires.
 - The "no registered step matching" error of the runtime dispatch also names the stage, the mode and the entity.
 
-### Fixed (Framework)
+### Fixed
 
 - `PluginPipeline.ExecutionLog` was documented as the steps that fired, but it also listed steps whose handler
   Vela's runtime skipped, with nothing to tell them apart. Those entries now carry `HandlerInvoked = false` (see
   above), and the docs say an entry means "invoked by the platform".
 
-### Added (CLI)
+## [0.25.0] - 2026-10-13 (Vela.Cli)
+
+### Added
 
 - **`vela init --integrations`** adds the `{prefix}.Integrations` plugin project, and its `{prefix}.Integrations.Tests`
   project unless `--no-tests`, without `--samples`: an empty second plugin package with the same build setup as
@@ -84,7 +88,7 @@ All notable changes to Vela are documented here. The format is based on
   instead of being ignored without `--samples`. With `--samples` the behaviour is unchanged. `--integrations` or
   `--managed-identity` together with `--no-integrations` is refused.
 
-### Changed (CLI)
+### Changed
 
 - **`vela add test` reads the class under test from source**, in the projects the test project references (else the
   solution), and fails with a clear message when it finds none. A plugin test takes the plugin's namespace, its
@@ -100,7 +104,7 @@ All notable changes to Vela are documented here. The format is based on
   (`Skip = "TODO: set the inputs <Api> requires"`): `PluginContext` now validates the request against the definition,
   so the test needs the API's required inputs before it can run. A bound API's test supplies a `Target` of its table.
 
-### Fixed (CLI)
+### Fixed
 
 - The `vela solution show` help example passed the publisher prefix to `vela init --prefix`, which is the namespace
   prefix. It now feeds `vela init --publisher-prefix`, and a second example feeds `vela add customapi --prefix`.
