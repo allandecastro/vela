@@ -105,8 +105,7 @@ namespace Vela.CustomApi
                     $"Custom API '{GetType().FullName}' must configure Handler(...) or override ExecuteDataversePlugin.");
             }
 
-            (ctx as LocalPluginContext)?.SetCurrentHandler(methodName);
-            TraceHandlerEntry(ctx, methodName);
+            EnterHandler(ctx, methodName);
             HandlerInvoker.ResolveAndInvoke(
                 this,
                 methodName,
@@ -116,6 +115,11 @@ namespace Vela.CustomApi
                 handlerNoun: "handler",
                 expectedSignature: $"void {methodName}(ILocalPluginContext)");
         }
+
+        // Vela's dispatch (ExecuteRegisteredHandler) reports the handler call itself, unless the plug-in overrides
+        // ExecuteDataversePlugin, whose override is then the handler.
+        private protected override bool DispatchesToHandler
+            => GetType().GetMethod(nameof(ExecuteDataversePlugin), BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(ILocalPluginContext)], null)?.DeclaringType == typeof(CustomApiBase);
 
         /// <summary>
         /// Executes the lightweight Custom API by dispatching to the registered handler.

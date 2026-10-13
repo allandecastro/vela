@@ -428,7 +428,7 @@ namespace Vela.Testing
         // of the service that issued the triggering call; InitiatingUserId is always the outermost caller. Links the
         // ParentContext for a cascaded (nested) execution, and keeps the context on the stack while the plugin runs
         // so a write it triggers sees it as the parent.
-        private void ExecuteWithContext(FakePluginExecutionContext context, IPlugin plugin, StepDefinition? step = null, FakePluginExecutionContext? parentContext = null, bool outsideTransaction = false)
+        private void ExecuteWithContext(FakePluginExecutionContext context, IPlugin plugin, PipelineExecutionEntry entry, StepDefinition? step = null, FakePluginExecutionContext? parentContext = null, bool outsideTransaction = false)
         {
             (Guid actingUserId, Guid businessUnitId, Guid organizationId) = _store.CurrentActor();
             Guid caller = _callerUserId ?? actingUserId;
@@ -457,7 +457,13 @@ namespace Vela.Testing
             _contextStack.Push(context);
             try
             {
-                plugin.Execute(BuildProvider(context));
+                if (!(plugin is Vela.Plugin.PluginBase))
+                {
+                    // A plain IPlugin has no Vela dispatch to report through: its Execute is the handler.
+                    entry.MarkHandlerInvoked();
+                }
+
+                plugin.Execute(BuildProvider(context, entry));
             }
             finally
             {
@@ -474,7 +480,7 @@ namespace Vela.Testing
             }
         }
 
-        private IServiceProvider BuildProvider(FakePluginExecutionContext context)
+        private IServiceProvider BuildProvider(FakePluginExecutionContext context, PipelineExecutionEntry entry)
         {
             // ctx.Service is CreateOrganizationService(ctx.UserId): a service acting as that user (subject to the
             // security model). ctx.SystemService is CreateOrganizationService(null): SYSTEM, not subject to it.
@@ -485,10 +491,24 @@ namespace Vela.Testing
                 [typeof(IPluginExecutionContext)] = context,
                 [typeof(IOrganizationServiceFactory)] = factory,
                 [typeof(ITracingService)] = _trace,
-                [typeof(Microsoft.Xrm.Sdk.PluginTelemetry.ILogger)] = _logger
+                [typeof(Microsoft.Xrm.Sdk.PluginTelemetry.ILogger)] = _logger,
+                // Not a platform service: Vela's runtime reports through it when it calls the handler or skips it, so
+                // the log entry can say whether the invoked step's handler ran.
+                [typeof(Vela.Context.IHandlerObserver)] = new EntryHandlerObserver(entry),
             };
 
             return new DictionaryServiceProvider(services);
+        }
+
+        private sealed class EntryHandlerObserver : Vela.Context.IHandlerObserver
+        {
+            private readonly PipelineExecutionEntry _entry;
+
+            public EntryHandlerObserver(PipelineExecutionEntry entry) => _entry = entry;
+
+            public void HandlerInvoked() => _entry.MarkHandlerInvoked();
+
+            public void HandlerSkipped(string reason) => _entry.MarkHandlerSkipped(reason);
         }
 
         // Hands plugins identity-bound pipeline services: null (or SystemUserId) -> SYSTEM, any other id -> that user.

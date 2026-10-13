@@ -44,6 +44,22 @@ All notable changes to Vela are documented here. The format is based on
   an entity-collection-bound API. It used to see the builder's default (`account`). `WithPrimaryEntity(...)` still
   wins.
 
+### Added (Framework)
+
+- **`ctx.Sides()` on the Associate / Disassociate contexts** splits the link by the plugin's table instead of by the
+  caller's direction. These messages have no primary entity, so the `T` of `EntityPluginBase<T>` does not filter
+  them and `ctx.Request.Target` is whichever end the caller passed (associating contacts from an account gives an
+  account `Target` to a contact plugin). `Sides()` returns `ThisSide` (the records of `T`), `OtherSide` and
+  `Relationship`, the same whichever end the caller started from; on a self-referential relationship `Target` is
+  this side. The plugins guide (Relationship scope) now documents this.
+
+- `PipelineExecutionEntry.HandlerInvoked` and `PipelineExecutionEntry.SkipReason` report whether a step's handler ran.
+  An entry in `PluginPipeline.ExecutionLog` means the platform invoked the step. `HandlerInvoked` is `true` only once
+  the handler is actually called. When Vela's runtime skips the handler (a `.ForRelationship(...)` scope that does
+  not match, `.SkipWhenDepthAbove(n)`, the plugin-level depth guard), `SkipReason` holds the line it traced; a failure
+  before the handler (constructor, service registration) leaves `HandlerInvoked` `false` with no `SkipReason`.
+  `ToString()` also shows a handler that did not run.
+
 ### Changed (Framework)
 
 - `PluginContext` reads the step registration before running the plugin whatever the trigger, so an invalid
@@ -54,7 +70,59 @@ All notable changes to Vela are documented here. The format is based on
   still runs the handler: use `PluginPipeline` to assert whether a step fires.
 - The "no registered step matching" error of the runtime dispatch also names the stage, the mode and the entity.
 
+### Fixed (Framework)
+
+- `PluginPipeline.ExecutionLog` was documented as the steps that fired, but it also listed steps whose handler
+  Vela's runtime skipped, with nothing to tell them apart. Those entries now carry `HandlerInvoked = false` (see
+  above), and the docs say an entry means "invoked by the platform".
+
+### Added (CLI)
+
+- **`vela init --integrations`** adds the `{prefix}.Integrations` plugin project, and its `{prefix}.Integrations.Tests`
+  project unless `--no-tests`, without `--samples`: an empty second plugin package with the same build setup as
+  `{prefix}.Plugins`. `--managed-identity` now implies it, so it adds the Integrations project with its signing step
+  instead of being ignored without `--samples`. With `--samples` the behaviour is unchanged. `--integrations` or
+  `--managed-identity` together with `--no-integrations` is refused.
+
+### Changed (CLI)
+
+- **`vela add test` reads the class under test from source**, in the projects the test project references (else the
+  solution), and fails with a clear message when it finds none. A plugin test takes the plugin's namespace, its
+  entity (`--entity` is now optional) and its steps from the source. A Custom API test finds the class named
+  `<Name>` or `<Name>CustomApi`, or the one registering `<prefix>_<Name>`, and takes its class, namespace, unique
+  name and request type from it: `vela add test AccountEstimateValue --kind customapi` now tests the sample
+  `AccountEstimateValueCustomApi` and its `EstimateValueRequest`. The Custom API test file is named after the class.
+- **A generated plugin test drives the step through `PluginPipeline`** and asserts from its `ExecutionLog` that the
+  step fired, instead of asserting the trace line the `add plugin` handler writes (which a real handler removes).
+  The request is sent the way a caller sends that message, setting the step's `FilterOn` columns on a
+  `Create`/`Update`. A second, skipped test is the skeleton for asserting what the plugin does.
+- The Custom API test from `vela add test --kind customapi` ships its output test skipped
+  (`Skip = "TODO: set the inputs <Api> requires"`): `PluginContext` now validates the request against the definition,
+  so the test needs the API's required inputs before it can run. A bound API's test supplies a `Target` of its table.
+
 ### Fixed (CLI)
+
+- The `vela solution show` help example passed the publisher prefix to `vela init --prefix`, which is the namespace
+  prefix. It now feeds `vela init --publisher-prefix`, and a second example feeds `vela add customapi --prefix`.
+- The `AGENTS.md` that `vela init` writes no longer describes how to skip the `vela apply` confirmation; it says to
+  apply only when the user asks.
+- The C# blocks of the scaffolded `AGENTS.md` now start with the `using` directives they need, so a block pasted
+  into a file created by `vela add` compiles (the Custom API block failed without `using Vela.Messages;`).
+- The scaffolded README, `AGENTS.md` and the `vela init` next steps now show the same `vela models` command
+  (`--entities account,contact --project src/<Prefix>.Shared/<Prefix>.Shared.csproj --interactive`), instead of three variants.
+
+- **`vela add test --message Associate`/`Disassociate` no longer seeds an entity `Target`**: the test associates two
+  records over a (TODO) many-to-many relationship through the pipeline. `Delete`, `Retrieve` and `Assign` act on a
+  seeded record by reference, `RetrieveMultiple` sends a query, and any other message sends the step's own request.
+- **`--filtering-attributes` with a column logical name compiles.** `add plugin`/`add step` map `telephone1` to its
+  property through the model's `[AttributeLogicalName]`, not only by case-insensitive property name, and find the
+  model under a `.slnx` solution root too. Without a model, an all-lower-case value is refused with a message to run
+  `vela models` or pass the property name, instead of emitting a `FilterOn(e => e.name)` that does not compile.
+
+- `vela models --custom-apis` with `--package`/`--packages-dir` now excludes only the **typed** Custom APIs authored
+  in the package (`CustomApiBase<TRequest, TResponse>`, whose request/response classes are already in your code).
+  Lightweight Custom APIs (`RegisterCustomApi(name, handler)`) have no request class, so they are generated again
+  from the environment, with a note of how many were kept.
 
 - The bound Custom API test scaffolded by `vela add test --kind customapi --entity <Table>` sets the request's `Target`
   to a record of the bound table, which `PluginContext` now requires as Dataverse does.

@@ -19,7 +19,10 @@ public sealed record RegistrationItem(string Kind, string Type, JsonElement Defi
 // SecureConfigByStepKey is the RAW value SecureConfigResolver resolved for it from --secure-config or the environment.
 // Step definitions in Items only ever carry a digest, so a secret never lands in plan/inspect output; apply writes
 // the raw value, and only for the steps present here (every other secure configuration is left untouched).
-public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics, IReadOnlyDictionary<string, string>? SecureConfigByStepKey = null, IReadOnlyDictionary<string, string>? SecureConfigNameByStepKey = null, string[]? UnmanagedPluginTypes = null, string[]? Info = null);
+// TypedCustomApiUniqueNames (local scan only) lists the Custom APIs whose code declares a request class
+// (CustomApiBase<TRequest, TResponse>); a lightweight one (RegisterCustomApi(name, handler)) has none. A side list, not
+// part of the custom-api item shape, so it never enters the plan/apply diff; `vela models` reads it.
+public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics, IReadOnlyDictionary<string, string>? SecureConfigByStepKey = null, IReadOnlyDictionary<string, string>? SecureConfigNameByStepKey = null, string[]? UnmanagedPluginTypes = null, string[]? Info = null, string[]? TypedCustomApiUniqueNames = null);
 public sealed record RegistrationDiff(string[] LocalAssemblies, string[] CurrentAssemblies, RegistrationItem[] Added, RegistrationItem[] Removed, RegistrationChange[] Changed, RegistrationItem[] LocalItems, RegistrationItem[] CurrentItems)
 {
     public DiffSummary Summary { get; init; } = new DiffSummary(Added.Length, Removed.Length, Changed.Length);

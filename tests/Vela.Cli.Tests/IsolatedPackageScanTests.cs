@@ -54,6 +54,8 @@ public sealed class IsolatedPackageScanTests : IDisposable
         Assert.Equal(inProcess.SourceAssemblies, isolated.SourceAssemblies);
         Assert.Equal(inProcess.PackagePayloads, isolated.PackagePayloads);
         Assert.Equal(inProcess.UnmanagedPluginTypes, isolated.UnmanagedPluginTypes);
+        Assert.NotEmpty(isolated.TypedCustomApiUniqueNames!);
+        Assert.Equal(inProcess.TypedCustomApiUniqueNames, isolated.TypedCustomApiUniqueNames);
         Assert.Equal(inProcess.SecureConfigNameByStepKey, isolated.SecureConfigNameByStepKey);
     }
 

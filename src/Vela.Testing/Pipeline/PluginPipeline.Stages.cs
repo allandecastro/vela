@@ -182,9 +182,10 @@ namespace Vela.Testing
                 context.OutputParameters["Ids"] = targets.Entities.Select(entity => entity.Id).ToArray();
             }
 
-            _log.Add(new PipelineExecutionEntry(registration.Step.PluginTypeName, message, stage, registration.Step.Mode, entityName, _depth));
+            PipelineExecutionEntry entry = new PipelineExecutionEntry(registration.Step.PluginTypeName, message, stage, registration.Step.Mode, entityName, _depth);
+            _log.Add(entry);
             IPlugin plugin = registration.GetInstance(SecureConfigFor(registration.Step));
-            ExecuteWithContext(context, plugin, registration.Step);
+            ExecuteWithContext(context, plugin, entry, registration.Step);
         }
 
         // One target's image collection for a bulk step, as Dataverse fills it (verified live): the step's own images,
@@ -308,9 +309,10 @@ namespace Vela.Testing
 
             MaskSecuredImageColumns(new[] { context.PreEntityImages, context.PostEntityImages });
 
-            _log.Add(new PipelineExecutionEntry(registration.Step.PluginTypeName, invocation.Message, invocation.Stage, registration.Step.Mode, invocation.EntityLogicalName, _depth));
+            PipelineExecutionEntry entry = new PipelineExecutionEntry(registration.Step.PluginTypeName, invocation.Message, invocation.Stage, registration.Step.Mode, invocation.EntityLogicalName, _depth);
+            _log.Add(entry);
             IPlugin plugin = registration.GetInstance(SecureConfigFor(registration.Step));
-            ExecuteWithContext(context, plugin, registration.Step, invocation.ParentContext, invocation.OutsideTransaction);
+            ExecuteWithContext(context, plugin, entry, registration.Step, invocation.ParentContext, invocation.OutsideTransaction);
 
             // A synchronous step changes the message as it flows: a PreValidation/PreOperation step that replaces an
             // input (a Retrieve's ColumnSet, a RetrieveMultiple's Query, ...) changes what the main operation runs, and

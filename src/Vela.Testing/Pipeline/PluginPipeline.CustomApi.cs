@@ -68,8 +68,9 @@ namespace Vela.Testing
                 }
 
 
-                _log.Add(new PipelineExecutionEntry(pluginType.FullName ?? pluginType.Name, message, PluginStages.MainOperation, ExecutionMode.Synchronous, entityName, _depth));
-                ExecuteWithContext(context, plugin);
+                PipelineExecutionEntry entry = new PipelineExecutionEntry(pluginType.FullName ?? pluginType.Name, message, PluginStages.MainOperation, ExecutionMode.Synchronous, entityName, _depth);
+                _log.Add(entry);
+                ExecuteWithContext(context, plugin, entry);
 
                 OrganizationResponse response = new OrganizationResponse { ResponseName = message };
                 foreach (KeyValuePair<string, object> output in context.OutputParameters)

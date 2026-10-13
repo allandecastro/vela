@@ -18,7 +18,8 @@ namespace Vela.Cli;
 /// <param name="Prefix">Namespace / assembly-name prefix for the generated projects.</param>
 /// <param name="OutputDirectory">Directory the solution folder is created under.</param>
 /// <param name="IncludeConsole">When true, generate the ConsoleApp project.</param>
-/// <param name="IncludeIntegrations">When true, generate the Integrations project.</param>
+/// <param name="IncludeIntegrations">When true, generate the Integrations project: with its demo code under
+/// <c>--samples</c>, empty otherwise (<c>--integrations</c> or <c>--managed-identity</c>).</param>
 /// <param name="IncludeTests">When true, generate the Plugins.Tests project (Vela.Testing).</param>
 /// <param name="CoreVersion">Version of the <c>Vela.Plugins</c> package the projects reference.</param>
 /// <param name="Force">When true, overwrite an existing target directory.</param>
@@ -29,7 +30,7 @@ namespace Vela.Cli;
 /// <param name="WebResourcesFolder">The build output folder (tsup <c>outDir</c>) and default <c>vela apply --webresources</c> target.</param>
 /// <param name="Json">Whether to emit machine-readable JSON output instead of the human-readable summary.</param>
 /// <param name="IncludeSamples">When true (<c>--samples</c>), emit the demo models, services, plugins, Custom APIs and the
-/// demo-only Integrations/ConsoleApp projects. Off by default: <c>vela init</c> scaffolds a minimal solution.</param>
+/// demo-only ConsoleApp project, plus the Integrations project with its demos. Off by default: <c>vela init</c> scaffolds a minimal solution.</param>
 /// <param name="PublisherPrefix">The Dataverse publisher customization prefix passed with <c>--publisher-prefix</c>, or
 /// null to derive it from <paramref name="Prefix"/>. When set it is written to the generated projects as
 /// <c>VelaPublisherPrefix</c>, which <c>vela add customapi</c> reads.</param>
@@ -227,14 +228,31 @@ internal sealed record ScaffoldOptions(
             includeSamples = PromptYesNo("Include the sample code (demo models, services, plugins, Custom APIs, Integrations and ConsoleApp projects)? [y/N]:", defaultYes: false);
         }
 
-        // An explicit --no-console/--no-integrations/--no-tests always wins; the demo-only projects need --samples.
+        // The Integrations project comes with --samples (with its demo plugins and Custom APIs), or empty with
+        // --integrations. --managed-identity only shapes that project, so it asks for it too. Asking for the project
+        // and excluding it at once is refused rather than resolved silently either way.
+        bool integrationsFlag = HasFlag(args, "--integrations");
+        bool managedIdentityFlag = HasFlag(args, "--managed-identity") || HasFlag(args, "--mi");
+        bool noIntegrations = HasFlag(args, "--no-integrations");
+        if (noIntegrations && (integrationsFlag || managedIdentityFlag))
+        {
+            exitCode = Fail(
+                integrationsFlag
+                    ? "Use either --integrations or --no-integrations, not both."
+                    : "--managed-identity applies to the Integrations project, which --no-integrations excludes; drop one of them.",
+                ExitInvalidArguments,
+                includeUsage: false);
+            return false;
+        }
+
+        // An explicit --no-console/--no-integrations/--no-tests always wins; the ConsoleApp project needs --samples.
         bool includeConsole = includeSamples && !HasFlag(args, "--no-console");
-        bool includeIntegrations = includeSamples && !HasFlag(args, "--no-integrations");
+        bool includeIntegrations = (includeSamples || integrationsFlag || managedIdentityFlag) && !noIntegrations;
         bool includeTests = !HasFlag(args, "--no-tests");
 
         if (interactive)
         {
-            if (includeSamples && !HasFlag(args, "--no-integrations"))
+            if (includeSamples && !noIntegrations && !integrationsFlag && !managedIdentityFlag)
             {
                 includeIntegrations = PromptYesNo("Generate an Integrations project? [Y/n]:", defaultYes: true);
             }
@@ -292,8 +310,8 @@ internal sealed record ScaffoldOptions(
 
         bool force = HasFlag(args, "--force");
 
-        // Managed-identity signing only applies to the Integrations project; if it is excluded, the flag is a no-op.
-        bool managedIdentity = HasFlag(args, "--managed-identity") || HasFlag(args, "--mi");
+        // Managed-identity signing only applies to the Integrations project, which the flag includes (see above).
+        bool managedIdentity = managedIdentityFlag;
         if (interactive && includeIntegrations && !managedIdentity)
         {
             managedIdentity = PromptYesNo("Enable managed identity for the Integrations project (adds the required signing step)? [y/N]:", defaultYes: false);
@@ -424,7 +442,7 @@ internal sealed record ScaffoldOptions(
 
     private static readonly HashSet<string> FlagOptions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "--force", "--json", "--managed-identity", "--mi", "--no-console", "--no-integrations", "--no-tests",
+        "--force", "--json", "--managed-identity", "--mi", "--integrations", "--no-console", "--no-integrations", "--no-tests",
         "--web-resources", "--webresources", "--interactive", "-i", "--help", "-h", "--minimal", "--no-demos", "--samples", "--verbose", "-v",
     };
 
