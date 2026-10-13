@@ -363,23 +363,6 @@ namespace Vela.Testing
             return copy;
         }
 
-        // The primary entity a Custom API's main operation sees on Dataverse (verified live): "none" and an empty id
-        // for a global API, the bound entity and the Target's id for an entity-bound API, and the bound entity with
-        // an empty id for an entity-collection-bound API.
-        private static (string, Guid) CustomApiPrimaryEntity(CustomApiDefinition? definition, OrganizationRequest request)
-        {
-            if (definition == null || definition.BindingType == CustomApiBindingType.Global || string.IsNullOrEmpty(definition.BoundEntityLogicalName))
-            {
-                return ("none", Guid.Empty);
-            }
-
-            Guid id = definition.BindingType == CustomApiBindingType.Entity
-                && request.Parameters.TryGetValue("Target", out object? target) && target is EntityReference reference
-                ? reference.Id
-                : Guid.Empty;
-            return (definition.BoundEntityLogicalName!, id);
-        }
-
         private static StageInvocation GenericInvocation(string message, PluginStages stage, string entityName, Guid entityId, ParameterCollection inputs, ParameterCollection? outputs)
         {
             return new StageInvocation

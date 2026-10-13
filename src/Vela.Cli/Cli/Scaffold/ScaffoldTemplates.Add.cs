@@ -218,7 +218,9 @@ namespace {{ns}}
             Assert.Equal("{{uniqueName}}", definition.UniqueName);
         }
 
-        [Fact]
+        // Execute validates the request against the definition as Dataverse does, so this test needs the inputs the
+        // Custom API requires: set them, then remove Skip.
+        [Fact(Skip = "TODO: set the inputs {{apiType}} requires")]
         public void Sets_Every_Declared_Output()
         {
             {{apiType}} api = new {{apiType}}(string.Empty, string.Empty);
@@ -234,6 +236,13 @@ namespace {{ns}}
             {
                 // TODO: set the inputs, e.g. AccountId = Guid.NewGuid(),
             });
+
+            // A bound Custom API runs on a record of its table: the request's Target. Execute validates the request
+            // against the definition as Dataverse does (required inputs, their types, the Target).
+            if (definition.BoundEntityLogicalName is string boundTable)
+            {
+                builder.WithInputParameter("Target", new Microsoft.Xrm.Sdk.EntityReference(boundTable, Guid.NewGuid()));
+            }
 """)}}
 
             builder.Execute(api);

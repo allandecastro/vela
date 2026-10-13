@@ -448,7 +448,7 @@ public sealed class PluginBaseMutationTests
 
         InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(provider));
 
-        Assert.Equal($"Plugin '{typeof(NamedHandlerPlugin).FullName}' has no registered step matching message 'Create'.", ex.Message);
+        Assert.Equal($"Plugin '{typeof(NamedHandlerPlugin).FullName}' has no registered step matching message 'Create', stage PostOperation, mode Synchronous on entity 'account'.", ex.Message);
         Assert.False(plugin.Ran);
     }
 
@@ -460,7 +460,7 @@ public sealed class PluginBaseMutationTests
 
         InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(() => plugin.Execute(provider));
 
-        Assert.Equal($"Plugin '{typeof(NamedHandlerPlugin).FullName}' has no registered step matching message 'Update'.", ex.Message);
+        Assert.Equal($"Plugin '{typeof(NamedHandlerPlugin).FullName}' has no registered step matching message 'Update', stage PostOperation, mode Synchronous on entity 'contact'.", ex.Message);
         Assert.False(plugin.Ran);
     }
 

@@ -246,7 +246,8 @@ namespace Vela.Plugin
                 }
 
                 throw new InvalidPluginExecutionException(
-                    $"Plugin '{GetType().FullName}' has no registered step matching message '{ctx.MessageName}'.");
+                    $"Plugin '{GetType().FullName}' has no registered step matching message '{ctx.MessageName}', " +
+                    $"stage {DescribeEnum<PluginStages>(ctx.Stage)}, mode {DescribeEnum<ExecutionMode>(ctx.Mode)} on entity '{ctx.PrimaryEntityName}'.");
             }
 
             // A step-level depth limit (.SkipWhenDepthAbove(n)) replaces the plugin-level guard: past it, the handler is
@@ -285,6 +286,11 @@ namespace Vela.Plugin
             EnterHandler(ctx, matchedDefinition.HandlerMethodName);
             InvokeTypedHandler(matchedDefinition.HandlerMethodName!, argument);
         }
+
+        // The enum member's name when the platform value maps to one (PreOperation, Synchronous), else the raw value.
+        private static string DescribeEnum<TEnum>(int value)
+            where TEnum : struct
+            => Enum.IsDefined(typeof(TEnum), value) ? Enum.GetName(typeof(TEnum), value)! : value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         private void RegisterFluentStep(StepBuilder<TEntity> stepBuilder)
         {

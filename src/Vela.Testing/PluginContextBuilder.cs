@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
 using Vela.Constants;
 using Vela.Context;
+using Vela.CustomApi;
 using Vela.Steps;
 
 namespace Vela.Testing
@@ -24,14 +27,23 @@ namespace Vela.Testing
         private ITracingService _tracingService;
         private Microsoft.Xrm.Sdk.PluginTelemetry.ILogger _logger;
         private IManagedIdentityService? _managedIdentityService;
-        private bool _triggerConfigured;
+        // Which parts of the trigger the test stated; the others are resolved from the plugin's registration.
+        private bool _messageSet;
+        private bool _stageSet;
+        private bool _modeSet;
+        private bool _primaryEntityNameSet;
+        private bool _primaryEntityIdSet;
+        private bool _customApiPrimaryEntity;
+        private Guid _derivedPrimaryEntityId;
+        private bool _requestValidation = true;
 
         /// <summary>Initializes the builder, deriving the primary entity name from <typeparamref name="TEntity"/> when possible.</summary>
         public PluginContextBuilder()
         {
             _tracingService = _recorder;
             _logger = _loggerRecorder;
-            Context = new FakePluginExecutionContext();
+            // PrimaryEntityId follows the Target unless the test sets it (see BuildServiceProvider).
+            Context = new FakePluginExecutionContext { PrimaryEntityId = Guid.Empty };
             Factory = new HookOrganizationServiceFactory();
 
             string? logicalName = ResolveLogicalName();
@@ -69,7 +81,7 @@ namespace Vela.Testing
         public PluginContextBuilder<TEntity> OnMessage(string messageName)
         {
             Context.MessageName = SdkMessageNames.ToSdkMessage(messageName);
-            _triggerConfigured = true;
+            _messageSet = true;
             return this;
         }
 
@@ -93,7 +105,7 @@ namespace Vela.Testing
                 Context.InputParameters[parameter.Key] = parameter.Value;
             }
 
-            _triggerConfigured = true;
+            _messageSet = true;
             return this;
         }
 
@@ -101,7 +113,7 @@ namespace Vela.Testing
         public PluginContextBuilder<TEntity> Stage(PluginStages stage)
         {
             Context.Stage = (int)stage;
-            _triggerConfigured = true;
+            _stageSet = true;
             return this;
         }
 
@@ -109,7 +121,7 @@ namespace Vela.Testing
         public PluginContextBuilder<TEntity> Mode(ExecutionMode mode)
         {
             Context.Mode = (int)mode;
-            _triggerConfigured = true;
+            _modeSet = true;
             return this;
         }
 
@@ -126,13 +138,19 @@ namespace Vela.Testing
             return this;
         }
 
-        /// <summary>Overrides the primary entity name (and optionally its id).</summary>
+        /// <summary>
+        /// Overrides the primary entity name (and optionally its id). Without an id, <c>PrimaryEntityId</c> follows the
+        /// <c>Target</c> (see <see cref="WithTarget"/>). Both win over the primary entity a Custom API derives from its
+        /// binding.
+        /// </summary>
         public PluginContextBuilder<TEntity> WithPrimaryEntity(string logicalName, Guid? id = null)
         {
             Context.PrimaryEntityName = logicalName;
+            _primaryEntityNameSet = true;
             if (id.HasValue)
             {
                 Context.PrimaryEntityId = id.Value;
+                _primaryEntityIdSet = true;
             }
 
             return this;
@@ -166,7 +184,11 @@ namespace Vela.Testing
             return this;
         }
 
-        /// <summary>Sets the <c>Target</c> input parameter.</summary>
+        /// <summary>
+        /// Sets the <c>Target</c> input parameter. Unless <see cref="WithPrimaryEntity"/> sets an id,
+        /// <c>PrimaryEntityId</c> is the Target's id (<see cref="Guid.Empty"/> on a global message such as Associate,
+        /// and when there is no Target).
+        /// </summary>
         public PluginContextBuilder<TEntity> WithTarget(TEntity target)
         {
             Context.InputParameters["Target"] = target;
@@ -322,9 +344,21 @@ namespace Vela.Testing
             return this;
         }
 
+        /// <summary>
+        /// Turns off the Custom API request validation that <see cref="Execute(IPlugin)"/> and <see cref="Build(IPlugin)"/>
+        /// apply (a missing required input, an input of the wrong type, an undeclared input, a missing bound Target), for
+        /// a test that feeds the API an invalid request on purpose to exercise its own checks.
+        /// </summary>
+        public PluginContextBuilder<TEntity> WithoutRequestValidation()
+        {
+            _requestValidation = false;
+            return this;
+        }
+
         /// <summary>Builds the fake <see cref="IServiceProvider"/> a plugin's <c>Execute</c> consumes.</summary>
         public IServiceProvider BuildServiceProvider()
         {
+            ApplyPrimaryEntityId();
             ApplyCreatedIdOutputs();
             Dictionary<Type, object> services = new Dictionary<Type, object>
             {
@@ -349,8 +383,8 @@ namespace Vela.Testing
         }
 
         /// <summary>
-        /// Builds a <see cref="LocalPluginContext"/> and, when no trigger was set explicitly, auto-derives the
-        /// message/stage/mode from the plugin's single registered step - the same inference
+        /// Builds a <see cref="LocalPluginContext"/> with the parts of the trigger (message/stage/mode) the test did
+        /// not set resolved from the plugin's registered steps - the same resolution and checks
         /// <see cref="Execute(IPlugin)"/> applies, so Build and Execute stay consistent.
         /// </summary>
         public LocalPluginContext Build(IPlugin plugin)
@@ -360,16 +394,22 @@ namespace Vela.Testing
                 throw new ArgumentNullException(nameof(plugin));
             }
 
-            TryAutoConfigureTrigger(plugin);
+            PrepareFor(plugin);
             return new LocalPluginContext(BuildServiceProvider());
         }
 
-        /// <summary>Builds a context with the trigger auto-derived from <typeparamref name="TPlugin"/>'s single step.</summary>
+        /// <summary>Builds a context with the trigger resolved from <typeparamref name="TPlugin"/>'s registered steps.</summary>
         public LocalPluginContext Build<TPlugin>()
             where TPlugin : IPlugin
             => Build(CreatePluginInstance<TPlugin>());
 
-        /// <summary>Executes the supplied plugin against the fake provider.</summary>
+        /// <summary>
+        /// Executes the supplied plugin against the fake provider. The parts of the trigger the test did not set are
+        /// resolved from the plugin's registered steps (those matching the message, stage, mode and entity that are
+        /// set): one matching trigger is used; several, or none, throw an <see cref="InvalidOperationException"/> that
+        /// lists them. A Custom API's request is validated against its definition first (see
+        /// <see cref="WithoutRequestValidation"/>).
+        /// </summary>
         public void Execute(IPlugin plugin)
         {
             if (plugin == null)
@@ -377,7 +417,7 @@ namespace Vela.Testing
                 throw new ArgumentNullException(nameof(plugin));
             }
 
-            TryAutoConfigureTrigger(plugin);
+            PrepareFor(plugin);
             plugin.Execute(BuildServiceProvider());
         }
 
@@ -390,7 +430,7 @@ namespace Vela.Testing
             where TPlugin : IPlugin
         {
             TPlugin plugin = CreatePluginInstance<TPlugin>();
-            TryAutoConfigureTrigger(plugin);
+            PrepareFor(plugin);
             plugin.Execute(BuildServiceProvider());
             return plugin;
         }
@@ -419,43 +459,300 @@ namespace Vela.Testing
                 "(string unsecureConfig, string secureConfig) constructor. Pass an instance to Execute(plugin) instead.");
         }
 
-        // When the caller did not set a trigger (message/stage/mode), derive it from the plugin's own single
-        // registered step so .Execute(plugin) "just works" without restating the registration. Multi-step plugins
-        // still require an explicit trigger to select the handler under test.
-        private void TryAutoConfigureTrigger(IPlugin plugin)
+        // Reads the plugin's registration before it runs: a Custom API's request is validated against its definition;
+        // an entity plugin's trigger parts the test left unset are resolved from its steps, and what PluginContext
+        // does not apply from the resolved step (FilterOn, registered images) is reported as a trace. Reading the
+        // registration up front also surfaces an invalid one with its own message, whatever the trigger.
+        private void PrepareFor(IPlugin plugin)
         {
-            if (_triggerConfigured)
+            if (plugin is CustomApiBase customApi)
+            {
+                CustomApiDefinition definition = customApi.GetCustomApiDefinition();
+                if (_requestValidation)
+                {
+                    CustomApiRequestValidator.Validate(definition.UniqueName, Context.InputParameters, definition);
+                }
+
+                ApplyCustomApiPrimaryEntity(definition);
+                return;
+            }
+
+            StepDefinition[]? definitions = ReadStepDefinitions(plugin);
+            if (definitions == null || definitions.Length == 0)
             {
                 return;
             }
 
+            ResolveTrigger(plugin, definitions);
+            TraceUnappliedRegistration(definitions, plugin.GetType().FullName ?? plugin.GetType().Name);
+        }
+
+        private static StepDefinition[]? ReadStepDefinitions(IPlugin plugin)
+        {
             MethodInfo? method = plugin.GetType().GetMethod("GetStepDefinitions", Type.EmptyTypes);
-            object? registration;
             try
             {
-                registration = method?.Invoke(plugin, null);
+                return method?.Invoke(plugin, null) as StepDefinition[];
             }
             catch (TargetInvocationException ex) when (ex.InnerException != null)
             {
-                // A registration that cannot be read would not deploy either: fail here, naming the plugin, rather
-                // than run it under the default trigger.
+                // A registration that cannot be read would not deploy either: fail here, naming the plugin and the
+                // reason, rather than let the plugin report it as an unexpected error.
                 throw new InvalidOperationException(
                     $"Could not read the step registration of {plugin.GetType().FullName}: {ex.InnerException.Message}", ex.InnerException);
             }
+        }
 
-            if (registration is not StepDefinition[] definitions || definitions.Length != 1)
+        // Fills the message, stage and mode the test did not set from the registered steps that match what it did set
+        // (and the primary entity). Exactly one matching trigger is used; several are ambiguous and none is a trigger
+        // the plugin does not register, both reported with the registered steps. A fully stated trigger is left to the
+        // plugin's own dispatch.
+        private void ResolveTrigger(IPlugin plugin, StepDefinition[] definitions)
+        {
+            if (_messageSet && _stageSet && _modeSet)
             {
                 return;
             }
 
-            StepDefinition step = definitions[0];
-            if (!string.IsNullOrWhiteSpace(step.Message))
+            List<StepDefinition> candidates = definitions.Where(MatchesStatedTrigger).ToList();
+            List<StepDefinition> triggers = candidates
+                .GroupBy(d => (Message: d.Message.ToUpperInvariant(), d.Stage, d.Mode))
+                .Select(group => group.First())
+                .ToList();
+
+            string pluginName = plugin.GetType().FullName ?? plugin.GetType().Name;
+            if (triggers.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"{pluginName} registers no step matching {DescribeStatedTrigger()}. Its registered steps: " +
+                    $"{string.Join(", ", definitions.Select(DescribeStep))}.");
+            }
+
+            if (triggers.Count > 1)
+            {
+                throw new InvalidOperationException(
+                    $"{pluginName} registers several steps matching {DescribeStatedTrigger()}: " +
+                    $"{string.Join(", ", candidates.Select(DescribeStep))}. Pick the step under test with {UnsetTriggerHint()}.");
+            }
+
+            StepDefinition step = triggers[0];
+            if (!_messageSet && !string.IsNullOrWhiteSpace(step.Message))
             {
                 Context.MessageName = step.Message;
             }
 
-            Context.Stage = (int)step.Stage;
-            Context.Mode = (int)step.Mode;
+            if (!_stageSet)
+            {
+                Context.Stage = (int)step.Stage;
+            }
+
+            if (!_modeSet)
+            {
+                Context.Mode = (int)step.Mode;
+            }
+        }
+
+        private bool MatchesStatedTrigger(StepDefinition definition)
+        {
+            if (_messageSet && !string.Equals(definition.Message, Context.MessageName, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if ((_stageSet && (int)definition.Stage != Context.Stage) || (_modeSet && (int)definition.Mode != Context.Mode))
+            {
+                return false;
+            }
+
+            return MatchesEntity(definition);
+        }
+
+        // The entity check the runtime dispatch applies: a global message (Associate, ...) matches any entity.
+        private bool MatchesEntity(StepDefinition definition)
+            => PluginMessages.IsGlobalMessage(definition.Message)
+                || string.IsNullOrWhiteSpace(definition.EntityLogicalName)
+                || string.Equals(definition.EntityLogicalName, Context.PrimaryEntityName, StringComparison.OrdinalIgnoreCase);
+
+        private string DescribeStatedTrigger()
+        {
+            List<string> parts = new List<string>();
+            if (_messageSet)
+            {
+                parts.Add($"message '{Context.MessageName}'");
+            }
+
+            if (_stageSet)
+            {
+                parts.Add($"stage {DescribeStage(Context.Stage)}");
+            }
+
+            if (_modeSet)
+            {
+                parts.Add($"mode {DescribeMode(Context.Mode)}");
+            }
+
+            parts.Add($"entity '{Context.PrimaryEntityName}'");
+            return string.Join(", ", parts);
+        }
+
+        private string UnsetTriggerHint()
+        {
+            List<string> hints = new List<string>();
+            if (!_messageSet)
+            {
+                hints.Add(".OnCreate()/.OnUpdate()/.OnMessage(...)");
+            }
+
+            if (!_stageSet)
+            {
+                hints.Add(".Stage(...)");
+            }
+
+            if (!_modeSet)
+            {
+                hints.Add(".Sync()/.Async()");
+            }
+
+            return string.Join(" and ", hints);
+        }
+
+        private static string DescribeStep(StepDefinition definition)
+        {
+            string entity = string.IsNullOrWhiteSpace(definition.EntityLogicalName) ? string.Empty : $" on {definition.EntityLogicalName}";
+            return $"{definition.Message}/{DescribeStage((int)definition.Stage)}/{DescribeMode((int)definition.Mode)}{entity} [{definition.StepKey}]";
+        }
+
+        private static string DescribeStage(int stage)
+            => Enum.IsDefined(typeof(PluginStages), stage) ? ((PluginStages)stage).ToString() : stage.ToString(CultureInfo.InvariantCulture);
+
+        private static string DescribeMode(int mode)
+            => mode == (int)ExecutionMode.Synchronous ? "Sync"
+                : mode == (int)ExecutionMode.Asynchronous ? "Async"
+                : mode.ToString(CultureInfo.InvariantCulture);
+
+        // PluginContext runs the handler whatever the step's FilterOn, images, Disabled flag, configuration or
+        // impersonation say (PluginPipeline applies them). Two of these make a test silently wrong, so they are
+        // reported as a trace: an Update whose Target holds none of the filtered attributes (Dataverse would not run
+        // the step), and a registered image the context does not carry (the handler reads null).
+        private void TraceUnappliedRegistration(StepDefinition[] definitions, string pluginTypeName)
+        {
+            StepDefinition? step = ExecutingStep(definitions, pluginTypeName);
+            if (step == null)
+            {
+                return;
+            }
+
+            string name = string.IsNullOrEmpty(step.StepKey) ? DescribeStep(step) : step.StepKey;
+            if (string.Equals(Context.MessageName, PluginMessages.Update, StringComparison.OrdinalIgnoreCase)
+                && step.FilteringAttributes.Length > 0
+                && Context.InputParameters.TryGetValue("Target", out object? target)
+                && target is Entity updated
+                && !step.FilteringAttributes.Any(updated.Contains))
+            {
+                TraceWarning(
+                    $"Vela.Testing: step '{name}' filters on {string.Join(", ", step.FilteringAttributes)} and the Target holds none " +
+                    "of them, so Dataverse would not run it for this update. PluginContext runs it anyway; assert whether a step " +
+                    "fires with PluginPipeline.");
+            }
+
+            foreach (ImageDefinition image in step.PreImages)
+            {
+                if (!HasImage(Context.PreEntityImages, Context.PreEntityImagesCollection, image.Alias))
+                {
+                    TraceWarning(
+                        $"Vela.Testing: step '{name}' registers the pre-image '{image.Alias}', but the context carries none " +
+                        "(WithPreImage). PluginContext does not build images; PluginPipeline does.");
+                }
+            }
+
+            foreach (ImageDefinition image in step.PostImages)
+            {
+                if (!HasImage(Context.PostEntityImages, Context.PostEntityImagesCollection, image.Alias))
+                {
+                    TraceWarning(
+                        $"Vela.Testing: step '{name}' registers the post-image '{image.Alias}', but the context carries none " +
+                        "(WithPostImage). PluginContext does not build images; PluginPipeline does.");
+                }
+            }
+        }
+
+        // The step the dispatch would run for the context's trigger: the only match, or the one the executing step
+        // (OwningExtension, by name or by id) names when several share the trigger, resolved by the runtime's own
+        // selection. Null when none resolves (the dispatch reports it).
+        private StepDefinition? ExecutingStep(StepDefinition[] definitions, string pluginTypeName)
+        {
+            List<StepDefinition> matches = definitions
+                .Where(d => string.Equals(d.Message, Context.MessageName, StringComparison.OrdinalIgnoreCase)
+                    && (int)d.Stage == Context.Stage
+                    && (int)d.Mode == Context.Mode
+                    && MatchesEntity(d))
+                .ToList();
+            if (matches.Count <= 1)
+            {
+                return matches.FirstOrDefault();
+            }
+
+            try
+            {
+                List<StepDefinition> selected = StepIdentity.Select(matches, new LocalPluginContext(BuildServiceProvider()), pluginTypeName);
+                return selected.Count == 1 ? selected[0] : null;
+            }
+            catch (Exception)
+            {
+                // No single step resolves (or its name cannot be read): the dispatch reports it, no warning here.
+                return null;
+            }
+        }
+
+        private static bool HasImage(EntityImageCollection images, EntityImageCollection[] bulkImages, string alias)
+            => images.Contains(alias) || (bulkImages != null && bulkImages.Any(collection => collection != null && collection.Contains(alias)));
+
+        private void TraceWarning(string message) => _tracingService.Trace("{0}", message);
+
+        // A Custom API's main operation sees the primary entity of its binding, as PluginPipeline gives it (verified
+        // live): "none" for a global API, the bound table for a bound one, with the Target id for an entity-bound API.
+        // What the test set with WithPrimaryEntity wins.
+        private void ApplyCustomApiPrimaryEntity(CustomApiDefinition definition)
+        {
+            (string name, Guid id) = CustomApiRequestValidator.PrimaryEntity(definition, Context.InputParameters);
+            if (!_primaryEntityNameSet)
+            {
+                Context.PrimaryEntityName = name;
+            }
+
+            bool idSetOnContext = Context.PrimaryEntityId != Guid.Empty && Context.PrimaryEntityId != _derivedPrimaryEntityId;
+            if (!_primaryEntityIdSet && !idSetOnContext)
+            {
+                Context.PrimaryEntityId = id;
+                _derivedPrimaryEntityId = id;
+                _customApiPrimaryEntity = true;
+            }
+        }
+
+        // PrimaryEntityId follows the Target unless the test set it: the Target's id (an entity or a reference), and
+        // Guid.Empty on a global message (Associate, ...) or without a Target. An id the test set, through
+        // WithPrimaryEntity or on Context, is kept.
+        private void ApplyPrimaryEntityId()
+        {
+            if (_primaryEntityIdSet || _customApiPrimaryEntity || (Context.PrimaryEntityId != Guid.Empty && Context.PrimaryEntityId != _derivedPrimaryEntityId))
+            {
+                return;
+            }
+
+            Guid id = Guid.Empty;
+            if (!PluginMessages.IsGlobalMessage(Context.MessageName)
+                && Context.InputParameters.TryGetValue("Target", out object? target))
+            {
+                id = target switch
+                {
+                    Entity entity => entity.Id,
+                    EntityReference reference => reference.Id,
+                    _ => Guid.Empty,
+                };
+            }
+
+            Context.PrimaryEntityId = id;
+            _derivedPrimaryEntityId = id;
         }
 
         // A Create/CreateMultiple Post step sees the created id(s) as OutputParameters (as Dataverse surfaces them),

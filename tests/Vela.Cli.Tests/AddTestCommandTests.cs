@@ -293,6 +293,11 @@ public class AddTestCommandTests
             Assert.Contains("PluginContext.ForRequest(new ExportContactRequest", content);
             Assert.Contains("Assert.Equal(\"acme_ExportContact\", definition.UniqueName);", content);
             Assert.DoesNotContain("ForMessage(", content);
+
+            // Execute validates the request against the definition, so a bound API's test supplies a Target of its table.
+            Assert.Contains("if (definition.BoundEntityLogicalName is string boundTable)", content);
+            Assert.Contains("[Fact(Skip = \"TODO: set the inputs ExportContact requires\")]", content);
+            Assert.Contains("builder.WithInputParameter(\"Target\", new Microsoft.Xrm.Sdk.EntityReference(boundTable, Guid.NewGuid()));", content);
         });
     }
 
