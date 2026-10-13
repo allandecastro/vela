@@ -587,6 +587,7 @@ public class AddCommandTests
             Assert.Contains("using Acme.Plugins.GlobalCustomApis;", content);
             Assert.Contains("PluginContext.ForMessage(\"acme_RecalculateTotals\")", content);
             Assert.Contains("new RecalculateTotals(string.Empty, string.Empty)", content);
+            Assert.DoesNotContain("\"Target\"", content);
         });
     }
 
@@ -603,9 +604,10 @@ public class AddCommandTests
             Assert.Contains("using Acme.Plugins.Contact.CustomApis;", content);
 
             // A bound Custom API is typed (vela add customapi generates ExportContactRequest): the test states no
-            // message name or parameter key.
+            // message name. Its Target is a record of the bound table, which the request validation requires.
             Assert.Contains("PluginContext.ForRequest(new ExportContactRequest", content);
             Assert.DoesNotContain("ForMessage(", content);
+            Assert.Contains("builder.WithInputParameter(\"Target\", new Microsoft.Xrm.Sdk.EntityReference(definition.BoundEntityLogicalName!, Guid.NewGuid()));", content);
         });
     }
 

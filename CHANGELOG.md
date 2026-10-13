@@ -21,6 +21,39 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (Framework, breaking)
+
+- **Breaking:** `PluginContext` resolves the trigger from the plugin's registration part by part. The message, stage
+  and mode a test does not set come from the registered steps that match the parts it does set and the primary
+  entity, so `.OnCreate()` alone runs a plugin's only `Create` step (it used to keep the fake defaults, PostOperation
+  and synchronous, and fail with "no registered step matching message 'Create'"). When several steps match, or none,
+  `Execute` / `Build(plugin)` throw an `InvalidOperationException` listing the registered steps
+  (`Create/PreOperation/Sync on account [step-key]`). A multi-step plugin run with no trigger now throws the same way
+  instead of running under the fake defaults (Update, PostOperation, synchronous). A test that relied on those
+  defaults states its trigger.
+- **Breaking:** `PluginContext` sets `ctx.PrimaryEntityId` to the `Target`'s id (an entity or an `EntityReference`),
+  and to `Guid.Empty` without a Target or on a global message such as `Associate`. It used to be a random id unless
+  `WithPrimaryEntity(name, id)` set it, which still wins, as does an id set on `Context`.
+- **Breaking:** running a Custom API through `PluginContext` validates its request against the definition with the
+  same faults as `PluginPipeline`: a missing required input (`0x80040203`), an input of the wrong type or an
+  undeclared one (`0x80040315`), a bound API without its `Target`. `.WithoutRequestValidation()` turns it off for a
+  test that sends an invalid request on purpose.
+
+### Changed (Framework)
+
+- `PluginContext` reads the step registration before running the plugin whatever the trigger, so an invalid
+  registration fails with its own reason ("Could not read the step registration of ...") instead of the plugin's
+  generic "An unexpected error occurred. Correlation id: ..." message.
+- `PluginContext` traces a warning in `TraceCapture`, prefixed `Vela.Testing:`, when the resolved step filters on
+  attributes (`FilterOn`) that the `Update` Target holds none of, or registers an image the context does not carry. It
+  still runs the handler: use `PluginPipeline` to assert whether a step fires.
+- The "no registered step matching" error of the runtime dispatch also names the stage, the mode and the entity.
+
+### Fixed (CLI)
+
+- The bound Custom API test `vela add test --kind customapi --entity <Table>` scaffolds sets the request's `Target`
+  to a record of the bound table, which `PluginContext` now requires as Dataverse does.
+
 ## [0.33.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Changed (breaking)

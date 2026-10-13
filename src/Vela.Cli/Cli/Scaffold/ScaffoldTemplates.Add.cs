@@ -165,6 +165,10 @@ namespace {{ns}}
             {
                 // TODO: set the inputs, e.g. AccountId = Guid.NewGuid(),
             });
+
+            // A bound Custom API runs on a record of its table: the request's Target. Execute validates the request
+            // against the definition as Dataverse does (required inputs, their types, the Target).
+            builder.WithInputParameter("Target", new Microsoft.Xrm.Sdk.EntityReference(definition.BoundEntityLogicalName!, Guid.NewGuid()));
 """)}}
 
             builder.Execute(api);

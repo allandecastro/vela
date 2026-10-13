@@ -142,6 +142,11 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
 `WithOrganizationService(...)`. `PluginPipeline` has no such fallback: it always drives its own in-memory store
 (configure it with the pipeline's `With*`/`As*` methods, which mirror every store configuration method).
 
+- **`PluginContext` runs one handler, not the registration.** It selects the step by message, stage, mode, entity and
+  relationship scope, but does not apply `FilterOn`, the registered images, `.Disabled()`, the step configuration or
+  impersonation; it traces a `Vela.Testing:` warning when an `Update` Target holds none of the filtered attributes
+  or a registered image is missing from the context. Assert whether a step fires with `PluginPipeline`
+  ([Testing](../guides/testing.md#run-a-plugin-against-a-fake-context)).
 - **`Execute` covers a common set:** `Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`,
   `CreateMultiple`/`UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`/`SetState`/`Merge`/`Associate`/`Disassociate`,
   the file block messages, the metadata reads
