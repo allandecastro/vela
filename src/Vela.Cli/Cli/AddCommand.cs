@@ -992,9 +992,11 @@ internal static class AddCommand
         return true;
     }
 
-    // Validates explicit --filtering-attributes identifiers and, when the generated model is available,
-    // corrects a wrong-case value to the real property (e.g. 'name' -> 'Name', which compiles) or warns when
-    // the name is unknown. Returns the (possibly corrected) attributes; false only on an invalid C# identifier.
+    // Validates explicit --filtering-attributes values and resolves each to the early-bound property FilterOn selects.
+    // With the generated model: an exact property name is kept, a column logical name (the property's
+    // [AttributeLogicalName], e.g. 'name') maps to its property ('Name'), and a wrong-case property name is corrected;
+    // an unknown name only warns (the model may be stale). Without a model, a value with no upper-case letter is
+    // refused: it reads as a logical name nothing can map, and `e => e.name` would not compile against the model.
     private static bool TryResolveFilteringAttributes(string[] explicitAttributes, string projectDir, string entity, out string[] attributes, out string? error)
     {
         attributes = explicitAttributes;
@@ -1009,8 +1011,20 @@ internal static class AddCommand
             }
         }
 
-        if (explicitAttributes.Length == 0 || !TryReadModelPropertyNames(projectDir, entity, out var modelProperties))
+        if (explicitAttributes.Length == 0)
         {
+            return true;
+        }
+
+        if (!TryReadModelColumns(projectDir, entity, out HashSet<string> modelProperties, out Dictionary<string, string> logicalToProperty))
+        {
+            string[] logicalNames = explicitAttributes.Where(a => !a.Any(char.IsUpper)).ToArray();
+            if (logicalNames.Length > 0)
+            {
+                error = $"--filtering-attributes {string.Join(", ", logicalNames.Select(a => $"'{a}'"))}: no early-bound model for {entity} was found to map a column logical name to its property, and FilterOn selects the property (e.g. Name, not name). Run 'vela models' first, or pass the property name.";
+                return false;
+            }
+
             return true;
         }
 
@@ -1024,10 +1038,12 @@ internal static class AddCommand
                 continue;
             }
 
-            string? suggestion = modelProperties.FirstOrDefault(p => string.Equals(p, attribute, StringComparison.OrdinalIgnoreCase));
+            string? suggestion = logicalToProperty.TryGetValue(attribute, out string? mapped)
+                ? mapped
+                : modelProperties.FirstOrDefault(p => string.Equals(p, attribute, StringComparison.OrdinalIgnoreCase));
             if (suggestion is not null)
             {
-                Console.Error.WriteLine($"Note: filtering attribute '{attribute}' corrected to '{suggestion}' (property names are case-sensitive).");
+                Console.Error.WriteLine($"Note: filtering attribute '{attribute}' corrected to '{suggestion}' (FilterOn selects the early-bound property; property names are case-sensitive).");
                 corrected[i] = suggestion;
             }
             else
@@ -1051,27 +1067,29 @@ internal static class AddCommand
     private static readonly Regex LogicalNameAttr = new("\\[AttributeLogicalName\\(\"(?<logical>[^\"]+)\"\\)\\]", RegexOptions.Compiled);
     private static readonly Regex PropertyDecl = new("^\\s*public\\s+(?<type>[\\w\\.<>\\?\\[\\],\\s]+?)\\s+(?<name>\\w+)\\s*$", RegexOptions.Compiled);
 
-    // Reads the set of generated property names off the entity's early-bound model (each declared right after an
-    // [AttributeLogicalName("...")] attribute). Used to sanity-check explicit --filtering-attributes against the
-    // real columns. False when the model file cannot be located (then no validation is attempted).
-    private static bool TryReadModelPropertyNames(string projectDir, string entity, out HashSet<string> properties)
+    // Reads the generated properties off the entity's early-bound model (each declared right after an
+    // [AttributeLogicalName("...")] attribute, facet attributes possibly in between) with the column logical name each
+    // one maps. False when the model file cannot be located or declares no column (then no validation is attempted).
+    private static bool TryReadModelColumns(string projectDir, string entity, out HashSet<string> properties, out Dictionary<string, string> logicalToProperty)
     {
         properties = new HashSet<string>(StringComparer.Ordinal);
+        logicalToProperty = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!TryFindEntityModelFile(projectDir, entity, out string modelPath))
         {
             return false;
         }
 
-        bool sawLogicalName = false;
+        string? logical = null;
         foreach (string line in File.ReadLines(modelPath))
         {
-            if (LogicalNameAttr.IsMatch(line))
+            Match logicalMatch = LogicalNameAttr.Match(line);
+            if (logicalMatch.Success)
             {
-                sawLogicalName = true;
+                logical = logicalMatch.Groups["logical"].Value;
                 continue;
             }
 
-            if (!sawLogicalName)
+            if (logical is null)
             {
                 continue;
             }
@@ -1079,36 +1097,42 @@ internal static class AddCommand
             Match propertyMatch = PropertyDecl.Match(line);
             if (propertyMatch.Success)
             {
-                properties.Add(propertyMatch.Groups["name"].Value);
-                sawLogicalName = false;
+                string property = propertyMatch.Groups["name"].Value;
+                properties.Add(property);
+                logicalToProperty.TryAdd(logical, property);
+                logical = null;
             }
         }
 
         return properties.Count > 0;
     }
 
-    // Locates the generated early-bound model file for an entity: walks up from the target project to the solution
-    // root (a directory holding a .sln, else the highest reached), then finds a "{entity}.cs" that declares
-    // "class {entity} : Entity", skipping build output. False when not found.
-    private static bool TryFindEntityModelFile(string projectDir, string entity, out string path)
+    // The solution root above a project: the nearest directory (within a few levels) holding a .sln or .slnx, else the
+    // project directory itself rather than climbing toward the filesystem root and scanning an enormous tree.
+    internal static string FindSolutionRoot(string projectDir)
     {
-        path = string.Empty;
-
-        // Bound the search to the solution root (a directory holding a .sln) so auto-detection can reach a sibling
-        // models project. If no .sln is found within a few levels, fall back to the project directory itself rather
-        // than climbing toward the filesystem root and scanning an enormous tree.
-        string root = projectDir;
         string? dir = projectDir;
         for (int i = 0; i < 6 && dir != null; i++)
         {
-            if (Directory.EnumerateFiles(dir, "*.sln", SearchOption.TopDirectoryOnly).Any())
+            if (Directory.EnumerateFiles(dir, "*.sln", SearchOption.TopDirectoryOnly).Any()
+                || Directory.EnumerateFiles(dir, "*.slnx", SearchOption.TopDirectoryOnly).Any())
             {
-                root = dir;
-                break;
+                return dir;
             }
 
             dir = Path.GetDirectoryName(dir);
         }
+
+        return projectDir;
+    }
+
+    // Locates the generated early-bound model file for an entity: from the solution root (FindSolutionRoot, so a
+    // sibling models project is reached), finds a "{entity}.cs" that declares "class {entity} : Entity", skipping build
+    // output. False when not found.
+    private static bool TryFindEntityModelFile(string projectDir, string entity, out string path)
+    {
+        path = string.Empty;
+        string root = FindSolutionRoot(projectDir);
 
         var classDecl = new Regex($"class\\s+{Regex.Escape(entity)}\\s*:\\s*Entity", RegexOptions.Compiled);
         foreach (string file in Directory.EnumerateFiles(root, entity + ".cs", SearchOption.AllDirectories))
