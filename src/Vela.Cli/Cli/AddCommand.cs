@@ -569,7 +569,9 @@ internal static class AddCommand
 
             string testClass = $"{name}Tests";
             (string ns, string folder) = TestPlacement(plugin.Namespace, pluginsRoot, rootNamespace, Path.Combine(entity!, "Plugins"));
-            if (!TryChoosePluginTestStep(args, plugin, entity!, out PluginTestStep step, out string stepError))
+            // A partial plugin may register its steps in another file: read every declaration of the class.
+            List<AddTestSources.SourceClass> declarations = classes.Where(c => c.Name == plugin.Name && c.Namespace == plugin.Namespace).ToList();
+            if (!TryChoosePluginTestStep(args, plugin.Name, declarations, out PluginTestStep step, out string stepError))
             {
                 return Fail(stepError, ExitInvalidArguments, includeUsage: false);
             }
@@ -643,10 +645,10 @@ internal static class AddCommand
     // The step a plugin test drives: the --message one when given, else the plugin's first step (a note names the
     // others). Its FilterOn members are set by the test so the step fires; its request type serves a message the test
     // cannot drive through a dedicated service call.
-    private static bool TryChoosePluginTestStep(string[] args, AddTestSources.SourceClass plugin, string entity, out PluginTestStep step, out string error)
+    private static bool TryChoosePluginTestStep(string[] args, string pluginName, List<AddTestSources.SourceClass> declarations, out PluginTestStep step, out string error)
     {
         error = string.Empty;
-        List<AddTestSources.PluginStep> steps = AddTestSources.ReadSteps(plugin);
+        List<AddTestSources.PluginStep> steps = declarations.SelectMany(AddTestSources.ReadSteps).ToList();
         string? rawMessage = TryReadOption(args, "--message")?.Trim();
         AddTestSources.PluginStep? chosen;
         if (string.IsNullOrEmpty(rawMessage))
@@ -654,7 +656,7 @@ internal static class AddCommand
             chosen = steps.FirstOrDefault();
             if (steps.Count > 1)
             {
-                Console.Error.WriteLine($"Note: {plugin.Name} registers {steps.Count} steps; the test drives the first ({chosen!.Message}). Pass --message to test another.");
+                Console.Error.WriteLine($"Note: {pluginName} registers {steps.Count} steps; the test drives the first ({chosen!.Message}). Pass --message to test another.");
             }
         }
         else
@@ -662,7 +664,7 @@ internal static class AddCommand
             chosen = steps.FirstOrDefault(s => string.Equals(s.Message, rawMessage, StringComparison.OrdinalIgnoreCase));
             if (chosen is null && steps.Count > 0)
             {
-                Console.Error.WriteLine($"Note: no {rawMessage} step was found in {plugin.Name}; the test drives {rawMessage} anyway. Set the request it needs.");
+                Console.Error.WriteLine($"Note: no {rawMessage} step was found in {pluginName}; the test drives {rawMessage} anyway. Set the request it needs.");
             }
         }
 

@@ -175,6 +175,26 @@ public class AddTestCommandTests
     }
 
     [Fact]
+    public void PluginTest_ReadsTheStepsOfEveryPartialDeclaration()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            string folder = Path.Combine(Path.GetDirectoryName(plugins)!, "Account", "Plugins");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "AccountSplit.cs"),
+                "namespace Acme.Plugins.Account.Plugins\n{\n    public sealed partial class AccountSplit(string u, string s) : EntityPluginBase<Account>(u, s)\n    {\n    }\n}\n");
+            File.WriteAllText(Path.Combine(folder, "AccountSplit.Steps.cs"),
+                "namespace Acme.Plugins.Account.Plugins\n{\n    public sealed partial class AccountSplit\n    {\n" +
+                "        protected override void RegisterPluginSteps()\n        {\n            RegisterStep().OnUpdate()\n                .PostOperation()\n                .FilterOn(e => e.Telephone1)\n                .Handle(OnChanged);\n        }\n    }\n}\n");
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountSplit", "--project", tests]));
+
+            string content = File.ReadAllText(Path.Combine(testsDir, "Account", "Plugins", "AccountSplitTests.cs"));
+            Assert.Contains("pipeline.Service.Update(new Account { Id = id, Telephone1 = default });", content);
+        });
+    }
+
+    [Fact]
     public void PluginTest_UnknownPlugin_Fails()
     {
         RunInSolution((_, tests, testsDir) =>
