@@ -21,6 +21,19 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added (Framework)
+
+- `PipelineExecutionEntry.HandlerInvoked` and `PipelineExecutionEntry.SkipReason` report whether a step's handler ran.
+  An entry in `PluginPipeline.ExecutionLog` means the platform invoked the step. When Vela's runtime skips the handler
+  (a `.ForRelationship(...)` scope that does not match, `.SkipWhenDepthAbove(n)`, the plugin-level depth guard),
+  `HandlerInvoked` is `false` and `SkipReason` holds the line it traced. `ToString()` also shows the skip.
+
+### Fixed (Framework)
+
+- `PluginPipeline.ExecutionLog` was documented as the steps that fired, but it also listed steps whose handler
+  Vela's runtime skipped, with nothing to tell them apart. Those entries now carry `HandlerInvoked = false` (see
+  above), and the docs say an entry means "invoked by the platform".
+
 ## [0.33.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Changed (breaking)

@@ -253,7 +253,12 @@ namespace Vela.Testing
         /// <summary>The pipeline-aware service: drive the scenario through it, and plugins receive it for cascade.</summary>
         public IOrganizationService Service => _service;
 
-        /// <summary>Ordered log of every step that fired (for asserting what ran and in what order).</summary>
+        /// <summary>
+        /// Ordered log of every step the platform invoked (for asserting what was invoked and in what order). An entry
+        /// does not mean the handler ran: Vela's runtime can skip it (a <c>.ForRelationship(...)</c> scope,
+        /// <c>.SkipWhenDepthAbove(n)</c>, the depth guard), which <see cref="PipelineExecutionEntry.HandlerInvoked"/>
+        /// and <see cref="PipelineExecutionEntry.SkipReason"/> report.
+        /// </summary>
         public IReadOnlyList<PipelineExecutionEntry> ExecutionLog => _log;
 
         /// <summary>

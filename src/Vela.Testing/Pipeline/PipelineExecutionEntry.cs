@@ -4,8 +4,9 @@ using Vela.Steps;
 namespace Vela.Testing
 {
     /// <summary>
-    /// One entry in a <see cref="PluginPipeline"/>'s execution log: a step that fired during simulation.
-    /// Useful for asserting which plugins ran, in what order, and at which cascade depth.
+    /// One entry in a <see cref="PluginPipeline"/>'s execution log: a step the platform invoked during simulation.
+    /// Useful for asserting which plugins were invoked, in what order, at which cascade depth, and (through
+    /// <see cref="HandlerInvoked"/>) whether their handler actually ran.
     /// </summary>
     public sealed class PipelineExecutionEntry
     {
@@ -37,9 +38,24 @@ namespace Vela.Testing
         /// <summary>The cascade depth at which the step fired (1 = top-level operation).</summary>
         public int Depth { get; }
 
+        /// <summary>
+        /// Whether the step's handler ran. An entry means the platform invoked the step; Vela's runtime can still decide
+        /// not to call the handler (a <c>.ForRelationship(...)</c> scope that does not match, <c>.SkipWhenDepthAbove(n)</c>,
+        /// the plugin-level depth guard), and then this is <c>false</c> and <see cref="SkipReason"/> says why.
+        /// </summary>
+        public bool HandlerInvoked => SkipReason == null;
+
+        /// <summary>
+        /// Why Vela's runtime did not call the handler (the line it traced), or <c>null</c> when the handler ran.
+        /// </summary>
+        public string? SkipReason { get; private set; }
+
+        internal void MarkHandlerSkipped(string reason) => SkipReason = reason;
+
         public override string ToString()
         {
-            return $"{Message}/{Stage} {EntityLogicalName} (depth {Depth}) -> {PluginTypeName}";
+            string entry = $"{Message}/{Stage} {EntityLogicalName} (depth {Depth}) -> {PluginTypeName}";
+            return HandlerInvoked ? entry : $"{entry} [handler not run: {SkipReason}]";
         }
     }
 }

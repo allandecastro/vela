@@ -337,6 +337,10 @@ namespace Vela.Context
         // dispatch just before it invokes the handler; cleared implicitly when the execution (and this context) ends.
         internal void SetCurrentHandler(string? handlerMethod) => _currentHandler = handlerMethod;
 
+        // Tells the test harness, when it registered an observer, that the runtime did not call the handler and why.
+        internal void ReportHandlerSkipped(string reason)
+            => (ServiceProvider.GetService(typeof(IHandlerSkipObserver)) as IHandlerSkipObserver)?.HandlerSkipped(reason);
+
         /// <inheritdoc />
         public void LogMetric(string name, long value, IReadOnlyDictionary<string, object?>? properties = null)
         {

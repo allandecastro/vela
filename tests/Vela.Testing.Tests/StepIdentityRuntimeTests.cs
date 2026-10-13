@@ -110,6 +110,84 @@ namespace Vela.Testing.Tests
         private void OnUpdated(IUpdatePostContext<FakeAccount> ctx) => ctx.Trace("ran:deep");
     }
 
+    // Cascade drivers for the execution-log tests: a task whose subject is an account id renames that account (depth 2),
+    // and a rename to "L2" renames it again (depth 3).
+    public sealed class RenameAccountOnTaskCreate : EntityPluginBase<FakeTask>
+    {
+        public RenameAccountOnTaskCreate(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnCreate().PostOperation().Sync().FilterOn(t => t.Subject).Handle(OnTaskCreated);
+
+        private void OnTaskCreated(ICreatePostContext<FakeTask> ctx)
+        {
+            if (Guid.TryParse(ctx.Request.Target.Subject, out Guid accountId))
+            {
+                ctx.SystemService.Update(new FakeAccount { Id = accountId, Name = "L2" });
+            }
+        }
+    }
+
+    public sealed class RenameAgainOnUpdate : EntityPluginBase<FakeAccount>
+    {
+        public RenameAgainOnUpdate(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnUpdated);
+
+        private void OnUpdated(IUpdatePostContext<FakeAccount> ctx)
+        {
+            if (ctx.Request.Target.Name == "L2")
+            {
+                ctx.SystemService.Update(new FakeAccount { Id = ctx.Request.Target.Id, Name = "L3" });
+            }
+        }
+    }
+
+    public sealed class BulkUpdateOnTaskCreate : EntityPluginBase<FakeTask>
+    {
+        public BulkUpdateOnTaskCreate(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnCreate().PostOperation().Sync().FilterOn(t => t.Subject).Handle(OnTaskCreated);
+
+        private void OnTaskCreated(ICreatePostContext<FakeTask> ctx)
+        {
+            if (Guid.TryParse(ctx.Request.Target.Subject, out Guid accountId))
+            {
+                EntityCollection targets = new EntityCollection { EntityName = "account" };
+                targets.Entities.Add(new FakeAccount { Id = accountId, Name = "Nested" });
+                ctx.SystemService.Execute(new Microsoft.Xrm.Sdk.Messages.UpdateMultipleRequest { Targets = targets });
+            }
+        }
+    }
+
+    // A bulk step skipped past a depth of 1.
+    public sealed class DepthLimitedBulkStep : EntityPluginBase<FakeAccount>
+    {
+        public DepthLimitedBulkStep(string unsecure, string secure) : base(unsecure, secure) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdateMultiple().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .SkipWhenDepthAbove(1)
+                .Handle(OnUpdatedMultiple);
+
+        private void OnUpdatedMultiple(IUpdateMultiplePostContext<FakeAccount> ctx)
+            => ctx.SystemService.Create(new FakeTask { Subject = "bulk-ran" });
+    }
+
+    // A step under a plugin-level MaxDepth of 1: the depth guard throws past it.
+    public sealed class GuardedStep : EntityPluginBase<FakeAccount>
+    {
+        public GuardedStep(string unsecure, string secure) : base(unsecure, secure, maxDepth: 1) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnUpdated);
+
+        private void OnUpdated(IUpdatePostContext<FakeAccount> ctx) => ctx.Trace("ran:guarded");
+    }
+
     public sealed class StepIdentityRuntimeTests
     {
         private static PluginContextBuilder<FakeAccount> UpdateContext(string? owningStepName = null, int depth = 1)
@@ -201,10 +279,82 @@ namespace Vela.Testing.Tests
             pipeline.Service.Associate("account", accountId, new Relationship("account_partners"),
                 new EntityReferenceCollection { new EntityReference("contact", contactId) });
             Assert.Empty(pipeline.GetAll("task"));
+            // The platform invoked the step (it fires for every relationship), but its handler did not run.
+            PipelineExecutionEntry skipped = Assert.Single(pipeline.ExecutionLog);
+            Assert.False(skipped.HandlerInvoked);
+            Assert.Equal("Vela: relationship outside the step's ForRelationship scope; nothing to run.", skipped.SkipReason);
+            Assert.EndsWith("[handler not run: Vela: relationship outside the step's ForRelationship scope; nothing to run.]", skipped.ToString());
 
             pipeline.Service.Associate("account", accountId, new Relationship("account_contacts"),
                 new EntityReferenceCollection { new EntityReference("contact", contactId) });
             Assert.Single(pipeline.GetAll("task"));
+            PipelineExecutionEntry handled = pipeline.ExecutionLog.Last();
+            Assert.True(handled.HandlerInvoked);
+            Assert.Null(handled.SkipReason);
+            Assert.DoesNotContain("handler not run", handled.ToString());
+        }
+
+        [Fact]
+        public void SkipWhenDepthAbove_in_the_pipeline_logs_the_step_with_its_handler_not_run()
+        {
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<DepthLimitedStep>().Register<RenameAccountOnTaskCreate>().Register<RenameAgainOnUpdate>()
+                .Seed(new FakeAccount { Id = id, Name = "Old" });
+
+            // Depth 1: within the step's limit (2).
+            pipeline.Service.Update(new FakeAccount { Id = id, Name = "Top" });
+            PipelineExecutionEntry top = Assert.Single(pipeline.ExecutionLog, e => e.PluginTypeName == typeof(DepthLimitedStep).FullName);
+            Assert.True(top.HandlerInvoked);
+
+            // Task create (1) -> account update (2) -> account update (3): past the limit at depth 3.
+            pipeline.Service.Create(new FakeTask { Subject = id.ToString() });
+            PipelineExecutionEntry[] cascade = pipeline.ExecutionLog.Where(e => e.PluginTypeName == typeof(DepthLimitedStep).FullName).Skip(1).ToArray();
+            Assert.Equal(new[] { 2, 3 }, cascade.Select(e => e.Depth));
+            Assert.True(cascade[0].HandlerInvoked);
+            Assert.False(cascade[1].HandlerInvoked);
+            Assert.Equal("Vela: step skipped by SkipWhenDepthAbove. Depth=3, MaxDepth=2", cascade[1].SkipReason);
+        }
+
+        [Fact]
+        public void A_bulk_step_past_its_depth_limit_is_logged_with_its_handler_not_run()
+        {
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<DepthLimitedBulkStep>().Register<BulkUpdateOnTaskCreate>()
+                .Seed(new FakeAccount { Id = id, Name = "Old" });
+
+            pipeline.Service.Execute(new Microsoft.Xrm.Sdk.Messages.UpdateMultipleRequest { Targets = AccountTargets(new FakeAccount { Id = id, Name = "Top" }) });
+            PipelineExecutionEntry top = Assert.Single(pipeline.ExecutionLog, e => e.PluginTypeName == typeof(DepthLimitedBulkStep).FullName);
+            Assert.True(top.HandlerInvoked);
+            Assert.Equal(PluginMessages.UpdateMultiple, top.Message);
+
+            // Task create (1) -> UpdateMultiple (2): past the bulk step's limit (1).
+            pipeline.Service.Create(new FakeTask { Subject = id.ToString() });
+            PipelineExecutionEntry nested = pipeline.ExecutionLog.Last(e => e.PluginTypeName == typeof(DepthLimitedBulkStep).FullName);
+            Assert.Equal(2, nested.Depth);
+            Assert.False(nested.HandlerInvoked);
+            Assert.Equal("Vela: step skipped by SkipWhenDepthAbove. Depth=2, MaxDepth=1", nested.SkipReason);
+            Assert.Single(pipeline.GetAll("task"), t => t.GetAttributeValue<string>("subject") == "bulk-ran");
+        }
+
+        [Fact]
+        public void The_depth_guard_logs_the_step_with_its_handler_not_run()
+        {
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<GuardedStep>().Register<RenameAccountOnTaskCreate>()
+                .Seed(new FakeAccount { Id = id, Name = "Old" });
+
+            // Task create (1) -> account update (2): past the plugin-level MaxDepth (1), the guard throws.
+            Assert.Throws<InvalidPluginExecutionException>(() => pipeline.Service.Create(new FakeTask { Subject = id.ToString() }));
+            PipelineExecutionEntry guarded = Assert.Single(pipeline.ExecutionLog, e => e.PluginTypeName == typeof(GuardedStep).FullName);
+            Assert.False(guarded.HandlerInvoked);
+            Assert.Equal("Depth guard triggered. Depth=2, MaxDepth=1", guarded.SkipReason);
+        }
+
+        private static EntityCollection AccountTargets(params Entity[] entities)
+        {
+            EntityCollection collection = new EntityCollection { EntityName = "account" };
+            collection.Entities.AddRange(entities);
+            return collection;
         }
 
         [Fact]

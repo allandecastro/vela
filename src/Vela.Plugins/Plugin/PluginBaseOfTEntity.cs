@@ -241,7 +241,7 @@ namespace Vela.Plugin
                 {
                     // An Associate/Disassociate step fires for every relationship in Dataverse; .ForRelationship(...)
                     // scopes it, so another relationship is not an error, just not this step's business.
-                    ctx.Trace("Vela: relationship outside the step's ForRelationship scope; nothing to run.");
+                    SkipHandler(ctx, "Vela: relationship outside the step's ForRelationship scope; nothing to run.");
                     return;
                 }
 
@@ -253,7 +253,7 @@ namespace Vela.Plugin
             // skipped rather than the execution failing.
             if (matchedDefinition.SkipWhenDepthAbove is int stepMaxDepth && ctx.Depth > stepMaxDepth)
             {
-                ctx.Trace("Vela: step skipped by SkipWhenDepthAbove. Depth={0}, MaxDepth={1}", ctx.Depth, stepMaxDepth);
+                SkipHandler(ctx, $"Vela: step skipped by SkipWhenDepthAbove. Depth={ctx.Depth}, MaxDepth={stepMaxDepth}");
                 return;
             }
 

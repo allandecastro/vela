@@ -321,6 +321,17 @@ namespace Vela.Plugin
         /// </summary>
         private protected virtual bool HasStepDepthLimit(ILocalPluginContext context) => false;
 
+        /// <summary>
+        /// Every runtime path that decides not to call the handler goes through here: it traces why and reports it to
+        /// the Vela.Testing pipeline (if one runs the plug-in), whose execution log then shows the step as invoked
+        /// with its handler not run.
+        /// </summary>
+        private protected static void SkipHandler(ILocalPluginContext context, string reason)
+        {
+            context.Trace("{0}", reason);
+            (context as LocalPluginContext)?.ReportHandlerSkipped(reason);
+        }
+
         private void EnforceDepth(ILocalPluginContext context)
         {
             if (context.Depth <= MaxDepth || HasStepDepthLimit(context))
@@ -328,7 +339,7 @@ namespace Vela.Plugin
                 return;
             }
 
-            context.Trace("Depth guard triggered. Depth={0}, MaxDepth={1}", context.Depth, MaxDepth);
+            SkipHandler(context, $"Depth guard triggered. Depth={context.Depth}, MaxDepth={MaxDepth}");
             throw new InvalidPluginExecutionException("Plugin execution stopped to prevent recursion.");
         }
     }
