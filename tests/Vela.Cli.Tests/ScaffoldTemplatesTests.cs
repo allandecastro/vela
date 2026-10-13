@@ -234,17 +234,21 @@ public class ScaffoldTemplatesTests
     }
 
     [Fact]
-    public void AddPluginTestFile_TargetsThePluginAndExecutesIt()
+    public void AddPluginTestFile_DrivesThePluginThroughThePipeline()
     {
         string code = ScaffoldTemplates.AddPluginTestFile(
             "Acme.Plugins.Tests.Account.Plugins", "Acme.Plugins.Account.Plugins", "Acme.Shared.Models.Generated",
-            "AccountValidatorPluginTests", "AccountValidatorPlugin", "Account");
+            "AccountValidatorPluginTests", "AccountValidatorPlugin", "Account",
+            new ScaffoldTemplates.PluginTestStep("Update", "Microsoft.Xrm.Sdk.Messages.UpdateRequest", ["Name"]));
 
         Assert.Contains("namespace Acme.Plugins.Tests.Account.Plugins", code);
         Assert.Contains("using Acme.Plugins.Account.Plugins;", code);
         Assert.Contains("public sealed class AccountValidatorPluginTests", code);
-        Assert.Contains("PluginContext.For<Account>()", code);
-        Assert.Contains("new AccountValidatorPlugin(string.Empty, string.Empty)", code);
+        Assert.Contains("PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountValidatorPlugin>();", code);
+        Assert.Contains("pipeline.Service.Update(new Account { Id = id, Name = default });", code);
+        Assert.Contains("Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName == typeof(AccountValidatorPlugin).FullName && e.Message == \"Update\");", code);
+        Assert.Contains("[Fact(Skip = \"TODO: assert what AccountValidatorPlugin does\")]", code);
+        Assert.DoesNotContain("TraceCapture", code);
     }
 
     [Fact]

@@ -546,53 +546,146 @@ internal static class AddCommand
             return Fail($"Unsupported --kind '{kind}'. Expected 'plugin' or 'customapi'.", ExitInvalidArguments, includeUsage: false);
         }
 
-        string testClass = $"{name}Tests";
+        // The class under test is read from the source of the projects the test project references (else the
+        // solution), so the test names the real class, namespace, steps, unique name and request type.
+        List<AddTestSources.SourceClass> classes = AddTestSources.FindClasses(AddTestSources.SearchRoots(projectFile, projectDir));
+        string modelsNamespace = $"{prefix}.Shared.Models.Generated";
+        bool json = HasFlag(args, "--json");
 
         if (kind == "plugin")
         {
+            AddTestSources.SourceClass? plugin = classes.FirstOrDefault(c => c.Name == name && AddTestSources.PluginEntity(c) is not null)
+                ?? classes.FirstOrDefault(c => c.Name == name);
+            if (plugin is null)
+            {
+                return Fail($"No plugin class '{name}' was found in the projects this test project references. Create it first with 'vela add plugin {name}', or pass the plugin's class name.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            entity = string.IsNullOrWhiteSpace(entity) ? AddTestSources.PluginEntity(plugin) : entity;
             if (string.IsNullOrWhiteSpace(entity))
             {
                 return Fail("A plugin test needs the entity under test. Pass --entity <ModelType> (the early-bound class name, e.g. Account).", ExitInvalidArguments, includeUsage: false);
             }
 
-            string ns = $"{rootNamespace}.{entity}.Plugins";
-            string pluginNamespace = $"{pluginsRoot}.{entity}.Plugins";
-            string modelsNamespace = $"{prefix}.Shared.Models.Generated";
-            string relativePath = Path.Combine(entity!, "Plugins", $"{testClass}.cs");
-            // A *Multiple plugin reads ctx.Request.Targets, so the generated test must seed Targets (WithTargets),
-            // not Target. --message (optional) tells us which to emit; default single-record.
-            string testMessage = (TryReadOption(args, "--message") ?? "Create").Trim();
-            // Only CreateMultiple/UpdateMultiple carry a Targets collection; RetrieveMultiple (also ...Multiple)
-            // is query-based and keeps a single Target shape, so match the two bulk-write messages explicitly.
-            bool multiple = testMessage.Equals("CreateMultiple", StringComparison.OrdinalIgnoreCase)
-                || testMessage.Equals("UpdateMultiple", StringComparison.OrdinalIgnoreCase);
-            string content = AddPluginTestFile(ns, pluginNamespace, modelsNamespace, testClass, name, entity!, multiple);
-            return WriteFile(projectDir, relativePath, content, force, $"plugin test {testClass} (for {name})", HasFlag(args, "--json"));
+            string testClass = $"{name}Tests";
+            (string ns, string folder) = TestPlacement(plugin.Namespace, pluginsRoot, rootNamespace, Path.Combine(entity!, "Plugins"));
+            if (!TryChoosePluginTestStep(args, plugin, entity!, out PluginTestStep step, out string stepError))
+            {
+                return Fail(stepError, ExitInvalidArguments, includeUsage: false);
+            }
+
+            string content = AddPluginTestFile(ns, plugin.Namespace, modelsNamespace, testClass, name, entity!, step);
+            return WriteFile(projectDir, Path.Combine(folder, $"{testClass}.cs"), content, force, $"plugin test {testClass} (for {name})", json);
         }
 
-        if (!TryResolvePublisherPrefix(args, projectFile, prefix, out string testApiPrefix, out int prefixExit))
+        // A Custom API: the class named <name> or <name>CustomApi, else the one registering "<prefix>_<name>".
+        List<AddTestSources.SourceClass> apis = classes.Where(c => AddTestSources.IsCustomApi(c, out _)).ToList();
+        List<AddTestSources.SourceClass> matches = apis.Where(c => c.Name == name).ToList();
+        if (matches.Count == 0)
         {
-            return prefixExit;
+            matches = apis.Where(c => c.Name == name + "CustomApi").ToList();
         }
 
-        string uniqueName = $"{testApiPrefix}_{name}";
-        if (string.IsNullOrWhiteSpace(entity))
+        if (matches.Count == 0)
         {
-            string ns = $"{rootNamespace}.GlobalCustomApis";
-            string apiNamespace = $"{pluginsRoot}.GlobalCustomApis";
-            string relativePath = Path.Combine("GlobalCustomApis", $"{testClass}.cs");
-            string content = AddCustomApiTestFile(ns, apiNamespace, testClass, name, uniqueName);
-            return WriteFile(projectDir, relativePath, content, force, $"Custom API test {testClass} (for {name})", HasFlag(args, "--json"));
+            matches = apis.Where(c => AddTestSources.CustomApiUniqueName(c) is { } unique
+                && unique.EndsWith("_" + name, StringComparison.OrdinalIgnoreCase)
+                && unique.IndexOf('_') == unique.Length - name.Length - 1).ToList();
+        }
+
+        if (matches.Count == 0)
+        {
+            return Fail($"No Custom API '{name}' was found in the projects this test project references (a class {name} or {name}CustomApi deriving from CustomApiBase, or one registering '<prefix>_{name}'). Create it first with 'vela add customapi {name}', or pass the Custom API's class name.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (matches.Count > 1)
+        {
+            return Fail($"Several Custom APIs match '{name}': {string.Join(", ", matches.Select(m => $"{m.Namespace}.{m.Name}"))}. Pass the class name of the one to test.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        AddTestSources.SourceClass api = matches[0];
+        AddTestSources.IsCustomApi(api, out string? requestType);
+        string? uniqueName = AddTestSources.CustomApiUniqueName(api);
+        if (uniqueName is null)
+        {
+            // Computed some other way: fall back to the name `vela add customapi` would have given it.
+            if (!TryResolvePublisherPrefix(args, projectFile, prefix, out string testApiPrefix, out int prefixExit))
+            {
+                return prefixExit;
+            }
+
+            uniqueName = $"{testApiPrefix}_{name}";
+            Console.Error.WriteLine($"Note: could not read the unique name {api.Name} registers; the test asserts '{uniqueName}'. Adjust it if that is not the name.");
+        }
+
+        string apiTestClass = $"{api.Name}Tests";
+        string fallbackFolder = requestType is null && string.IsNullOrWhiteSpace(entity) ? "GlobalCustomApis" : Path.Combine(entity ?? string.Empty, "CustomApis");
+        (string apiTestNs, string apiFolder) = TestPlacement(api.Namespace, pluginsRoot, rootNamespace, fallbackFolder);
+        string apiContent = AddCustomApiTestFile(apiTestNs, api.Namespace, apiTestClass, api.Name, uniqueName, requestType);
+        return WriteFile(projectDir, Path.Combine(apiFolder, $"{apiTestClass}.cs"), apiContent, force, $"Custom API test {apiTestClass} (for {api.Name})", json);
+    }
+
+    // Where a test for a class in <paramref name="sourceNamespace"/> goes: the same sub-namespace and folder under the
+    // test project (Zava.Plugins.Account.Plugins -> Zava.Plugins.Tests.Account.Plugins, Account/Plugins), or, for a
+    // namespace outside the plugins root, <paramref name="fallbackFolder"/>.
+    private static (string Namespace, string Folder) TestPlacement(string sourceNamespace, string pluginsRoot, string rootNamespace, string fallbackFolder)
+    {
+        if (sourceNamespace.StartsWith(pluginsRoot + ".", StringComparison.Ordinal))
+        {
+            string relative = sourceNamespace.Substring(pluginsRoot.Length + 1);
+            return ($"{rootNamespace}.{relative}", Path.Combine(relative.Split('.')));
+        }
+
+        string folder = fallbackFolder.Trim(Path.DirectorySeparatorChar);
+        return (folder.Length == 0 ? rootNamespace : $"{rootNamespace}.{folder.Replace(Path.DirectorySeparatorChar, '.')}", folder);
+    }
+
+    // The step a plugin test drives: the --message one when given, else the plugin's first step (a note names the
+    // others). Its FilterOn members are set by the test so the step fires; its request type serves a message the test
+    // cannot drive through a dedicated service call.
+    private static bool TryChoosePluginTestStep(string[] args, AddTestSources.SourceClass plugin, string entity, out PluginTestStep step, out string error)
+    {
+        error = string.Empty;
+        List<AddTestSources.PluginStep> steps = AddTestSources.ReadSteps(plugin);
+        string? rawMessage = TryReadOption(args, "--message")?.Trim();
+        AddTestSources.PluginStep? chosen;
+        if (string.IsNullOrEmpty(rawMessage))
+        {
+            chosen = steps.FirstOrDefault();
+            if (steps.Count > 1)
+            {
+                Console.Error.WriteLine($"Note: {plugin.Name} registers {steps.Count} steps; the test drives the first ({chosen!.Message}). Pass --message to test another.");
+            }
         }
         else
         {
-            string ns = $"{rootNamespace}.{entity}.CustomApis";
-            string apiNamespace = $"{pluginsRoot}.{entity}.CustomApis";
-            string relativePath = Path.Combine(entity!, "CustomApis", $"{testClass}.cs");
-            string content = AddCustomApiTestFile(ns, apiNamespace, testClass, name, uniqueName, requestType: $"{name}Request");
-            return WriteFile(projectDir, relativePath, content, force, $"Custom API test {testClass} (for {name})", HasFlag(args, "--json"));
+            chosen = steps.FirstOrDefault(s => string.Equals(s.Message, rawMessage, StringComparison.OrdinalIgnoreCase));
+            if (chosen is null && steps.Count > 0)
+            {
+                Console.Error.WriteLine($"Note: no {rawMessage} step was found in {plugin.Name}; the test drives {rawMessage} anyway. Set the request it needs.");
+            }
         }
+
+        string message = chosen?.Message ?? rawMessage ?? "Create";
+        if (!IdentifierPattern.IsMatch(message))
+        {
+            error = $"Invalid --message '{message}'. Use an SDK message name (letters, digits, '_'; not starting with a digit).";
+            step = default;
+            return false;
+        }
+
+        // A typed trigger's message is a request name; any other is the request type the trigger names (fully
+        // qualified when the plugin's usings would not reach the test), or the SDK's, or the generated one.
+        string? known = FindKnownMessage(message);
+        string requestType = chosen?.RequestType is { } fromSource && fromSource.Contains('.')
+            ? fromSource
+            : SdkMessageClassResolver.TryGetSdkRequestTypeName(known ?? message, out string sdkType)
+                ? sdkType
+                : chosen?.RequestType ?? $"{known ?? message}Request";
+        step = new PluginTestStep(known ?? message, requestType, chosen?.Filters ?? []);
+        return true;
     }
+
 
     private static int AddPlugin(string[] args, string name, string? entity, bool force, string projectDir, string rootNamespace, string modelsNamespace)
     {

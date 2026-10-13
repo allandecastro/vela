@@ -681,6 +681,11 @@ public class ProjectScaffolderTests
             Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "GetScore", "--entity", "Account", "--function", "--prefix", "zava", "--project", pluginsProject]));
             Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Lookup", "--global", "--function", "--prefix", "zava", "--project", pluginsProject]));
 
+            // `vela add test` for the sample Custom API, whose class (AccountEstimateValueCustomApi) and request
+            // (EstimateValueRequest) are not named after its unique name: they are read from its source.
+            string testsProject = Path.Combine(root, "tests", "Zava.Plugins.Tests", "Zava.Plugins.Tests.csproj");
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountEstimateValue", "--kind", "customapi", "--force", "--project", testsProject]));
+
             // Exactly the sample steps: AccountRelatedContacts 1, AccountPostCreate 1, ContactRouter 2, ContactSync 1,
             // AccountSyncRouter 2. The abstract AccountMessageReference cheat-sheet (16 steps) is never deployed.
             RegistrationItem[] items = BuildTestAndScan(temp, root, expectedCustomApis: ["zava_AccountEstimateValue", "zava_GetScore", "zava_Lookup"], minimumSteps: 7, maximumSteps: 7);
@@ -714,6 +719,13 @@ public class ProjectScaffolderTests
                 ["plugin", "AccountBulk", "--entity", "Account", "--message", "UpdateMultiple", "--filtering-attributes", "Name"],
                 ["plugin", "AccountAssigned", "--entity", "Account", "--message", "Assign"],
                 ["plugin", "AccountGuard", "--entity", "Account", "--message", "Delete", "--stage", "PreOperation"],
+                ["plugin", "AccountLinked", "--entity", "Account", "--message", "Associate"],
+                ["plugin", "AccountUnlinked", "--entity", "Account", "--message", "Disassociate"],
+                ["plugin", "AccountRead", "--entity", "Account", "--message", "Retrieve"],
+                ["plugin", "AccountSearch", "--entity", "Account", "--message", "RetrieveMultiple"],
+                // A column logical name resolves to its early-bound property through the model.
+                ["plugin", "AccountImported", "--entity", "Account", "--message", "CreateMultiple", "--filtering-attributes", "name"],
+                ["plugin", "AccountState", "--entity", "Account", "--message", "SetState"],
                 ["service", "AccountScoring", "--entity", "Account"],
                 ["customapi", "Recalculate", "--global"],
                 ["customapi", "Score", "--entity", "Account", "--function"],
@@ -725,8 +737,17 @@ public class ProjectScaffolderTests
 
             string[][] testAdds =
             [
+                // Each one drives its step through PluginPipeline the way a caller sends the message, and must pass.
+                ["test", "AccountCreated", "--message", "Update"],
                 ["test", "AccountAssigned", "--entity", "Account", "--message", "Assign"],
                 ["test", "AccountBulk", "--entity", "Account", "--message", "UpdateMultiple"],
+                ["test", "AccountGuard"],
+                ["test", "AccountLinked"],
+                ["test", "AccountUnlinked"],
+                ["test", "AccountRead"],
+                ["test", "AccountSearch"],
+                ["test", "AccountImported"],
+                ["test", "AccountState"],
                 ["test", "Recalculate", "--kind", "customapi"],
                 ["test", "Score", "--kind", "customapi", "--entity", "Account"],
             ];
@@ -735,7 +756,7 @@ public class ProjectScaffolderTests
                 Assert.Equal(ExitSuccess, AddCommand.Run([.. add, "--project", tests]));
             }
 
-            BuildTestAndScan(temp, root, expectedCustomApis: ["zava_Recalculate", "zava_Score"], minimumSteps: 5, maximumSteps: 5);
+            BuildTestAndScan(temp, root, expectedCustomApis: ["zava_Recalculate", "zava_Score"], minimumSteps: 11, maximumSteps: 11);
         });
     }
 
