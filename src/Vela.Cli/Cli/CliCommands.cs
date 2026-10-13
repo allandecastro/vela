@@ -82,7 +82,7 @@ internal static class CliCommands
 
     private static readonly CliOption[] ModelsPackageInputs =
     [
-        new("--package", CliOptionKind.Value, "Built plugin package(s): with a bare --custom-apis, excludes the Custom APIs you authored (repeatable).", "file.nupkg", ["-p"]),
+        new("--package", CliOptionKind.Value, "Built plugin package(s): with a bare --custom-apis, excludes the typed Custom APIs you authored (repeatable).", "file.nupkg", ["-p"]),
         new("--packages-dir", CliOptionKind.Value, "A folder of .nupkg packages, used like --package.", "folder"),
         new("--package-assembly", CliOptionKind.Value, "The primary assembly inside the package(s).", "name.dll"),
     ];
@@ -143,11 +143,12 @@ internal static class CliCommands
                     new("--output", CliOptionKind.Value, "Target folder (default: current directory).", "dir", ["-o"]),
                     new("--samples", CliOptionKind.Flag, "Add the demo code and the Integrations/ConsoleApp projects."),
                     new("--minimal", CliOptionKind.Flag, "The default: no demo code (kept as an alias).", Aliases: ["--no-demos"]),
+                    new("--integrations", CliOptionKind.Flag, "Add an empty Integrations plugin project (and its tests) without --samples."),
                     new("--no-integrations", CliOptionKind.Flag, "With --samples: skip the Integrations project."),
                     new("--no-tests", CliOptionKind.Flag, "Skip the unit tests project."),
                     new("--no-console", CliOptionKind.Flag, "With --samples: skip the console project."),
                     new("--core-version", CliOptionKind.Value, "Vela.Plugins version (default: latest on nuget.org).", "ver"),
-                    new("--managed-identity", CliOptionKind.Flag, "With --samples: add the signing step to the Integrations package.", Aliases: ["--mi"]),
+                    new("--managed-identity", CliOptionKind.Flag, "Add the signing step to the Integrations package (implies --integrations).", Aliases: ["--mi"]),
                     new("--web-resources", CliOptionKind.Flag, "(preview) Add a TypeScript web resources project.", Aliases: ["--webresources"]),
                     new("--web-resources-namespace", CliOptionKind.Value, "(preview) Namespace of the web resources.", "name"),
                     new("--web-resources-folder", CliOptionKind.Value, "(preview) Folder of the web resources.", "dir"),
@@ -249,7 +250,10 @@ internal static class CliCommands
                 ("Other", [Help]),
             ],
             Notes: ["JSON: {\"solution\":\"...\",\"publisherPrefix\":\"...\"}."],
-            Examples: ["vela init MySolution --prefix \"$(vela solution show mysolution_unique -i)\""]),
+            Examples: [
+                "vela init --name ZavaSales --prefix Zava --publisher-prefix \"$(vela solution show ZavaSales -i)\"",
+                "vela add customapi ApproveOrder --prefix \"$(vela solution show ZavaSales -i)\"",
+            ]),
         new("sign", "Sign a plugin package (managed-identity plugins).",
             ["vela sign --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64-env <VAR>) (--pfx-password-env <VAR> | --pfx-credential <target>)) [--timestamp <url>]"],
             [

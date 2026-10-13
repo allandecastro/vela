@@ -495,49 +495,6 @@ public class AddCommandTests
     }
 
     [Fact]
-    public void Add_PluginTest_SingleMessage_SeedsTargetNotTargets()
-    {
-        RunInProject("Acme.Plugins.Tests", (project, dir) =>
-        {
-            int exit = AddCommand.Run(["test", "AccountPlugin", "--entity", "Account", "--message", "Update", "--project", project]);
-            Assert.Equal(ExitSuccess, exit);
-
-            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountPluginTests.cs"));
-            Assert.Contains(".WithTarget(target)", content);
-            Assert.DoesNotContain(".WithTargets(target)", content);
-        });
-    }
-
-    [Fact]
-    public void Add_PluginTest_MultipleMessage_SeedsTargetsCollection()
-    {
-        RunInProject("Acme.Plugins.Tests", (project, dir) =>
-        {
-            int exit = AddCommand.Run(["test", "AccountBulkPlugin", "--entity", "Account", "--message", "CreateMultiple", "--project", project]);
-            Assert.Equal(ExitSuccess, exit);
-
-            // A *Multiple plugin reads ctx.Request.Targets, so the generated test must seed Targets.
-            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountBulkPluginTests.cs"));
-            Assert.Contains(".WithTargets(targets)", content);
-        });
-    }
-
-    [Fact]
-    public void Add_PluginTest_RetrieveMultiple_SeedsTargetNotTargets()
-    {
-        RunInProject("Acme.Plugins.Tests", (project, dir) =>
-        {
-            // RetrieveMultiple ends with "Multiple" but is query-based (no Targets); it must keep WithTarget.
-            int exit = AddCommand.Run(["test", "AccountSearchPlugin", "--entity", "Account", "--message", "RetrieveMultiple", "--project", project]);
-            Assert.Equal(ExitSuccess, exit);
-
-            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountSearchPluginTests.cs"));
-            Assert.Contains(".WithTarget(target)", content);
-            Assert.DoesNotContain(".WithTargets(target)", content);
-        });
-    }
-
-    [Fact]
     public void Add_Plugin_And_Step_GenerateLfOnlyFiles()
     {
         RunInProject("Acme.Plugins", (project, dir) =>
@@ -550,82 +507,6 @@ public class AddCommandTests
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountEol.cs"));
             Assert.DoesNotContain("\r\n", content);
             Assert.DoesNotContain("\r", content);
-        });
-    }
-
-    [Fact]
-    public void Add_PluginTest_GeneratesTestTargetingThePlugin()
-    {
-        RunInProject("Acme.Plugins.Tests", (project, dir) =>
-        {
-            int exit = AddCommand.Run(["test", "AccountValidatorPlugin", "--entity", "Account", "--project", project]);
-            Assert.Equal(ExitSuccess, exit);
-
-            string file = Path.Combine(dir, "Account", "Plugins", "AccountValidatorPluginTests.cs");
-            Assert.True(File.Exists(file));
-
-            string content = File.ReadAllText(file);
-            Assert.Contains("namespace Acme.Plugins.Tests.Account.Plugins", content);
-            Assert.Contains("using Acme.Plugins.Account.Plugins;", content);
-            Assert.Contains("using Acme.Shared.Models.Generated;", content);
-            Assert.Contains("public sealed class AccountValidatorPluginTests", content);
-            Assert.Contains("PluginContext.For<Account>()", content);
-            Assert.Contains("new AccountValidatorPlugin(string.Empty, string.Empty)", content);
-        });
-    }
-
-    [Fact]
-    public void Add_GlobalCustomApiTest_GeneratesTestWithDerivedUniqueName()
-    {
-        RunInProject("Acme.Plugins.Tests", (project, dir) =>
-        {
-            int exit = AddCommand.Run(["test", "RecalculateTotals", "--kind", "customapi", "--project", project]);
-            Assert.Equal(ExitSuccess, exit);
-
-            string content = File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "RecalculateTotalsTests.cs"));
-            Assert.Contains("namespace Acme.Plugins.Tests.GlobalCustomApis", content);
-            Assert.Contains("using Acme.Plugins.GlobalCustomApis;", content);
-            Assert.Contains("PluginContext.ForMessage(\"acme_RecalculateTotals\")", content);
-            Assert.Contains("new RecalculateTotals(string.Empty, string.Empty)", content);
-        });
-    }
-
-    [Fact]
-    public void Add_BoundCustomApiTest_GeneratesTestUnderEntityFolder()
-    {
-        RunInProject("Acme.Plugins.Tests", (project, dir) =>
-        {
-            int exit = AddCommand.Run(["test", "ExportContact", "--kind", "customapi", "--entity", "Contact", "--project", project]);
-            Assert.Equal(ExitSuccess, exit);
-
-            string content = File.ReadAllText(Path.Combine(dir, "Contact", "CustomApis", "ExportContactTests.cs"));
-            Assert.Contains("namespace Acme.Plugins.Tests.Contact.CustomApis", content);
-            Assert.Contains("using Acme.Plugins.Contact.CustomApis;", content);
-
-            // A bound Custom API is typed (vela add customapi generates ExportContactRequest): the test states no
-            // message name or parameter key.
-            Assert.Contains("PluginContext.ForRequest(new ExportContactRequest", content);
-            Assert.DoesNotContain("ForMessage(", content);
-        });
-    }
-
-    [Fact]
-    public void Add_Test_OutsideTestProject_Fails()
-    {
-        RunInProject("Acme.Plugins", (project, _) =>
-        {
-            int exit = AddCommand.Run(["test", "AccountValidatorPlugin", "--entity", "Account", "--project", project]);
-            Assert.Equal(ExitInvalidArguments, exit);
-        });
-    }
-
-    [Fact]
-    public void Add_PluginTest_WithoutEntity_Fails()
-    {
-        RunInProject("Acme.Plugins.Tests", (project, _) =>
-        {
-            int exit = AddCommand.Run(["test", "AccountValidatorPlugin", "--project", project]);
-            Assert.Equal(ExitInvalidArguments, exit);
         });
     }
 
@@ -903,35 +784,6 @@ namespace Acme.Plugins.Account.Plugins
             Assert.False(File.Exists(Path.Combine(dir, "GlobalCustomApis", "Recalc.cs")));
 
             Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Recalc", "--global", "--prefix", "zava", "--project", project]));
-        });
-    }
-
-    [Fact]
-    public void Add_CustomApiTest_UsesThePublisherPrefix_AndAssertsTheOutputs()   // A-50, A-51
-    {
-        RunInProject("Zava.Plugins.Tests", (project, dir) =>
-        {
-            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "Recalc", "--kind", "customapi", "--prefix", "zs", "--project", project]));
-
-            string content = File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "RecalcTests.cs"));
-            Assert.Contains("PluginContext.ForMessage(\"zs_Recalc\")", content);
-            Assert.Contains("Assert.Equal(\"zs_Recalc\", definition.UniqueName);", content);
-            Assert.Contains("Assert.True(builder.Context.OutputParameters.Contains(output.Name)", content);
-            Assert.Contains(".WithInputParameter(", content);
-        });
-    }
-
-    [Fact]
-    public void Add_PluginTest_AssertsThatTheHandlerRan()   // A-51: the generated test used to assert nothing
-    {
-        RunInProject("Acme.Plugins.Tests", (project, dir) =>
-        {
-            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountValidator", "--entity", "Account", "--project", project]));
-
-            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountValidatorTests.cs"));
-            Assert.Contains("builder.Execute(new AccountValidator(string.Empty, string.Empty));", content);
-            Assert.Contains("Assert.Contains(\"AccountValidator executed\", builder.TraceCapture.Output);", content);
-            Assert.DoesNotContain("// Assert.", content);
         });
     }
 

@@ -18,7 +18,7 @@ internal static partial class ScaffoldTemplates
             : string.Empty;
         // With --no-tests the solution has no test project and no Vela.Testing reference, so the guide names neither.
         string packages = options.IncludeTests ? "`Vela.Plugins`, `Vela.Testing` and the `vela` CLI" : "`Vela.Plugins` and the `vela` CLI";
-        string testSection = options.IncludeTests ? "\n" + TestSection : string.Empty;
+        string testSection = options.IncludeTests ? "\n" + TestSection.Replace("{{prefix}}", prefix) : string.Empty;
 
         return
 $$"""
@@ -42,7 +42,7 @@ dotnet build {{options.SolutionName}}.sln -c Release   # build, analyzers, and t
 vela add plugin AccountGuard --entity Account --message Update --stage PreOperation --filtering-attributes Name --project src/{{prefix}}.Plugins/{{prefix}}.Plugins.csproj
 vela add customapi EstimateValue --global --function --project src/{{prefix}}.Plugins/{{prefix}}.Plugins.csproj
 vela plan  --packages-dir artifacts --solution <uniquename> --json   # read-only; JSON with "schemaVersion": 1
-vela apply --packages-dir artifacts --solution <uniquename>          # writes; --auto-approve skips the prompt
+vela apply --packages-dir artifacts --solution <uniquename>          # writes; asks for confirmation - run only when the user asks
 vela help --json                                                     # every command, option and exit code
 ```
 
@@ -52,6 +52,11 @@ Always pass `--solution`: it gives the package its publisher prefix, without whi
 ## Write a step
 
 ```csharp
+using Microsoft.Xrm.Sdk;
+using Vela.Context;
+using Vela.Plugin;
+using {{prefix}}.Shared.Models.Generated;
+
 public sealed partial class AccountCreditPlugin(string unsecureConfig, string secureConfig)
     : EntityPluginBase<Account>(unsecureConfig, secureConfig)
 {
@@ -100,6 +105,11 @@ public sealed partial class AccountCreditPlugin(string unsecureConfig, string se
 ## Write a Custom API
 
 ```csharp
+using System;
+using Vela.Context;
+using Vela.CustomApi;
+using Vela.Messages;
+
 public sealed class EstimateValueApi(string unsecureConfig, string secureConfig)
     : CustomApiBase<EstimateValueRequest, EstimateValueResponse>(unsecureConfig, secureConfig)
 {
@@ -148,6 +158,13 @@ underscores). `Build()` rejects what Dataverse refuses, such as a function witho
 ## Write a test
 
 ```csharp
+using System;
+using Microsoft.Xrm.Sdk;
+using Vela.Context;
+using Vela.Testing;
+using Xunit;
+using {{prefix}}.Shared.Models.Generated;
+
 [Fact]
 public void Rejects_A_Credit_Limit_That_More_Than_Doubles()
 {
@@ -171,6 +188,7 @@ public void Estimates_A_Value()
 }
 ```
 
+Also add a `using` for the namespace of the plugin and Custom API classes under test.
 `PluginPipeline` runs every registered step around each request, as Dataverse does (stages, filters, images,
 transactions, async steps after the commit). Read stored rows with `pipeline.GetAll("account")`. For a single
 handler, `PluginContext.For<Account>().WithTarget(...).Execute<AccountCreditPlugin>()` runs one step directly.

@@ -60,6 +60,8 @@ namespace SamplePluginFixture
             {
                 PluginTypeName = "SamplePluginFixture.SampleCustomApi",
                 UniqueName = "sample_DoThing",
+                // Typed: the framework's CustomApiBase<TRequest, TResponse> sets the request type name; a lightweight API leaves it empty.
+                RequestTypeName = "SamplePluginFixture.DoThingRequest",
                 IsFunction = false,
                 IsBound = false,
             };
