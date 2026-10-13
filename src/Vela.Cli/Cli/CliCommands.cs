@@ -250,7 +250,10 @@ internal static class CliCommands
                 ("Other", [Help]),
             ],
             Notes: ["JSON: {\"solution\":\"...\",\"publisherPrefix\":\"...\"}."],
-            Examples: ["vela init MySolution --prefix \"$(vela solution show mysolution_unique -i)\""]),
+            Examples: [
+                "vela init --name ZavaSales --prefix Zava --publisher-prefix \"$(vela solution show ZavaSales -i)\"",
+                "vela add customapi ApproveOrder --prefix \"$(vela solution show ZavaSales -i)\"",
+            ]),
         new("sign", "Sign a plugin package (managed-identity plugins).",
             ["vela sign --package <path.nupkg> (--fingerprint <hex> | (--pfx <file> | --pfx-base64-env <VAR>) (--pfx-password-env <VAR> | --pfx-credential <target>)) [--timestamp <url>]"],
             [

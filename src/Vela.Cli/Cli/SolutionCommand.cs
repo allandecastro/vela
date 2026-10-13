@@ -13,7 +13,8 @@ namespace Vela.Cli;
 /// <summary>
 /// Implements <c>vela solution show &lt;uniquename&gt;</c>: a read-only command that connects to Dataverse and prints
 /// the target solution's publisher customization prefix. It lets scaffolding be aligned to the solution up front -
-/// feed it to <c>vela init/add --prefix</c> - instead of discovering a prefix mismatch only at <c>apply</c>. (#321)
+/// feed it to <c>vela init --publisher-prefix</c> or <c>vela add customapi/test --prefix</c> - instead of discovering a
+/// prefix mismatch only at <c>apply</c>. (#321)
 /// </summary>
 internal static class SolutionCommand
 {

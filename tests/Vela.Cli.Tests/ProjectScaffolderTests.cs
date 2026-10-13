@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Vela.Cli;
 using Xunit;
 using static Vela.Cli.CliExitCodes;
@@ -445,6 +446,14 @@ public class ProjectScaffolderTests
             Assert.Contains("vela apply --packages-dir artifacts --solution <uniquename>", agents);
             Assert.Contains("--project src/Zava.Plugins/Zava.Plugins.csproj", agents);
             Assert.DoesNotContain("{{", agents);
+
+            // The guide never tells an agent how to skip the apply confirmation.
+            Assert.DoesNotContain("--auto-approve", agents);
+            Assert.Contains("asks for confirmation - run only when the user asks", agents);
+
+            // Each C# block carries its usings, so it compiles pasted into a file `vela add` created.
+            Assert.Contains("using Vela.Messages;", agents);
+            Assert.Contains("using Zava.Shared.Models.Generated;", agents);
         });
     }
 
@@ -460,7 +469,8 @@ public class ProjectScaffolderTests
         string repoRoot = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(pluginsProject)!, "..", ".."));
         string[] compiled = NormalizedLines(File.ReadAllText(Path.Combine(repoRoot, "docs", "samples", "Vela.DocSamples", "AgentsGuideSamples.cs")));
 
-        string[][] members = GuideCSharpMembers(ScaffoldTemplates.AgentsGuide(Options("unused")));
+        string guide = ScaffoldTemplates.AgentsGuide(Options("unused"));
+        string[][] members = GuideCSharpMembers(guide);
 
         Assert.NotEmpty(members);
         int searchFrom = 0;
@@ -470,7 +480,40 @@ public class ProjectScaffolderTests
             Assert.True(at >= 0, $"This AGENTS.md snippet is not, in order and contiguous, in AgentsGuideSamples.cs:\n{string.Join("\n", member)}");
             searchFrom = at + member.Length;
         }
+
+        // Each guide block is one namespace block of the sample, which declares exactly that block's usings (the
+        // sample's models namespace standing for the scaffold's): the compiled sample proves the usings suffice, so a
+        // block pasted into a `vela add` file compiles without the reader guessing its imports.
+        string[][] guideUsings = [.. GuideCSharpBlocks(guide).Select(block => UsingsOf(block)
+            .Select(u => u.Replace("Zava.Shared.Models.Generated", "Vela.DocSamples.Models")).ToArray())];
+        string[][] sampleUsings = [.. SampleNamespaceBlocks(string.Join("\n", compiled)).Select(UsingsOf)];
+        Assert.Equal(sampleUsings.Length, guideUsings.Length);
+        for (int i = 0; i < guideUsings.Length; i++)
+        {
+            Assert.NotEmpty(guideUsings[i]);
+            Assert.Equal(sampleUsings[i].OrderBy(u => u, StringComparer.Ordinal), guideUsings[i].OrderBy(u => u, StringComparer.Ordinal));
+        }
     }
+
+    [Fact]
+    public void AgentsGuide_drift_check_rejects_a_block_missing_a_using()
+    {
+        string[] sample = [.. SampleNamespaceBlocks("namespace N\n{\n    using System;\n    using Vela.Messages;\n    class A { }\n}\n").Select(UsingsOf).Single()];
+        string[] guide = UsingsOf(GuideCSharpBlocks("```csharp\nusing System;\n\nclass A { }\n```").Single());
+
+        Assert.Equal(["using System;", "using Vela.Messages;"], sample);
+        Assert.NotEqual(sample, guide);
+    }
+
+    private static string[] GuideCSharpBlocks(string guide)
+        => [.. guide.Replace("\r\n", "\n").Split("```").Where(b => b.StartsWith("csharp", StringComparison.Ordinal)).Select(b => b.Substring("csharp".Length))];
+
+    // The sample file's top-level namespace declarations, in order.
+    private static string[] SampleNamespaceBlocks(string sample)
+        => [.. Regex.Split(sample.Replace("\r\n", "\n"), @"^namespace \S+\n", RegexOptions.Multiline).Skip(1)];
+
+    private static string[] UsingsOf(string code)
+        => [.. code.Split('\n').Select(line => line.Trim()).Where(line => line.StartsWith("using ", StringComparison.Ordinal) && line.EndsWith(";", StringComparison.Ordinal))];
 
     [Fact]
     public void AgentsGuide_drift_check_rejects_a_reordered_snippet()
@@ -498,6 +541,11 @@ public class ProjectScaffolderTests
             bool previousBlank = true;
             foreach (string line in block.Substring("csharp".Length).Split('\n'))
             {
+                if (line.StartsWith("using ", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 bool blank = line.Trim().Length == 0;
                 if (!blank && previousBlank && !char.IsWhiteSpace(line[0]) && current.Count > 0)
                 {

@@ -38,6 +38,17 @@ All notable changes to Vela are documented here. The format is based on
   instead of being ignored without `--samples`. With `--samples` the behaviour is unchanged. `--integrations` or
   `--managed-identity` together with `--no-integrations` is refused.
 
+### Fixed (CLI)
+
+- The `vela solution show` help example passed the publisher prefix to `vela init --prefix`, which is the namespace
+  prefix. It now feeds `vela init --publisher-prefix`, and a second example feeds `vela add customapi --prefix`.
+- The `AGENTS.md` that `vela init` writes no longer describes how to skip the `vela apply` confirmation; it says to
+  apply only when the user asks.
+- The C# blocks of the scaffolded `AGENTS.md` now start with the `using` directives they need, so a block pasted
+  into a file created by `vela add` compiles (the Custom API block failed without `using Vela.Messages;`).
+- The scaffolded README, `AGENTS.md` and the `vela init` next steps now show the same `vela models` command
+  (`--entities account,contact --project src/<Prefix>.Shared/<Prefix>.Shared.csproj --interactive`), instead of three variants.
+
 ## [0.33.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Changed (breaking)

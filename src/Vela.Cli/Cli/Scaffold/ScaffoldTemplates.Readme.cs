@@ -53,7 +53,7 @@ another folder to see worked examples of every pattern.
 
 Run these from the solution root:
 
-1. Generate early-bound models from your environment: `vela models --entities account,contact --out src/{{prefix}}.Shared/Models/Generated --namespace {{prefix}}.Shared.Models.Generated`.
+1. Generate early-bound models from your environment: `vela models --entities account,contact --project src/{{prefix}}.Shared/{{prefix}}.Shared.csproj --interactive` (it writes into the project's `Models/Generated` folder, in the `{{prefix}}.Shared.Models.Generated` namespace).
 2. Add a plugin or Custom API (`--entity` is the early-bound model type): `vela add plugin MyPlugin --entity Account --filtering-attributes Name --project src/{{prefix}}.Plugins` (a Create/Update step needs its filtering columns) or `vela add customapi MyApi --global --project src/{{prefix}}.Plugins`.
 3. Build: `dotnet build {{options.SolutionName}}.sln -c Release`.
 {{testStep}}{{deployStep}}. Preview and deploy into your Dataverse solution: `vela plan --packages-dir artifacts --solution {{options.SolutionName}}`, then `vela apply --packages-dir artifacts --solution {{options.SolutionName}}` (use your solution's unique name; `--solution` gives the package its publisher prefix, without which `vela plan` refuses an unprefixed package).
@@ -323,8 +323,7 @@ the same connection options as `vela plan`/`apply`:
 ```powershell
 vela models `
   --solution {{prefix}} `
-  --out ./src/{{prefix}}.Shared/Models/Generated `
-  --namespace {{prefix}}.Shared.Models.Generated `
+  --project src/{{prefix}}.Shared/{{prefix}}.Shared.csproj `
   --overwrite
 ```
 
