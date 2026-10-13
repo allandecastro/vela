@@ -174,7 +174,7 @@ internal static class ModelsCommand
         // Only scan when ALL-mode --custom-apis could actually use the result: the scan instantiates and runs code
         // from the package (see PackageScanner's SECURITY note), so don't run it when nothing would consume the names
         // (targeted --custom-apis is never filtered; --messages excludes Custom-API-backed messages by itself).
-        HashSet<string> authoredCustomApis = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> typedAuthoredCustomApis = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         HashSet<string> lightweightCustomApis = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (scope.AllCustomApis && packagePaths.Count > 0)
         {
@@ -199,7 +199,7 @@ internal static class ModelsCommand
                 // NormalizeCustomApiDefinition emits it and how PackageScannerBuildStateTests reads it.
                 JsonSerializerOptions scanJson = new JsonSerializerOptions(JsonSerializerDefaults.Web);
                 RegistrationState scanned = IsolatedPackageScan.Scan(scanOptions, scanJson, tempDirectories);
-                authoredCustomApis = CustomApiReader.AuthoredCustomApiUniqueNames(scanned);
+                typedAuthoredCustomApis = CustomApiReader.TypedAuthoredCustomApiUniqueNames(scanned);
                 lightweightCustomApis = CustomApiReader.LightweightAuthoredCustomApiUniqueNames(scanned);
             }
             catch (Exception ex)
@@ -303,7 +303,7 @@ internal static class ModelsCommand
                     // no request class in code and are kept. No package = nothing excluded.
                     IReadOnlyList<CustomApiMessage> all = CustomApiReader.ReadAllCustomApis(service);
                     ISet<string> kept = new HashSet<string>(
-                        CustomApiReader.ExcludeAuthoredCustomApis(all.Select(m => m.UniqueName), authoredCustomApis, out int excludedCount),
+                        CustomApiReader.ExcludeAuthoredCustomApis(all.Select(m => m.UniqueName), typedAuthoredCustomApis, out int excludedCount),
                         StringComparer.OrdinalIgnoreCase);
                     customApiMessages = all.Where(m => kept.Contains(m.UniqueName)).ToArray();
                     if (excludedCount > 0)

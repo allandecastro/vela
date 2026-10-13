@@ -70,7 +70,7 @@ public sealed class PackageScannerBuildStateTests : IDisposable
             TypedCustomApiUniqueNames = ["ZAVA_TYPED"],
         };
 
-        HashSet<string> excludedNames = CustomApiReader.AuthoredCustomApiUniqueNames(state);
+        HashSet<string> excludedNames = CustomApiReader.TypedAuthoredCustomApiUniqueNames(state);
         HashSet<string> lightweight = CustomApiReader.LightweightAuthoredCustomApiUniqueNames(state);
         IReadOnlyList<string> kept = CustomApiReader.ExcludeAuthoredCustomApis(new[] { "zava_Typed", "zava_Light", "other_Api" }, excludedNames, out int excluded);
 
@@ -86,7 +86,7 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         // No typed list (e.g. a state built by hand): every authored API counts as lightweight, none is excluded.
         RegistrationState state = RegistrationFactory.State(RegistrationFactory.CustomApi(new { uniqueName = "zava_Light" }));
 
-        Assert.Empty(CustomApiReader.AuthoredCustomApiUniqueNames(state));
+        Assert.Empty(CustomApiReader.TypedAuthoredCustomApiUniqueNames(state));
         Assert.Equal(new[] { "zava_Light" }, CustomApiReader.LightweightAuthoredCustomApiUniqueNames(state).ToArray());
     }
 
@@ -99,7 +99,7 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         string nupkg = BuildNupkg("SamplePluginFixture.dll", "SamplePluginFixture");
 
         RegistrationState state = PackageScanner.BuildLocalStateFromPackages(OptionsFor(nupkg), Web, _temps);
-        HashSet<string> authored = CustomApiReader.AuthoredCustomApiUniqueNames(state);
+        HashSet<string> authored = CustomApiReader.TypedAuthoredCustomApiUniqueNames(state);
 
         Assert.Contains("sample_DoThing", authored);
 

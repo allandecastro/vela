@@ -150,7 +150,7 @@ internal static class CustomApiReader
     // the developer already has their request/response classes, so ALL-mode --custom-apis skips them. A lightweight
     // Custom API (RegisterCustomApi(name, handler)) has no request class in code and is not returned, so it is still
     // generated. Case-insensitive so it matches the environment's uniquename regardless of casing.
-    internal static HashSet<string> AuthoredCustomApiUniqueNames(RegistrationState state)
+    internal static HashSet<string> TypedAuthoredCustomApiUniqueNames(RegistrationState state)
     {
         HashSet<string> typed = new HashSet<string>(state.TypedCustomApiUniqueNames ?? [], StringComparer.OrdinalIgnoreCase);
         HashSet<string> names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

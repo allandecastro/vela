@@ -95,7 +95,7 @@ public sealed class PluginContractScanTests : IDisposable
         RegistrationState state = Scan();
 
         Assert.Equal(new[] { "contract_ScoreAccount" }, state.TypedCustomApiUniqueNames);
-        Assert.Equal(new[] { "contract_ScoreAccount" }, CustomApiReader.AuthoredCustomApiUniqueNames(state).ToArray());
+        Assert.Equal(new[] { "contract_ScoreAccount" }, CustomApiReader.TypedAuthoredCustomApiUniqueNames(state).ToArray());
         Assert.Equal(new[] { "contract_ExportContacts" }, CustomApiReader.LightweightAuthoredCustomApiUniqueNames(state).ToArray());
     }
 
