@@ -38,6 +38,19 @@ All notable changes to Vela are documented here. The format is based on
   instead of being ignored without `--samples`. With `--samples` the behaviour is unchanged. `--integrations` or
   `--managed-identity` together with `--no-integrations` is refused.
 
+### Changed (CLI)
+
+- **`vela add test` reads the class under test from source**, in the projects the test project references (else the
+  solution), and fails with a clear message when it finds none. A plugin test takes the plugin's namespace, its
+  entity (`--entity` is now optional) and its steps from the source. A Custom API test finds the class named
+  `<Name>` or `<Name>CustomApi`, or the one registering `<prefix>_<Name>`, and takes its class, namespace, unique
+  name and request type from it: `vela add test AccountEstimateValue --kind customapi` now tests the sample
+  `AccountEstimateValueCustomApi` and its `EstimateValueRequest`. The Custom API test file is named after the class.
+- **A generated plugin test drives the step through `PluginPipeline`** and asserts from its `ExecutionLog` that the
+  step fired, instead of asserting the trace line the `add plugin` handler writes (which a real handler removes).
+  The request is sent the way a caller sends that message, setting the step's `FilterOn` columns on a
+  `Create`/`Update`. A second, skipped test is the skeleton for asserting what the plugin does.
+
 ### Fixed (CLI)
 
 - The `vela solution show` help example passed the publisher prefix to `vela init --prefix`, which is the namespace
@@ -48,6 +61,14 @@ All notable changes to Vela are documented here. The format is based on
   into a file created by `vela add` compiles (the Custom API block failed without `using Vela.Messages;`).
 - The scaffolded README, `AGENTS.md` and the `vela init` next steps now show the same `vela models` command
   (`--entities account,contact --project src/<Prefix>.Shared/<Prefix>.Shared.csproj --interactive`), instead of three variants.
+
+- **`vela add test --message Associate`/`Disassociate` no longer seeds an entity `Target`**: the test associates two
+  records over a (TODO) many-to-many relationship through the pipeline. `Delete`, `Retrieve` and `Assign` act on a
+  seeded record by reference, `RetrieveMultiple` sends a query, and any other message sends the step's own request.
+- **`--filtering-attributes` with a column logical name compiles.** `add plugin`/`add step` map `telephone1` to its
+  property through the model's `[AttributeLogicalName]`, not only by case-insensitive property name, and find the
+  model under a `.slnx` solution root too. Without a model, an all-lower-case value is refused with a message to run
+  `vela models` or pass the property name, instead of emitting a `FilterOn(e => e.name)` that does not compile.
 
 ## [0.33.0] - 2026-10-12 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

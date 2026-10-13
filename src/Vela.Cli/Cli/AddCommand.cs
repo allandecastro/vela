@@ -546,53 +546,169 @@ internal static class AddCommand
             return Fail($"Unsupported --kind '{kind}'. Expected 'plugin' or 'customapi'.", ExitInvalidArguments, includeUsage: false);
         }
 
-        string testClass = $"{name}Tests";
+        // The class under test is read from the source of the projects the test project references (else the
+        // solution), so the test names the real class, namespace, steps, unique name and request type.
+        List<AddTestSources.SourceClass> classes = AddTestSources.FindClasses(AddTestSources.SearchRoots(projectFile, projectDir));
+        string modelsNamespace = $"{prefix}.Shared.Models.Generated";
+        bool json = HasFlag(args, "--json");
 
         if (kind == "plugin")
         {
+            AddTestSources.SourceClass? plugin = classes.FirstOrDefault(c => c.Name == name && AddTestSources.PluginEntity(c) is not null)
+                ?? classes.FirstOrDefault(c => c.Name == name);
+            if (plugin is null)
+            {
+                return Fail($"No plugin class '{name}' was found in the projects this test project references. Create it first with 'vela add plugin {name}', or pass the plugin's class name.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            entity = string.IsNullOrWhiteSpace(entity) ? AddTestSources.PluginEntity(plugin) : entity;
             if (string.IsNullOrWhiteSpace(entity))
             {
                 return Fail("A plugin test needs the entity under test. Pass --entity <ModelType> (the early-bound class name, e.g. Account).", ExitInvalidArguments, includeUsage: false);
             }
 
-            string ns = $"{rootNamespace}.{entity}.Plugins";
-            string pluginNamespace = $"{pluginsRoot}.{entity}.Plugins";
-            string modelsNamespace = $"{prefix}.Shared.Models.Generated";
-            string relativePath = Path.Combine(entity!, "Plugins", $"{testClass}.cs");
-            // A *Multiple plugin reads ctx.Request.Targets, so the generated test must seed Targets (WithTargets),
-            // not Target. --message (optional) tells us which to emit; default single-record.
-            string testMessage = (TryReadOption(args, "--message") ?? "Create").Trim();
-            // Only CreateMultiple/UpdateMultiple carry a Targets collection; RetrieveMultiple (also ...Multiple)
-            // is query-based and keeps a single Target shape, so match the two bulk-write messages explicitly.
-            bool multiple = testMessage.Equals("CreateMultiple", StringComparison.OrdinalIgnoreCase)
-                || testMessage.Equals("UpdateMultiple", StringComparison.OrdinalIgnoreCase);
-            string content = AddPluginTestFile(ns, pluginNamespace, modelsNamespace, testClass, name, entity!, multiple);
-            return WriteFile(projectDir, relativePath, content, force, $"plugin test {testClass} (for {name})", HasFlag(args, "--json"));
+            string testClass = $"{name}Tests";
+            (string ns, string folder) = TestPlacement(plugin.Namespace, pluginsRoot, rootNamespace, Path.Combine(entity!, "Plugins"));
+            // A partial plugin may register its steps in another file: read every declaration of the class.
+            List<AddTestSources.SourceClass> declarations = classes.Where(c => c.Name == plugin.Name && c.Namespace == plugin.Namespace).ToList();
+            if (!TryChoosePluginTestStep(args, plugin.Name, entity!, declarations, out PluginTestStep step, out string stepError))
+            {
+                return Fail(stepError, ExitInvalidArguments, includeUsage: false);
+            }
+
+            string content = AddPluginTestFile(ns, plugin.Namespace, modelsNamespace, testClass, name, entity!, step);
+            return WriteFile(projectDir, Path.Combine(folder, $"{testClass}.cs"), content, force, $"plugin test {testClass} (for {name})", json);
         }
 
-        if (!TryResolvePublisherPrefix(args, projectFile, prefix, out string testApiPrefix, out int prefixExit))
+        // A Custom API: the class named <name> or <name>CustomApi, else the one registering "<prefix>_<name>".
+        List<AddTestSources.SourceClass> apis = classes.Where(c => AddTestSources.IsCustomApi(c, out _)).ToList();
+        List<AddTestSources.SourceClass> matches = apis.Where(c => c.Name == name).ToList();
+        if (matches.Count == 0)
         {
-            return prefixExit;
+            matches = apis.Where(c => c.Name == name + "CustomApi").ToList();
         }
 
-        string uniqueName = $"{testApiPrefix}_{name}";
-        if (string.IsNullOrWhiteSpace(entity))
+        if (matches.Count == 0)
         {
-            string ns = $"{rootNamespace}.GlobalCustomApis";
-            string apiNamespace = $"{pluginsRoot}.GlobalCustomApis";
-            string relativePath = Path.Combine("GlobalCustomApis", $"{testClass}.cs");
-            string content = AddCustomApiTestFile(ns, apiNamespace, testClass, name, uniqueName);
-            return WriteFile(projectDir, relativePath, content, force, $"Custom API test {testClass} (for {name})", HasFlag(args, "--json"));
+            matches = apis.Where(c => AddTestSources.CustomApiUniqueName(c) is { } unique
+                && unique.EndsWith("_" + name, StringComparison.OrdinalIgnoreCase)
+                && unique.IndexOf('_') == unique.Length - name.Length - 1).ToList();
+        }
+
+        if (matches.Count == 0)
+        {
+            return Fail($"No Custom API '{name}' was found in the projects this test project references (a class {name} or {name}CustomApi deriving from CustomApiBase, or one registering '<prefix>_{name}'). Create it first with 'vela add customapi {name}', or pass the Custom API's class name.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        if (matches.Count > 1)
+        {
+            return Fail($"Several Custom APIs match '{name}': {string.Join(", ", matches.Select(m => $"{m.Namespace}.{m.Name}"))}. Pass the class name of the one to test.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        AddTestSources.SourceClass api = matches[0];
+        AddTestSources.IsCustomApi(api, out string? requestType);
+        string? uniqueName = AddTestSources.CustomApiUniqueName(api);
+        if (uniqueName is null)
+        {
+            // Computed some other way: fall back to the name `vela add customapi` would have given it.
+            if (!TryResolvePublisherPrefix(args, projectFile, prefix, out string testApiPrefix, out int prefixExit))
+            {
+                return prefixExit;
+            }
+
+            uniqueName = $"{testApiPrefix}_{name}";
+            Console.Error.WriteLine($"Note: could not read the unique name {api.Name} registers; the test asserts '{uniqueName}'. Adjust it if that is not the name.");
+        }
+
+        string apiTestClass = $"{api.Name}Tests";
+        string fallbackFolder = requestType is null && string.IsNullOrWhiteSpace(entity) ? "GlobalCustomApis" : Path.Combine(entity ?? string.Empty, "CustomApis");
+        (string apiTestNs, string apiFolder) = TestPlacement(api.Namespace, pluginsRoot, rootNamespace, fallbackFolder);
+        string apiContent = AddCustomApiTestFile(apiTestNs, api.Namespace, apiTestClass, api.Name, uniqueName, requestType);
+        return WriteFile(projectDir, Path.Combine(apiFolder, $"{apiTestClass}.cs"), apiContent, force, $"Custom API test {apiTestClass} (for {api.Name})", json);
+    }
+
+    // Where a test for a class in <paramref name="sourceNamespace"/> goes: the same sub-namespace and folder under the
+    // test project (Zava.Plugins.Account.Plugins -> Zava.Plugins.Tests.Account.Plugins, Account/Plugins), or, for a
+    // namespace outside the plugins root, <paramref name="fallbackFolder"/>.
+    private static (string Namespace, string Folder) TestPlacement(string sourceNamespace, string pluginsRoot, string rootNamespace, string fallbackFolder)
+    {
+        if (sourceNamespace.StartsWith(pluginsRoot + ".", StringComparison.Ordinal))
+        {
+            string relative = sourceNamespace.Substring(pluginsRoot.Length + 1);
+            return ($"{rootNamespace}.{relative}", Path.Combine(relative.Split('.')));
+        }
+
+        string folder = fallbackFolder.Trim(Path.DirectorySeparatorChar);
+        return (folder.Length == 0 ? rootNamespace : $"{rootNamespace}.{folder.Replace(Path.DirectorySeparatorChar, '.')}", folder);
+    }
+
+    // The step a plugin test drives: the --message one when given, else the plugin's first step (a note names the
+    // others). Its FilterOn members are set by the test so the step fires; its request type serves a message the test
+    // cannot drive through a dedicated service call.
+    private static bool TryChoosePluginTestStep(string[] args, string pluginName, string entity, List<AddTestSources.SourceClass> declarations, out PluginTestStep step, out string error)
+    {
+        error = string.Empty;
+        List<AddTestSources.PluginStep> steps = declarations.SelectMany(AddTestSources.ReadSteps).ToList();
+        string? rawMessage = TryReadOption(args, "--message")?.Trim();
+        AddTestSources.PluginStep? chosen;
+        string message;
+        step = default;
+        if (string.IsNullOrEmpty(rawMessage))
+        {
+            chosen = steps.FirstOrDefault();
+            if (chosen is null)
+            {
+                // Guessing a message would emit a test that can never see the step fire.
+                error = $"Could not read a step registration in {pluginName}. Pass --message <Message> with the message its step is registered on.";
+                return false;
+            }
+
+            if (steps.Count > 1)
+            {
+                Console.Error.WriteLine($"Note: {pluginName} registers {steps.Count} steps; the test drives the first ({chosen.Message}). Pass --message to test another.");
+            }
+
+            message = chosen.Message;
         }
         else
         {
-            string ns = $"{rootNamespace}.{entity}.CustomApis";
-            string apiNamespace = $"{pluginsRoot}.{entity}.CustomApis";
-            string relativePath = Path.Combine(entity!, "CustomApis", $"{testClass}.cs");
-            string content = AddCustomApiTestFile(ns, apiNamespace, testClass, name, uniqueName, requestType: $"{name}Request");
-            return WriteFile(projectDir, relativePath, content, force, $"Custom API test {testClass} (for {name})", HasFlag(args, "--json"));
+            if (!IdentifierPattern.IsMatch(rawMessage))
+            {
+                error = $"Invalid --message '{rawMessage}'. Use an SDK message name (letters, digits, '_'; not starting with a digit).";
+                return false;
+            }
+
+            // The request --message names, as for add plugin: an sdkmessage alias (Send) resolves to its request
+            // (SendEmail), which is what the plugin's typed trigger names.
+            string? request = ResolveRequestName(rawMessage, entity, out string messageError);
+            if (request is null)
+            {
+                error = messageError;
+                return false;
+            }
+
+            chosen = steps.FirstOrDefault(s => string.Equals(s.Message, request, StringComparison.OrdinalIgnoreCase))
+                ?? steps.FirstOrDefault(s => string.Equals(s.Message, rawMessage, StringComparison.OrdinalIgnoreCase));
+            if (chosen is null && steps.Count > 0)
+            {
+                Console.Error.WriteLine($"Note: no {request} step was found in {pluginName}; the test drives {request} anyway. Set the request it needs.");
+            }
+
+            message = chosen?.Message ?? request;
         }
+
+        // A typed trigger's message is a request name; any other is the request type the trigger names (fully
+        // qualified when the plugin's usings would not reach the test), or the SDK's, or the generated one.
+        string? known = FindKnownMessage(message);
+        string requestType = chosen?.RequestType is { } fromSource && fromSource.Contains('.')
+            ? fromSource
+            : SdkMessageClassResolver.TryGetSdkRequestTypeName(known ?? message, out string sdkType)
+                ? sdkType
+                : chosen?.RequestType ?? $"{known ?? message}Request";
+        step = new PluginTestStep(known ?? message, requestType, chosen?.Filters ?? []);
+        return true;
     }
+
 
     private static int AddPlugin(string[] args, string name, string? entity, bool force, string projectDir, string rootNamespace, string modelsNamespace)
     {
@@ -992,9 +1108,11 @@ internal static class AddCommand
         return true;
     }
 
-    // Validates explicit --filtering-attributes identifiers and, when the generated model is available,
-    // corrects a wrong-case value to the real property (e.g. 'name' -> 'Name', which compiles) or warns when
-    // the name is unknown. Returns the (possibly corrected) attributes; false only on an invalid C# identifier.
+    // Validates explicit --filtering-attributes values and resolves each to the early-bound property FilterOn selects.
+    // With the generated model: an exact property name is kept, a column logical name (the property's
+    // [AttributeLogicalName], e.g. 'name') maps to its property ('Name'), and a wrong-case property name is corrected;
+    // an unknown name only warns (the model may be stale). Without a model, a value with no upper-case letter is
+    // refused: it reads as a logical name nothing can map, and `e => e.name` would not compile against the model.
     private static bool TryResolveFilteringAttributes(string[] explicitAttributes, string projectDir, string entity, out string[] attributes, out string? error)
     {
         attributes = explicitAttributes;
@@ -1009,8 +1127,20 @@ internal static class AddCommand
             }
         }
 
-        if (explicitAttributes.Length == 0 || !TryReadModelPropertyNames(projectDir, entity, out var modelProperties))
+        if (explicitAttributes.Length == 0)
         {
+            return true;
+        }
+
+        if (!TryReadModelColumns(projectDir, entity, out HashSet<string> modelProperties, out Dictionary<string, string> logicalToProperty))
+        {
+            string[] logicalNames = explicitAttributes.Where(a => !a.Any(char.IsUpper)).ToArray();
+            if (logicalNames.Length > 0)
+            {
+                error = $"--filtering-attributes {string.Join(", ", logicalNames.Select(a => $"'{a}'"))}: no early-bound model for {entity} was found to map a column logical name to its property, and FilterOn selects the property (e.g. Name, not name). Run 'vela models' first, or pass the property name.";
+                return false;
+            }
+
             return true;
         }
 
@@ -1024,10 +1154,12 @@ internal static class AddCommand
                 continue;
             }
 
-            string? suggestion = modelProperties.FirstOrDefault(p => string.Equals(p, attribute, StringComparison.OrdinalIgnoreCase));
+            string? suggestion = logicalToProperty.TryGetValue(attribute, out string? mapped)
+                ? mapped
+                : modelProperties.FirstOrDefault(p => string.Equals(p, attribute, StringComparison.OrdinalIgnoreCase));
             if (suggestion is not null)
             {
-                Console.Error.WriteLine($"Note: filtering attribute '{attribute}' corrected to '{suggestion}' (property names are case-sensitive).");
+                Console.Error.WriteLine($"Note: filtering attribute '{attribute}' corrected to '{suggestion}' (FilterOn selects the early-bound property; property names are case-sensitive).");
                 corrected[i] = suggestion;
             }
             else
@@ -1051,27 +1183,29 @@ internal static class AddCommand
     private static readonly Regex LogicalNameAttr = new("\\[AttributeLogicalName\\(\"(?<logical>[^\"]+)\"\\)\\]", RegexOptions.Compiled);
     private static readonly Regex PropertyDecl = new("^\\s*public\\s+(?<type>[\\w\\.<>\\?\\[\\],\\s]+?)\\s+(?<name>\\w+)\\s*$", RegexOptions.Compiled);
 
-    // Reads the set of generated property names off the entity's early-bound model (each declared right after an
-    // [AttributeLogicalName("...")] attribute). Used to sanity-check explicit --filtering-attributes against the
-    // real columns. False when the model file cannot be located (then no validation is attempted).
-    private static bool TryReadModelPropertyNames(string projectDir, string entity, out HashSet<string> properties)
+    // Reads the generated properties off the entity's early-bound model (each declared right after an
+    // [AttributeLogicalName("...")] attribute, facet attributes possibly in between) with the column logical name each
+    // one maps. False when the model file cannot be located or declares no column (then no validation is attempted).
+    private static bool TryReadModelColumns(string projectDir, string entity, out HashSet<string> properties, out Dictionary<string, string> logicalToProperty)
     {
         properties = new HashSet<string>(StringComparer.Ordinal);
+        logicalToProperty = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!TryFindEntityModelFile(projectDir, entity, out string modelPath))
         {
             return false;
         }
 
-        bool sawLogicalName = false;
+        string? logical = null;
         foreach (string line in File.ReadLines(modelPath))
         {
-            if (LogicalNameAttr.IsMatch(line))
+            Match logicalMatch = LogicalNameAttr.Match(line);
+            if (logicalMatch.Success)
             {
-                sawLogicalName = true;
+                logical = logicalMatch.Groups["logical"].Value;
                 continue;
             }
 
-            if (!sawLogicalName)
+            if (logical is null)
             {
                 continue;
             }
@@ -1079,36 +1213,42 @@ internal static class AddCommand
             Match propertyMatch = PropertyDecl.Match(line);
             if (propertyMatch.Success)
             {
-                properties.Add(propertyMatch.Groups["name"].Value);
-                sawLogicalName = false;
+                string property = propertyMatch.Groups["name"].Value;
+                properties.Add(property);
+                logicalToProperty.TryAdd(logical, property);
+                logical = null;
             }
         }
 
         return properties.Count > 0;
     }
 
-    // Locates the generated early-bound model file for an entity: walks up from the target project to the solution
-    // root (a directory holding a .sln, else the highest reached), then finds a "{entity}.cs" that declares
-    // "class {entity} : Entity", skipping build output. False when not found.
-    private static bool TryFindEntityModelFile(string projectDir, string entity, out string path)
+    // The solution root above a project: the nearest directory (within a few levels) holding a .sln or .slnx, else the
+    // project directory itself rather than climbing toward the filesystem root and scanning an enormous tree.
+    internal static string FindSolutionRoot(string projectDir)
     {
-        path = string.Empty;
-
-        // Bound the search to the solution root (a directory holding a .sln) so auto-detection can reach a sibling
-        // models project. If no .sln is found within a few levels, fall back to the project directory itself rather
-        // than climbing toward the filesystem root and scanning an enormous tree.
-        string root = projectDir;
         string? dir = projectDir;
         for (int i = 0; i < 6 && dir != null; i++)
         {
-            if (Directory.EnumerateFiles(dir, "*.sln", SearchOption.TopDirectoryOnly).Any())
+            if (Directory.EnumerateFiles(dir, "*.sln", SearchOption.TopDirectoryOnly).Any()
+                || Directory.EnumerateFiles(dir, "*.slnx", SearchOption.TopDirectoryOnly).Any())
             {
-                root = dir;
-                break;
+                return dir;
             }
 
             dir = Path.GetDirectoryName(dir);
         }
+
+        return projectDir;
+    }
+
+    // Locates the generated early-bound model file for an entity: from the solution root (FindSolutionRoot, so a
+    // sibling models project is reached), finds a "{entity}.cs" that declares "class {entity} : Entity", skipping build
+    // output. False when not found.
+    private static bool TryFindEntityModelFile(string projectDir, string entity, out string path)
+    {
+        path = string.Empty;
+        string root = FindSolutionRoot(projectDir);
 
         var classDecl = new Regex($"class\\s+{Regex.Escape(entity)}\\s*:\\s*Entity", RegexOptions.Compiled);
         foreach (string file in Directory.EnumerateFiles(root, entity + ".cs", SearchOption.AllDirectories))

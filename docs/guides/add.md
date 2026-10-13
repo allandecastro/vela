@@ -58,9 +58,12 @@ vela add --interactive
   `FilterOn(e => e.Name, e => e.Telephone1)`). `add` never guesses a column from the model: without the option it
   fails with a message naming it, and writes nothing. On any other message the option is rejected (those steps
   have no `FilterOn`). The interactive wizard asks for the columns.
-  Property names are **case-sensitive** (`Name`, not `name`): when the model is available and a value differs
-  only in case (for example `name` for `Name`), `add` corrects it to the real property and prints a note, so the
-  emitted `FilterOn` compiles; a name that matches no property is left as-is with a warning.
+  Property names are **case-sensitive** (`Name`, not `name`). When the generated model is available (found under
+  the solution root, the nearest folder above the project holding a `.sln` or `.slnx`), `add` maps a column logical
+  name to its property through the model's `[AttributeLogicalName]` (`telephone1` becomes `Telephone1`), corrects a
+  value that differs only in case, and prints a note, so the emitted `FilterOn` compiles; a name that matches no
+  property is left as-is with a warning. Without a model, an all-lower-case value is refused (nothing can map it,
+  and `e => e.name` would not compile): run `vela models` first or pass the property name.
 - **Stage and mode** (`add plugin` and `add step`): `--stage <PreValidation|PreOperation|PostOperation>` and
   `--mode <Sync|Async>` set the step's stage and execution mode. Both are optional and default to
   `PostOperation` + `Sync`. A pre-stage handler gets the pre-stage typed context (`I<Message>PreContext<T>`); a
@@ -71,15 +74,23 @@ vela add --interactive
   into your plugin's `ConfigureServices(...)`. With `--json` that line is returned in a structured `registration`
   field (omitted for every other `add` kind), so an agent driving the CLI can wire the service up without parsing
   the human prose.
-- `vela add test <ClassUnderTest>` scaffolds a `Vela.Testing` test (`<ClassUnderTest>Tests`) pre-wired with
-  `PluginContext.For<…>()…Execute(…)`. Run it inside the test project (its `RootNamespace` must end in `.Tests`);
-  use `--kind customapi` for a Custom API test (and omit `--entity` for a global one; `--prefix` names the Custom
-  API as for `add customapi`). For a `*Multiple` plugin pass `--message CreateMultiple`/`--message UpdateMultiple`
-  so the generated test seeds `WithTargets(...)` (the handler reads `ctx.Request.Targets`) instead of
-  `WithTarget(...)`. The generated tests pass as generated and assert something real: a plugin test checks that
-  the handler ran (the trace line the `add plugin` handler writes); a Custom API test checks the registered unique
-  name and that every declared output parameter is set, with a `WithInputParameter(...)` example for the inputs.
-  Replace those assertions with your plugin's own behaviour.
+- `vela add test <ClassUnderTest>` scaffolds a `Vela.Testing` test. Run it inside the test project (its
+  `RootNamespace` must end in `.Tests`). It reads the class under test from the source of the projects the test
+  project references (else the solution), and fails when it finds none, so the test names the real class,
+  namespace, steps and unique name.
+  - A **plugin** test (`<Plugin>Tests`) drives the plugin through `PluginPipeline` and asserts from its
+    `ExecutionLog` that the step fired, whatever the handler does. It drives the step `--message` names, else the
+    plugin's first step (`--entity` defaults to the plugin's `EntityPluginBase<T>`), the way a caller sends that
+    message: `Create`/`Update` (and `*Multiple`, with `Targets`) with an entity that sets the step's `FilterOn`
+    column(s); `Delete`, `Retrieve`, `RetrieveMultiple` and `Assign` on a seeded record;
+    `Associate`/`Disassociate` over a placeholder many-to-many relationship (a TODO to replace with yours). Any
+    other message sends the step's request with a TODO for its inputs, in a test skipped until they are set. A
+    second, skipped test is the skeleton for asserting what the plugin does.
+  - A **Custom API** test (`--kind customapi`, `<Class>Tests`) finds the class named `<Name>` or
+    `<Name>CustomApi`, or the one registering `<prefix>_<Name>`, and takes its unique name and request type from
+    the source. It checks the registered unique name and that every declared output parameter is set, with a
+    `WithInputParameter(...)` example for the inputs. `--prefix` names the Custom API only when the unique name
+    cannot be read from the source.
 - `vela add step <PluginName>` edits an existing **handler-based (multi-step)** plugin in place, appending a
   `RegisterStep().On<Message>()…Handle(Handle<Message>)` registration (where `On<Message>()` is the curated
   method, e.g. `OnUpdate()`, or `On<XxxRequest>()` for an unmodelled message, as for `add plugin`) and a matching

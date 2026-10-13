@@ -73,15 +73,74 @@ namespace {{ns}}
 }
 """;
 
-    public static string AddPluginTestFile(string ns, string pluginNamespace, string modelsNamespace, string testClass, string pluginType, string entityType, bool multiple = false)
+    /// <summary>The step a generated plugin test drives: its message, the request type of a message without a dedicated service call, and the FilterOn properties to set.</summary>
+    internal readonly record struct PluginTestStep(string Message, string RequestType, string[] Filters);
+
+    // The plugin test drives the step through PluginPipeline, which applies the registration as Dataverse does (message,
+    // stage, entity, filtering columns, images), and asserts from the ExecutionLog that it fired - whatever the handler
+    // does. A second, skipped test is the skeleton for asserting that behaviour. Each message is driven the way a caller
+    // sends it: Create/Update with an entity that sets the step's filtering column(s), Delete/Assign/Retrieve on a seeded
+    // record (an EntityReference target), Associate/Disassociate with a relationship, the bulk messages with Targets.
+    public static string AddPluginTestFile(string ns, string pluginNamespace, string modelsNamespace, string testClass, string pluginType, string entityType, PluginTestStep step)
     {
-        // A *Multiple plugin reads ctx.Request.Targets (an EntityCollection), so the test must seed Targets via
-        // WithTargets(...); a single-record plugin uses WithTarget(...). Emitting the wrong one leaves
-        // ctx.Request.Targets null and the handler throws.
-        string arrange = multiple
-            ? $"EntityCollection targets = new EntityCollection(new Entity[] {{ new {entityType} {{ Id = Guid.NewGuid() }} }});"
-            : $"{entityType} target = new {entityType} {{ Id = Guid.NewGuid() }};";
-        string targetCall = multiple ? ".WithTargets(targets)" : ".WithTarget(target)";
+        const string I = "            ";
+        string logical = $"{entityType}.EntityLogicalNameValue";
+        string filters = string.Concat(step.Filters.Select(f => $", {f} = default"));
+        string newFiltered = step.Filters.Length > 0 ? $"new {entityType} {{ {filters.Substring(2)} }}" : $"new {entityType}()";
+        string filterNote = step.Filters.Length > 0
+            ? $"{I}// The step filters on {string.Join(", ", step.Filters)}, so the request sets {(step.Filters.Length > 1 ? "them (TODO: give them real values)" : "it (TODO: give it a real value)")}.\n"
+            : $"{I}// TODO: set the column(s) the step filters on (FilterOn): a Create/Update step fires only when the request sets one.\n";
+        string seed = $"{I}Guid id = Guid.NewGuid();\n{I}pipeline.Seed(new {entityType} {{ Id = id }});\n";
+        string relationship =
+            $"{I}// TODO: your relationship. WithManyToMany declares it (schema name, intersect table, both sides) to the in-memory store.\n" +
+            $"{I}const string RelationshipName = \"todo_relationship\";\n" +
+            $"{I}pipeline.WithManyToMany(RelationshipName, \"todo_intersect\", {logical}, \"todo_firstid\", {logical}, \"todo_secondid\");\n" +
+            $"{I}Guid id = Guid.NewGuid();\n{I}Guid relatedId = Guid.NewGuid();\n" +
+            $"{I}pipeline.Seed(new {entityType} {{ Id = id }}, new {entityType} {{ Id = relatedId }});\n" +
+            $"{I}EntityReferenceCollection related = new EntityReferenceCollection {{ new EntityReference({logical}, relatedId) }};\n";
+
+        bool typed = true;
+        string act = step.Message switch
+        {
+            "Create" => filterNote + $"{I}pipeline.Service.Create({newFiltered});\n",
+            "Update" => seed + filterNote + $"{I}pipeline.Service.Update(new {entityType} {{ Id = id{filters} }});\n",
+            "CreateMultiple" => filterNote +
+                $"{I}pipeline.Service.Execute(new Microsoft.Xrm.Sdk.Messages.CreateMultipleRequest\n{I}{{\n" +
+                $"{I}    Targets = new EntityCollection(new Entity[] {{ {newFiltered} }}) {{ EntityName = {logical} }},\n{I}}});\n",
+            "UpdateMultiple" => seed + filterNote +
+                $"{I}pipeline.Service.Execute(new Microsoft.Xrm.Sdk.Messages.UpdateMultipleRequest\n{I}{{\n" +
+                $"{I}    Targets = new EntityCollection(new Entity[] {{ new {entityType} {{ Id = id{filters} }} }}) {{ EntityName = {logical} }},\n{I}}});\n",
+            "Delete" => seed + $"{I}pipeline.Service.Delete({logical}, id);\n",
+            "Retrieve" => seed + $"{I}pipeline.Service.Retrieve({logical}, id, new Microsoft.Xrm.Sdk.Query.ColumnSet(true));\n",
+            "RetrieveMultiple" => seed + $"{I}pipeline.Service.RetrieveMultiple(new Microsoft.Xrm.Sdk.Query.QueryExpression({logical}) {{ ColumnSet = new Microsoft.Xrm.Sdk.Query.ColumnSet(true) }});\n",
+            "Assign" => seed +
+                $"{I}Guid ownerId = Guid.NewGuid();\n{I}pipeline.Seed(new Entity(\"systemuser\", ownerId));\n" +
+                $"{I}pipeline.Service.Execute(new Microsoft.Crm.Sdk.Messages.AssignRequest\n{I}{{\n" +
+                $"{I}    Target = new EntityReference({logical}, id),\n{I}    Assignee = new EntityReference(\"systemuser\", ownerId),\n{I}}});\n",
+            "Associate" => relationship + $"{I}pipeline.Service.Associate({logical}, id, new Relationship(RelationshipName), related);\n",
+            // The existing link is seeded straight into the intersect table, so only Disassociate runs through the pipeline.
+            "Disassociate" => relationship +
+                $"{I}pipeline.Seed(new Entity(\"todo_intersect\", Guid.NewGuid())\n{I}{{\n" +
+                $"{I}    [\"todo_firstid\"] = new EntityReference({logical}, id),\n{I}    [\"todo_secondid\"] = new EntityReference({logical}, relatedId),\n{I}}});\n" +
+                $"{I}pipeline.Service.Disassociate({logical}, id, new Relationship(RelationshipName), related);\n",
+            _ => null!,
+        };
+
+        if (act is null)
+        {
+            // No dedicated service call: send the step's request, whose inputs only the author knows.
+            typed = false;
+            act = seed +
+                $"{I}pipeline.Service.Execute(new {step.RequestType}\n{I}{{\n" +
+                $"{I}    // TODO: the inputs {step.Message} needs, e.g. Target = new EntityReference({logical}, id),\n{I}}});\n";
+        }
+
+        string fires = typed
+            ? "[Fact]"
+            : $"[Fact(Skip = \"TODO: set the {step.Message} request's inputs above, then remove Skip.\")]";
+        string assertion = typed
+            ? $"e => e.PluginTypeName == typeof({pluginType}).FullName && e.Message == \"{step.Message}\""
+            : $"e => e.PluginTypeName == typeof({pluginType}).FullName";
         return
 $$"""
 namespace {{ns}}
@@ -94,28 +153,38 @@ namespace {{ns}}
     using {{modelsNamespace}};
 
     /// <summary>
-    /// Test for <see cref="{{pluginType}}"/>, generated by <c>vela add test</c>. Uses <c>Vela.Testing</c>'s
-    /// in-memory Dataverse and a fake execution context - no connection, no mocking library.
+    /// Tests for <see cref="{{pluginType}}"/>, generated by <c>vela add test</c>. <see cref="PluginPipeline"/> runs the
+    /// plugin's registered steps around each request sent through <c>pipeline.Service</c>, as Dataverse does (message,
+    /// stage, entity, filtering columns, images), against an in-memory Dataverse - no connection, no mocking library.
     /// </summary>
     public sealed class {{testClass}}
     {
-        [Fact]
-        public void Runs_Its_Handler()
+        {{fires}}
+        public void Fires_On_{{step.Message}}()
         {
-            // Arrange: an in-memory Dataverse the plugin's injected IOrganizationService reads and writes.
-            InMemoryOrganizationService crm = new InMemoryOrganizationService();
-            {{arrange}}
+            // Arrange: Empty().Register<T>() scopes the pipeline to this plugin (FromAssemblyOf<T>() takes them all).
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<{{pluginType}}>();
 
-            // Act: a single-step plugin derives its trigger (message/stage/mode) from its own registration. For a
-            // multi-step plugin, select the step under test: .OnUpdate().Stage(PluginStages.PostOperation).Sync().
-            PluginContextBuilder<{{entityType}}> builder = PluginContext.For<{{entityType}}>()
-                {{targetCall}}
-                .WithOrganizationService(crm);
-            builder.Execute(new {{pluginType}}(string.Empty, string.Empty));
+            // Act: send the {{step.Message}} the step is registered on.
+{{act.TrimEnd('\n')}}
 
-            // Assert: the handler ran (the scaffolded one traces this line). Replace it with assertions on what your
-            // plugin does, e.g. retrieve the rows it writes from `crm` and check their columns.
-            Assert.Contains("{{pluginType}} executed", builder.TraceCapture.Output);
+            // Assert: the step fired. What the handler does is the next test's job.
+            Assert.Contains(pipeline.ExecutionLog, {{assertion}});
+        }
+
+        [Fact(Skip = "TODO: assert what {{pluginType}} does")]
+        public void Does_What_It_Should()
+        {
+            // Arrange: seed the rows the plugin reads, e.g. pipeline.Seed(new {{entityType}} { Id = id, ... }).
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<{{pluginType}}>();
+            Guid id = Guid.NewGuid();
+            pipeline.Seed(new {{entityType}} { Id = id });
+
+            // Act: send the {{step.Message}} through pipeline.Service, as in Fires_On_{{step.Message}}.
+
+            // Assert: read back what the plugin wrote and check it, e.g.
+            //   {{entityType}} saved = pipeline.Service.Retrieve({{logical}}, id, new Microsoft.Xrm.Sdk.Query.ColumnSet(true)).ToEntity<{{entityType}}>();
+            //   Assert.Equal(expected, saved.SomeColumn);
         }
     }
 }
