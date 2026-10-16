@@ -21,7 +21,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Fixed (CLI)
+## [0.25.1] - 2026-10-16 (Vela.Cli)
+
+### Fixed
 
 - A network error while `vela plan`, `apply`, `inspect`, `models`, `solution` or `logs` talks to Dataverse (DNS,
   refused or reset socket, HTTP transport, timeout) now exits with `6` (connection failure) instead of `4`. Only the
