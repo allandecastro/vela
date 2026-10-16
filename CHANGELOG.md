@@ -30,6 +30,23 @@ All notable changes to Vela are documented here. The format is based on
   and changing only the scope of a step with a step key is not a step change (the new scope deploys with the plugin
   package).
 
+## [0.34.1] - 2026-10-16 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Fixed
+
+- `Vela.Messages` (net10.0) no longer carries vulnerable transitive `System.Security.Cryptography.Xml` 8.0.4 and
+  `System.Security.Cryptography.Pkcs` 8.0.1 from the Dataverse client: the repository now pins the patched 8.0.5 and
+  8.0.2 (GHSA-r955-8q5j-3h83, GHSA-7hqp-7c5m-4vq6, GHSA-vrv5-2jg9-4mmr, GHSA-c399-9853-6jmj, GHSA-846f-f764-76mx,
+  GHSA-2fmv-rv2c-59x7).
+
+## [0.25.2] - 2026-10-16 (Vela.Cli)
+
+### Fixed
+
+- `vela init` pins the patched `System.Security.Cryptography.Xml` 8.0.5 and `System.Security.Cryptography.Pkcs` 8.0.2
+  in the Shared and ConsoleApp projects (it pinned Xml 8.0.4, since affected by new advisories, and left Pkcs at the
+  client's vulnerable 8.0.1). The `vela` tool itself ships the same patched versions.
+
 ## [0.25.1] - 2026-10-16 (Vela.Cli)
 
 ### Fixed
