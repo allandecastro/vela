@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (CLI)
+
+- `vela plan`, `apply` and `inspect` now show the relationship scope of an Associate / Disassociate step declared
+  with `ForRelationship(...)`: the human output adds `relationships=<schema names>` to the step line, and the JSON
+  carries `relationships` on the step's local definition (an added field; `schemaVersion` stays 1). The scope is
+  enforced at run time and not deployed, so it is not part of the diff: re-planning a scoped step reports no change,
+  and changing only the scope of a step with a step key is not a step change (the new scope deploys with the plugin
+  package).
+
 ## [0.25.1] - 2026-10-16 (Vela.Cli)
 
 ### Fixed

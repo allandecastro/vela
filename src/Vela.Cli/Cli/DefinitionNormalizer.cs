@@ -2,6 +2,7 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using static Vela.Cli.JsonReader;
 
 namespace Vela.Cli;
@@ -224,7 +225,7 @@ internal static class DefinitionNormalizer
             description = name;
         }
 
-        return BuildStepShape(
+        JsonElement shape = BuildStepShape(
             pluginTypeName,
             message,
             entityLogicalName,
@@ -244,6 +245,20 @@ internal static class DefinitionNormalizer
             supportedDeployment,
             jsonOptions,
             TryGetBool(raw, "asyncAutoDelete"));
+
+        // The .ForRelationship(...) scope rides along for plan/inspect output only (DiffEngine.RelationshipsField):
+        // added only when declared, so every other step keeps the exact shape the live read builds.
+        string[] relationships = TryGetStringArray(raw, DiffEngine.RelationshipsField)
+            .Select(r => r.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (relationships.Length == 0 || JsonNode.Parse(shape.GetRawText()) is not JsonObject obj)
+        {
+            return shape;
+        }
+
+        obj[DiffEngine.RelationshipsField] = new JsonArray(relationships.Select(r => (JsonNode)JsonValue.Create(r)!).ToArray());
+        return JsonSerializer.SerializeToElement(obj, jsonOptions);
     }
 
     public static JsonElement NormalizeCustomApiDefinition(JsonElement raw, JsonSerializerOptions jsonOptions)

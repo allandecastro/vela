@@ -88,6 +88,19 @@ public sealed class PluginContractScanTests : IDisposable
     }
 
     [Fact]
+    public void Cli_scanner_carries_the_relationship_scope_on_the_scoped_step_only()
+    {
+        // ForRelationship is runtime-only (not in the golden contract), but plan and inspect show it: the scanner must
+        // read StepDefinition.Relationships under the "relationships" key, and add it only where one was declared.
+        RegistrationState state = Scan();
+
+        RegistrationItem[] steps = state.Items.Where(i => i.Kind == "step").ToArray();
+        RegistrationItem scoped = Assert.Single(steps, i => i.Definition.TryGetProperty("relationships", out _));
+        Assert.Equal("contact-associate", scoped.Definition.GetProperty("stepKey").GetString());
+        Assert.Equal(["contact_customer_accounts"], Strings(scoped.Definition.GetProperty("relationships")).Select(n => n!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
     public void Cli_scanner_marks_only_the_typed_custom_api_as_typed()
     {
         // The real framework builders: CustomApiBase<TRequest, TResponse> sets a request type name, the lightweight

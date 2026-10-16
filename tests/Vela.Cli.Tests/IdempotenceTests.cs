@@ -44,6 +44,12 @@ public class IdempotenceTests
         new { pluginTypeName = "Zava.Plugins.ContactPlugin", message = "Delete", entityLogicalName = "contact", stage = 20, mode = 0 },
         // Global message (no entity), disabled, async at pre-operation.
         new { pluginTypeName = "Zava.Plugins.GlobalPlugin", message = "Update", stepKey = "dv-global", stage = 10, mode = 1, enabled = false },
+        // Associate scoped with .ForRelationship: the scope is runtime-only, so the live read never carries it.
+        new
+        {
+            pluginTypeName = "Zava.Plugins.ContactPlugin", message = "Associate", entityLogicalName = "contact",
+            stepKey = "contact-associate", stage = 40, mode = 0, relationships = new[] { "contact_customer_accounts", "account_contacts" },
+        },
     };
 
     private static RegistrationItem NormalizedStep(object manifest) =>
@@ -152,6 +158,8 @@ public class IdempotenceTests
         {
             org.SeedMessage(message, "account", "contact");
         }
+
+        org.SeedMessage("Associate"); // global: no entity filter
 
         org.DefinePackage("zava_Plugins", Assembly,
             "Zava.Plugins.AccountPlugin", "Zava.Plugins.ContactPlugin", "Zava.Plugins.GlobalPlugin", "Zava.Plugins.RecalcApi", "Zava.Plugins.PingApi");
