@@ -210,6 +210,55 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Contains("no solution publisher prefix", _error.ToString());
     }
 
+    // A .ForRelationship(...) Associate step: the scope is runtime-only (Dataverse registers Associate for every
+    // relationship), so plan shows it but never diffs it.
+    private static RegistrationItem ScopedAssociateStep(params string[] relationships) =>
+        new("step", Plugin, DefinitionNormalizer.NormalizeStepDefinition(
+            JsonSerializer.SerializeToElement(new { pluginTypeName = Plugin, message = "Associate", stage = 40, mode = 0, stepKey = "link-contacts", relationships }),
+            JsonOptions));
+
+    [Fact]
+    public void Plan_shows_the_relationship_scope_of_an_associate_step_in_json_and_human_output()
+    {
+        int exit = Run("plan", Options(verbose: true), Host(Org(), Local([ScopedAssociateStep("account_contacts", "contact_customer_accounts")])));
+
+        Assert.Equal(CliExitCodes.ExitSuccess, exit);
+        JsonElement added = Assert.Single(StdoutJson().GetProperty("diff").GetProperty("added").EnumerateArray());
+        Assert.Equal(
+            ["account_contacts", "contact_customer_accounts"],
+            added.GetProperty("definition").GetProperty("relationships").EnumerateArray().Select(r => r.GetString()!).ToArray());
+        Assert.Contains($"+ step: {Plugin} - PostOpSync: link-contacts [filter=none; pre=0; post=0; relationships=account_contacts,contact_customer_accounts]", _error.ToString());
+    }
+
+    [Fact]
+    public void A_step_without_a_relationship_scope_carries_no_relationships_field()
+    {
+        Run("plan", Options(verbose: true), Host(Org(), Local([LocalStep()])));
+
+        JsonElement added = Assert.Single(StdoutJson().GetProperty("diff").GetProperty("added").EnumerateArray());
+        Assert.False(added.GetProperty("definition").TryGetProperty("relationships", out _));
+        Assert.DoesNotContain("relationships=", _error.ToString());
+    }
+
+    [Fact]
+    public void A_relationship_scoped_step_converges_and_replans_with_no_change()
+    {
+        // The live read has no relationship scope to return: comparing it would leave the step "changed" forever.
+        FakeOrgService org = Org();
+        RegistrationState local = Local([ScopedAssociateStep("account_contacts")]);
+
+        int applyExit = Run("apply", Options(autoApprove: true), Host(org, local));
+        Assert.Equal(CliExitCodes.ExitSuccess, applyExit);
+        Assert.Equal("apply-execute", StdoutJson().GetProperty("mode").GetString());
+        _out.GetStringBuilder().Clear();
+
+        int planExit = Run("plan", Options(detailedExitCode: true), Host(org, Local([ScopedAssociateStep("contact_customer_accounts")])));
+
+        // Same step key, another scope: still no diff (the scope lives in the package code, not in the registration).
+        Assert.Equal(CliExitCodes.ExitSuccess, planExit);
+        Assert.False(StdoutJson().GetProperty("hasChanges").GetBoolean());
+    }
+
     // ---- --strict ----------------------------------------------------------------------------------------------
 
     [Fact]

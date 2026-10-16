@@ -337,7 +337,10 @@ internal static class OutputWriter
                 : $"filter={string.Join(",", TryGetStringArray(definition, "filteringAttributes"))}";
             int preCount = TryGetArrayLength(definition, "preImages");
             int postCount = TryGetArrayLength(definition, "postImages");
-            return $"{baseName} [{filter}; pre={preCount}; post={postCount}]";
+            // A .ForRelationship(...) scope (local side only; Dataverse registers the step for every relationship).
+            string[] relationships = TryGetStringArray(definition, RelationshipsField);
+            string scope = relationships.Length == 0 ? string.Empty : $"; relationships={string.Join(",", relationships)}";
+            return $"{baseName} [{filter}; pre={preCount}; post={postCount}{scope}]";
         }
 
         if (!string.IsNullOrWhiteSpace(TryGetString(definition, "uniqueName")))
