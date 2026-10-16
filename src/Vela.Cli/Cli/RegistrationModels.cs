@@ -8,6 +8,41 @@ public sealed class DataverseConnectionException : Exception
 {
     public DataverseConnectionException(string message) : base(message) { }
     public DataverseConnectionException(string message, Exception innerException) : base(message, innerException) { }
+
+    /// <summary>
+    /// True when <paramref name="exception"/> means Dataverse could not be reached: a failed connect, or a network
+    /// error (DNS, refused or reset socket, HTTP transport, timeout) on any later call, which the SDK surfaces as
+    /// itself or wrapped. Commands map it to <see cref="CliExitCodes.ExitConnectionFailure"/> (6), so a connection
+    /// drop while reading the live state is not reported as a generic failure (4). A Dataverse fault (the service
+    /// answered) is not a connection failure.
+    /// </summary>
+    public static bool IsConnectionFailure(Exception exception)
+    {
+        for (Exception? current = exception; current != null; current = current.InnerException)
+        {
+            if (current is System.ServiceModel.FaultException)
+            {
+                return false;
+            }
+
+            if (current is DataverseConnectionException
+                or System.Net.Http.HttpRequestException
+                or System.Net.Sockets.SocketException
+                or System.Net.WebException
+                or TimeoutException
+                or System.ServiceModel.CommunicationException)
+            {
+                return true;
+            }
+
+            if (current is AggregateException aggregate && aggregate.InnerExceptions.Any(IsConnectionFailure))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
 public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, string? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool AutoApprove, bool Interactive, bool Strict, bool Verbose, string? WebResourcesRoot = null, bool Json = false, int? TimeoutMinutes = null, int? BatchChunkSize = null, string[]? SecureConfigs = null, bool DetailedExitCode = false);
 public sealed record ExtractedPackage(string PackagePath, string TempDirectory, string PrimaryAssemblyPath, string[] RegistrableAssemblyPaths);

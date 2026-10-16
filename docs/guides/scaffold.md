@@ -78,7 +78,9 @@ namespace matches its folder. Generate a samples solution next to your real one 
   it is included, with its demo code, unless `--no-integrations`; `--integrations` with `--no-integrations` is refused.
 - `--managed-identity` / `--mi` - wire an opt-in package-signing step into the Integrations project (see
   [Sign the plugin package](signing.md)). It implies `--integrations`, and is refused with `--no-integrations`.
-- `--output` (default: `.`), `--no-tests`; with `--samples`: `--no-integrations`, `--no-console`.
+- `--output <dir>` (default: `.`) - the parent folder: the solution is created in `<dir>/<SolutionName>`, so
+  `--output ~/Desktop --name ZavaDemo` gives `~/Desktop/ZavaDemo`.
+- `--no-tests`; with `--samples`: `--no-integrations`, `--no-console`.
 - `--core-version` (also `--core-version=X`) - the `Vela.Plugins` / `Vela.Testing` version the projects reference;
   default: the latest published framework version, resolved from nuget.org.
 - `--web-resources` - also scaffold the TypeScript web-resources project (see below); `--web-resources-namespace`

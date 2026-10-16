@@ -201,7 +201,7 @@ internal sealed record ScaffoldOptions(
         string? output = TryReadOption(args, "--output") ?? TryReadOption(args, "-o");
         if (string.IsNullOrWhiteSpace(output) && interactive)
         {
-            output = Prompt("Output directory (default: current directory):", allowEmpty: true);
+            output = Prompt("Parent directory, the solution folder is created inside it (default: current directory):", allowEmpty: true);
         }
 
         if (string.IsNullOrWhiteSpace(output))

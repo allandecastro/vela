@@ -404,7 +404,7 @@ internal static class ModelsCommand
 
             return WriteModels(models, outDir, overwrite, json, $" (namespace {ns})");
         }
-        catch (DataverseConnectionException ex)
+        catch (Exception ex) when (DataverseConnectionException.IsConnectionFailure(ex))
         {
             return FailWithException(ex, ExitConnectionFailure, options.Verbose);
         }
@@ -498,7 +498,7 @@ internal static class ModelsCommand
 
             return report.HasDrift ? ExitDriftDetected : ExitSuccess;
         }
-        catch (DataverseConnectionException ex)
+        catch (Exception ex) when (DataverseConnectionException.IsConnectionFailure(ex))
         {
             return FailWithException(ex, ExitConnectionFailure, options.Verbose);
         }
@@ -755,7 +755,7 @@ internal static class ModelsCommand
 
             return WriteModels(files, outDir, overwrite, json, string.Empty);
         }
-        catch (DataverseConnectionException ex)
+        catch (Exception ex) when (DataverseConnectionException.IsConnectionFailure(ex))
         {
             return FailWithException(ex, ExitConnectionFailure, options.Verbose);
         }

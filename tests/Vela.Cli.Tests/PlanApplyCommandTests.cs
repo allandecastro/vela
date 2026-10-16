@@ -509,6 +509,44 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Equal(string.Empty, _out.ToString());
     }
 
+    public static TheoryData<Exception, int> ReadFailures() => new()
+    {
+        { new System.Net.Http.HttpRequestException("No such host is known."), CliExitCodes.ExitConnectionFailure },
+        { new InvalidOperationException("ServiceClient call failed", new System.Net.Sockets.SocketException(10054)), CliExitCodes.ExitConnectionFailure },
+        { new TimeoutException("The request channel timed out."), CliExitCodes.ExitConnectionFailure },
+        { new System.ServiceModel.FaultException<Microsoft.Xrm.Sdk.OrganizationServiceFault>(new Microsoft.Xrm.Sdk.OrganizationServiceFault { Message = "Principal user is missing prvReadPluginAssembly" }), CliExitCodes.ExitError },
+        { new InvalidOperationException("bad state"), CliExitCodes.ExitError },
+    };
+
+    // The connection opens lazily for a token-based client: a network error on the first read of the live state is
+    // still a connection failure (6), while an error Dataverse answered with stays a command failure (4).
+    [Theory]
+    [MemberData(nameof(ReadFailures))]
+    public void A_failure_reading_the_live_state_maps_network_errors_to_exit_6(Exception failure, int expected)
+    {
+        PlanApplyHost host = new()
+        {
+            ScanLocal = (_, _, _) => Local(),
+            Connect = _ => new OrganizationConnection(new ThrowingOrgService(failure)),
+            IsOutputRedirected = () => true,
+        };
+
+        Assert.Equal(expected, Run("plan", Options(), host));
+        Assert.Contains(failure.Message, _error.ToString());
+    }
+
+    private sealed class ThrowingOrgService(Exception failure) : Microsoft.Xrm.Sdk.IOrganizationService
+    {
+        public Guid Create(Microsoft.Xrm.Sdk.Entity entity) => throw failure;
+        public Microsoft.Xrm.Sdk.Entity Retrieve(string entityName, Guid id, Microsoft.Xrm.Sdk.Query.ColumnSet columnSet) => throw failure;
+        public void Update(Microsoft.Xrm.Sdk.Entity entity) => throw failure;
+        public void Delete(string entityName, Guid id) => throw failure;
+        public Microsoft.Xrm.Sdk.OrganizationResponse Execute(Microsoft.Xrm.Sdk.OrganizationRequest request) => throw failure;
+        public void Associate(string entityName, Guid entityId, Microsoft.Xrm.Sdk.Relationship relationship, Microsoft.Xrm.Sdk.EntityReferenceCollection relatedEntities) => throw failure;
+        public void Disassociate(string entityName, Guid entityId, Microsoft.Xrm.Sdk.Relationship relationship, Microsoft.Xrm.Sdk.EntityReferenceCollection relatedEntities) => throw failure;
+        public Microsoft.Xrm.Sdk.EntityCollection RetrieveMultiple(Microsoft.Xrm.Sdk.Query.QueryBase query) => throw failure;
+    }
+
     [Theory]
     [InlineData(true, CliExitCodes.ExitFileNotFound)]
     [InlineData(false, CliExitCodes.ExitError)]
