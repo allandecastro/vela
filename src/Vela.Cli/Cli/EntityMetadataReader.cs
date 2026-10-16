@@ -50,7 +50,7 @@ internal static class EntityMetadataReader
                 metadata.Add(readEntity(intersect));
                 added++;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!DataverseConnectionException.IsConnectionFailure(ex))
             {
                 onSkip?.Invoke($"Warning: skipping intersect table '{intersect}' (could not read its metadata): {OutputWriter.RedactSecrets(ex.Message)}");
             }

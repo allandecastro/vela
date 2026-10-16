@@ -265,7 +265,7 @@ internal static class ModelsCommand
                     {
                         metadata.Add(EntityMetadataReader.ReadEntity(service, name));
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (!DataverseConnectionException.IsConnectionFailure(ex))
                     {
                         Console.Error.WriteLine($"Warning: skipping entity '{name}' (could not read its metadata): {RedactSecrets(ex.Message)}");
                     }
@@ -352,7 +352,7 @@ internal static class ModelsCommand
                             }
                         }
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (!DataverseConnectionException.IsConnectionFailure(ex))
                     {
                         Console.Error.WriteLine($"Warning: skipping message '{name}' (could not read its contract): {RedactSecrets(ex.Message)}");
                     }
@@ -683,7 +683,7 @@ internal static class ModelsCommand
                     metaCache[logicalName] = read;
                     return read;
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (!DataverseConnectionException.IsConnectionFailure(ex))
                 {
                     unreadable.Add(logicalName);
                     Console.Error.WriteLine($"Warning: skipping table '{logicalName}' (metadata read failed): {RedactSecrets(ex.Message)}");

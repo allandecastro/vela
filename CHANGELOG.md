@@ -27,7 +27,8 @@ All notable changes to Vela are documented here. The format is based on
   refused or reset socket, HTTP transport, timeout) now exits with `6` (connection failure) instead of `4`. Only the
   connect step was classified before, so a token-based connection, which first reaches the network on its first
   read, reported a drop as a generic failure. A fault Dataverse answered with still exits `4`; a drop in the middle
-  of `apply` still exits `7`.
+  of `apply` still exits `7`. `vela models` no longer skips a table, message or intersect table on a network error
+  (it warned and went on, ending with exit 2 or an incomplete model set): the error stops the command with `6`.
 - `vela init --output` is described as what it is: the parent folder, the solution being created in
   `<dir>/<SolutionName>` (the help said "Target folder").
 
