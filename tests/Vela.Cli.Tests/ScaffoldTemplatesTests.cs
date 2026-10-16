@@ -239,16 +239,32 @@ public class ScaffoldTemplatesTests
         string code = ScaffoldTemplates.AddPluginTestFile(
             "Acme.Plugins.Tests.Account.Plugins", "Acme.Plugins.Account.Plugins", "Acme.Shared.Models.Generated",
             "AccountValidatorPluginTests", "AccountValidatorPlugin", "Account",
-            new ScaffoldTemplates.PluginTestStep("Update", "Microsoft.Xrm.Sdk.Messages.UpdateRequest", ["Name"]));
+            [(new ScaffoldTemplates.PluginTestStep("Update", "Microsoft.Xrm.Sdk.Messages.UpdateRequest", ["Name"], "PostOperation"), "Update_PostOperation")]);
 
         Assert.Contains("namespace Acme.Plugins.Tests.Account.Plugins", code);
         Assert.Contains("using Acme.Plugins.Account.Plugins;", code);
         Assert.Contains("public sealed class AccountValidatorPluginTests", code);
         Assert.Contains("PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountValidatorPlugin>();", code);
         Assert.Contains("pipeline.Service.Update(new Account { Id = id, Name = default });", code);
-        Assert.Contains("Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName == typeof(AccountValidatorPlugin).FullName && e.Message == \"Update\");", code);
-        Assert.Contains("[Fact(Skip = \"TODO: assert what AccountValidatorPlugin does\")]", code);
+        Assert.Contains("Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName == typeof(AccountValidatorPlugin).FullName && e.Message == \"Update\" && e.Stage == Vela.Constants.PluginStages.PostOperation);", code);
+        Assert.Contains("public void Fires_On_Update_PostOperation()", code);
+        Assert.Contains("[Fact(Skip = \"TODO: assert what AccountValidatorPlugin does on Update PostOperation\")]", code);
+        Assert.Contains("public void Does_What_It_Should_On_Update_PostOperation()", code);
         Assert.DoesNotContain("TraceCapture", code);
+    }
+
+    [Fact]
+    public void PluginTestNames_AreMessageAndStage_NumberedOnRepeat()
+    {
+        string[] names = ScaffoldTemplates.PluginTestNames(
+        [
+            new ScaffoldTemplates.PluginTestStep("Update", "UpdateRequest", [], "PreOperation"),
+            new ScaffoldTemplates.PluginTestStep("Update", "UpdateRequest", [], "PostOperation"),
+            new ScaffoldTemplates.PluginTestStep("Update", "UpdateRequest", [], "PostOperation"),
+            new ScaffoldTemplates.PluginTestStep("Delete", "DeleteRequest", []),
+        ]);
+
+        Assert.Equal(["Update_PreOperation", "Update_PostOperation", "Update_PostOperation_2", "Delete"], names);
     }
 
     [Fact]

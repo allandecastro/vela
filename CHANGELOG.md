@@ -21,6 +21,18 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (CLI)
+
+- `vela add test <Plugin>` on a plugin whose test class exists completes the class instead of failing with exit 2:
+  it adds, before the class's closing brace, the tests of every step that has none yet (plus any `using` they
+  need), and leaves the rest of the file untouched. Rerun it after `vela add step` and the new step has its tests;
+  when every step is tested it says so and exits 0. A file whose class cannot be found exits 2 and is left alone;
+  `--force` still overwrites. A Custom API test that exists has nothing to add (exit 0).
+- A generated plugin test covers every step the plugin registers (it covered the first, unless `--message` named
+  one), and each step's tests are named after its message and stage: `Fires_On_<Message>_<Stage>` (it asserts the
+  stage too) and the skipped `Does_What_It_Should_On_<Message>_<Stage>`, numbered `_2`... for a repeat. A class
+  generated earlier keeps its names: its `Fires_On_<Message>` counts as the test of the first step on that message.
+
 ## [0.25.1] - 2026-10-16 (Vela.Cli)
 
 ### Fixed

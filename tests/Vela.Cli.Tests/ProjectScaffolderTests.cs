@@ -870,7 +870,17 @@ public class ProjectScaffolderTests
                 Assert.Equal(ExitSuccess, AddCommand.Run([.. add, "--project", tests]));
             }
 
-            BuildTestAndScan(temp, root, expectedCustomApis: ["zava_Recalculate", "zava_Score"], minimumSteps: 11, maximumSteps: 11);
+            // `vela add test` completes an existing class: a step added after its test gets its tests on the next run,
+            // and AccountCreated, tested for its Update step only above, gets its Create step's.
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountTouched", "--entity", "Account", "--filtering-attributes", "Name", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--project", tests]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountTouched", "--entity", "Account", "--message", "Update", "--filtering-attributes", "Telephone1", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--project", tests]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountCreated", "--project", tests]));
+            string touchedTests = File.ReadAllText(Path.Combine(root, "tests", "Zava.Plugins.Tests", "Account", "Plugins", "AccountTouchedTests.cs"));
+            Assert.Contains("public void Fires_On_Update_PostOperation()", touchedTests);
+
+            BuildTestAndScan(temp, root, expectedCustomApis: ["zava_Recalculate", "zava_Score"], minimumSteps: 13, maximumSteps: 13);
         });
     }
 

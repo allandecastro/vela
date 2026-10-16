@@ -24,11 +24,11 @@ public class AddTestCommandTests
             Assert.Contains("PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountRenamed>();", content);
             Assert.Contains("pipeline.Seed(new Account { Id = id });", content);
             Assert.Contains("pipeline.Service.Update(new Account { Id = id, Name = default, Telephone1 = default });", content);
-            Assert.Contains("[Fact]\n        public void Fires_On_Update()", content);
-            Assert.Contains("e.PluginTypeName == typeof(AccountRenamed).FullName && e.Message == \"Update\"", content);
+            Assert.Contains("[Fact]\n        public void Fires_On_Update_PostOperation()", content);
+            Assert.Contains("e.PluginTypeName == typeof(AccountRenamed).FullName && e.Message == \"Update\" && e.Stage == Vela.Constants.PluginStages.PostOperation", content);
 
             // The behaviour test is a skipped skeleton; nothing asserts the scaffold's trace line any more.
-            Assert.Contains("[Fact(Skip = \"TODO: assert what AccountRenamed does\")]", content);
+            Assert.Contains("[Fact(Skip = \"TODO: assert what AccountRenamed does on Update PostOperation\")]", content);
             Assert.DoesNotContain("TraceCapture", content);
             Assert.DoesNotContain("WithTarget(", content);
         });
@@ -44,7 +44,7 @@ public class AddTestCommandTests
             Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountRenamed", "--project", tests]));
 
             string content = File.ReadAllText(Path.Combine(testsDir, "Account", "Plugins", "AccountRenamedTests.cs"));
-            Assert.Contains("public void Fires_On_Update()", content);
+            Assert.Contains("public void Fires_On_Update_PostOperation()", content);
             Assert.Contains("pipeline.Service.Update(new Account { Id = id, Name = default });", content);
         });
     }
@@ -204,7 +204,7 @@ public class AddTestCommandTests
             Assert.Equal(ExitSuccess, AddCommand.Run(["test", "EmailSent", "--message", "Send", "--project", tests]));
 
             string content = File.ReadAllText(Path.Combine(testsDir, "Email", "Plugins", "EmailSentTests.cs"));
-            Assert.Contains("public void Fires_On_SendEmail()", content);
+            Assert.Contains("public void Fires_On_SendEmail_PostOperation()", content);
             Assert.Contains("new Microsoft.Crm.Sdk.Messages.SendEmailRequest", content);
             Assert.DoesNotContain("SendRequest", content);
         });
@@ -369,6 +369,155 @@ public class AddTestCommandTests
 
             Assert.Equal(ExitInvalidArguments, AddCommand.Run(["test", "Missing", "--kind", "customapi", "--project", tests]));
             Assert.Empty(Directory.GetFiles(testsDir, "*.cs", SearchOption.AllDirectories));
+        });
+    }
+
+    [Fact]
+    public void PluginTest_WithoutMessage_TestsEveryStep()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountTouched", "--entity", "Account", "--filtering-attributes", "Name", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountTouched", "--entity", "Account", "--message", "Update", "--filtering-attributes", "Telephone1", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--project", tests]));
+
+            string content = File.ReadAllText(Path.Combine(testsDir, "Account", "Plugins", "AccountTouchedTests.cs"));
+            Assert.Contains("public void Fires_On_Create_PostOperation()", content);
+            Assert.Contains("public void Does_What_It_Should_On_Create_PostOperation()", content);
+            Assert.Contains("public void Fires_On_Update_PostOperation()", content);
+            Assert.Contains("public void Does_What_It_Should_On_Update_PostOperation()", content);
+            Assert.Contains("pipeline.Service.Update(new Account { Id = id, Telephone1 = default });", content);
+        });
+    }
+
+    [Fact]
+    public void PluginTest_ExistingClass_AddsOnlyTheNewStepsTests_AndKeepsEveryOtherByte()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountTouched", "--entity", "Account", "--filtering-attributes", "Name", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--project", tests]));
+
+            // The user edits the generated class: a test of their own, a comment, a helper type after it.
+            string path = Path.Combine(testsDir, "Account", "Plugins", "AccountTouchedTests.cs");
+            string generated = File.ReadAllText(path);
+            int classClose = generated.LastIndexOf("    }\n}", StringComparison.Ordinal);
+            string edited = generated.Substring(0, classClose) +
+                "\n        // Mine: keep it.\n        [Fact]\n        public void My_Own_Test() { Assert.True(true); }\n" +
+                generated.Substring(classClose) + "\n// trailing user comment\n";
+            File.WriteAllText(path, edited);
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountTouched", "--entity", "Account", "--message", "Delete", "--handler", "HandleDelete", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--project", tests]));
+
+            string completed = File.ReadAllText(path);
+            int insertAt = edited.LastIndexOf("    }\n}", StringComparison.Ordinal);
+            Assert.StartsWith(edited.Substring(0, insertAt), completed, StringComparison.Ordinal);
+            Assert.EndsWith(edited.Substring(insertAt), completed, StringComparison.Ordinal);
+            string added = completed.Substring(insertAt, completed.Length - edited.Length);
+            Assert.StartsWith("\n        [Fact]\n        public void Fires_On_Delete_PostOperation()", added, StringComparison.Ordinal);
+            Assert.Contains("pipeline.Service.Delete(Account.EntityLogicalNameValue, id);", added);
+            Assert.Contains("public void Does_What_It_Should_On_Delete_PostOperation()", added);
+            Assert.DoesNotContain("Create", added);
+            Assert.DoesNotContain("using ", added);
+
+            // Every step has its test now: a rerun changes nothing and succeeds.
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--project", tests]));
+            Assert.Equal(completed, File.ReadAllText(path));
+        });
+    }
+
+    [Fact]
+    public void PluginTest_ExistingClass_ForTheMessageGiven_AddsThatStepOnly()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountTouched", "--entity", "Account", "--filtering-attributes", "Name", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountTouched", "--entity", "Account", "--message", "Delete", "--handler", "HandleDelete", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--message", "Create", "--project", tests]));
+            string path = Path.Combine(testsDir, "Account", "Plugins", "AccountTouchedTests.cs");
+            Assert.DoesNotContain("Fires_On_Delete", File.ReadAllText(path));
+
+            // Create is tested already: nothing to add.
+            string before = File.ReadAllText(path);
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--message", "Create", "--project", tests]));
+            Assert.Equal(before, File.ReadAllText(path));
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--message", "Delete", "--project", tests]));
+            Assert.Contains("public void Fires_On_Delete_PostOperation()", File.ReadAllText(path));
+        });
+    }
+
+    [Fact]
+    public void PluginTest_ExistingClass_RecognisesTheMessageOnlyNameOfEarlierVersions()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountTouched", "--entity", "Account", "--filtering-attributes", "Name", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountTouched", "--entity", "Account", "--message", "Delete", "--handler", "HandleDelete", "--project", plugins]));
+
+            // A class written by an earlier `vela add test` (Fires_On_<Message>), in a file-scoped namespace, with
+            // CRLF line endings and without the usings the new tests need.
+            string folder = Path.Combine(testsDir, "Account", "Plugins");
+            Directory.CreateDirectory(folder);
+            string path = Path.Combine(folder, "AccountTouchedTests.cs");
+            string legacy = "using Xunit;\r\n\r\nnamespace Acme.Plugins.Tests.Account.Plugins;\r\n\r\npublic sealed class AccountTouchedTests\r\n{\r\n" +
+                "    [Fact]\r\n    public void Fires_On_Create() { }\r\n}\r\n";
+            File.WriteAllText(path, legacy);
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--project", tests]));
+
+            string completed = File.ReadAllText(path);
+            Assert.DoesNotContain("Fires_On_Create_PostOperation", completed);
+            Assert.Contains("\r\n    [Fact]\r\n    public void Fires_On_Delete_PostOperation()\r\n    {\r\n", completed);
+            Assert.DoesNotContain("\r\r", completed);
+            Assert.Equal(completed.Split('\n').Length - 1, completed.Split("\r\n").Length - 1);
+            Assert.StartsWith(
+                "using Xunit;\r\nusing System;\r\nusing Microsoft.Xrm.Sdk;\r\nusing Vela.Testing;\r\nusing Acme.Plugins.Account.Plugins;\r\nusing Acme.Shared.Models.Generated;\r\n\r\nnamespace",
+                completed,
+                StringComparison.Ordinal);
+            Assert.EndsWith("    }\r\n}\r\n", completed, StringComparison.Ordinal);
+        });
+    }
+
+    [Theory]
+    [InlineData("namespace Acme.Plugins.Tests.Account.Plugins\n{\n    public sealed class SomethingElse\n    {\n    }\n}\n")]
+    [InlineData("namespace Acme.Plugins.Tests.Account.Plugins\n{\n    public sealed class AccountTouchedTests\n    {\n        public void Broken()\n        {\n    }\n")]
+    public void PluginTest_ExistingFileWithoutAReadableClass_Fails_AndLeavesItAlone(string text)
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountTouched", "--entity", "Account", "--filtering-attributes", "Name", "--project", plugins]));
+            string folder = Path.Combine(testsDir, "Account", "Plugins");
+            Directory.CreateDirectory(folder);
+            string path = Path.Combine(folder, "AccountTouchedTests.cs");
+            File.WriteAllText(path, text);
+
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["test", "AccountTouched", "--project", tests]));
+            Assert.Equal(text, File.ReadAllText(path));
+
+            // --force still overwrites it with a fresh class.
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--force", "--project", tests]));
+            Assert.Contains("public void Fires_On_Create_PostOperation()", File.ReadAllText(path));
+        });
+    }
+
+    [Fact]
+    public void CustomApiTest_ExistingClass_HasNothingToAdd()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Recalc", "--global", "--prefix", "zs", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "Recalc", "--kind", "customapi", "--project", tests]));
+            string path = Path.Combine(testsDir, "GlobalCustomApis", "RecalcTests.cs");
+            string before = File.ReadAllText(path) + "// mine\n";
+            File.WriteAllText(path, before);
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "Recalc", "--kind", "customapi", "--project", tests]));
+            Assert.Equal(before, File.ReadAllText(path));
+
+            File.WriteAllText(path, "// not a test class\n");
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["test", "Recalc", "--kind", "customapi", "--project", tests]));
         });
     }
 

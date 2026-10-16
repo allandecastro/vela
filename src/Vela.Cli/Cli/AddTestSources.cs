@@ -17,8 +17,8 @@ internal static class AddTestSources
     /// <summary>A class declared in a source file.</summary>
     internal sealed record SourceClass(string Name, string Namespace, string BaseList, string Body, string FileText, string FilePath);
 
-    /// <summary>One <c>RegisterStep()</c> chain: its message, the TRequest of an <c>On&lt;TRequest&gt;()</c> trigger, its FilterOn members.</summary>
-    internal sealed record PluginStep(string Message, string? RequestType, string[] Filters);
+    /// <summary>One <c>RegisterStep()</c> chain: its message, the TRequest of an <c>On&lt;TRequest&gt;()</c> trigger, its FilterOn members, its stage (null when unreadable).</summary>
+    internal sealed record PluginStep(string Message, string? RequestType, string[] Filters, string? Stage = null);
 
     private static readonly Regex ProjectReference = new(@"<ProjectReference\s+Include\s*=\s*""(?<path>[^""]+)""", RegexOptions.Compiled);
     private static readonly Regex NamespaceDecl = new(@"^\s*namespace\s+(?<ns>[\w\.]+)", RegexOptions.Compiled | RegexOptions.Multiline);
@@ -26,6 +26,7 @@ internal static class AddTestSources
     private static readonly Regex StepChain = new(
         @"RegisterStep\s*\(\s*\)\s*\.\s*On(?:(?<typed>[A-Za-z]\w*)|\s*<\s*(?<request>[\w\.]+)\s*>)\s*\(\s*\)(?<rest>[^;]*);",
         RegexOptions.Compiled);
+    private static readonly Regex StageCall = new(@"\.\s*(?<stage>PreValidation|PreOperation|PostOperation)\s*\(\s*\)", RegexOptions.Compiled);
     private static readonly Regex EntityBase = new(@"EntityPluginBase\s*<\s*(?<entity>[\w\.]+)\s*>", RegexOptions.Compiled);
     // The base type, whether the class declares a primary constructor (": CustomApiBase(u, s)") or a conventional one.
     private static readonly Regex CustomApiBase = new(@":\s*(?:[\w\.]+\.)?CustomApiBase\b\s*(?:<\s*(?<request>[\w\.]+)\s*,\s*(?<response>[\w\.]+)\s*>)?", RegexOptions.Compiled);
@@ -122,7 +123,8 @@ internal static class AddTestSources
         {
             string? request = chain.Groups["request"].Success ? chain.Groups["request"].Value : null;
             string message = request is null ? chain.Groups["typed"].Value : MessageOfRequest(request);
-            steps.Add(new PluginStep(message, request, StepInjector.FilterColumns(chain.Groups["rest"].Value).ToArray()));
+            Match stage = StageCall.Match(chain.Groups["rest"].Value);
+            steps.Add(new PluginStep(message, request, StepInjector.FilterColumns(chain.Groups["rest"].Value).ToArray(), stage.Success ? stage.Groups["stage"].Value : null));
         }
 
         return steps;
