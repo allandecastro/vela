@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (Framework)
+
+- VELA018 (write to the Target in an async step) now also reports a write through a local that only ever holds the
+  Target (`var t = ctx.Request.Target; t.Name = ...`, `ctx.Request.Target is Account t`, a reference cast or `as`), a
+  write into the Target's `Attributes` collection (`t.Attributes["name"] = ...`), and a call that hands the Target
+  to a non-virtual method of the same type, in the same file, that writes into that parameter (one level deep). A
+  local that is ever given anything else (a copy, a method result, `null`) stays unreported. Projects that build
+  with warnings as errors may see the new warnings.
+
 ### Fixed (CLI)
 
 - `vela plan`, `apply` and `inspect` now show the relationship scope of an Associate / Disassociate step declared
