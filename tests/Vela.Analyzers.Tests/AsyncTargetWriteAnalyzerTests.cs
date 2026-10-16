@@ -24,7 +24,18 @@ namespace Microsoft.Xrm.Sdk
 
 namespace Demo
 {
-    public class Account : Microsoft.Xrm.Sdk.Entity { public string? Name { get; set; } public int Count { get; set; } }
+    public class Account : Microsoft.Xrm.Sdk.Entity
+    {
+        public string? Name { get; set; }
+        public int Count { get; set; }
+        public static Account operator ++(Account a) => new Account();
+        public static Account operator --(Account a) => new Account();
+    }
+    public sealed class Snapshot : Microsoft.Xrm.Sdk.Entity
+    {
+        public string? Name { get; set; }
+        public static implicit operator Snapshot(Account a) => new Snapshot { Name = a.Name };
+    }
 }
 
 namespace Vela.Messages
@@ -172,6 +183,12 @@ namespace Demo
     [InlineData("var t = ctx.Request.Target; t = ctx.GetTarget<Account>();")]
     // An alias chain that never reaches the Target.
     [InlineData("var a = ctx.GetPreImage<Account>(); var b = a; b.Name = \"x\";")]
+    // An implicit user-defined conversion builds another object.
+    [InlineData("Snapshot s = ctx.Request.Target; s.Name = \"x\";")]
+    [InlineData("Snapshot s; s = ctx.GetTarget<Account>(); s.Name = \"x\";")]
+    // An overloaded ++/-- on the local itself may hand back another instance.
+    [InlineData("var t = ctx.Request.Target; t++; t.Name = \"x\";")]
+    [InlineData("var t = ctx.Request.Target; --t; t.Name = \"x\";")]
     public async Task Does_not_flag_a_local_that_may_not_hold_the_Target(string body)
     {
         string members =
@@ -207,6 +224,11 @@ namespace Demo
     // A params array, or a by-reference parameter, is not tracked.
     [InlineData("Mutate(ctx.Request.Target);", "private void Mutate(params Account[] a) { a[0].Name = \"x\"; }")]
     [InlineData("var t = ctx.Request.Target; Mutate(in t);", "private void Mutate(in Account a) { a.Name = \"x\"; }")]
+    // The argument goes through an implicit user-defined conversion: the helper gets a copy.
+    [InlineData("Mutate(ctx.Request.Target);", "private void Mutate(Snapshot s) { s.Name = \"x\"; }")]
+    // The helper replaces its parameter through an overloaded ++/--.
+    [InlineData("Mutate(ctx.Request.Target);", "private void Mutate(Account a) { a++; a.Name = \"x\"; }")]
+    [InlineData("Mutate(ctx.Request.Target);", "private void Mutate(Account a) { --a; a.Name = \"x\"; }")]
     public async Task Does_not_flag_a_helper_call_that_does_not_write_the_Target(string body, string helper)
     {
         await Verify.VerifyAnalyzerAsync(AsyncHandler(body, helper));

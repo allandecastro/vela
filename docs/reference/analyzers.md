@@ -307,7 +307,7 @@ private void OnUpdate(ILocalPluginContext ctx)
 The rule does not follow:
 
 - a local that is ever given anything other than the Target (a copy, `ToEntity<T>()`, any method result, `null`,
-  `??`), compound-assigned (`??=`), deconstructed into, passed by `ref`/`out`, or declared by `out var`, `foreach` or
+  `??`, an implicit user-defined conversion), compound-assigned (`??=`) or incremented itself (`t++`), deconstructed into, passed by `ref`/`out`, or declared by `out var`, `foreach` or
   a `switch` pattern. The analysis does not track the order of statements, so it keeps only locals that can never
   hold anything else;
 - a helper that is virtual, abstract or an override, declared in another type or another file (a `partial` part),

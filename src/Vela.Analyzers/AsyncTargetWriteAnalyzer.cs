@@ -287,6 +287,13 @@ namespace Vela.Analyzers
         // True when the expression is a root itself or a tracked alias of one.
         private static bool IsRooted(ExpressionSyntax expression, SemanticModel model, ISet<ISymbol> aliases, RootPredicate isRoot, CancellationToken cancellationToken)
         {
+            // An implicit user-defined conversion (Snapshot s = ctx.Request.Target;, or such an argument) may build
+            // another object, so the converted value is not the Target.
+            if (model.GetConversion(expression, cancellationToken).IsUserDefined)
+            {
+                return false;
+            }
+
             ExpressionSyntax current = Unwrap(expression, model, cancellationToken);
             if (current is IdentifierNameSyntax
                 && model.GetSymbolInfo(current, cancellationToken).Symbol is ISymbol symbol
@@ -350,6 +357,16 @@ namespace Vela.Analyzers
                         break;
                     case RefExpressionSyntax refExpression:
                         Poison(refExpression.Expression, model, poisoned, cancellationToken);
+                        break;
+                    // t++ / --t on the local itself: an overloaded operator may hand back another instance.
+                    // (t.Count++ increments a member, not the local, and keeps the alias.)
+                    case PrefixUnaryExpressionSyntax { Operand: IdentifierNameSyntax } prefix
+                        when prefix.IsKind(SyntaxKind.PreIncrementExpression) || prefix.IsKind(SyntaxKind.PreDecrementExpression):
+                        Poison(prefix.Operand, model, poisoned, cancellationToken);
+                        break;
+                    case PostfixUnaryExpressionSyntax { Operand: IdentifierNameSyntax } postfix
+                        when postfix.IsKind(SyntaxKind.PostIncrementExpression) || postfix.IsKind(SyntaxKind.PostDecrementExpression):
+                        Poison(postfix.Operand, model, poisoned, cancellationToken);
                         break;
                 }
             }
