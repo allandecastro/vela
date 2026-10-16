@@ -31,8 +31,10 @@ $$"""
   <!-- net10.0: the cross-platform client supplies Microsoft.Xrm.Sdk for the ConsoleApp. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="{{DataverseClientVersion}}" />
-    <!-- Pin the patched System.Security.Cryptography.Xml over the client's advisory transitive version (NU1903). -->
+    <!-- Pin the patched System.Security.Cryptography.Xml and .Pkcs over the client's advisory transitive versions
+         (NU1902/NU1903). -->
     <PackageReference Include="System.Security.Cryptography.Xml" Version="{{CryptographyXmlVersion}}" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="{{CryptographyPkcsVersion}}" />
   </ItemGroup>
 
   <!-- The On<Message>() step extensions `vela models` writes to Messages/*.Steps.cs need Vela.Plugins: the plugin
@@ -233,8 +235,10 @@ $$"""
 
   <ItemGroup>
     <PackageReference Include="Microsoft.PowerPlatform.Dataverse.Client" Version="{{DataverseClientVersion}}" />
-    <!-- Pin the patched System.Security.Cryptography.Xml over the client's advisory transitive version (NU1903). -->
+    <!-- Pin the patched System.Security.Cryptography.Xml and .Pkcs over the client's advisory transitive versions
+         (NU1902/NU1903). -->
     <PackageReference Include="System.Security.Cryptography.Xml" Version="{{CryptographyXmlVersion}}" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="{{CryptographyPkcsVersion}}" />
   </ItemGroup>
 
   <ItemGroup>
