@@ -635,7 +635,7 @@ internal static class AddCommand
         if (File.Exists(apiFullPath) && !force)
         {
             // A Custom API test is the same set of tests whatever the API declares: an existing class already has them.
-            if (!TryReadTestClass(apiFullPath, apiTestClass, out _, out _, out int readExit))
+            if (!TryReadTestClass(apiFullPath, apiTestClass, out _, out _, out _, out int readExit))
             {
                 return readExit;
             }
@@ -653,13 +653,13 @@ internal static class AddCommand
     // dispatch test Fires_On_<Message>, which counts for the first step of that message.
     private static int CompletePluginTestFile(string fullPath, string testClass, string pluginType, string entity, string pluginNamespace, string modelsNamespace, List<(PluginTestStep Step, string Name)> steps, bool json)
     {
-        if (!TryReadTestClass(fullPath, testClass, out string source, out TestClassAppender.ClassSpan span, out int readExit))
+        if (!TryReadTestClass(fullPath, testClass, out string source, out System.Text.Encoding encoding, out TestClassAppender.ClassSpan span, out int readExit))
         {
             return readExit;
         }
 
         HashSet<string> seenMessages = new(StringComparer.Ordinal);
-        List<(PluginTestStep Step, string Name)> missing = [];
+        List<(PluginTestStep Step, string Name, bool Behaviour)> missing = [];
         foreach ((PluginTestStep step, string testName) in steps)
         {
             bool firstOfMessage = seenMessages.Add(step.Message);
@@ -669,7 +669,8 @@ internal static class AddCommand
                 continue;
             }
 
-            missing.Add((step, testName));
+            // A behaviour test the user kept (or wrote) under the generated name is not generated again.
+            missing.Add((step, testName, !TestClassAppender.DeclaresMethod(source, span, PluginTestBehaviourMethod(testName))));
         }
 
         if (missing.Count == 0)
@@ -677,8 +678,8 @@ internal static class AddCommand
             return ReportNothingToAdd(fullPath, $"{testClass} already tests every step of {pluginType}", json);
         }
 
-        string members = string.Join("\n", missing.Select(m => PluginTestMethods(pluginType, entity, m.Step, m.Name)));
-        File.WriteAllText(fullPath, TestClassAppender.Insert(source, span, members, PluginTestUsings(pluginNamespace, modelsNamespace)));
+        string members = string.Join("\n", missing.Select(m => PluginTestMethods(pluginType, entity, m.Step, m.Name, m.Behaviour)));
+        File.WriteAllText(fullPath, TestClassAppender.Insert(source, span, members, PluginTestUsings(pluginNamespace, modelsNamespace)), encoding);
         string added = string.Join(", ", missing.Select(m => PluginTestFiresMethod(m.Name)));
         string description = $"tests {added} to {testClass} (for {pluginType})";
         if (json)
@@ -695,9 +696,9 @@ internal static class AddCommand
     }
 
     // Reads an existing test file and locates its class; a file whose class cannot be located safely is left alone.
-    private static bool TryReadTestClass(string fullPath, string testClass, out string source, out TestClassAppender.ClassSpan span, out int exit)
+    private static bool TryReadTestClass(string fullPath, string testClass, out string source, out System.Text.Encoding encoding, out TestClassAppender.ClassSpan span, out int exit)
     {
-        source = File.ReadAllText(fullPath);
+        source = TestClassAppender.Read(fullPath, out encoding);
         exit = ExitSuccess;
         if (TestClassAppender.TryFindClass(source, testClass, out span, out string reason))
         {

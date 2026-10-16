@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -14,14 +15,29 @@ namespace Vela.Cli;
 /// </summary>
 internal static class TestClassAppender
 {
-    private static readonly Regex UsingDirective = new(@"^[ \t]*(?:global\s+)?using\s+(?:static\s+)?(?<ns>[\w\.]+)\s*;[^\n]*\n?", RegexOptions.Compiled | RegexOptions.Multiline);
+    // A using directive, through its ';' and, when only spaces and a line comment follow, the end of its line.
+    private static readonly Regex UsingDirective = new(@"(?<![\w\.])(?:global\s+)?using\s+(?:static\s+)?(?<ns>[\w\.]+)\s*;(?<eol>[ \t]*(?://[^\n]*)?\r?\n)?", RegexOptions.Compiled);
+    private static readonly Regex OtherDeclaration = new(@"\b(?:class|struct|interface|record|enum|namespace|delegate)\b|[};]", RegexOptions.Compiled);
+    private static readonly HashSet<string> NotAType = new(StringComparer.Ordinal) { "return", "await", "new", "throw", "else", "yield", "case", "in", "is", "as", "not", "and", "or", "when" };
 
     /// <summary>The span of a class body in a file: the offsets of its opening and closing braces, and the indentation of its declaration line.</summary>
     internal readonly record struct ClassSpan(int Open, int Close, string Indent);
 
+    /// <summary>Reads a file and the encoding to write it back with (its byte order mark kept, UTF-8 without one by default).</summary>
+    internal static string Read(string path, out Encoding encoding)
+    {
+        byte[] bytes = File.ReadAllBytes(path);
+        using StreamReader reader = new StreamReader(new MemoryStream(bytes), new UTF8Encoding(false), detectEncodingFromByteOrderMarks: true);
+        string text = reader.ReadToEnd();
+        bool utf8Bom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+        encoding = reader.CurrentEncoding is UTF8Encoding ? new UTF8Encoding(utf8Bom) : reader.CurrentEncoding;
+        return text;
+    }
+
     /// <summary>
     /// Finds the single declaration of <paramref name="className"/> in <paramref name="source"/> and its body. False,
-    /// with the reason, when the class is not declared, is declared more than once, or its braces do not balance.
+    /// with the reason, when the class is not declared, is declared more than once, has no body of its own, or its
+    /// braces do not balance.
     /// </summary>
     internal static bool TryFindClass(string source, string className, out ClassSpan span, out string error)
     {
@@ -37,45 +53,61 @@ internal static class TestClassAppender
             return false;
         }
 
+        // The body is the first '{' after the declaration, unless another declaration (or the end of one) comes first.
         int declaration = declarations[0].Index;
-        int open = masked.IndexOfAny(['{', ';'], declaration);
-        if (open < 0 || masked[open] != '{')
+        int afterName = declaration + declarations[0].Length;
+        int open = masked.IndexOf('{', afterName);
+        if (open < 0 || OtherDeclaration.IsMatch(masked.Substring(afterName, open - afterName)))
         {
             error = $"the declaration of class {className} has no body";
             return false;
         }
 
-        int depth = 0;
-        for (int i = open; i < masked.Length; i++)
+        int close = MatchingBrace(masked, open);
+        if (close < 0)
         {
+            error = $"the braces of class {className} do not balance";
+            return false;
+        }
+
+        int lineStart = source.LastIndexOf('\n', declaration) + 1;
+        string indent = new string(source.Skip(lineStart).TakeWhile(c => c is ' ' or '\t').ToArray());
+        span = new ClassSpan(open, close, indent);
+        return true;
+    }
+
+    /// <summary>
+    /// True when the class itself (not a nested type) declares a method named <paramref name="method"/>, outside
+    /// comments and literals. A call to a method of that name does not count.
+    /// </summary>
+    internal static bool DeclaresMethod(string source, ClassSpan span, string method)
+    {
+        string masked = StepInjector.MaskCommentsAndLiterals(source);
+        Regex declaration = new(@"(?<type>\b[A-Za-z_][\w\.]*(?:<[^;{}()]*>)?(?:\[\])?\??)\s+" + Regex.Escape(method) + @"\s*[\(<]");
+        int depth = 0;
+        int[] depthAt = new int[span.Close - span.Open];
+        for (int i = span.Open; i < span.Close; i++)
+        {
+            depthAt[i - span.Open] = depth;
             if (masked[i] == '{')
             {
                 depth++;
             }
-            else if (masked[i] == '}' && --depth == 0)
+            else if (masked[i] == '}')
             {
-                int lineStart = source.LastIndexOf('\n', declaration) + 1;
-                string indent = new string(source.Skip(lineStart).TakeWhile(c => c is ' ' or '\t').ToArray());
-                span = new ClassSpan(open, i, indent);
-                return true;
+                depth--;
             }
         }
 
-        error = $"the braces of class {className} do not balance";
-        return false;
-    }
-
-    /// <summary>True when the class body declares a method named <paramref name="method"/> (outside comments and literals).</summary>
-    internal static bool DeclaresMethod(string source, ClassSpan span, string method)
-    {
-        string body = StepInjector.MaskCommentsAndLiterals(source).Substring(span.Open, span.Close - span.Open);
-        return Regex.IsMatch(body, $@"\b{Regex.Escape(method)}\s*\(");
+        return declaration.Matches(masked.Substring(span.Open, span.Close - span.Open))
+            .Any(m => depthAt[m.Index] == 1 && !NotAType.Contains(m.Groups["type"].Value));
     }
 
     /// <summary>
     /// Inserts <paramref name="members"/> (class members indented by 8 spaces, each line ending with '\n') before the
     /// class's closing brace, re-indented to the class's member indentation and in the file's line endings, and adds the
-    /// <paramref name="usings"/> the file lacks after its last <c>using</c> directive (else at its top).
+    /// <paramref name="usings"/> the class does not see after the last <c>using</c> directive it sees (else at the top of
+    /// the file).
     /// </summary>
     internal static string Insert(string source, ClassSpan span, string members, IEnumerable<string> usings)
     {
@@ -92,9 +124,12 @@ internal static class TestClassAppender
             ? source.Insert(lineStart, newline + reindented)
             : source.Insert(span.Close, newline + newline + reindented + span.Indent);
 
+        // The directives the class sees: at the top level, or in a namespace block that encloses it (both before it).
         string masked = StepInjector.MaskCommentsAndLiterals(updated);
-        List<Match> directives = UsingDirective.Matches(masked).Where(m => m.Index < span.Open).ToList();
-        HashSet<string> present = new(directives.Select(m => m.Groups["ns"].Value), StringComparer.Ordinal);
+        List<Match> visible = UsingDirective.Matches(masked)
+            .Where(m => m.Index < span.Open && EnclosingBlocks(masked, m.Index).All(block => block < span.Open && MatchingBrace(masked, block) > span.Open))
+            .ToList();
+        HashSet<string> present = new(visible.Select(m => m.Groups["ns"].Value), StringComparer.Ordinal);
         string[] missing = usings.Where(u => !present.Contains(u)).Distinct(StringComparer.Ordinal).ToArray();
         if (missing.Length == 0)
         {
@@ -102,7 +137,7 @@ internal static class TestClassAppender
         }
 
         StringBuilder lines = new StringBuilder();
-        if (directives.Count == 0)
+        if (visible.Count == 0)
         {
             foreach (string ns in missing)
             {
@@ -112,15 +147,60 @@ internal static class TestClassAppender
             return lines.Append(newline).ToString() + updated;
         }
 
-        Match last = directives[directives.Count - 1];
-        string indent = new string(updated.Skip(last.Index).TakeWhile(c => c is ' ' or '\t').ToArray());
-        int after = last.Index + last.Length;
-        bool endsLine = last.Value.EndsWith('\n');
+        Match last = visible[visible.Count - 1];
+        int directiveLine = updated.LastIndexOf('\n', last.Index) + 1;
+        string indent = new string(updated.Skip(directiveLine).TakeWhile(c => c is ' ' or '\t').ToArray());
+        bool endsLine = last.Groups["eol"].Success;
         foreach (string ns in missing)
         {
-            lines.Append(endsLine ? string.Empty : newline).Append(indent).Append("using ").Append(ns).Append(';').Append(endsLine ? newline : string.Empty);
+            if (endsLine)
+            {
+                lines.Append(indent).Append("using ").Append(ns).Append(';').Append(newline);
+            }
+            else
+            {
+                lines.Append(newline).Append(indent).Append("using ").Append(ns).Append(';');
+            }
         }
 
-        return updated.Insert(after, lines.ToString());
+        return updated.Insert(last.Index + last.Length, lines.ToString());
+    }
+
+    // The offset of the '}' closing the '{' at <paramref name="open"/>, or -1.
+    private static int MatchingBrace(string masked, int open)
+    {
+        int depth = 0;
+        for (int i = open; i < masked.Length; i++)
+        {
+            if (masked[i] == '{')
+            {
+                depth++;
+            }
+            else if (masked[i] == '}' && --depth == 0)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    // The offsets of the '{' of every block that contains <paramref name="position"/>.
+    private static List<int> EnclosingBlocks(string masked, int position)
+    {
+        List<int> open = new List<int>();
+        for (int i = 0; i < position; i++)
+        {
+            if (masked[i] == '{')
+            {
+                open.Add(i);
+            }
+            else if (masked[i] == '}' && open.Count > 0)
+            {
+                open.RemoveAt(open.Count - 1);
+            }
+        }
+
+        return open;
     }
 }

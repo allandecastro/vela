@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
 using Vela.Cli;
 using Xunit;
 using static Vela.Cli.CliExitCodes;
@@ -519,6 +521,118 @@ public class AddTestCommandTests
             File.WriteAllText(path, "// not a test class\n");
             Assert.Equal(ExitInvalidArguments, AddCommand.Run(["test", "Recalc", "--kind", "customapi", "--project", tests]));
         });
+    }
+
+    [Fact]
+    public void PluginTest_ExistingClass_KeepsABehaviourTestWhoseDispatchTestWasRemoved()
+    {
+        CompleteTouched(
+            "namespace Acme.Plugins.Tests.Account.Plugins\n{\n    using System;\n    using Microsoft.Xrm.Sdk;\n    using Vela.Testing;\n    using Xunit;\n" +
+            "    using Acme.Plugins.Account.Plugins;\n    using Acme.Shared.Models.Generated;\n\n    public sealed class AccountTouchedTests\n    {\n" +
+            "        [Fact]\n        public void Fires_On_Create_PostOperation() { }\n\n" +
+            "        [Fact]\n        public void Does_What_It_Should_On_Delete_PostOperation() { Assert.True(true); }\n    }\n}\n",
+            completed =>
+            {
+                Assert.Contains("public void Fires_On_Delete_PostOperation()", completed);
+                Assert.Single(Regex.Matches(completed, @"void Does_What_It_Should_On_Delete_PostOperation\("));
+            });
+    }
+
+    [Fact]
+    public void PluginTest_ExistingClass_KeepsTheFilesEncodingAndByteOrderMark()
+    {
+        string text = "namespace Acme.Plugins.Tests.Account.Plugins\n{\n    using System;\n    using Microsoft.Xrm.Sdk;\n    using Vela.Testing;\n    using Xunit;\n" +
+            "    using Acme.Plugins.Account.Plugins;\n    using Acme.Shared.Models.Generated;\n\n    // café\n    public sealed class AccountTouchedTests\n    {\n" +
+            "        [Fact]\n        public void Fires_On_Create_PostOperation() { }\n    }\n}\n";
+        foreach (System.Text.Encoding encoding in new System.Text.Encoding[] { new System.Text.UTF8Encoding(true), System.Text.Encoding.Unicode })
+        {
+            RunInSolution((plugins, tests, testsDir) =>
+            {
+                string path = TouchedTestPath(plugins, testsDir);
+                File.WriteAllText(path, text, encoding);
+                byte[] before = File.ReadAllBytes(path);
+                int head = encoding.GetPreamble().Length + encoding.GetByteCount(text.Substring(0, text.LastIndexOf("    }\n}", StringComparison.Ordinal)));
+
+                Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--project", tests]));
+
+                byte[] after = File.ReadAllBytes(path);
+                Assert.Equal(before.Take(head), after.Take(head));
+                Assert.Contains("Fires_On_Delete_PostOperation", encoding.GetString(after, encoding.GetPreamble().Length, after.Length - encoding.GetPreamble().Length));
+            });
+        }
+    }
+
+    [Fact]
+    public void PluginTest_ExistingClass_CompactFile_AddsTheUsingsBeforeTheNamespace()
+    {
+        CompleteTouched(
+            "using Xunit; namespace Acme.Plugins.Tests.Account.Plugins { public sealed class AccountTouchedTests { [Fact] public void Fires_On_Create_PostOperation() { } } }\n",
+            completed =>
+            {
+                Assert.StartsWith("using Xunit;\nusing System;\nusing Microsoft.Xrm.Sdk;\nusing Vela.Testing;\nusing Acme.Plugins.Account.Plugins;\nusing Acme.Shared.Models.Generated; namespace", completed, StringComparison.Ordinal);
+                Assert.Contains("public void Fires_On_Delete_PostOperation()", completed);
+            });
+    }
+
+    [Fact]
+    public void PluginTest_ExistingClass_CountsOnlyTheUsingsTheClassSees()
+    {
+        CompleteTouched(
+            "namespace Other\n{\n    using Xunit;\n}\n\nnamespace Acme.Plugins.Tests.Account.Plugins\n{\n    public sealed class AccountTouchedTests\n    {\n" +
+            "        [Xunit.Fact]\n        public void Fires_On_Create_PostOperation() { }\n    }\n}\n",
+            completed =>
+            {
+                Assert.StartsWith("using System;\nusing Microsoft.Xrm.Sdk;\nusing Vela.Testing;\nusing Xunit;\n", completed, StringComparison.Ordinal);
+                Assert.Contains("namespace Other\n{\n    using Xunit;\n}\n", completed);
+            });
+    }
+
+    [Fact]
+    public void PluginTest_ExistingClass_ACallOrANestedMethodIsNotTheStepsTest()
+    {
+        CompleteTouched(
+            "namespace Acme.Plugins.Tests.Account.Plugins\n{\n    using System;\n    using Microsoft.Xrm.Sdk;\n    using Vela.Testing;\n    using Xunit;\n" +
+            "    using Acme.Plugins.Account.Plugins;\n    using Acme.Shared.Models.Generated;\n\n    public sealed class AccountTouchedTests\n    {\n" +
+            "        [Fact]\n        public void Fires_On_Create_PostOperation() { new Helper().Fires_On_Delete_PostOperation(); }\n\n" +
+            "        private void Run() => Fires_On_Delete_PostOperation();\n\n" +
+            "        private sealed class Helper\n        {\n            public void Fires_On_Delete_PostOperation() { }\n        }\n    }\n}\n",
+            completed => Assert.Contains("        [Fact]\n        public void Fires_On_Delete_PostOperation()\n", completed));
+    }
+
+    [Fact]
+    public void PluginTest_ExistingClassWithoutABody_FollowedByAnotherClass_Fails()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            string path = TouchedTestPath(plugins, testsDir);
+            string text = "namespace Acme.Plugins.Tests.Account.Plugins\n{\n    public sealed partial class AccountTouchedTests;\n\n    public sealed class Helper\n    {\n    }\n}\n";
+            File.WriteAllText(path, text);
+
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["test", "AccountTouched", "--project", tests]));
+            Assert.Equal(text, File.ReadAllText(path));
+        });
+    }
+
+    // AccountTouched registers Create then Delete; its test file holds <paramref name="text"/> before `vela add test`.
+    private static void CompleteTouched(string text, Action<string> assert)
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            string path = TouchedTestPath(plugins, testsDir);
+            File.WriteAllText(path, text);
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--project", tests]));
+            assert(File.ReadAllText(path));
+        });
+    }
+
+    private static string TouchedTestPath(string plugins, string testsDir)
+    {
+        Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountTouched", "--entity", "Account", "--filtering-attributes", "Name", "--project", plugins]));
+        Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountTouched", "--entity", "Account", "--message", "Delete", "--handler", "HandleDelete", "--project", plugins]));
+        string folder = Path.Combine(testsDir, "Account", "Plugins");
+        Directory.CreateDirectory(folder);
+        return Path.Combine(folder, "AccountTouchedTests.cs");
     }
 
     // A solution with a plugins project (Acme.Plugins) and a test project referencing it (Acme.Plugins.Tests), as

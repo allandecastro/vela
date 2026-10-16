@@ -99,6 +99,9 @@ namespace {{ns}}
     /// <summary>The dispatch test of the step whose tests are named <paramref name="name"/> (see <see cref="PluginTestNames"/>).</summary>
     internal static string PluginTestFiresMethod(string name) => $"Fires_On_{name}";
 
+    /// <summary>The skipped behaviour skeleton of the step whose tests are named <paramref name="name"/>.</summary>
+    internal static string PluginTestBehaviourMethod(string name) => $"Does_What_It_Should_On_{name}";
+
     /// <summary>The namespaces the plugin test methods use, which <c>vela add test</c> adds to an existing test file that lacks them.</summary>
     internal static string[] PluginTestUsings(string pluginNamespace, string modelsNamespace) =>
         ["System", "Microsoft.Xrm.Sdk", "Vela.Testing", "Xunit", pluginNamespace, modelsNamespace];
@@ -129,11 +132,11 @@ namespace {{ns}}
 """;
     }
 
-    // The two tests of one step, as class members indented by 8 spaces, ending with a newline. Each message is driven
+    // The two tests of one step (the dispatch test alone when behaviour is false), as class members indented by 8 spaces, ending with a newline. Each message is driven
     // the way a caller sends it: Create/Update with an entity that sets the step's filtering column(s),
     // Delete/Assign/Retrieve on a seeded record (an EntityReference target), Associate/Disassociate with a
     // relationship, the bulk messages with Targets.
-    internal static string PluginTestMethods(string pluginType, string entityType, PluginTestStep step, string name)
+    internal static string PluginTestMethods(string pluginType, string entityType, PluginTestStep step, string name, bool behaviour = true)
     {
         const string I = "            ";
         string logical = $"{entityType}.EntityLogicalNameValue";
@@ -197,7 +200,7 @@ namespace {{ns}}
             ? $"e => e.PluginTypeName == typeof({pluginType}).FullName && e.Message == \"{step.Message}\"{stageCheck}"
             : $"e => e.PluginTypeName == typeof({pluginType}).FullName{stageCheck}";
         string firesMethod = PluginTestFiresMethod(name);
-        return
+        string firesTest =
 $$"""
         {{fires}}
         public void {{firesMethod}}()
@@ -212,8 +215,11 @@ $$"""
             Assert.Contains(pipeline.ExecutionLog, {{assertion}});
         }
 
+""";
+        string behaviourTest =
+$$"""
         [Fact(Skip = "TODO: assert what {{pluginType}} does on {{label}}")]
-        public void Does_What_It_Should_On_{{name}}()
+        public void {{PluginTestBehaviourMethod(name)}}()
         {
             // Arrange: seed the rows the plugin reads, e.g. pipeline.Seed(new {{entityType}} { Id = id, ... }).
             PluginPipeline pipeline = PluginPipeline.Empty().Register<{{pluginType}}>();
@@ -228,6 +234,7 @@ $$"""
         }
 
 """;
+        return behaviour ? firesTest + "\n" + behaviourTest : firesTest;
     }
 
     // A typed (bound) Custom API has a generated request type, so its test builds the context from it (message and
