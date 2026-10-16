@@ -26,9 +26,11 @@ internal static partial class ScaffoldTemplates
     // Cross-platform Dataverse client used by the Shared (netstandard2.0) and ConsoleApp projects.
     public const string DataverseClientVersion = "1.2.10";
 
-    // The Dataverse client pulls System.Security.Cryptography.Xml in transitively at a version with known
-    // advisories (NU1903); pin the patched build in the projects that reference the client (Shared, ConsoleApp).
-    public const string CryptographyXmlVersion = "8.0.4";
+    // The Dataverse client pulls System.Security.Cryptography.Xml and .Pkcs in transitively at versions with known
+    // advisories (NU1902/NU1903); pin the patched builds in the projects that reference the client (Shared,
+    // ConsoleApp). Kept equal to the repository's own pins in Directory.Packages.props (a test checks it).
+    public const string CryptographyXmlVersion = "8.0.5";
+    public const string CryptographyPkcsVersion = "8.0.2";
 
     // .NET Framework Dataverse SDK reference assemblies for plugin (net48) compilation.
     public const string CrmCoreAssembliesVersion = "9.0.2.59";
