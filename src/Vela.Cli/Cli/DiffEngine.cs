@@ -38,6 +38,14 @@ internal static class DiffEngine
     /// </summary>
     internal const string LiveStepKeyField = "liveStepKey";
 
+    /// <summary>
+    /// The relationship schema names an Associate / Disassociate step is scoped to (<c>.ForRelationship(...)</c>), on
+    /// the local definition only and only when declared. Dataverse has no step-level relationship filter (the step is
+    /// registered for every relationship and Vela's runtime applies the scope), so the live read cannot carry it and
+    /// the diff does not compare it: it is shown in plan and inspect output, never written by apply.
+    /// </summary>
+    internal const string RelationshipsField = "relationships";
+
     public static string GetIdentityKey(RegistrationItem item)
     {
         return $"{item.Kind}:{GetIdentity(item)}";
@@ -170,6 +178,9 @@ internal static class DiffEngine
         {
             return JsonSerializer.Serialize(definition);
         }
+
+        // Runtime-only, local-only (see RelationshipsField): comparing it would mark every scoped step as changed.
+        obj.Remove(RelationshipsField);
 
         // A label that defaults to a case-folded field (a step description to the step name, a Custom API display name
         // and description to the unique name) inherits that field's casing, so fold it too while the local label is

@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (Framework)
+
+- VELA018 (write to the Target in an async step) now also reports a write through a local that only ever holds the
+  Target (`var t = ctx.Request.Target; t.Name = ...`, `ctx.Request.Target is Account t`, a reference cast or `as`), a
+  write into the Target's `Attributes` collection (`t.Attributes["name"] = ...`), and a call that hands the Target
+  to a non-virtual method of the same type, in the same file, that writes into that parameter (one level deep). A
+  local that is ever given anything else (a copy, a method result, `null`) stays unreported. Projects that build
+  with warnings as errors may see the new warnings.
+
 ### Changed (CLI)
 
 - `vela add test <Plugin>` on a plugin whose test class exists completes the class instead of failing with exit 2:
@@ -32,6 +41,32 @@ All notable changes to Vela are documented here. The format is based on
   one), and each step's tests are named after its message and stage: `Fires_On_<Message>_<Stage>` (it asserts the
   stage too) and the skipped `Does_What_It_Should_On_<Message>_<Stage>`, numbered `_2`... for a repeat. A class
   generated earlier keeps its names: its `Fires_On_<Message>` counts as the test of the first step on that message.
+
+### Fixed (CLI)
+
+- `vela plan`, `apply` and `inspect` now show the relationship scope of an Associate / Disassociate step declared
+  with `ForRelationship(...)`: the human output adds `relationships=<schema names>` to the step line, and the JSON
+  carries `relationships` on the step's local definition (an added field; `schemaVersion` stays 1). The scope is
+  enforced at run time and not deployed, so it is not part of the diff: re-planning a scoped step reports no change,
+  and changing only the scope of a step with a step key is not a step change (the new scope deploys with the plugin
+  package).
+
+## [0.34.1] - 2026-10-16 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Fixed
+
+- `Vela.Messages` (net10.0) no longer carries vulnerable transitive `System.Security.Cryptography.Xml` 8.0.4 and
+  `System.Security.Cryptography.Pkcs` 8.0.1 from the Dataverse client: the repository now pins the patched 8.0.5 and
+  8.0.2 (GHSA-r955-8q5j-3h83, GHSA-7hqp-7c5m-4vq6, GHSA-vrv5-2jg9-4mmr, GHSA-c399-9853-6jmj, GHSA-846f-f764-76mx,
+  GHSA-2fmv-rv2c-59x7).
+
+## [0.25.2] - 2026-10-16 (Vela.Cli)
+
+### Fixed
+
+- `vela init` pins the patched `System.Security.Cryptography.Xml` 8.0.5 and `System.Security.Cryptography.Pkcs` 8.0.2
+  in the Shared and ConsoleApp projects (it pinned Xml 8.0.4, since affected by new advisories, and left Pkcs at the
+  client's vulnerable 8.0.1). The `vela` tool itself ships the same patched versions.
 
 ## [0.25.1] - 2026-10-16 (Vela.Cli)
 
