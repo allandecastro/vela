@@ -80,6 +80,24 @@ public sealed class IntersectModelsTests
         Assert.Single(skips);
     }
 
+    // A network error is not a table the caller cannot read: it propagates, so the command exits 6 instead of
+    // writing an incomplete model set.
+    [Fact]
+    public void AppendIntersects_does_not_skip_a_network_error()
+    {
+        List<EntityMetadata> metadata = new List<EntityMetadata>
+        {
+            Entity("account", ("good", "account", "lead"), ("bad", "account", "task")),
+        };
+        List<string> skips = new List<string>();
+
+        Assert.Throws<System.Net.Http.HttpRequestException>(() => EntityMetadataReader.AppendIntersects(
+            metadata,
+            name => name == "bad" ? throw new System.Net.Http.HttpRequestException("Connection reset by peer") : Entity(name),
+            skips.Add));
+        Assert.Empty(skips);
+    }
+
     [Fact]
     public void CollectIntersectNames_returns_empty_when_there_are_no_many_to_many()
     {

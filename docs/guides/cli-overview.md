@@ -47,7 +47,7 @@ Every command returns a stable exit code, so scripts and coding agents can branc
 | `3` | A required file was not found (for example a package path). |
 | `4` | Parse/read or other error (a malformed package, definition or response, or an unexpected failure). |
 | `5` | Drift detected (`vela models --verify` found the local model out of sync with the live schema, or `apply` wrote every change but the environment still differs afterwards). |
-| `6` | Dataverse connection failure (auth or endpoint). |
+| `6` | Dataverse connection failure: auth, endpoint, or a network error (DNS, socket, HTTP, timeout) on any call, including while reading the live state. |
 | `7` | Partial apply (a mid-run `apply` failure; Dataverse may be partially updated, so re-run `apply` to reconcile). |
 | `8` | Changes pending (`vela plan --detailed-exitcode` only). |
 

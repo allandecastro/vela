@@ -91,6 +91,15 @@ public sealed class CliCommandsTests
         Assert.Equal(Sorted(AddCommand.FlagOptions), Sorted(CliCommands.FlagOptions("add")));
     }
 
+    // The scaffolder creates the solution in <output>/<SolutionName>, so the help must not call --output the target.
+    [Fact]
+    public void Init_output_is_described_as_the_parent_folder()
+    {
+        CliOption output = CliCommands.Find("init")!.Options.Single(o => o.Name == "--output");
+        Assert.Contains("<dir>/<SolutionName>", output.Description);
+        Assert.DoesNotContain("Target folder", output.Description);
+    }
+
     [Fact]
     public void The_init_table_matches_the_init_parser()
     {

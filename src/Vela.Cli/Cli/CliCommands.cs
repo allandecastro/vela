@@ -140,7 +140,7 @@ internal static class CliCommands
                     new("--name", CliOptionKind.Value, "Solution name (also accepted as the first positional argument).", "SolutionName"),
                     new("--prefix", CliOptionKind.Value, "Namespace / assembly prefix of the projects.", "Prefix"),
                     new("--publisher-prefix", CliOptionKind.Value, "Dataverse publisher prefix (2-8 chars) naming the Custom APIs; recorded for 'vela add customapi'.", "prefix"),
-                    new("--output", CliOptionKind.Value, "Target folder (default: current directory).", "dir", ["-o"]),
+                    new("--output", CliOptionKind.Value, "Parent folder: the solution is created in <dir>/<SolutionName> (default: current directory).", "dir", ["-o"]),
                     new("--samples", CliOptionKind.Flag, "Add the demo code and the Integrations/ConsoleApp projects."),
                     new("--minimal", CliOptionKind.Flag, "The default: no demo code (kept as an alias).", Aliases: ["--no-demos"]),
                     new("--integrations", CliOptionKind.Flag, "Add an empty Integrations plugin project (and its tests) without --samples."),

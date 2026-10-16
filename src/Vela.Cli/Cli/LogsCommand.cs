@@ -130,7 +130,7 @@ internal static class LogsCommand
 
             return ExitSuccess;
         }
-        catch (DataverseConnectionException ex)
+        catch (Exception ex) when (DataverseConnectionException.IsConnectionFailure(ex))
         {
             return FailWithException(ex, ExitConnectionFailure, verbose);
         }

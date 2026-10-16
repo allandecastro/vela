@@ -88,7 +88,7 @@ internal static class PlanApplyCommand
                 _ => RunApply(service, local, current, unmanaged, options, jsonOptions, host, tempDirectories),
             };
         }
-        catch (DataverseConnectionException ex)
+        catch (Exception ex) when (DataverseConnectionException.IsConnectionFailure(ex))
         {
             return FailWithException(ex, ExitConnectionFailure, options.Verbose);
         }
