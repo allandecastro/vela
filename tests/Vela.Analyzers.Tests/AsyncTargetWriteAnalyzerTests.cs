@@ -13,7 +13,13 @@ using System;
 
 namespace Microsoft.Xrm.Sdk
 {
-    public class Entity { public object? this[string name] { get => null; set { } } }
+    public class AttributeCollection { public object? this[string name] { get => null; set { } } }
+    public class Entity
+    {
+        public object? this[string name] { get => null; set { } }
+        public AttributeCollection Attributes { get; } = new AttributeCollection();
+        public T ToEntity<T>() where T : Entity, new() => new T();
+    }
 }
 
 namespace Demo
@@ -122,13 +128,115 @@ namespace Demo
         await Verify.VerifyAnalyzerAsync(code);
     }
 
-    [Fact]
-    public async Task Does_not_flag_a_write_through_a_local_copy_of_the_Target()
-    {
-        // Conservative: the write base is a local, not the Target expression itself, so it is not tracked.
-        string code = InClass(
+    private static string AsyncHandler(string body, string members = "") =>
+        InClass(
             "public void Reg() { RegisterStep().OnUpdate().PostOperation().Async().Handle(OnUpd); }\n" +
-            "        private void OnUpd(ILocalPluginContext ctx) { var t = ctx.GetTarget<Account>(); t.Name = \"x\"; }");
+            "        private void OnUpd(ILocalPluginContext ctx) { " + body + " }\n" +
+            "        " + members);
+
+    [Theory]
+    [InlineData("var t = ctx.GetTarget<Account>(); {|#0:t.Name|} = \"x\";")]
+    [InlineData("var t = ctx.Request.Target; {|#0:t[\"name\"]|} = \"x\";")]
+    [InlineData("var t = ctx.Request.Target; {|#0:t.Attributes[\"name\"]|} = \"x\";")]
+    [InlineData("{|#0:ctx.Request.Target.Attributes[\"name\"]|} = \"x\";")]
+    [InlineData("var t = ctx.Request.Target; {|#0:t.Count|}++;")]
+    [InlineData("var t = ctx.Request.Target; {|#0:t.Name|} ??= \"x\";")]
+    [InlineData("var a = ctx.Request.Target; var b = a; {|#0:b.Name|} = \"x\";")]
+    [InlineData("Account t; t = ctx.GetTarget<Account>(); {|#0:t.Name|} = \"x\";")]
+    [InlineData("var t = ctx.Request.Target; t = ctx.Request.Target; {|#0:t.Name|} = \"x\";")]
+    [InlineData("if (ctx.Request.Target is Account t) { {|#0:t.Name|} = \"x\"; }")]
+    [InlineData("if (ctx.Request.Target is Account { } t) { {|#0:t.Name|} = \"x\"; }")]
+    [InlineData("var e = (Microsoft.Xrm.Sdk.Entity)ctx.Request.Target; {|#0:e[\"name\"]|} = \"x\";")]
+    [InlineData("var e = ctx.Request.Target as Microsoft.Xrm.Sdk.Entity; {|#0:e![\"name\"]|} = \"x\";")]
+    [InlineData("var t = ctx.Request.Target; System.Action a = () => { {|#0:t.Name|} = \"x\"; };")]
+    public async Task Flags_a_write_through_a_local_alias_of_the_Target(string body)
+    {
+        await Verify.VerifyAnalyzerAsync(AsyncHandler(body), Expected());
+    }
+
+    [Theory]
+    // Re-assigned to something else: the local may no longer hold the Target at the write.
+    [InlineData("var t = ctx.Request.Target; t = new Account(); t.Name = \"x\";")]
+    // Copies of the Target, not the Target itself.
+    [InlineData("var c = new Account { Name = ctx.Request.Target.Name }; c.Name = \"x\";")]
+    [InlineData("var c = ctx.Request.Target.ToEntity<Account>(); c.Name = \"x\";")]
+    [InlineData("var c = ctx.Request.Target ?? new Account(); c.Name = \"x\";")]
+    // Compound-assigned, deconstructed into, or passed by ref/out: not tracked.
+    [InlineData("Account? t = null; t ??= ctx.Request.Target; t.Name = \"x\";")]
+    [InlineData("var t = ctx.Request.Target; var o = new Account(); (t, o) = (o, t); t.Name = \"x\";")]
+    [InlineData("var t = ctx.Request.Target; Swap(ref t); t.Name = \"x\";")]
+    [InlineData("var t = ctx.Request.Target; ref Account r = ref t; t.Name = \"x\";")]
+    // Declared another way (out var): its first value is not the Target.
+    [InlineData("Make(out var t); t = ctx.Request.Target; t.Name = \"x\";")]
+    // Re-assigning the local itself is not a write into the Target.
+    [InlineData("var t = ctx.Request.Target; t = ctx.GetTarget<Account>();")]
+    // An alias chain that never reaches the Target.
+    [InlineData("var a = ctx.GetPreImage<Account>(); var b = a; b.Name = \"x\";")]
+    public async Task Does_not_flag_a_local_that_may_not_hold_the_Target(string body)
+    {
+        string members =
+            "private static void Swap(ref Account a) { a = new Account(); }\n" +
+            "        private static void Make(out Account a) { a = new Account(); }";
+        await Verify.VerifyAnalyzerAsync(AsyncHandler(body, members));
+    }
+
+    [Theory]
+    [InlineData("{|#0:Mutate(ctx.Request.Target)|};", "private void Mutate(Account a) { a.Name = \"x\"; }")]
+    [InlineData("var t = ctx.GetTarget<Account>(); {|#0:Mutate(t)|};", "private static void Mutate(Account a) { a[\"name\"] = \"x\"; }")]
+    [InlineData("{|#0:Mutate(ctx.Request.Target)|};", "private void Mutate(Account a) { var b = a; b.Attributes[\"name\"] = \"x\"; }")]
+    [InlineData("{|#0:Mutate(ctx.Request.Target)|};", "private void Mutate(Account a) => a.Count++;")]
+    [InlineData("{|#0:Mutate(1, ctx.Request.Target)|};", "private void Mutate(int n, Account a) { a.Count += n; }")]
+    [InlineData("{|#0:Mutate(a: ctx.Request.Target, n: 1)|};", "private void Mutate(int n, Account a) { a.Count += n; }")]
+    public async Task Flags_a_helper_of_the_same_type_that_writes_the_Target_it_is_given(string body, string helper)
+    {
+        await Verify.VerifyAnalyzerAsync(AsyncHandler(body, helper), Expected());
+    }
+
+    [Theory]
+    // The helper only reads its parameter, or writes another one.
+    [InlineData("Mutate(ctx.Request.Target);", "private void Mutate(Account a) { string? n = a.Name; }")]
+    [InlineData("Mutate(ctx.Request.Target, new Account());", "private void Mutate(Account a, Account b) { b.Name = a.Name; }")]
+    // The helper re-assigns its parameter before the write.
+    [InlineData("Mutate(ctx.Request.Target);", "private void Mutate(Account a) { a = new Account(); a.Name = \"x\"; }")]
+    // The argument is not the Target.
+    [InlineData("Mutate(new Account());", "private void Mutate(Account a) { a.Name = \"x\"; }")]
+    // An overridable helper may be replaced by one that does not write.
+    [InlineData("Mutate(ctx.Request.Target);", "protected virtual void Mutate(Account a) { a.Name = \"x\"; }")]
+    // One level deep only: a helper calling another helper is not followed.
+    [InlineData("Outer(ctx.Request.Target);", "private void Outer(Account a) { Inner(a); }\n        private void Inner(Account a) { a.Name = \"x\"; }")]
+    // A params array, or a by-reference parameter, is not tracked.
+    [InlineData("Mutate(ctx.Request.Target);", "private void Mutate(params Account[] a) { a[0].Name = \"x\"; }")]
+    [InlineData("var t = ctx.Request.Target; Mutate(in t);", "private void Mutate(in Account a) { a.Name = \"x\"; }")]
+    public async Task Does_not_flag_a_helper_call_that_does_not_write_the_Target(string body, string helper)
+    {
+        await Verify.VerifyAnalyzerAsync(AsyncHandler(body, helper));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_helper_of_another_type()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using Vela.Context;
+    public static class Helpers { public static void Mutate(Account a) { a.Name = ""x""; } }
+    public class Use : Plugin
+    {
+        public void Reg() { RegisterStep().OnUpdate().PostOperation().Async().Handle(OnUpd); }
+        private void OnUpd(ILocalPluginContext ctx) { Helpers.Mutate(ctx.Request.Target); }
+    }
+}
+";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_helper_call_from_a_sync_step()
+    {
+        string code = InClass(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { var t = ctx.Request.Target; t.Name = \"x\"; Mutate(t); }\n" +
+            "        private void Mutate(Account a) { a.Name = \"x\"; }");
         await Verify.VerifyAnalyzerAsync(code);
     }
 
