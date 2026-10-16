@@ -277,8 +277,45 @@ in its own execution, so mutating the Target (`ctx.Request.Target` / `ctx.GetTar
 change is neither written back to the database nor seen by any later step. Call `ctx.Service.Update(...)` with
 the change, or move the logic to a synchronous step. Like VELA017 it fires only in the unambiguous case: the handler
 is an instance method bound by exactly one `RegisterStep()` chain and that chain is `.Async()`; a handler shared
-across steps, or a write through a local copy of the Target, is left alone. See
+across steps is left alone. See
 [which stage persists a Target write](../guides/plugins.md#writing-the-target-which-stage-persists).
+
+A write is any assignment, compound assignment or `++`/`--` on a property or indexer of the Target, or on an entry
+of its `Attributes` collection. The rule follows the Target through:
+
+- **A local that only ever holds the Target**: `var t = ctx.Request.Target;`, `Account t; t = ctx.GetTarget<Account>();`,
+  a type pattern (`if (ctx.Request.Target is Account t)`), a chain of such locals (`var b = t;`), a reference cast
+  or `as`. A write through the local inside a lambda of the handler counts too.
+- **One helper call**: `Mutate(ctx.Request.Target)` or `Mutate(t)`, where `Mutate` is a non-virtual method of the
+  handler's own type, declared in the same file, that writes into that parameter (directly or through such a local).
+  The warning is on the call.
+
+It stays silent, to avoid false positives, when it cannot be sure the written object is the Target:
+
+```csharp
+private void OnUpdate(ILocalPluginContext ctx)
+{
+    var t = ctx.Request.Target;
+    t = new Account();                                       // given another value: never tracked
+    t.Name = "x";                                            // not reported
+
+    var copy = new Account { Id = ctx.Request.Target.Id };  // a copy, not the Target
+    copy.Name = "x";                                         // not reported
+}
+```
+
+The rule does not follow:
+
+- a local that is ever given anything other than the Target (a copy, `ToEntity<T>()`, any method result, `null`,
+  `??`), compound-assigned (`??=`), deconstructed into, passed by `ref`/`out`, or declared by `out var`, `foreach` or
+  a `switch` pattern. The analysis does not track the order of statements, so it keeps only locals that can never
+  hold anything else;
+- a helper that is virtual, abstract or an override, declared in another type or another file (a `partial` part),
+  an extension method, a local function, or a lambda stored in a variable; a `params`, `ref`, `in` or `out`
+  parameter;
+- a helper that calls another helper (one level only), or one that reads the Target itself from a context it is
+  given (`Apply(ctx)`);
+- method calls that change the Target without an assignment (`t.Attributes.Add(...)`, `t.Attributes.Remove(...)`).
 
 ## VELA019
 
