@@ -845,7 +845,7 @@ internal static class AddCommand
             return Fail(stageError, ExitInvalidArguments, includeUsage: false);
         }
 
-        // Create/Update (and their bulk variants) require a FilterOn: the builder (and VELA018) reject such a step
+        // Create/Update (and their bulk variants) require a FilterOn: the builder (and VELA020) reject such a step
         // without one, so the caller must name the column(s). We do NOT guess one from the model.
         string filteringCall = string.Empty;
         if (!RequiresFilter(message) && SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter")).Length > 0)
