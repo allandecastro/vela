@@ -21,13 +21,6 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Added (Framework)
-
-- `PluginPipeline.WithManagedIdentityService(IManagedIdentityService)` hands a managed-identity service to every
-  plugin and Custom API the pipeline runs, nested executions included, so `ctx.AcquireManagedIdentityToken(...)` and
-  `ctx.ManagedIdentityService` use it. Without it the pipeline serves none, as before. `null` throws
-  `ArgumentNullException`; calling it again replaces the earlier service.
-
 ### Changed (Framework, breaking)
 
 - `WithService<T>(instance)` on `PluginContext` and `PluginPipeline` now throws `ArgumentException` when `T` is a
@@ -40,6 +33,18 @@ All notable changes to Vela are documented here. The format is based on
   or the builder's context methods on `PluginContext`; `WithManagedIdentityService`, `Trace`, `LogCapture`, the
   in-memory store on `PluginPipeline`.
 
+### Added (Framework)
+
+- `PluginPipeline.WithManagedIdentityService(IManagedIdentityService)` hands a managed-identity service to every
+  plugin and Custom API the pipeline runs, nested executions included, so `ctx.AcquireManagedIdentityToken(...)` and
+  `ctx.ManagedIdentityService` use it. Without it the pipeline serves none, as before. `null` throws
+  `ArgumentNullException`; calling it again replaces the earlier service.
+
+- VELA027 (warning, with a code fix): an empty `catch` block (no statement, no comment) in a plugin or Custom API,
+  such as `catch (FaultException<OrganizationServiceFault>) { }`, with or without a `when` filter. A block holding a
+  comment is treated as a documented, deliberate swallow and is not reported. The fix puts `throw;` in the block.
+  Projects that build with warnings as errors may see this new warning.
+
 ### Fixed (Framework)
 
 - A typed image projection (`ctx.PreImage` / `ctx.PostImage` on a typed handler context, `ctx.PreImageAs<T>()`,
@@ -49,6 +54,11 @@ All notable changes to Vela are documented here. The format is based on
   or not) or `int`, and an `OptionSetValueCollection` becomes the property's enum collection (`IList<TEnum>`,
   `IEnumerable<TEnum>`, `IReadOnlyList<TEnum>`, `List<TEnum>`, `TEnum[]`). A value of any other mismatched type is
   still skipped and traced.
+
+### Docs (CLI)
+
+- New "Behind a proxy" section in the CLI guide: `vela` takes its proxy from `HTTPS_PROXY` / `NO_PROXY` or the
+  system settings, as .NET 10 does, and ignores the `<system.net><defaultProxy>` element of a `.config` file.
 
 ## [0.37.0] - 2026-10-17 (Vela.Messages + Vela.Plugins + Vela.Testing)
 

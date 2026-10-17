@@ -90,6 +90,33 @@ Every command returns a stable exit code, so scripts and coding agents can branc
 > notice to stderr when a newer version is available (`dotnet tool update -g Vela.Cli`). It never blocks or fails a
 > command, and is silent for `--json` output. Set `VELA_NO_UPDATE_CHECK` to disable it.
 
+## Behind a proxy
+
+`vela` runs on .NET 10, so it takes its proxy the way .NET does
+([`HttpClient.DefaultProxy`](https://learn.microsoft.com/dotnet/api/system.net.http.httpclient.defaultproxy)), not
+from a `.config` file: the `<system.net><defaultProxy>` element of an `app.config` is a .NET Framework setting, and
+`vela` ignores it.
+
+- `HTTPS_PROXY` (or `ALL_PROXY`) names the proxy; `NO_PROXY` lists the hosts reached directly, comma-separated,
+  with a leading dot for subdomains (`.contoso.com`).
+- When none of them is set, Windows and macOS use the system proxy settings; Linux connects directly.
+
+```bash
+export HTTPS_PROXY=http://proxy.contoso.com:8080      # PowerShell: $env:HTTPS_PROXY = "http://proxy.contoso.com:8080"
+vela plan --packages-dir ./artifacts --interactive
+```
+
+The connection to Dataverse and the sign-in requests go through that proxy. With `--interactive`, the sign-in page
+itself opens in your browser, which uses its own proxy settings. A proxy that can't be reached fails the command
+with exit code 6, like any connection failure. The proxy URL may carry credentials
+(`http://user:password@proxy:8080`), which leaves the password in the environment of every process started from
+that shell.
+
+`dotnet tool install` / `vela update` download the tool through NuGet, which has its own
+[proxy settings](https://learn.microsoft.com/nuget/reference/nuget-config-file#config-section). The generated
+ConsoleApp is .NET 10 too and follows the same rules. Plugin code runs in the Dataverse sandbox, where your proxy
+settings play no part.
+
 ## Solution prefix (`vela solution show`)
 
 `vela solution show <uniquename>` connects with the usual options and prints the customization prefix of the

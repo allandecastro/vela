@@ -21,6 +21,9 @@
 dotnet tool install --global Vela.Cli
 ```
 
+Behind a corporate proxy, see [Behind a proxy](../guides/cli-overview.md#behind-a-proxy): `vela` reads
+`HTTPS_PROXY` / `NO_PROXY` (or the system settings), not a `.config` file.
+
 ## From a locally built package
 
 ```bash
