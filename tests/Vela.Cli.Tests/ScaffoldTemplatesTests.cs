@@ -35,6 +35,16 @@ public class ScaffoldTemplatesTests
     }
 
     [Fact]
+    public void TestsCsproj_ReferencesSystemNetHttp()
+    {
+        string csproj = ScaffoldTemplates.TestsCsproj("Zava.Integrations.Tests", "Zava.Integrations", "Zava.Shared", "1.0.0");
+
+        // On net48 a test that builds new HttpClient(fakeHandler) needs the System.Net.Http GAC facade, as the plugin
+        // project does; every scaffolded test project (plugins and integrations) comes from this template.
+        Assert.Contains("<Reference Include=\"System.Net.Http\" />", csproj);
+    }
+
+    [Fact]
     public void PluginCsproj_ReferencesPluginSdkCoreAndShared()
     {
         string csproj = ScaffoldTemplates.PluginCsproj("Zava.Plugins", "Zava.Shared", "1.0.0");
