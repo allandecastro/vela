@@ -5,7 +5,7 @@ and Custom APIs, with a preview-first `plan` → `apply` workflow.
 
 | Package | What it is |
 | --- | --- |
-| `Vela.Plugins` | The plugin runtime (.NET Framework 4.6.2): fluent step and Custom API registration, typed handler contexts, DI, caching. Bundles the Roslyn analyzers (VELA001-VELA024, several with a code fix) and the source generator for typed images and step contexts. |
+| `Vela.Plugins` | The plugin runtime (.NET Framework 4.6.2): fluent step and Custom API registration, typed handler contexts, DI, caching. Bundles the Roslyn analyzers (VELA001-VELA026, several with a code fix) and the source generator for typed images and step contexts. |
 | `Vela.Messages` | Typed request/response base classes (`TypedRequest`, `CustomApiRequest`, ...), a dependency of `Vela.Plugins` that client code can use alone. |
 | `Vela.Testing` | The no-connection test harness: an in-memory Dataverse and the plugin pipeline. |
 | `Vela.Cli` | The `vela` .NET tool: `plan` / `apply` registrations, `init` / `add` scaffolding, `models` generation, `sign`. |
