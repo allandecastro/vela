@@ -78,19 +78,29 @@ vela add --interactive
   `RootNamespace` must end in `.Tests`). It reads the class under test from the source of the projects the test
   project references (else the solution), and fails when it finds none, so the test names the real class,
   namespace, steps and unique name.
-  - A **plugin** test (`<Plugin>Tests`) drives the plugin through `PluginPipeline` and asserts from its
-    `ExecutionLog` that the step fired, whatever the handler does. It drives the step `--message` names, else the
-    plugin's first step (`--entity` defaults to the plugin's `EntityPluginBase<T>`), the way a caller sends that
-    message: `Create`/`Update` (and `*Multiple`, with `Targets`) with an entity that sets the step's `FilterOn`
-    column(s); `Delete`, `Retrieve`, `RetrieveMultiple` and `Assign` on a seeded record;
-    `Associate`/`Disassociate` over a placeholder many-to-many relationship (a TODO to replace with yours). Any
-    other message sends the step's request with a TODO for its inputs, in a test skipped until they are set. A
-    second, skipped test is the skeleton for asserting what the plugin does.
+  - A **plugin** test (`<Plugin>Tests`) drives the plugin through `PluginPipeline`. For each step it covers (the
+    one `--message` names, else every step the plugin registers; `--entity` defaults to the plugin's
+    `EntityPluginBase<T>`) it writes two tests named after the step's message and stage:
+    `Fires_On_<Message>_<Stage>` asserts from the `ExecutionLog` that the step fired, whatever the handler does, and
+    the skipped `Does_What_It_Should_On_<Message>_<Stage>` is the skeleton for asserting what the plugin does. A
+    second step on the same message and stage gets `_2`, and so on, in the order the plugin registers them. The
+    message is sent the way a caller sends it: `Create`/`Update` (and `*Multiple`, with `Targets`) with an entity
+    that sets the step's `FilterOn` column(s); `Delete`, `Retrieve`, `RetrieveMultiple` and `Assign` on a seeded
+    record; `Associate`/`Disassociate` over a placeholder many-to-many relationship (a TODO to replace with yours).
+    Any other message sends the step's request with a TODO for its inputs, in a test skipped until they are set.
+  - When `<Plugin>Tests.cs` already exists, `vela add test` **completes** the class instead of failing: it adds the
+    two tests of every covered step that has no `Fires_On_<Message>_<Stage>` method yet (a `Fires_On_<Message>`
+    method, the name earlier versions generated, counts for the first step on that message), before the class's
+    closing brace, plus any `using` the new tests need. Nothing else in the file changes, so your edits are kept.
+    Add a step with `vela add step`, rerun `vela add test`, and the new step has its tests. When every step is
+    tested already, it says so and exits `0`. A file whose class it cannot find (or whose braces do not balance)
+    is left alone and the command exits `2`. `--force` still overwrites the file with a fresh class.
   - A **Custom API** test (`--kind customapi`, `<Class>Tests`) finds the class named `<Name>` or
     `<Name>CustomApi`, or the one registering `<prefix>_<Name>`, and takes its unique name and request type from
     the source. It checks the registered unique name and that every declared output parameter is set, with a
     `WithInputParameter(...)` example for the inputs. `--prefix` names the Custom API only when the unique name
-    cannot be read from the source.
+    cannot be read from the source. When the test class exists already it has these tests, so there is nothing to
+    add: the command says so and exits `0` (`2` when the file has no such class).
 - `vela add step <PluginName>` edits an existing **handler-based (multi-step)** plugin in place, appending a
   `RegisterStep().On<Message>()…Handle(Handle<Message>)` registration (where `On<Message>()` is the curated
   method, e.g. `OnUpdate()`, or `On<XxxRequest>()` for an unmodelled message, as for `add plugin`) and a matching

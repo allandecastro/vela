@@ -571,13 +571,20 @@ internal static class AddCommand
             (string ns, string folder) = TestPlacement(plugin.Namespace, pluginsRoot, rootNamespace, Path.Combine(entity!, "Plugins"));
             // A partial plugin may register its steps in another file: read every declaration of the class.
             List<AddTestSources.SourceClass> declarations = classes.Where(c => c.Name == plugin.Name && c.Namespace == plugin.Namespace).ToList();
-            if (!TryChoosePluginTestStep(args, plugin.Name, entity!, declarations, out PluginTestStep step, out string stepError))
+            if (!TryChoosePluginTestSteps(args, plugin.Name, entity!, declarations, out List<(PluginTestStep Step, string Name)> steps, out string stepError))
             {
                 return Fail(stepError, ExitInvalidArguments, includeUsage: false);
             }
 
-            string content = AddPluginTestFile(ns, plugin.Namespace, modelsNamespace, testClass, name, entity!, step);
-            return WriteFile(projectDir, Path.Combine(folder, $"{testClass}.cs"), content, force, $"plugin test {testClass} (for {name})", json);
+            string relativePath = Path.Combine(folder, $"{testClass}.cs");
+            string fullPath = Path.Combine(projectDir, relativePath);
+            if (File.Exists(fullPath) && !force)
+            {
+                return CompletePluginTestFile(fullPath, testClass, name, entity!, plugin.Namespace, modelsNamespace, steps, json);
+            }
+
+            string content = AddPluginTestFile(ns, plugin.Namespace, modelsNamespace, testClass, name, entity!, steps);
+            return WriteFile(projectDir, relativePath, content, force, $"plugin test {testClass} (for {name})", json);
         }
 
         // A Custom API: the class named <name> or <name>CustomApi, else the one registering "<prefix>_<name>".
@@ -623,8 +630,98 @@ internal static class AddCommand
         string apiTestClass = $"{api.Name}Tests";
         string fallbackFolder = requestType is null && string.IsNullOrWhiteSpace(entity) ? "GlobalCustomApis" : Path.Combine(entity ?? string.Empty, "CustomApis");
         (string apiTestNs, string apiFolder) = TestPlacement(api.Namespace, pluginsRoot, rootNamespace, fallbackFolder);
+        string apiRelativePath = Path.Combine(apiFolder, $"{apiTestClass}.cs");
+        string apiFullPath = Path.Combine(projectDir, apiRelativePath);
+        if (File.Exists(apiFullPath) && !force)
+        {
+            // A Custom API test is the same set of tests whatever the API declares: an existing class already has them.
+            if (!TryReadTestClass(apiFullPath, apiTestClass, out _, out _, out _, out int readExit))
+            {
+                return readExit;
+            }
+
+            return ReportNothingToAdd(apiFullPath, $"{apiTestClass} already tests {api.Name}", json);
+        }
+
         string apiContent = AddCustomApiTestFile(apiTestNs, api.Namespace, apiTestClass, api.Name, uniqueName, requestType);
-        return WriteFile(projectDir, Path.Combine(apiFolder, $"{apiTestClass}.cs"), apiContent, force, $"Custom API test {apiTestClass} (for {api.Name})", json);
+        return WriteFile(projectDir, apiRelativePath, apiContent, force, $"Custom API test {apiTestClass} (for {api.Name})", json);
+    }
+
+    // An existing plugin test class is completed, not replaced: the tests of every chosen step it does not test yet
+    // (no Fires_On_<name> method, see ScaffoldTemplates.PluginTestNames) go before its closing brace, with any using
+    // they need; the rest of the file is left byte for byte. Files written before step names carried the stage name the
+    // dispatch test Fires_On_<Message>, which counts for the first step of that message.
+    private static int CompletePluginTestFile(string fullPath, string testClass, string pluginType, string entity, string pluginNamespace, string modelsNamespace, List<(PluginTestStep Step, string Name)> steps, bool json)
+    {
+        if (!TryReadTestClass(fullPath, testClass, out string source, out System.Text.Encoding encoding, out TestClassAppender.ClassSpan span, out int readExit))
+        {
+            return readExit;
+        }
+
+        HashSet<string> seenMessages = new(StringComparer.Ordinal);
+        List<(PluginTestStep Step, string Name, bool Behaviour)> missing = [];
+        foreach ((PluginTestStep step, string testName) in steps)
+        {
+            bool firstOfMessage = seenMessages.Add(step.Message);
+            if (TestClassAppender.DeclaresMethod(source, span, PluginTestFiresMethod(testName))
+                || (firstOfMessage && TestClassAppender.DeclaresMethod(source, span, PluginTestFiresMethod(step.Message))))
+            {
+                continue;
+            }
+
+            // A behaviour test the user kept (or wrote) under the generated name is not generated again.
+            missing.Add((step, testName, !TestClassAppender.DeclaresMethod(source, span, PluginTestBehaviourMethod(testName))));
+        }
+
+        if (missing.Count == 0)
+        {
+            return ReportNothingToAdd(fullPath, $"{testClass} already tests every step of {pluginType}", json);
+        }
+
+        string members = string.Join("\n", missing.Select(m => PluginTestMethods(pluginType, entity, m.Step, m.Name, m.Behaviour)));
+        File.WriteAllText(fullPath, TestClassAppender.Insert(source, span, members, PluginTestUsings(pluginNamespace, modelsNamespace)), encoding);
+        string added = string.Join(", ", missing.Select(m => PluginTestFiresMethod(m.Name)));
+        string description = $"tests {added} to {testClass} (for {pluginType})";
+        if (json)
+        {
+            Console.WriteLine(BuildAddReport($"plugin {description}", [fullPath]));
+        }
+        else
+        {
+            ConsoleTheme.WriteSuccessLine($"Added {description}");
+            Console.WriteLine($"  {fullPath}");
+        }
+
+        return ExitSuccess;
+    }
+
+    // Reads an existing test file and locates its class; a file whose class cannot be located safely is left alone.
+    private static bool TryReadTestClass(string fullPath, string testClass, out string source, out System.Text.Encoding encoding, out TestClassAppender.ClassSpan span, out int exit)
+    {
+        source = TestClassAppender.Read(fullPath, out encoding);
+        exit = ExitSuccess;
+        if (TestClassAppender.TryFindClass(source, testClass, out span, out string reason))
+        {
+            return true;
+        }
+
+        exit = Fail($"Cannot complete {fullPath}: {reason}. Fix the file, or pass --force to overwrite it with a fresh test class.", ExitInvalidArguments, includeUsage: false);
+        return false;
+    }
+
+    private static int ReportNothingToAdd(string fullPath, string reason, bool json)
+    {
+        if (json)
+        {
+            Console.WriteLine(BuildAddReport($"nothing to add: {reason}", []));
+        }
+        else
+        {
+            Console.WriteLine($"Nothing to add: {reason}.");
+            Console.WriteLine($"  {fullPath}");
+        }
+
+        return ExitSuccess;
     }
 
     // Where a test for a class in <paramref name="sourceNamespace"/> goes: the same sub-namespace and folder under the
@@ -642,71 +739,79 @@ internal static class AddCommand
         return (folder.Length == 0 ? rootNamespace : $"{rootNamespace}.{folder.Replace(Path.DirectorySeparatorChar, '.')}", folder);
     }
 
-    // The step a plugin test drives: the --message one when given, else the plugin's first step (a note names the
-    // others). Its FilterOn members are set by the test so the step fires; its request type serves a message the test
-    // cannot drive through a dedicated service call.
-    private static bool TryChoosePluginTestStep(string[] args, string pluginName, string entity, List<AddTestSources.SourceClass> declarations, out PluginTestStep step, out string error)
+    // The steps a plugin test covers, each with the name its tests carry (ScaffoldTemplates.PluginTestNames over all the
+    // plugin's steps, so a step keeps its name whichever run writes its tests): the --message one when given, else every
+    // step the plugin registers. Their FilterOn members are set by the test so the step fires; the request type serves a
+    // message the test cannot drive through a dedicated service call.
+    private static bool TryChoosePluginTestSteps(string[] args, string pluginName, string entity, List<AddTestSources.SourceClass> declarations, out List<(PluginTestStep Step, string Name)> chosenSteps, out string error)
     {
         error = string.Empty;
+        chosenSteps = [];
         List<AddTestSources.PluginStep> steps = declarations.SelectMany(AddTestSources.ReadSteps).ToList();
+        List<PluginTestStep> testSteps = steps.Select(s => ToTestStep(s.Message, s)).ToList();
+        string[] names = PluginTestNames(testSteps);
         string? rawMessage = TryReadOption(args, "--message")?.Trim();
-        AddTestSources.PluginStep? chosen;
-        string message;
-        step = default;
         if (string.IsNullOrEmpty(rawMessage))
         {
-            chosen = steps.FirstOrDefault();
-            if (chosen is null)
+            if (steps.Count == 0)
             {
                 // Guessing a message would emit a test that can never see the step fire.
                 error = $"Could not read a step registration in {pluginName}. Pass --message <Message> with the message its step is registered on.";
                 return false;
             }
 
-            if (steps.Count > 1)
-            {
-                Console.Error.WriteLine($"Note: {pluginName} registers {steps.Count} steps; the test drives the first ({chosen.Message}). Pass --message to test another.");
-            }
-
-            message = chosen.Message;
+            chosenSteps = testSteps.Select((s, i) => (s, names[i])).ToList();
+            return true;
         }
-        else
+
+        if (!IdentifierPattern.IsMatch(rawMessage))
         {
-            if (!IdentifierPattern.IsMatch(rawMessage))
-            {
-                error = $"Invalid --message '{rawMessage}'. Use an SDK message name (letters, digits, '_'; not starting with a digit).";
-                return false;
-            }
-
-            // The request --message names, as for add plugin: an sdkmessage alias (Send) resolves to its request
-            // (SendEmail), which is what the plugin's typed trigger names.
-            string? request = ResolveRequestName(rawMessage, entity, out string messageError);
-            if (request is null)
-            {
-                error = messageError;
-                return false;
-            }
-
-            chosen = steps.FirstOrDefault(s => string.Equals(s.Message, request, StringComparison.OrdinalIgnoreCase))
-                ?? steps.FirstOrDefault(s => string.Equals(s.Message, rawMessage, StringComparison.OrdinalIgnoreCase));
-            if (chosen is null && steps.Count > 0)
-            {
-                Console.Error.WriteLine($"Note: no {request} step was found in {pluginName}; the test drives {request} anyway. Set the request it needs.");
-            }
-
-            message = chosen?.Message ?? request;
+            error = $"Invalid --message '{rawMessage}'. Use an SDK message name (letters, digits, '_'; not starting with a digit).";
+            return false;
         }
 
-        // A typed trigger's message is a request name; any other is the request type the trigger names (fully
-        // qualified when the plugin's usings would not reach the test), or the SDK's, or the generated one.
+        // The request --message names, as for add plugin: an sdkmessage alias (Send) resolves to its request
+        // (SendEmail), which is what the plugin's typed trigger names.
+        string? request = ResolveRequestName(rawMessage, entity, out string messageError);
+        if (request is null)
+        {
+            error = messageError;
+            return false;
+        }
+
+        int index = steps.FindIndex(s => string.Equals(s.Message, request, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            index = steps.FindIndex(s => string.Equals(s.Message, rawMessage, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (index >= 0)
+        {
+            chosenSteps = [(testSteps[index], names[index])];
+            return true;
+        }
+
+        if (steps.Count > 0)
+        {
+            Console.Error.WriteLine($"Note: no {request} step was found in {pluginName}; the test drives {request} anyway. Set the request it needs.");
+        }
+
+        PluginTestStep guessed = ToTestStep(request, null);
+        chosenSteps = [(guessed, PluginTestNames([guessed])[0])];
+        return true;
+    }
+
+    // A typed trigger's message is a request name; any other is the request type the trigger names (fully qualified
+    // when the plugin's usings would not reach the test), or the SDK's, or the generated one.
+    private static PluginTestStep ToTestStep(string message, AddTestSources.PluginStep? step)
+    {
         string? known = FindKnownMessage(message);
-        string requestType = chosen?.RequestType is { } fromSource && fromSource.Contains('.')
+        string requestType = step?.RequestType is { } fromSource && fromSource.Contains('.')
             ? fromSource
             : SdkMessageClassResolver.TryGetSdkRequestTypeName(known ?? message, out string sdkType)
                 ? sdkType
-                : chosen?.RequestType ?? $"{known ?? message}Request";
-        step = new PluginTestStep(known ?? message, requestType, chosen?.Filters ?? []);
-        return true;
+                : step?.RequestType ?? $"{known ?? message}Request";
+        return new PluginTestStep(known ?? message, requestType, step?.Filters ?? [], step?.Stage);
     }
 
 
@@ -740,7 +845,7 @@ internal static class AddCommand
             return Fail(stageError, ExitInvalidArguments, includeUsage: false);
         }
 
-        // Create/Update (and their bulk variants) require a FilterOn: the builder (and VELA018) reject such a step
+        // Create/Update (and their bulk variants) require a FilterOn: the builder (and VELA020) reject such a step
         // without one, so the caller must name the column(s). We do NOT guess one from the model.
         string filteringCall = string.Empty;
         if (!RequiresFilter(message) && SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter")).Length > 0)
