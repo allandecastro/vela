@@ -9,7 +9,7 @@ internal static partial class ScaffoldTemplates
     // These differ from the example templates above: they emit ONE file with a user-supplied name into an
     // existing project, following the same by-table conventions vela init uses.
 
-    public static string AddPluginFile(string ns, string className, string entityType, string modelsNamespace, string message, string registrationCall, string stageCall = ".PostOperation()", string modeCall = ".Sync()", string filteringCall = "", string handlerContextType = "ILocalPluginContext") =>
+    public static string AddPluginFile(string ns, string className, string entityType, string modelsNamespace, string message, string registrationCall, string stageCall = ".PostOperation()", string modeCall = ".Sync()", string filteringCall = "", string handlerName = AddCommand.PluginHandlerName) =>
 $$"""
 namespace {{ns}}
 {
@@ -27,10 +27,12 @@ namespace {{ns}}
                 {{stageCall}}
                 {{modeCall}}{{filteringCall}}
                 .WithDescription("{{message}} {{entityType}} handler.")
-                .Handle(OnExecute);
+                .Handle({{handlerName}});
         }
 
-        private void OnExecute({{handlerContextType}} ctx)
+        // {{handlerName}}Context is generated for this step (hence the partial class); the signature stays the same
+        // when the step later captures an image.
+        private void {{handlerName}}({{AddCommand.HandlerContextType(handlerName)}} ctx)
         {
             ctx.Trace("{{className}} executed for {0} '{1}'.", ctx.PrimaryEntityName, ctx.PrimaryEntityId);
 

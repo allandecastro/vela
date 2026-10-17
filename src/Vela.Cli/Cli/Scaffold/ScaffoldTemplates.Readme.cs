@@ -187,7 +187,7 @@ protected override void RegisterPluginSteps()
         .FilterOn(a => a.Name)                  // (create/update) attributes that trigger the step
         .WithDescription("Runs after an account is created.")
         .WithPostImage(a => a.Name)                  // snapshot after the operation, limited to these columns
-        .Handle(OnAccountCreated);                   // void OnAccountCreated(ICreatePostContext<Account> ctx)
+        .Handle(OnAccountCreated);                   // void OnAccountCreated(OnAccountCreatedContext ctx)
 }
 ```
 
@@ -197,12 +197,17 @@ configures.
 
 ### Single-step vs multi-step
 
-- **Single-step** - register one step bound to one handler. The handler takes the stage-typed context
-  (`ctx.Request` / `ctx.Response`, with the record at `ctx.Request.Target`). See `AccountPostCreatePlugin`.
+- **Single-step** - register one step bound to one handler. The handler takes its generated context
+  `{Handler}Context` (`ctx.Request` / `ctx.Response`, with the record at `ctx.Request.Target`). See
+  `AccountPostCreatePlugin`.
 - **Multi-step ("router")** - register several steps in one class, giving each its own `.Handle(Method)`; the
-  framework dispatches to the right one. Each handler takes the message-typed context (for example
-  `ICreatePostContext<TEntity>` / `IUpdatePostContext<TEntity>`), exposing a strongly-typed `ctx.Request` (and, in a
-  Post step, `ctx.Response`). See `ContactRouterPlugin`.
+  framework dispatches to the right one. Each handler takes its own generated `{Handler}Context`, which derives
+  from the message context of its step (`CreatePostContext<TEntity>`, `UpdatePostContext<TEntity>`...) and
+  exposes a strongly-typed `ctx.Request` (and, in a Post step, `ctx.Response`). See `ContactRouterPlugin`.
+
+The generated context is nested in the plugin class, which is why plugins are `partial`. Capturing an image does
+not change the handler's signature: the context then exposes it typed to the captured columns, as `ctx.PreImage` /
+`ctx.PostImage`.
 
 Every step must end with `.Handle(...)`; a chain that stops earlier does not compile (analyzer VELA002).
 
@@ -211,7 +216,7 @@ RegisterStep().OnUpdate()
     .PostOperation().Sync()
     .FilterOn(c => c.LastName)                  // (update) fire only when these columns change
     .WithPreImage(c => c.LastName)                   // before-snapshot for the handler
-    .Handle(OnLastNameChanged);                      // void OnLastNameChanged(IUpdatePostContext<Contact> ctx)
+    .Handle(OnLastNameChanged);                      // void OnLastNameChanged(OnLastNameChangedContext ctx)
 ```
 
 ### Builder options
@@ -228,9 +233,10 @@ RegisterStep().OnUpdate()
 | `.WithUnsecureConfig(...)` / `.WithSecureConfigFrom("Name")` | Step configuration passed to the plugin constructor; the secure value is supplied at deploy time (`vela apply --secure-config Name=...`), never compiled in. |
 | `.WithDescription(...)` | Step description shown in Dataverse. |
 | `.Disabled()` | Register the step dormant (kill-switch / phased rollout). |
-| `.Handle(M)` | The handler the step dispatches to; takes the message-typed context. Required, last in the chain. |
+| `.Handle(M)` | The handler the step dispatches to; takes its generated `{M}Context`. Required, last in the chain. |
 
-Read images back in a handler with `ctx.GetPreImage<TEntity>()` / `ctx.GetPostImage<TEntity>()`.
+Read images back in a handler with `ctx.PreImage` / `ctx.PostImage` (Create, Update, Delete, Assign, Merge), typed
+to the captured columns, or per target with `ctx.PreImages` / `ctx.PostImages` (CreateMultiple, UpdateMultiple).
 
 ## Services & dependency injection
 
@@ -287,9 +293,9 @@ protected override void ConfigureServices(SimpleServiceResolver services, ILocal
 ### Resolving and using a service
 
 ```csharp
-private void OnAccountCreated(ICreatePostContext<Account> ctx)
+private void OnAccountCreated(OnAccountCreatedContext ctx)
 {
-    Account target = ctx.GetTarget<Account>();
+    Account target = ctx.Request.Target;
     IAccountFollowUpService followUp = ctx.GetRequiredService<IAccountFollowUpService>();
     Guid taskId = followUp.CreateFollowUpTask(target.Id, target.Name);
     ctx.Trace("Created follow-up task {0}.", taskId);

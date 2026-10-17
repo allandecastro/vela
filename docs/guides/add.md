@@ -42,11 +42,12 @@ vela add --interactive
   case/contract messages (see the full list in [Write a plugin](plugins.md)). The sdkmessage name works too:
   `--message Send` renders `OnSendEmail()`, and `--message Win` renders `OnWinQuote()` or `OnWinOpportunity()`
   from `--entity`. `Assign` gets the typed `OnAssign()` too. Any other name is registered through its request type,
-  `On<XxxRequest>()`, with a handler taking `IMessagePostContext<XxxRequest>` (`IMessagePreContext` at a pre-stage):
-  the SDK class, fully qualified, when one ships (`--message SetState` renders
+  `On<XxxRequest>()`: the SDK class, fully qualified, when one ships (`--message SetState` renders
   `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`, which registers on `SetStateDynamicEntity`, the message a state
   change fires), otherwise the request [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`)
-  generates, with a note to generate it. `--project <csproj>` (default:
+  generates, with a note to generate it. Whatever the message, the plugin is `partial` and its handler,
+  `OnExecute`, takes its generated `OnExecuteContext` (see [Typed step context](plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage)),
+  so its signature stays the same when the step later captures an image. `--project <csproj>` (default:
   the single `.csproj` in the current directory), `--force` (overwrite an existing file), `--json` (machine-readable
   report).
 - **Each kind takes only its own options.** An option the kind does not use (for example `add service --message`
@@ -66,8 +67,9 @@ vela add --interactive
   and `e => e.name` would not compile): run `vela models` first or pass the property name.
 - **Stage and mode** (`add plugin` and `add step`): `--stage <PreValidation|PreOperation|PostOperation>` and
   `--mode <Sync|Async>` set the step's stage and execution mode. Both are optional and default to
-  `PostOperation` + `Sync`. A pre-stage handler gets the pre-stage typed context (`I<Message>PreContext<T>`); a
-  post-stage handler gets `I<Message>PostContext<T>`. Dataverse only allows asynchronous steps at
+  `PostOperation` + `Sync`. The handler's generated context follows the stage: at a pre-stage it derives from the
+  pre-stage context (`<Message>PreContext<T>`, no `ctx.Response`), at PostOperation from `<Message>PostContext<T>`.
+  Dataverse only allows asynchronous steps at
   `PostOperation`, so `--mode Async` with a pre-stage is rejected with a clear message.
 - `vela add service` scaffolds a table-scoped `I<Name>` interface + sealed implementation (injecting
   `IOrganizationService`) under `<Table>/Services/`, and surfaces the `services.AddScoped<...>(...)` line to drop
@@ -104,8 +106,10 @@ vela add --interactive
 - `vela add step <PluginName>` edits an existing **handler-based (multi-step)** plugin in place, appending a
   `RegisterStep().On<Message>()…Handle(Handle<Message>)` registration (where `On<Message>()` is the curated
   method, e.g. `OnUpdate()`, or `On<XxxRequest>()` for an unmodelled message, as for `add plugin`) and a matching
-  handler method
-  (`--message`, optional `--handler <Method>`). It refuses a plugin that has no handler-bound step yet (add a
+  handler method taking its generated `<Handler>Context`
+  (`--message`, optional `--handler <Method>`). The context is nested in the plugin class, so `add step` adds the
+  `partial` modifier to the class (and to any type enclosing it) when it is missing; the existing handlers keep
+  their parameter types. It refuses a plugin that has no handler-bound step yet (add a
   step ending in `.Handle(...)` first) and any file it can't parse cleanly, so it never corrupts source. It
   accepts the same `--stage`/`--mode` and `--filtering-attributes` options as `add plugin`: pass
   `--filtering-attributes <Col1,Col2>` to emit `FilterOn(e => e.Col1, e => e.Col2)` (identifiers validated and

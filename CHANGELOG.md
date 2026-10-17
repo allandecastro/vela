@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (CLI)
+
+- Every handler `vela init` and `vela add` generate takes its generated `{Handler}Context` (for example
+  `OnExecuteContext`) instead of the message interface (`ICreatePostContext<T>`, `IMessagePostContext<TRequest>`...):
+  `vela add plugin` for every message and stage, `vela add step`, and the `vela init` samples, README and AGENTS.md.
+  Capturing an image later no longer changes the handler's signature. `vela add step` now makes the plugin class
+  (and any type enclosing it) `partial` when it is not, since the context is generated inside it. Existing handlers
+  typed with the message interface keep compiling and are left as they are.
+
 ## [0.38.0] - 2026-10-17 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Changed (breaking)

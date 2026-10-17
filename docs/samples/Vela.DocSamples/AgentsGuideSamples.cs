@@ -39,7 +39,7 @@ namespace Vela.DocSamples
         }
 
         // An async step runs after the commit: write through a service, never to the Target (VELA018).
-        private void OnCreditLimitChanged(IUpdatePostContext<Account> ctx) =>
+        private void OnCreditLimitChanged(OnCreditLimitChangedContext ctx) =>
             ctx.Service.Update(new Account { Id = ctx.PrimaryEntityId, Description = "Credit limit reviewed." });
     }
 

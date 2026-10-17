@@ -519,7 +519,7 @@ Assert.Contains("ForRelationship", entry.SkipReason);
 
   ```csharp
   // plugin: read the client tag
-  private void OnAccountCreated(ICreatePostContext<Account> ctx)
+  private void OnAccountCreated(OnAccountCreatedContext ctx)
   {
       if (ctx.Tag == "bulk-import") { /* skip enrichment for imports */ }
   }

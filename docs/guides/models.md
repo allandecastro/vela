@@ -295,7 +295,7 @@ public sealed partial class RouteQualifiedLead(string unsecureConfig, string sec
     protected override void RegisterPluginSteps() =>
         RegisterStep().OnQualifyLead().PostOperation().Sync().Handle(OnQualified);
 
-    private void OnQualified(IQualifyLeadPostContext<Lead> ctx)
+    private void OnQualified(OnQualifiedContext ctx)
     {
         QualifyLeadRequest request = ctx.Request;                       // strongly typed
         QualifyLeadResponse response = ctx.Response;                    // the created records

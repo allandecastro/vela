@@ -20,7 +20,7 @@ persists with the row the platform is about to save - no extra `Update`, no recu
 [Writing the Target: which stage persists](plugins.md#writing-the-target-which-stage-persists)):
 
 ```csharp
-private void OnAccountUpdated(IUpdatePreContext<Account> ctx)
+private void OnAccountUpdated(OnAccountUpdatedContext ctx)
 {
     var target = ctx.Request.Target;
     var pricing = ctx.GetRequiredService<IPricingService>();
