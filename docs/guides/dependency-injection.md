@@ -120,4 +120,5 @@ The rule of thumb: inject a bare `IOrganizationService` for ordinary user-scoped
 
 Smaller handlers, cleaner separation of domain vs infrastructure, and - because you inject the
 `IOrganizationService` and friends - the same handler runs unchanged against the in-memory
-[test harness](testing.md), where you register fakes in `ConfigureServices`.
+[test harness](testing.md). A test replaces any service the plugin registers with
+`WithService<T>(instance)`, without changing the plugin (see [Replacing services](testing.md#replacing-services)).
