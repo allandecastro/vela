@@ -106,7 +106,7 @@ A plugin that calls an HTTP API through the `HttpClient` it registers:
 
 ```csharp
 protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
-    => services.AddScoped(_ => new HttpClient());
+    => services.AddScoped(_ => new HttpClient { Timeout = TimeSpan.FromSeconds(15) });
 ```
 
 is tested against a fake `HttpMessageHandler`:

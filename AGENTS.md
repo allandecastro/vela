@@ -12,7 +12,7 @@ Human contributors: [`CONTRIBUTING.md`](CONTRIBUTING.md). User docs: `docs/` (in
 | `src/Vela.Plugins/Steps/StepImageRules.cs` | | The image property and stage rules per message, shared by the builder, VELA007, the harness and the CLI. |
 | `src/Vela.Plugins/Steps/SdkMessageNames.cs` | | SDK request name to sdkmessage name (`SendEmail` registers on `Send`). |
 | `src/Vela.Messages` | net462, net10.0 | `TypedRequest` / `TypedResponse`, `CustomApiRequest` / `CustomApiResponse`, typed CRUD requests. |
-| `src/Vela.Analyzers` | netstandard2.0 | VELA001-VELA024 and the source generator for typed images and `{Handler}Context`. Rule ids in `DiagnosticIds.cs`; release tracking in `AnalyzerReleases.*.md`. |
+| `src/Vela.Analyzers` | netstandard2.0 | VELA001-VELA026 and the source generator for typed images and `{Handler}Context`. Rule ids in `DiagnosticIds.cs`; release tracking in `AnalyzerReleases.*.md`. |
 | `src/Vela.CodeFixes` | netstandard2.0 | Code fixes, packed inside `Vela.Plugins`. |
 | `src/Vela.Testing` | net462 | `InMemoryOrganizationService`, `PluginContext` (one plugin), `PluginPipeline` (the whole pipeline: stages, transactions, async steps, Custom APIs). |
 | `src/Vela.Cli` | net10.0 | `Program.cs` dispatches. `Cli/CliCommands.cs` is the command and option table that drives the help and each command's option allowlist. `PlanApplyCommand`, `DiffEngine`, `DataverseRegistration.*` (apply), `PackageScanner` / `IsolatedPackageScan` (the scan runs in a child process), `ProjectScaffolder` / `ScaffoldTemplates*` (`vela init`), `AddCommand` (`vela add`), `ModelsCommand` (`vela models`). |

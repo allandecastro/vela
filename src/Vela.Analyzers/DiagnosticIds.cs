@@ -30,5 +30,7 @@ namespace Vela
         public const string SetStateNeverFires = "VELA022";
         public const string TypedTriggerRequired = "VELA023";
         public const string ParallelExecution = "VELA024";
+        public const string IpAddressCall = "VELA025";
+        public const string HttpClientTimeout = "VELA026";
     }
 }
