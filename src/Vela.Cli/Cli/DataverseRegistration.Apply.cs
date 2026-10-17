@@ -307,7 +307,8 @@ internal static partial class DataverseRegistration
         return;
     }
 
-    PluginPackagePayload? unprefixed = packagePayloads.FirstOrDefault(p => !LooksSolutionPrefixed(p.PackageName));
+    // A package without registrations is never created, so its name cannot block the run (see ComputePackagePublishActions).
+    PluginPackagePayload? unprefixed = packagePayloads.FirstOrDefault(p => p.HasRegistrations && !LooksSolutionPrefixed(p.PackageName));
     if (unprefixed != null)
     {
         throw new InvalidOperationException(
@@ -349,6 +350,14 @@ internal static partial class DataverseRegistration
     byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName);
     string packageContent = Convert.ToBase64String(packageBytes);
     Entity? existing = GetPluginPackage(service, desiredPackageName);
+    if (existing == null && !package.HasRegistrations)
+    {
+        // Nothing to register yet (an empty scaffolded project): creating the package would only add an empty
+        // component to Dataverse. Same decision as ComputePackagePublishActions; Guid.Empty means "not written".
+        LogOperation("package", "skip", desiredPackageName, "no plugin or Custom API", verbose);
+        return Guid.Empty;
+    }
+
     if (existing == null)
     {
         LogOperation("package", "create", desiredPackageName, $"v{package.Version}", verbose);
@@ -434,7 +443,10 @@ internal static partial class DataverseRegistration
     // code-only rebuild. Mirrors UpsertPluginPackage exactly so plan and apply never disagree: same create/skip
     // decision, same missing-file FileNotFoundException. The importable-prefix guard (EnsurePluginPackagesImportable)
     // runs separately in both paths, so an unprefixed package without --solution never reaches here as a "create".
-    internal static IReadOnlyList<PackagePublishAction> ComputePackagePublishActions(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories)
+    // A package without registrations that is absent from Dataverse is neither listed nor created; it is named in
+    // `info` instead. One that already exists is compared and republished as usual (removing its last plugin still
+    // updates it).
+    internal static IReadOnlyList<PackagePublishAction> ComputePackagePublishActions(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, List<string>? info = null)
 {
     if (packagePayloads.Length == 0)
     {
@@ -460,6 +472,12 @@ internal static partial class DataverseRegistration
 
         byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName);
         Entity? existing = GetPluginPackage(service, desiredPackageName);
+        if (existing == null && !package.HasRegistrations)
+        {
+            info?.Add($"Plugin package '{desiredPackageName}' contains no plugin or Custom API; it is not created in Dataverse until it does.");
+            continue;
+        }
+
         if (existing == null)
         {
             actions.Add(new PackagePublishAction(desiredPackageName, IsCreate: true));

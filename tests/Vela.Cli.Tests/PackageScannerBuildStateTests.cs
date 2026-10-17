@@ -33,7 +33,7 @@ public sealed class PackageScannerBuildStateTests : IDisposable
 
         // The fixture assembly is discovered and recorded as a source assembly and a package payload.
         Assert.Equal(new[] { "SamplePluginFixture" }, state.SourceAssemblies);
-        Assert.Contains(state.PackagePayloads, p => p.PackageName == "SamplePluginFixture");
+        Assert.Contains(state.PackagePayloads, p => p.PackageName == "SamplePluginFixture" && p.HasRegistrations);
         Assert.Contains(state.SourceAssemblyPayloads, a => a.AssemblyName == "SamplePluginFixture");
 
         // Both plugin kinds were instantiated, their definition methods invoked, and the results normalized —
@@ -56,6 +56,21 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         // The fixture declares a request type name, so it is recorded as typed, beside the item and not in its shape.
         Assert.Equal(new[] { "sample_DoThing" }, state.TypedCustomApiUniqueNames);
         Assert.False(api.Definition.TryGetProperty("requestTypeName", out _));
+    }
+
+    [Fact]
+    public void A_package_without_any_plugin_is_flagged_as_having_no_registrations()
+    {
+        // A dependency-free assembly with no plugin type stands in for a freshly scaffolded, still empty project.
+        string nupkg = BuildNupkg("xunit.abstractions.dll", "zava_Empty");
+
+        RegistrationState state = PackageScanner.BuildLocalStateFromPackages(OptionsFor(nupkg), Web, _temps);
+
+        PluginPackagePayload payload = Assert.Single(state.PackagePayloads);
+        Assert.False(payload.HasRegistrations);
+        Assert.Empty(state.Items);
+        // The assembly is still a source assembly, so its live steps are read (and deleted once gone).
+        Assert.Equal(new[] { "xunit.abstractions" }, state.SourceAssemblies);
     }
 
     [Fact]

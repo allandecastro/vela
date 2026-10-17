@@ -55,7 +55,8 @@ internal static class PackageScanner
     // only the highest version of each package id is scanned, and the others are named on stderr.
     foreach (string packagePath in SelectLatestPackageVersions(options.PackagePaths, Console.Error.WriteLine))
     {
-        packagePayloads.Add(ReadPluginPackagePayload(packagePath));
+        PluginPackagePayload packagePayload = ReadPluginPackagePayload(packagePath);
+        int registrationsBefore = items.Count + unmanagedPluginTypes.Count;
         ExtractedPackage package = ExtractPackage(packagePath, options.PackageAssembly, tempDirectories);
         // Loads the package's assembly (and resolves its sibling dependencies from the same temp folder), by
         // bytes so the file stays deletable. The types below are then instantiated and invoked to read their
@@ -136,6 +137,10 @@ internal static class PackageScanner
                 }
             }
         }
+
+        // A package that contributes nothing (no step, Custom API or unmanaged plugin type) is flagged so plan/apply do
+        // not create an empty package in Dataverse; its assembly stays in SourceAssemblies so live steps are still read.
+        packagePayloads.Add(packagePayload with { HasRegistrations = items.Count + unmanagedPluginTypes.Count > registrationsBefore });
     }
 
     // A web resources root adds web-resource items alongside the plugin/Custom API items (folder mirror).

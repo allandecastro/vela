@@ -341,6 +341,34 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
+    public void UpsertPluginPackage_does_not_create_a_package_without_registrations()
+    {
+        string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-empty"));
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => new EntityCollection() };
+
+        Guid result = DataverseRegistration.UpsertPluginPackage(svc, new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false), solutionPrefix: null, new List<string>(), verbose: false);
+
+        Assert.Equal(Guid.Empty, result);
+        Assert.Empty(svc.Created);
+        Assert.Empty(svc.Updated);
+    }
+
+    [Fact]
+    public void UpsertPluginPackage_still_republishes_an_existing_package_without_registrations()
+    {
+        // Removing the last plugin must still update the deployed package.
+        string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-empty"));
+        var existingId = Guid.NewGuid();
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("pluginpackage", existingId)) };
+
+        Guid result = DataverseRegistration.UpsertPluginPackage(svc, new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false), solutionPrefix: null, new List<string>(), verbose: false);
+
+        Assert.Equal(existingId, result);
+        Assert.Equal(existingId, Assert.Single(svc.Updated).Id);
+        Assert.Empty(svc.Created);
+    }
+
+    [Fact]
     public void UpsertPluginPackage_updates_existing_package_without_solutionid()
     {
         byte[] bytes = Encoding.UTF8.GetBytes("pkg-bytes-2");
@@ -618,6 +646,38 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
         Assert.Equal("acme_Pkg", action.PackageName);
         Assert.True(action.IsCreate);
+    }
+
+    [Fact]
+    public void ComputePackagePublishActions_skips_a_new_package_without_registrations_and_says_so()
+    {
+        string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-empty"));
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection() };
+        List<string> info = [];
+
+        Assert.Empty(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false) }, solutionUniqueName: null, new List<string>(), info));
+        Assert.Equal("Plugin package 'acme_Pkg' contains no plugin or Custom API; it is not created in Dataverse until it does.", Assert.Single(info));
+    }
+
+    [Fact]
+    public void ComputePackagePublishActions_update_an_existing_package_without_registrations()
+    {
+        string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-empty"));
+        var existing = new Entity("pluginpackage", Guid.NewGuid());
+        var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
+        svc.PackageFiles.Store(existing.Id, Encoding.UTF8.GetBytes("pkg-old"));
+        List<string> info = [];
+
+        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false) }, solutionUniqueName: null, new List<string>(), info));
+        Assert.False(action.IsCreate);
+        Assert.Empty(info);
+    }
+
+    [Fact]
+    public void EnsurePluginPackagesImportable_ignores_an_unprefixed_package_without_registrations()
+    {
+        // Such a package is never imported, so its name cannot fail the run.
+        DataverseRegistration.EnsurePluginPackagesImportable(new[] { new PluginPackagePayload("Plugins", "1.0.0", "ignored", HasRegistrations: false) }, solutionUniqueName: null);
     }
 
     [Fact]

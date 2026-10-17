@@ -21,6 +21,17 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (CLI)
+
+- Test projects created by `vela init` (including `Integrations.Tests` with `--integrations`) now reference
+  `System.Net.Http`, like the plugin project, so a net48 test that builds an `HttpClient` around a fake handler
+  compiles.
+- `vela plan` and `vela apply` no longer create a plugin package that contains no plugin and no Custom API (for example
+  the Plugins project right after `vela init`, or the Integrations project of `vela init --integrations` without
+  samples). The package is named under `info` instead, and is not checked for a publisher prefix. A package that is
+  already in Dataverse is still republished, so removing its last plugin still updates it. The "plugin assembly not
+  found" info line no longer says that apply will create the assembly.
+
 ## [0.35.0] - 2026-10-17 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Fixed
