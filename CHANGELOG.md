@@ -21,7 +21,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Added (Framework)
+## [0.37.0] - 2026-10-17 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Added
 
 - VELA025 (warning): a plugin or Custom API calls an IP address (`new Uri("https://10.0.0.1/")`,
   `client.GetStringAsync("http://[2001:db8::1]/x")`, `WebRequest.Create(...)`) instead of a named host resolved by
@@ -33,13 +35,15 @@ All notable changes to Vela are documented here. The format is based on
   not followed.
 - Projects that build with warnings as errors may see these two new warnings.
 
-### Fixed (Framework)
+### Fixed
 
 - The error `WithSecureConfigFrom` raises when given something other than a name now points to
   `vela apply --secure-config NAME=@file` or the `VELA_SECURE_CONFIG_<NAME>` environment variable instead of an
   inline `NAME=VALUE`.
 
-### Fixed (CLI)
+## [0.26.2] - 2026-10-17 (Vela.Cli)
+
+### Fixed
 
 - `--secure-config NAME=@file` now drops exactly one trailing line ending (`\n` or `\r\n`) from the file's
   content, so `echo secret > key.txt` supplies `secret` instead of `secret` plus a newline. Nothing else is trimmed:
