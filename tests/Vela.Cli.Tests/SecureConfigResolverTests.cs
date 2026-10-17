@@ -75,7 +75,8 @@ public class SecureConfigResolverTests
         RegistrationState resolved = Resolve(local, State([]));
 
         Assert.Empty(resolved.SecureConfigByStepKey!);
-        Assert.Contains(resolved.Diagnostics, d => d.Contains("'Key'") && d.Contains("--secure-config Key=VALUE"));
+        Assert.Contains(resolved.Diagnostics, d => d.Contains("'Key'") && d.Contains("--secure-config Key=@file") && d.Contains("VELA_SECURE_CONFIG_Key")
+            && !d.Contains("=VALUE"));
     }
 
     [Fact]
@@ -91,6 +92,44 @@ public class SecureConfigResolverTests
         Assert.DoesNotContain("hunter2", bad.Message);
         Assert.Throws<ArgumentException>(() => SecureConfigResolver.ParseSpecs(["A=1", "A=2"], _ => ""));
         Assert.Throws<FileNotFoundException>(() => SecureConfigResolver.ParseSpecs(["A=@nope"], _ => throw new IOException("missing")));
+    }
+
+    [Theory]
+    [InlineData("x\n", "x")]
+    [InlineData("x\r\n", "x")]
+    [InlineData("x\n\n", "x\n")]
+    [InlineData("x\r\n\r\n", "x\r\n")]
+    [InlineData("x", "x")]
+    [InlineData(" x ", " x ")]
+    [InlineData("\tx\r", "\tx\r")]
+    [InlineData("\n", "")]
+    [InlineData("", "")]
+    public void ParseSpecs_drops_exactly_one_trailing_line_ending_from_a_file_value(string content, string expected)
+    {
+        Dictionary<string, string> values = SecureConfigResolver.ParseSpecs(["Key=@key.txt"], _ => content);
+
+        Assert.Equal(expected, values["Key"]);
+    }
+
+    [Fact]
+    public void ParseSpecs_keeps_a_trailing_newline_of_an_inline_value()
+    {
+        Dictionary<string, string> values = SecureConfigResolver.ParseSpecs(["Key=x\n"], _ => "");
+
+        Assert.Equal("x\n", values["Key"]);
+    }
+
+    [Fact]
+    public void The_digest_of_a_file_value_is_computed_from_the_trimmed_value()
+    {
+        // plan shows the digest and apply writes the raw value: both come from the same trimmed string.
+        RegistrationState local = State([Step(PluginA)], new() { [PluginA + ":stepkey:main"] = "Key" });
+        Dictionary<string, string> supplied = SecureConfigResolver.ParseSpecs(["Key=@key.txt"], _ => "s3cret\n");
+
+        RegistrationState resolved = Resolve(local, State([]), supplied: supplied);
+
+        Assert.Equal("s3cret", resolved.SecureConfigByStepKey![PluginA + ":stepkey:main"]);
+        Assert.Equal(DefinitionNormalizer.HashSecret("s3cret"), Digest(resolved, PluginA));
     }
 
     [Fact]

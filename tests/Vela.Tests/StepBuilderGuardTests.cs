@@ -116,8 +116,11 @@ public sealed class StepBuilderGuardTests
     [InlineData("é")]
     public void A_secure_config_name_must_be_an_identifier(string name)
     {
-        Assert.StartsWith("WithSecureConfigFrom takes the NAME of a secure configuration",
-            Error(s => s.OnDelete().PostOperation().Sync().WithSecureConfigFrom(name).Handle(_ => { })).Message, StringComparison.Ordinal);
+        string message = Error(s => s.OnDelete().PostOperation().Sync().WithSecureConfigFrom(name).Handle(_ => { })).Message;
+        Assert.StartsWith("WithSecureConfigFrom takes the NAME of a secure configuration", message, StringComparison.Ordinal);
+        // The hint never suggests putting the secret on the command line.
+        Assert.Contains("--secure-config NAME=@file or the VELA_SECURE_CONFIG_NAME environment variable", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("=VALUE", message, StringComparison.Ordinal);
     }
 
     [Theory]

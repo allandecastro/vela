@@ -368,7 +368,7 @@ public sealed partial class StepBuilder<TEntity>
         if (string.IsNullOrEmpty(name) || !IsSecureConfigName(name))
         {
             throw new ArgumentException(
-                "WithSecureConfigFrom takes the NAME of a secure configuration (letters, digits and '_', not starting with a digit), not its value. Pass the value to 'vela apply --secure-config NAME=VALUE'.",
+                "WithSecureConfigFrom takes the NAME of a secure configuration (letters, digits and '_', not starting with a digit), not its value. Pass the value to 'vela apply' with --secure-config NAME=@file or the VELA_SECURE_CONFIG_NAME environment variable.",
                 nameof(name));
         }
 

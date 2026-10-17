@@ -19,8 +19,9 @@ internal static class SecureConfigResolver
     internal const string EnvironmentVariablePrefix = "VELA_SECURE_CONFIG_";
 
     /// <summary>
-    /// Parses <c>--secure-config</c> specs (<c>NAME=VALUE</c> or <c>NAME=@path</c>). Messages name the
-    /// configuration, never its value. An inline <c>NAME=VALUE</c> sits in shell history and the process listing, so
+    /// Parses <c>--secure-config</c> specs (<c>NAME=VALUE</c> or <c>NAME=@path</c>). A file's value loses exactly one
+    /// trailing line ending (<c>"\r\n"</c> or <c>"\n"</c>), the one <c>echo secret &gt; file</c> adds; nothing else
+    /// is trimmed. Messages name the configuration, never its value. An inline <c>NAME=VALUE</c> sits in shell history and the process listing, so
     /// it is honored but reported through <paramref name="warn"/>, as <c>--client-secret</c> is.
     /// </summary>
     internal static Dictionary<string, string> ParseSpecs(IEnumerable<string> specs, Func<string, string> readFile, Action<string>? warn = null)
@@ -42,7 +43,7 @@ internal static class SecureConfigResolver
                 string path = value[1..];
                 try
                 {
-                    value = readFile(path);
+                    value = TrimOneLineEnding(readFile(path));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -114,7 +115,7 @@ internal static class SecureConfigResolver
                 }
                 else if (digest.Length == 0)
                 {
-                    diagnostics.Add($"Step '{key}' expects the secure configuration '{name}', but none is set in the environment and no value was given; pass --secure-config {name}=VALUE (or set {EnvironmentVariablePrefix}{name}).");
+                    diagnostics.Add($"Step '{key}' expects the secure configuration '{name}', but none is set in the environment and no value was given; pass --secure-config {name}=@file or set the {EnvironmentVariablePrefix}{name} environment variable.");
                 }
             }
 
@@ -123,6 +124,12 @@ internal static class SecureConfigResolver
 
         return local with { Items = [.. items], Diagnostics = [.. diagnostics], SecureConfigByStepKey = valuesByStepKey };
     }
+
+    // Only the single line ending an editor or `echo` appends: a value that genuinely ends in a newline keeps the rest.
+    private static string TrimOneLineEnding(string value) =>
+        value.EndsWith("\r\n", StringComparison.Ordinal) ? value[..^2]
+        : value.EndsWith('\n') ? value[..^1]
+        : value;
 
     private static JsonElement WithSecureConfig(JsonElement definition, string digest, JsonSerializerOptions jsonOptions)
     {

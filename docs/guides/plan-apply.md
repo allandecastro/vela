@@ -69,7 +69,8 @@ Custom API, or remove the existing one first.
 
 **Secure configuration.** A step's secure configuration value is supplied at plan/apply time with
 `--secure-config NAME=VALUE` / `NAME=@file` (or `VELA_SECURE_CONFIG_<NAME>`), never compiled into the package;
-without a value the environment keeps its own. Deleting a step also deletes its secure-configuration row. See
+without a value the environment keeps its own. A value read from a file loses one trailing line ending (`\n` or
+`\r\n`, as `echo secret > key.txt` adds); everything else in the file is kept. Deleting a step also deletes its secure-configuration row. See
 the step configuration section of [Write a plugin](plugins.md).
 
 ### Package code runs in a separate process (not a sandbox)
