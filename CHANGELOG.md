@@ -21,7 +21,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Fixed (Framework)
+## [0.35.0] - 2026-10-17 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Fixed
 
 - VELA018 (write to the Target in an async step) now also reports a write through a local that only ever holds the
   Target (`var t = ctx.Request.Target; t.Name = ...`, `ctx.Request.Target is Account t`, a reference cast or `as`), a
@@ -30,7 +32,9 @@ All notable changes to Vela are documented here. The format is based on
   local that is ever given anything else (a copy, a method result, `null`) stays unreported. Projects that build
   with warnings as errors may see the new warnings.
 
-### Changed (CLI)
+## [0.26.0] - 2026-10-17 (Vela.Cli)
+
+### Changed
 
 - `vela add test <Plugin>` on a plugin whose test class exists completes the class instead of failing with exit 2:
   it adds, before the class's closing brace, the tests of every step that has none yet (plus any `using` they
@@ -42,7 +46,7 @@ All notable changes to Vela are documented here. The format is based on
   stage too) and the skipped `Does_What_It_Should_On_<Message>_<Stage>`, numbered `_2`... for a repeat. A class
   generated earlier keeps its names: its `Fires_On_<Message>` counts as the test of the first step on that message.
 
-### Fixed (CLI)
+### Fixed
 
 - `vela plan`, `apply` and `inspect` now show the relationship scope of an Associate / Disassociate step declared
   with `ForRelationship(...)`: the human output adds `relationships=<schema names>` to the step line, and the JSON
