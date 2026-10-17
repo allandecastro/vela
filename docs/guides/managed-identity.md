@@ -31,6 +31,18 @@ ILocalPluginContext ctx = PluginContext.For<Account>()
     .Build();
 ```
 
+In a pipeline test, `PluginPipeline.WithManagedIdentityService(fake)` hands the fake to every plugin and Custom API
+the pipeline runs, nested executions included:
+
+```csharp
+PluginPipeline pipeline = PluginPipeline.Empty()
+    .Register<AccountSyncPlugin>()
+    .WithManagedIdentityService(fake);
+```
+
+Without it, neither harness serves a managed-identity service, so `AcquireManagedIdentityToken` throws as it does on
+an environment without one. `WithService<IManagedIdentityService>(...)` is rejected: use `WithManagedIdentityService`.
+
 ## See also
 
 - [Caching](caching.md) and [Environment variables](environment-variables.md) - the other built-in context services.

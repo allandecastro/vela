@@ -199,11 +199,26 @@ namespace Vela.Testing
         /// same instance for the whole execution), whatever its <c>ConfigureServices</c> or the assembly's
         /// <c>[assembly: VelaServiceRegistrar]</c> register for that type. It applies to Vela's built-in resolver
         /// (<c>ctx.GetRequiredService&lt;T&gt;()</c>), not to a container a plugin builds itself. Calling it again for
-        /// the same type replaces the earlier instance.
+        /// the same type replaces the earlier instance. A platform service the context reads from the platform
+        /// (<see cref="IManagedIdentityService"/>, <see cref="ITracingService"/>, the telemetry <c>ILogger</c>,
+        /// <see cref="IOrganizationService"/>, <see cref="IOrganizationServiceFactory"/>, the execution context) is
+        /// rejected with an <see cref="ArgumentException"/> naming how the pipeline supplies it.
         /// </summary>
         public PluginPipeline WithService<TService>(TService instance) where TService : class
         {
             _serviceOverrides.Add(instance);
+            return this;
+        }
+
+        /// <summary>
+        /// Registers a managed-identity service for every plugin and Custom API the pipeline runs (the nested
+        /// executions included), so <c>ctx.AcquireManagedIdentityToken</c> and <c>ctx.ManagedIdentityService</c> use
+        /// it. Without it the pipeline serves none, as on an environment without a managed identity. Calling it again
+        /// replaces the earlier service.
+        /// </summary>
+        public PluginPipeline WithManagedIdentityService(IManagedIdentityService service)
+        {
+            _managedIdentityService = service ?? throw new ArgumentNullException(nameof(service));
             return this;
         }
 
