@@ -21,6 +21,12 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (Framework)
+
+- The error `WithSecureConfigFrom` raises when given something other than a name now points to
+  `vela apply --secure-config NAME=@file` or the `VELA_SECURE_CONFIG_<NAME>` environment variable instead of an
+  inline `NAME=VALUE`.
+
 ### Fixed (CLI)
 
 - `--secure-config NAME=@file` now drops exactly one trailing line ending (`\n` or `\r\n`) from the file's

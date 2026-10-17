@@ -75,7 +75,7 @@ namespace Vela.Testing
         private BypassContext _bypass = BypassContext.None;
 
         // Secure configuration values by name (WithSecureConfig). A step only carries its SecureConfigName; the
-        // value is supplied at deployment time (vela apply --secure-config NAME=VALUE), so the test supplies it here.
+        // value is supplied at deployment time (vela apply --secure-config NAME=@file or VELA_SECURE_CONFIG_NAME), so the test supplies it here.
         private readonly Dictionary<string, string> _secureConfigs = new Dictionary<string, string>(StringComparer.Ordinal);
 
         // The services the test replaced with WithService, handed to every plugin the pipeline runs.
@@ -229,7 +229,7 @@ namespace Vela.Testing
         /// <summary>
         /// Supplies the value of a named secure configuration. A step declared with <c>.WithSecureConfigFrom(name)</c>
         /// receives this value as the <c>secureConfig</c> constructor argument, exactly as <c>vela apply
-        /// --secure-config NAME=VALUE</c> provides it in production. A step whose name has no value receives null.
+        /// --secure-config NAME=@file</c> (or <c>VELA_SECURE_CONFIG_NAME</c>) provides it in production. A step whose name has no value receives null.
         /// </summary>
         public PluginPipeline WithSecureConfig(string name, string value)
         {
