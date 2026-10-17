@@ -45,6 +45,16 @@ All notable changes to Vela are documented here. The format is based on
   comment is treated as a documented, deliberate swallow and is not reported. The fix puts `throw;` in the block.
   Projects that build with warnings as errors may see this new warning.
 
+### Fixed (Framework)
+
+- A typed image projection (`ctx.PreImage` / `ctx.PostImage` on a typed handler context, `ctx.PreImageAs<T>()`,
+  `ctx.PreImagesAs<T>()` and the post-image forms) now fills choice columns. Before, every State, Status, Choice and
+  multi-select Choice column read `null`, because the image holds `OptionSetValue` / `OptionSetValueCollection` while
+  the generated property has the early-bound enum type. An `OptionSetValue` now becomes the property's enum (nullable
+  or not) or `int`, and an `OptionSetValueCollection` becomes the property's enum collection (`IList<TEnum>`,
+  `IEnumerable<TEnum>`, `IReadOnlyList<TEnum>`, `List<TEnum>`, `TEnum[]`). A value of any other mismatched type is
+  still skipped and traced.
+
 ### Docs (CLI)
 
 - New "Behind a proxy" section in the CLI guide: `vela` takes its proxy from `HTTPS_PROXY` / `NO_PROXY` or the
