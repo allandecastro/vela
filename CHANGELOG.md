@@ -21,6 +21,17 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (CLI)
+
+- `--secure-config NAME=@file` now drops exactly one trailing line ending (`\n` or `\r\n`) from the file's
+  content, so `echo secret > key.txt` supplies `secret` instead of `secret` plus a newline. Nothing else is trimmed:
+  leading and inner whitespace and any further newline are kept, and inline values and `VELA_SECURE_CONFIG_<NAME>`
+  are unchanged. This changes the value (and the digest `plan` shows) for anyone who relied on the trailing newline
+  being sent: the next `plan` reports the step's secure configuration as changed and `apply` rewrites it.
+- The diagnostic for a declared secure configuration with no value now suggests `--secure-config NAME=@file` or the
+  `VELA_SECURE_CONFIG_<NAME>` environment variable instead of an inline `NAME=VALUE`, which exposes the secret in
+  shell history and process listings.
+
 ## [0.36.0] - 2026-10-17 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Added
