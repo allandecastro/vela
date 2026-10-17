@@ -21,7 +21,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Changed (Framework, breaking)
+## [0.38.0] - 2026-10-17 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Changed (breaking)
 
 - `WithService<T>(instance)` on `PluginContext` and `PluginPipeline` now throws `ArgumentException` when `T` is a
   platform service the plugin context reads from the platform rather than from Vela's resolver:
@@ -33,7 +35,7 @@ All notable changes to Vela are documented here. The format is based on
   or the builder's context methods on `PluginContext`; `WithManagedIdentityService`, `Trace`, `LogCapture`, the
   in-memory store on `PluginPipeline`.
 
-### Added (Framework)
+### Added
 
 - `PluginPipeline.WithManagedIdentityService(IManagedIdentityService)` hands a managed-identity service to every
   plugin and Custom API the pipeline runs, nested executions included, so `ctx.AcquireManagedIdentityToken(...)` and
@@ -45,7 +47,7 @@ All notable changes to Vela are documented here. The format is based on
   comment is treated as a documented, deliberate swallow and is not reported. The fix puts `throw;` in the block.
   Projects that build with warnings as errors may see this new warning.
 
-### Fixed (Framework)
+### Fixed
 
 - A typed image projection (`ctx.PreImage` / `ctx.PostImage` on a typed handler context, `ctx.PreImageAs<T>()`,
   `ctx.PreImagesAs<T>()` and the post-image forms) now fills choice columns. Before, every State, Status, Choice and
@@ -55,7 +57,9 @@ All notable changes to Vela are documented here. The format is based on
   `IEnumerable<TEnum>`, `IReadOnlyList<TEnum>`, `List<TEnum>`, `TEnum[]`). A value of any other mismatched type is
   still skipped and traced.
 
-### Docs (CLI)
+## [0.26.3] - 2026-10-17 (Vela.Cli)
+
+### Docs
 
 - New "Behind a proxy" section in the CLI guide: `vela` takes its proxy from `HTTPS_PROXY` / `NO_PROXY` or the
   system settings, as .NET 10 does, and ignores the `<system.net><defaultProxy>` element of a `.config` file.
