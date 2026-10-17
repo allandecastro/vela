@@ -603,7 +603,10 @@ recursion prevention. `PluginPipeline` caps the cascade at the same depth by def
 - **Outbound HTTP** is limited to what the administrator allows. Prefer a [managed identity](managed-identity.md)
   token to a stored secret, set a short `Timeout` and turn keep-alive off, as Microsoft recommends
   ([timeout](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-timeout-for-external-calls-from-plug-ins),
-  [keep-alive](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-keepalive-false-interacting-external-hosts-plugin)):
+  [keep-alive](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-keepalive-false-interacting-external-hosts-plugin)).
+  Vela warns on an `HttpClient` whose `Timeout` is never set ([VELA026](../reference/analyzers.md#vela026)) and on a
+  call to an IP address instead of a named host ([VELA025](../reference/analyzers.md#vela025); see the
+  [web access restrictions](https://learn.microsoft.com/power-apps/developer/data-platform/access-web-services)):
 
   ```csharp
   string token = ctx.AcquireManagedIdentityToken(new[] { "https://graph.microsoft.com/.default" });

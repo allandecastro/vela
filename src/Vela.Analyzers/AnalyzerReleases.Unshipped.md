@@ -10,6 +10,8 @@ VELA021 | Vela.Usage | Warning | ImageProjectionGenerator
 VELA022 | Vela.Reliability | Warning | SetStateStepAnalyzer
 VELA023 | Vela.Usage | Error | TypedTriggerRequiredAnalyzer
 VELA024 | Vela.Reliability | Warning | ParallelExecutionAnalyzer
+VELA025 | Vela.Reliability | Warning | IpAddressCallAnalyzer
+VELA026 | Vela.Reliability | Warning | HttpClientTimeoutAnalyzer
 
 ### Removed Rules
 

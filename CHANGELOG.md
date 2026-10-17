@@ -21,6 +21,18 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added (Framework)
+
+- VELA025 (warning): a plugin or Custom API calls an IP address (`new Uri("https://10.0.0.1/")`,
+  `client.GetStringAsync("http://[2001:db8::1]/x")`, `WebRequest.Create(...)`) instead of a named host resolved by
+  DNS. Only build-time strings are checked (literals, constants, and interpolations or concatenations whose constant
+  start holds the whole host).
+- VELA026 (warning, with a code fix): a plugin or Custom API creates an `HttpClient` and never sets its `Timeout` in
+  the member that creates it, including a `services.AddScoped(_ => new HttpClient())` factory. The fix adds
+  `Timeout = TimeSpan.FromSeconds(30)` to the object initializer. A client returned or passed out of that member is
+  not followed.
+- Projects that build with warnings as errors may see these two new warnings.
+
 ### Fixed (Framework)
 
 - The error `WithSecureConfigFrom` raises when given something other than a name now points to

@@ -1,6 +1,6 @@
 # Vela
 
-> Vela is a framework (Vela.Plugins, .NET Framework 4.6.2, for plug-ins on 4.6.2 through 4.8), a CLI (Vela.Cli, command `vela`) and an in-memory test harness (Vela.Testing) for Microsoft Dataverse plugins and Custom APIs, with a preview-first `vela plan` then `vela apply` workflow. Steps are declared in code with a type-state fluent builder; Roslyn analyzers (VELA001-VELA024) reject invalid registrations at build time.
+> Vela is a framework (Vela.Plugins, .NET Framework 4.6.2, for plug-ins on 4.6.2 through 4.8), a CLI (Vela.Cli, command `vela`) and an in-memory test harness (Vela.Testing) for Microsoft Dataverse plugins and Custom APIs, with a preview-first `vela plan` then `vela apply` workflow. Steps are declared in code with a type-state fluent builder; Roslyn analyzers (VELA001-VELA026) reject invalid registrations at build time.
 
 Key facts: plugin classes are `sealed partial` with a primary constructor `(string unsecureConfig, string secureConfig)`; Create/Update steps require `FilterOn(...)`; the handler context exposes `ctx.Service`, `ctx.SystemService` and `ctx.AsUser(id)`; `vela plan` and `vela apply` take `--solution <uniquename>`; `vela plan --json` and `vela help --json` are machine-readable. A project scaffolded by `vela init` has its own AGENTS.md.
 
@@ -44,7 +44,7 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 
 - [Machine-readable output](https://raw.githubusercontent.com/allandecastro/vela/main/docs/reference/machine-readable-output.md): the versioned JSON contract of plan, apply and inspect, and the exit codes
 - [CLI cheat sheet](https://raw.githubusercontent.com/allandecastro/vela/main/docs/reference/cli-cheatsheet.md): every command and environment variable at a glance
-- [Analyzers and generators](https://raw.githubusercontent.com/allandecastro/vela/main/docs/reference/analyzers.md): VELA001 to VELA024, their code fixes, and the source generator
+- [Analyzers and generators](https://raw.githubusercontent.com/allandecastro/vela/main/docs/reference/analyzers.md): VELA001 to VELA026, their code fixes, and the source generator
 - [Limitations](https://raw.githubusercontent.com/allandecastro/vela/main/docs/reference/limitations.md): what is out of scope, and where the harness differs from Dataverse
 - [FAQ](https://raw.githubusercontent.com/allandecastro/vela/main/docs/reference/faq.md): common questions
 - [Troubleshooting](https://raw.githubusercontent.com/allandecastro/vela/main/docs/guides/troubleshooting.md): fixes for common errors

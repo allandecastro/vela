@@ -1,10 +1,10 @@
 # Analyzers and generators
 
-Vela ships 23 Roslyn **analyzers** (VELA001 to VELA024; VELA006 was removed), one **source generator** and a set of IDE **code fixes**
+Vela ships 25 Roslyn **analyzers** (VELA001 to VELA026; VELA006 was removed), one **source generator** and a set of IDE **code fixes**
 inside the `Vela.Plugins` package (assemblies `Vela.Analyzers` and `Vela.CodeFixes`). There is nothing else to
 reference: they run in the editor and at build with no configuration. A mistake that would fail at registration
 or silently do nothing is an **error**; advisory rules (VELA011, VELA012, VELA013, VELA018, VELA019,
-VELA021, VELA022 and VELA024) are **warnings**.
+VELA021, VELA022, VELA024, VELA025 and VELA026) are **warnings**.
 
 | Rule | Category | Severity | What it catches |
 | --- | --- | --- | --- |
@@ -31,8 +31,10 @@ VELA021, VELA022 and VELA024) are **warnings**.
 | [VELA022](#vela022) | Vela.Reliability | Warning | A step on the `SetState` message never fires |
 | [VELA023](#vela023) | Vela.Usage | Error | A message with a typed trigger is registered through it, not `On<UpdateRequest>()` |
 | [VELA024](#vela024) | Vela.Reliability | Warning | A plugin runs work in parallel (`Task.Run`, `Parallel.*`, `new Thread`, ...) or blocks on a task (`.Result`, `.Wait()`) |
+| [VELA025](#vela025) | Vela.Reliability | Warning | A plugin calls an IP address (`new Uri("https://10.0.0.1/...")`) instead of a named host |
+| [VELA026](#vela026) | Vela.Reliability | Warning | A plugin creates an `HttpClient` and never sets its `Timeout` |
 
-Code fixes (editor lightbulb): VELA003, VELA004, VELA005, VELA007, VELA012, VELA014, VELA015 and VELA023. The
+Code fixes (editor lightbulb): VELA003, VELA004, VELA005, VELA007, VELA012, VELA014, VELA015, VELA023 and VELA026. The
 [typed image projection generator](#typed-image-projection-generator) ships in the same assembly as the analyzers.
 
 ## VELA001
@@ -441,3 +443,55 @@ type) is left alone.
 
 **Fix:** run the work sequentially on the calling thread (batch Dataverse calls with `ExecuteMultipleRequest` if
 needed), or move it out of the sandbox: an asynchronous step, a Power Automate flow or an Azure function.
+
+## VELA025
+
+**Outbound call to an IP address.** A plug-in in the sandbox can't call an IP address: see the web access restrictions
+in [Access external web services](https://learn.microsoft.com/power-apps/developer/data-platform/access-web-services).
+Vela reports, inside a plugin / Custom API type, a string whose host is an IPv4 or IPv6 literal when it is given to:
+
+- `new Uri(...)` (so `client.BaseAddress = new Uri("https://10.0.0.1/")` and `request.RequestUri = new Uri(...)` are
+  covered);
+- a string parameter of an `HttpClient` or `HttpRequestMessage` method or constructor
+  (`client.GetStringAsync("http://192.168.1.10/x")`, `new HttpRequestMessage(HttpMethod.Get, "...")`), or of
+  `WebRequest` / `HttpWebRequest` (`WebRequest.Create("...")`).
+
+The string must be known at build time: a literal, a `const`, an interpolated string or a `+` concatenation whose
+constant start already holds the whole host (`$"https://10.0.0.1/items/{id}"`, `"https://10.0.0.1:" + port`). The
+host is parsed with `System.Uri`, and only `http` / `https` URIs whose host is an IP literal (`10.0.0.1`,
+`[2001:db8::1]`) are reported. Not reported: a named host (`localhost` included), a relative or non-HTTP string, a
+string that is never given to one of the members above, a URI built from a variable or configuration, and a host
+cut by an interpolation (`$"https://10.0.0.{n}/"`). Like VELA019, code outside a plugin type is left alone.
+
+**Fix:** give the service a DNS name and call that name.
+
+## VELA026
+
+**HttpClient without a timeout.** Microsoft recommends
+[setting a timeout on external calls from a plug-in](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-timeout-for-external-calls-from-plug-ins):
+the default `HttpClient` timeout is 100 seconds, close to the time a plug-in has to complete. Vela reports a
+`new HttpClient(...)` (or a target-typed `new()`) inside a plugin / Custom API type when its `Timeout` is never set
+in the member that creates it: the method, constructor or accessor (lambdas and local functions in it included), or
+the field / property initializer. The client is fine when:
+
+- its object initializer sets it: `new HttpClient { Timeout = TimeSpan.FromSeconds(15) }`;
+- the local, field or property that holds it gets `.Timeout = ...` in the same member, in any order (also inside a
+  lambda of that member).
+
+```csharp
+protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
+{
+    services.AddScoped(_ => new HttpClient());                                          // VELA026
+    services.AddScoped(_ => new HttpClient { Timeout = TimeSpan.FromSeconds(15) });     // fine
+}
+```
+
+A factory lambda that returns the client (`services.AddScoped(_ => new HttpClient())`) is checked like any other
+creation. A field assigned in one method whose `Timeout` is set in another method is reported: the check stays in the
+creating member. It is one level only and does not follow a client that leaves that member: a client returned from a
+method or a local function, passed as an argument (`new MyApiClient(new HttpClient())`), or copied into another
+variable is not reported, whether or not the code that receives it sets `Timeout`. Only `System.Net.Http.HttpClient`
+itself is checked, not a type derived from it.
+
+**Fix (lightbulb):** adds `Timeout = TimeSpan.FromSeconds(30)` to the object initializer (creating it if needed).
+30 seconds is a starting point: set the value the service needs.
