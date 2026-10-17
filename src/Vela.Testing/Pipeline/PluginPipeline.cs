@@ -78,6 +78,9 @@ namespace Vela.Testing
         // value is supplied at deployment time (vela apply --secure-config NAME=VALUE), so the test supplies it here.
         private readonly Dictionary<string, string> _secureConfigs = new Dictionary<string, string>(StringComparer.Ordinal);
 
+        // The services the test replaced with WithService, handed to every plugin the pipeline runs.
+        private readonly ServiceOverrides _serviceOverrides = new ServiceOverrides();
+
         // The identity of the service issuing the current call (null = the test-facing service: the configured
         // current user) and the user who initiated the outermost request (null until a plugin-issued call runs).
         private Guid? _callerUserId;

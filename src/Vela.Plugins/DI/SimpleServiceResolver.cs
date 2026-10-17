@@ -111,6 +111,12 @@ namespace Vela.DI
             return Add(typeof(TService), factory, isScoped: false);
         }
 
+        // Registers an existing instance as scoped under serviceType (the test harness's WithService overrides).
+        internal SimpleServiceResolver AddScopedInstance(Type serviceType, object instance)
+        {
+            return Add(serviceType, new Func<IPluginServiceResolver, object>(_ => instance), isScoped: true);
+        }
+
         /// <inheritdoc />
         public object? GetService(Type serviceType)
         {

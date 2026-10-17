@@ -193,6 +193,20 @@ namespace Vela.Testing
             return this;
         }
 
+        /// <summary>
+        /// Replaces a service the plugins register, for this test: every plugin and Custom API the pipeline runs (the
+        /// nested executions included) resolves <paramref name="instance"/> for <typeparamref name="TService"/> (the
+        /// same instance for the whole execution), whatever its <c>ConfigureServices</c> or the assembly's
+        /// <c>[assembly: VelaServiceRegistrar]</c> register for that type. It applies to Vela's built-in resolver
+        /// (<c>ctx.GetRequiredService&lt;T&gt;()</c>), not to a container a plugin builds itself. Calling it again for
+        /// the same type replaces the earlier instance.
+        /// </summary>
+        public PluginPipeline WithService<TService>(TService instance) where TService : class
+        {
+            _serviceOverrides.Add(instance);
+            return this;
+        }
+
         /// <summary>Declares a table as organization-owned (audit columns only, no owner columns).</summary>
         public PluginPipeline AsOrganizationOwned(string entityLogicalName)
         {

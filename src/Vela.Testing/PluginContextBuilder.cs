@@ -27,6 +27,7 @@ namespace Vela.Testing
         private ITracingService _tracingService;
         private Microsoft.Xrm.Sdk.PluginTelemetry.ILogger _logger;
         private IManagedIdentityService? _managedIdentityService;
+        private readonly ServiceOverrides _serviceOverrides = new ServiceOverrides();
         // Which parts of the trigger the test stated; the others are resolved from the plugin's registration.
         private bool _messageSet;
         private bool _stageSet;
@@ -309,6 +310,19 @@ namespace Vela.Testing
             return this;
         }
 
+        /// <summary>
+        /// Replaces a service the plugin registers, for this test: the plugin resolves <paramref name="instance"/> for
+        /// <typeparamref name="TService"/> (the same instance for the whole execution), whatever its
+        /// <c>ConfigureServices</c> or the assembly's <c>[assembly: VelaServiceRegistrar]</c> register for that type.
+        /// It applies to Vela's built-in resolver (<c>ctx.GetRequiredService&lt;T&gt;()</c>), not to a container the
+        /// plugin builds itself. Calling it again for the same type replaces the earlier instance.
+        /// </summary>
+        public PluginContextBuilder<TEntity> WithService<TService>(TService instance) where TService : class
+        {
+            _serviceOverrides.Add(instance);
+            return this;
+        }
+
         /// <summary>Overrides the tracing service (disables the default <see cref="TraceCapture"/> recorder).</summary>
         public PluginContextBuilder<TEntity> WithTracingService(ITracingService service)
         {
@@ -371,6 +385,12 @@ namespace Vela.Testing
             if (_managedIdentityService != null)
             {
                 services[typeof(IManagedIdentityService)] = _managedIdentityService;
+            }
+
+            // Not a platform service: the services the test replaced with WithService.
+            if (!_serviceOverrides.IsEmpty)
+            {
+                services[typeof(Vela.DI.IServiceOverrides)] = _serviceOverrides;
             }
 
             return new DictionaryServiceProvider(services);
