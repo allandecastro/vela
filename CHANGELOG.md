@@ -40,6 +40,16 @@ All notable changes to Vela are documented here. The format is based on
   or the builder's context methods on `PluginContext`; `WithManagedIdentityService`, `Trace`, `LogCapture`, the
   in-memory store on `PluginPipeline`.
 
+### Fixed (Framework)
+
+- A typed image projection (`ctx.PreImage` / `ctx.PostImage` on a typed handler context, `ctx.PreImageAs<T>()`,
+  `ctx.PreImagesAs<T>()` and the post-image forms) now fills choice columns. Before, every State, Status, Choice and
+  multi-select Choice column read `null`, because the image holds `OptionSetValue` / `OptionSetValueCollection` while
+  the generated property has the early-bound enum type. An `OptionSetValue` now becomes the property's enum (nullable
+  or not) or `int`, and an `OptionSetValueCollection` becomes the property's enum collection (`IList<TEnum>`,
+  `IEnumerable<TEnum>`, `IReadOnlyList<TEnum>`, `List<TEnum>`, `TEnum[]`). A value of any other mismatched type is
+  still skipped and traced.
+
 ## [0.37.0] - 2026-10-17 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Added
