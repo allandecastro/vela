@@ -113,7 +113,9 @@ internal static class TestClassAppender
     {
         string newline = source.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         string memberIndent = span.Indent + (span.Indent.Contains('\t') ? "\t" : "    ");
-        string reindented = string.Concat(members.TrimEnd('\n').Split('\n')
+        // The templates' raw literals carry the line endings of the checkout that compiled the CLI (CRLF on Windows):
+        // fold them to '\n' first, so the inserted lines follow the file's own line endings.
+        string reindented = string.Concat(members.Replace("\r\n", "\n").TrimEnd('\n').Split('\n')
             .Select(line => (line.StartsWith("        ", StringComparison.Ordinal) ? memberIndent + line.Substring(8) : line) + newline));
 
         // Before the closing brace: on a line of its own, the members go on the lines just above it, after a blank line;
