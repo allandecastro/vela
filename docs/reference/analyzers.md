@@ -1,10 +1,10 @@
 # Analyzers and generators
 
-Vela ships 25 Roslyn **analyzers** (VELA001 to VELA026; VELA006 was removed), one **source generator** and a set of IDE **code fixes**
+Vela ships 26 Roslyn **analyzers** (VELA001 to VELA027; VELA006 was removed), one **source generator** and a set of IDE **code fixes**
 inside the `Vela.Plugins` package (assemblies `Vela.Analyzers` and `Vela.CodeFixes`). There is nothing else to
 reference: they run in the editor and at build with no configuration. A mistake that would fail at registration
 or silently do nothing is an **error**; advisory rules (VELA011, VELA012, VELA013, VELA018, VELA019,
-VELA021, VELA022, VELA024, VELA025 and VELA026) are **warnings**.
+VELA021, VELA022, VELA024, VELA025, VELA026 and VELA027) are **warnings**.
 
 | Rule | Category | Severity | What it catches |
 | --- | --- | --- | --- |
@@ -33,9 +33,10 @@ VELA021, VELA022, VELA024, VELA025 and VELA026) are **warnings**.
 | [VELA024](#vela024) | Vela.Reliability | Warning | A plugin runs work in parallel (`Task.Run`, `Parallel.*`, `new Thread`, ...) or blocks on a task (`.Result`, `.Wait()`) |
 | [VELA025](#vela025) | Vela.Reliability | Warning | A plugin calls an IP address (`new Uri("https://10.0.0.1/...")`) instead of a named host |
 | [VELA026](#vela026) | Vela.Reliability | Warning | A plugin creates an `HttpClient` and never sets its `Timeout` |
+| [VELA027](#vela027) | Vela.Reliability | Warning | A plugin has an empty `catch` block (no statement, no comment) |
 
-Code fixes (editor lightbulb): VELA003, VELA004, VELA005, VELA007, VELA012, VELA014, VELA015, VELA023 and VELA026. The
-[typed image projection generator](#typed-image-projection-generator) ships in the same assembly as the analyzers.
+Code fixes (editor lightbulb): VELA003, VELA004, VELA005, VELA007, VELA012, VELA014, VELA015, VELA023, VELA026 and VELA027.
+The [typed image projection generator](#typed-image-projection-generator) ships in the same assembly as the analyzers.
 
 ## VELA001
 
@@ -495,3 +496,37 @@ itself is checked, not a type derived from it.
 
 **Fix (lightbulb):** adds `Timeout = TimeSpan.FromSeconds(30)` to the object initializer (creating it if needed).
 30 seconds is a starting point: set the value the service needs.
+
+## VELA027
+
+**Empty catch in a plugin.** Vela reports, inside a plugin / Custom API type (lambdas and local functions included),
+a `catch` clause whose block holds no statement and no comment: `catch { }`, `catch (Exception) { }`,
+`catch (FaultException<OrganizationServiceFault>) { }`, with or without a `when` filter. The exception is swallowed:
+nothing is traced and the failure disappears. When the swallowed exception is a failed organization-service write
+inside the pipeline transaction, Dataverse fails the operation anyway with "ISV code reduced the open transaction
+count. Custom plug-ins should not catch exceptions from OrganizationService calls and continue processing." (see
+[Transaction errors](https://learn.microsoft.com/troubleshoot/power-platform/dataverse/plug-in-execution/dataverse-plug-ins-errors#transaction-errors)).
+The test harness reproduces that failure for a caught failed write (see
+[Simulate the pipeline](../guides/testing.md#simulate-the-pipeline-cascade)).
+
+```csharp
+try { service.Delete("account", id); } catch (FaultException<OrganizationServiceFault>) { }         // VELA027
+try { service.Delete("account", id); } catch (FaultException<OrganizationServiceFault>) { throw; }  // fine
+```
+
+Not reported: a block with any statement (`throw;`, a trace call, `return`, ...), and a block that holds a comment
+(or a preprocessor directive), which Vela takes as a deliberate, documented swallow:
+
+```csharp
+catch (InvalidOperationException)
+{
+    // the cache entry may already be gone: nothing to do
+}
+```
+
+Code outside a plugin type (tests, tools, a nested helper type) is left alone.
+
+**Fix (lightbulb):** puts `throw;` in the block, which rethrows the original exception with its stack trace. The
+unused exception variable is dropped (`catch (Exception ex) { }` becomes `catch (Exception) { throw; }`) unless the
+clause has a `when` filter. To surface a message to the caller instead, throw an `InvalidPluginExecutionException`
+(see [VELA012](#vela012)).

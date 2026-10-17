@@ -21,6 +21,13 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added (Framework)
+
+- VELA027 (warning, with a code fix): an empty `catch` block (no statement, no comment) in a plugin or Custom API,
+  such as `catch (FaultException<OrganizationServiceFault>) { }`, with or without a `when` filter. A block holding a
+  comment is treated as a documented, deliberate swallow and is not reported. The fix puts `throw;` in the block.
+  Projects that build with warnings as errors may see this new warning.
+
 ## [0.37.0] - 2026-10-17 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Added

@@ -451,7 +451,8 @@ is still ahead:
   `FormatUnexpectedErrorMessage(context, exception)` for a more detailed message.
 - Don't swallow an exception in a synchronous step: the operation would commit without the work. A swallowed failed
   **write** fails the operation anyway (`0x8009000C`); a swallowed failed read is harmless. Catch only for
-  deliberate best-effort work, and trace it.
+  deliberate best-effort work, and trace it. [VELA027](../reference/analyzers.md#vela027) flags an empty `catch`
+  block.
 
 ## Context helpers
 
