@@ -95,6 +95,9 @@ namespace Vela.Plugin
                 // shared registration (the resolver is last-registration-wins).
                 AssemblyServiceRegistrars.Resolve(GetType())?.Register(localContext.Resolver, localContext);
                 ConfigureServices(localContext.Resolver, localContext);
+                // Then the test harness's replacements, when it registered any (Dataverse never does): a test's
+                // WithService(...) wins over both the registrar and ConfigureServices.
+                (serviceProvider.GetService(typeof(IServiceOverrides)) as IServiceOverrides)?.Apply(localContext.Resolver);
 
                 localContext.Trace(
                     "Executing {0}. Message={1}, Stage={2}, Mode={3}, Depth={4}",

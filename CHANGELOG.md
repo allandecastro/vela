@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added (Framework)
+
+- `WithService<T>(instance)` on `PluginContext` and `PluginPipeline` replaces a service the plugin registers, for the
+  test: the plugin resolves the test's instance (the same one for the whole execution) whatever its
+  `ConfigureServices` or the assembly's `[assembly: VelaServiceRegistrar]` register for that type, so a test can hand
+  it a fake API client or an `HttpClient` over a fake `HttpMessageHandler` without changing the plugin. On
+  `PluginPipeline` it applies to every plugin and Custom API the pipeline runs, nested executions included. It covers
+  Vela's built-in resolver, not a container a plugin builds itself.
+
 ### Fixed (CLI)
 
 - Test projects created by `vela init` (including `Integrations.Tests` with `--integrations`) now reference

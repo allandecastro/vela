@@ -89,9 +89,44 @@ the whole registration.
 The builder also exposes: `WithInputParameter`/`WithOutputParameter`, `WithSharedVariable`, `WithTag`,
 `WithUserId`/`WithInitiatingUserId`, `WithTargets(...)` and `WithBulkPreImages`/`WithBulkPostImages` (bulk
 `CreateMultiple`/`UpdateMultiple`), `WithParentContext`, `WithManagedIdentityService`,
+`WithService` (see [Replacing services](#replacing-services)),
 `WithEnvironmentId`/`WithTenantId`/`AsApplicationUser`, `TraceCapture` (a `RecordingTracingService`) and
 `LogCapture` (a `RecordingLogger` that records `ctx.Log*` entries and `ctx.LogMetric` metrics). `FakePluginExecutionContext` implements the full `IPluginExecutionContext2..7`
 chain, so plugins reading newer context members work.
+
+## Replacing services
+
+A plugin that registers its own services in `ConfigureServices` (or in an `[assembly: VelaServiceRegistrar]`, see
+[Dependency injection](dependency-injection.md)) gets a test double from the test with `WithService<T>(instance)`,
+on `PluginContext` and on `PluginPipeline`, without changing the plugin. The plugin resolves the test's instance for
+`T`, the same one for the whole execution, whatever the registrar and `ConfigureServices` registered for that type.
+On `PluginPipeline` it applies to every plugin and Custom API the pipeline runs, nested executions included.
+
+A plugin that calls an HTTP API through the `HttpClient` it registers:
+
+```csharp
+protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
+    => services.AddScoped(_ => new HttpClient());
+```
+
+is tested against a fake `HttpMessageHandler`:
+
+```csharp
+sealed class FakeHandler : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("42") });
+}
+
+PluginPipeline pipeline = PluginPipeline.Empty()
+    .Register<AccountScoringPlugin>()
+    .WithService(new HttpClient(new FakeHandler()));
+```
+
+The same works for your own API client: `.WithService<IContactApi>(new FakeContactApi())`. Calling `WithService` again
+for the same type replaces the earlier instance. It replaces registrations in Vela's built-in resolver
+(`ctx.GetRequiredService<T>()`); a container the plugin builds itself (for example with `AddPluginRuntime`) is not
+affected.
 
 ## Test doubles (no Moq)
 
@@ -521,7 +556,8 @@ Assert.Contains("ForRelationship", entry.SkipReason);
 - Use `PluginPipeline.Empty().Register<MyPlugin>()` to scope a test to specific plugins.
 - **Pipeline configuration.** `PluginPipeline` forwards the store's configuration (`WithSecurity`,
   `WithStrictSecurity`, `WithAlternateKey`, `WithAutoNumber`, `WithDefaultStatus`, relationships, metadata,
-  ownership, clock and id sequence), and adds `Seed(...)`, `WithSecureConfig(name, value)` and `WithMaxDepth(n)`.
+  ownership, clock and id sequence), and adds `Seed(...)`, `WithSecureConfig(name, value)`, `WithMaxDepth(n)` and
+  `WithService<T>(instance)` ([Replacing services](#replacing-services)).
   Assert with `GetAll(table)`, `ExecutionLog`, `AsyncStepFailures`, `Trace` and `LogCapture` (the whole cascade's
   `ctx.Log*` entries).
 
