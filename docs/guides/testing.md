@@ -128,6 +128,19 @@ for the same type replaces the earlier instance. It replaces registrations in Ve
 (`ctx.GetRequiredService<T>()`); a container the plugin builds itself (for example with `AddPluginRuntime`) is not
 affected.
 
+`WithService` does not take the platform services the plugin context reads from the platform rather than from the
+resolver: `IManagedIdentityService`, `ITracingService`, the telemetry `ILogger`, `IOrganizationService`,
+`IOrganizationServiceFactory` and the execution context. It throws an `ArgumentException` naming how to replace that
+service instead:
+
+| Service | `PluginContext` | `PluginPipeline` |
+| --- | --- | --- |
+| `IManagedIdentityService` | `WithManagedIdentityService` | `WithManagedIdentityService` |
+| `ITracingService` | `WithTracingService` | recorded in `Trace` |
+| `ILogger` (telemetry) | `WithLogger` | recorded in `LogCapture` |
+| `IOrganizationService`, `IOrganizationServiceFactory` | `WithOrganizationService`, `WithUserService`, `WithSystemService` | the pipeline's in-memory store |
+| `IPluginExecutionContext` (and `2..7`) | the builder's context methods | built by the pipeline for each step |
+
 ## Test doubles (no Moq)
 
 | Type | Purpose |
@@ -556,8 +569,10 @@ Assert.Contains("ForRelationship", entry.SkipReason);
 - Use `PluginPipeline.Empty().Register<MyPlugin>()` to scope a test to specific plugins.
 - **Pipeline configuration.** `PluginPipeline` forwards the store's configuration (`WithSecurity`,
   `WithStrictSecurity`, `WithAlternateKey`, `WithAutoNumber`, `WithDefaultStatus`, relationships, metadata,
-  ownership, clock and id sequence), and adds `Seed(...)`, `WithSecureConfig(name, value)`, `WithMaxDepth(n)` and
-  `WithService<T>(instance)` ([Replacing services](#replacing-services)).
+  ownership, clock and id sequence), and adds `Seed(...)`, `WithSecureConfig(name, value)`, `WithMaxDepth(n)`,
+  `WithManagedIdentityService(service)` (for every plugin and Custom API it runs, nested executions included; see
+  [Managed identity](managed-identity.md#testing)) and `WithService<T>(instance)`
+  ([Replacing services](#replacing-services)).
   Assert with `GetAll(table)`, `ExecutionLog`, `AsyncStepFailures`, `Trace` and `LogCapture` (the whole cascade's
   `ctx.Log*` entries).
 

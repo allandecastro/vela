@@ -21,7 +21,24 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (Framework, breaking)
+
+- `WithService<T>(instance)` on `PluginContext` and `PluginPipeline` now throws `ArgumentException` when `T` is a
+  platform service the plugin context reads from the platform rather than from Vela's resolver:
+  `IManagedIdentityService`, `ITracingService`, the telemetry `ILogger`, `IOrganizationService`,
+  `IOrganizationServiceFactory` and the execution context interfaces (`IExecutionContext`, `IPluginExecutionContext`,
+  `IPluginExecutionContext2..7`). Such an override only reached `ctx.GetRequiredService<T>()` while `ctx.Service`,
+  `ctx.TracingService`, `ctx.AcquireManagedIdentityToken(...)` and the others kept the harness's own. The message names
+  the way to replace it: `WithManagedIdentityService`, `WithTracingService`, `WithLogger`, `WithOrganizationService`
+  or the builder's context methods on `PluginContext`; `WithManagedIdentityService`, `Trace`, `LogCapture`, the
+  in-memory store on `PluginPipeline`.
+
 ### Added (Framework)
+
+- `PluginPipeline.WithManagedIdentityService(IManagedIdentityService)` hands a managed-identity service to every
+  plugin and Custom API the pipeline runs, nested executions included, so `ctx.AcquireManagedIdentityToken(...)` and
+  `ctx.ManagedIdentityService` use it. Without it the pipeline serves none, as before. `null` throws
+  `ArgumentNullException`; calling it again replaces the earlier service.
 
 - VELA027 (warning, with a code fix): an empty `catch` block (no statement, no comment) in a plugin or Custom API,
   such as `catch (FaultException<OrganizationServiceFault>) { }`, with or without a `when` filter. A block holding a

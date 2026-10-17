@@ -497,6 +497,11 @@ namespace Vela.Testing
                 [typeof(Vela.Context.IHandlerObserver)] = new EntryHandlerObserver(entry),
             };
 
+            if (_managedIdentityService != null)
+            {
+                services[typeof(IManagedIdentityService)] = _managedIdentityService;
+            }
+
             // Not a platform service either: the services the test replaced with WithService, for every plugin it runs.
             if (!_serviceOverrides.IsEmpty)
             {
