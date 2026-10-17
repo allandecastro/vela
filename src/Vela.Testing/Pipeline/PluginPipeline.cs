@@ -79,7 +79,22 @@ namespace Vela.Testing
         private readonly Dictionary<string, string> _secureConfigs = new Dictionary<string, string>(StringComparer.Ordinal);
 
         // The services the test replaced with WithService, handed to every plugin the pipeline runs.
-        private readonly ServiceOverrides _serviceOverrides = new ServiceOverrides();
+        private readonly ServiceOverrides _serviceOverrides = new ServiceOverrides(PlatformServices);
+
+        // The platform services WithService rejects, with how the pipeline supplies or replaces each one.
+        private static readonly IReadOnlyList<KeyValuePair<Type, string>> PlatformServices = new[]
+        {
+            new KeyValuePair<Type, string>(typeof(IManagedIdentityService), "Use WithManagedIdentityService."),
+            new KeyValuePair<Type, string>(typeof(ITracingService), "The pipeline records every trace line in Trace."),
+            new KeyValuePair<Type, string>(typeof(Microsoft.Xrm.Sdk.PluginTelemetry.ILogger), "The pipeline records every log entry in LogCapture."),
+            new KeyValuePair<Type, string>(typeof(IOrganizationService), "Plugins call the pipeline's in-memory store; seed it with Seed and configure it with the pipeline's With... methods."),
+            new KeyValuePair<Type, string>(typeof(IOrganizationServiceFactory), "Plugins call the pipeline's in-memory store; seed it with Seed and configure it with the pipeline's With... methods."),
+            new KeyValuePair<Type, string>(typeof(IExecutionContext), "The pipeline builds each step's execution context from the request it runs."),
+        };
+
+        // The managed-identity service handed to every plugin the pipeline runs (WithManagedIdentityService); null
+        // leaves it out of the provider, as on an environment without one.
+        private IManagedIdentityService? _managedIdentityService;
 
         // The identity of the service issuing the current call (null = the test-facing service: the configured
         // current user) and the user who initiated the outermost request (null until a plugin-issued call runs).

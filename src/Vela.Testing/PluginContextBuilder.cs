@@ -27,7 +27,18 @@ namespace Vela.Testing
         private ITracingService _tracingService;
         private Microsoft.Xrm.Sdk.PluginTelemetry.ILogger _logger;
         private IManagedIdentityService? _managedIdentityService;
-        private readonly ServiceOverrides _serviceOverrides = new ServiceOverrides();
+        private readonly ServiceOverrides _serviceOverrides = new ServiceOverrides(PlatformServices);
+
+        // The platform services WithService rejects, with the builder method that replaces each one.
+        private static readonly IReadOnlyList<KeyValuePair<Type, string>> PlatformServices = new[]
+        {
+            new KeyValuePair<Type, string>(typeof(IManagedIdentityService), "Use WithManagedIdentityService."),
+            new KeyValuePair<Type, string>(typeof(ITracingService), "Use WithTracingService."),
+            new KeyValuePair<Type, string>(typeof(Microsoft.Xrm.Sdk.PluginTelemetry.ILogger), "Use WithLogger."),
+            new KeyValuePair<Type, string>(typeof(IOrganizationService), "Use WithOrganizationService (or WithUserService / WithSystemService)."),
+            new KeyValuePair<Type, string>(typeof(IOrganizationServiceFactory), "Use WithOrganizationService (or WithUserService / WithSystemService)."),
+            new KeyValuePair<Type, string>(typeof(IExecutionContext), "Describe the execution with the builder's methods (OnCreate, WithTarget, WithInputParameter, WithUserId...)."),
+        };
         // Which parts of the trigger the test stated; the others are resolved from the plugin's registration.
         private bool _messageSet;
         private bool _stageSet;
@@ -315,7 +326,11 @@ namespace Vela.Testing
         /// <typeparamref name="TService"/> (the same instance for the whole execution), whatever its
         /// <c>ConfigureServices</c> or the assembly's <c>[assembly: VelaServiceRegistrar]</c> register for that type.
         /// It applies to Vela's built-in resolver (<c>ctx.GetRequiredService&lt;T&gt;()</c>), not to a container the
-        /// plugin builds itself. Calling it again for the same type replaces the earlier instance.
+        /// plugin builds itself. Calling it again for the same type replaces the earlier instance. A platform service
+        /// the context reads from the platform (<see cref="IManagedIdentityService"/>, <see cref="ITracingService"/>,
+        /// the telemetry <c>ILogger</c>, <see cref="IOrganizationService"/>, <see cref="IOrganizationServiceFactory"/>,
+        /// the execution context) is rejected with an <see cref="ArgumentException"/> naming the builder method that
+        /// replaces it.
         /// </summary>
         public PluginContextBuilder<TEntity> WithService<TService>(TService instance) where TService : class
         {
