@@ -12,6 +12,7 @@ VELA023 | Vela.Usage | Error | TypedTriggerRequiredAnalyzer
 VELA024 | Vela.Reliability | Warning | ParallelExecutionAnalyzer
 VELA025 | Vela.Reliability | Warning | IpAddressCallAnalyzer
 VELA026 | Vela.Reliability | Warning | HttpClientTimeoutAnalyzer
+VELA027 | Vela.Reliability | Warning | EmptyCatchAnalyzer
 
 ### Removed Rules
 
