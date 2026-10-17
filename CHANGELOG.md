@@ -21,6 +21,11 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Docs (CLI)
+
+- New "Behind a proxy" section in the CLI guide: `vela` takes its proxy from `HTTPS_PROXY` / `NO_PROXY` or the
+  system settings, as .NET 10 does, and ignores the `<system.net><defaultProxy>` element of a `.config` file.
+
 ## [0.37.0] - 2026-10-17 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Added
