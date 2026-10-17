@@ -206,6 +206,9 @@ $$"""
     <PackageReference Include="Microsoft.CrmSdk.CoreAssemblies" Version="{{CrmCoreAssembliesVersion}}" />
     <!-- Vela.Testing resolves from nuget.org, the same source as Vela.Plugins. -->
     <PackageReference Include="Vela.Testing" Version="{{coreVersion}}" />
+    <!-- HttpClient on .NET Framework binds against this GAC facade, as in the plugin project; without it a test that
+         builds an HttpClient (e.g. around a fake HttpMessageHandler) does not compile. Harmless when unused. -->
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 
   <ItemGroup>

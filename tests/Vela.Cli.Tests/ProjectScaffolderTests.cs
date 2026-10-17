@@ -135,6 +135,8 @@ public class ProjectScaffolderTests
             Assert.Contains("tests\\Zava.Integrations.Tests\\Zava.Integrations.Tests.csproj", sln);
             Assert.Contains("..\\..\\src\\Zava.Integrations\\Zava.Integrations.csproj", File.ReadAllText(Path.Combine(root, "tests", "Zava.Integrations.Tests", "Zava.Integrations.Tests.csproj")));
             Assert.DoesNotContain("SignPluginPackage", File.ReadAllText(Path.Combine(root, "src", "Zava.Integrations", "Zava.Integrations.csproj")));
+            // An integration test builds an HttpClient around a fake handler; on net48 that needs the GAC facade.
+            Assert.Contains("<Reference Include=\"System.Net.Http\" />", File.ReadAllText(Path.Combine(root, "tests", "Zava.Integrations.Tests", "Zava.Integrations.Tests.csproj")));
 
             string readme = File.ReadAllText(Path.Combine(root, "README.md"));
             Assert.Contains("`src/Zava.Integrations` - a second plugin package", readme);
@@ -799,6 +801,34 @@ public class ProjectScaffolderTests
             // (EstimateValueRequest) are not named after its unique name: they are read from its source.
             string testsProject = Path.Combine(root, "tests", "Zava.Plugins.Tests", "Zava.Plugins.Tests.csproj");
             Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountEstimateValue", "--kind", "customapi", "--force", "--project", testsProject]));
+
+            // A test that drives an HttpClient through a fake handler, as integration tests do: it only compiles on
+            // net48 when the test project references the System.Net.Http facade.
+            File.WriteAllText(Path.Combine(root, "tests", "Zava.Integrations.Tests", "HttpClientFakeHandlerTests.cs"), """
+                using System.Net;
+                using System.Net.Http;
+                using System.Threading;
+                using System.Threading.Tasks;
+                using Xunit;
+
+                namespace Zava.Integrations.Tests;
+
+                public class HttpClientFakeHandlerTests
+                {
+                    private sealed class FakeHandler : HttpMessageHandler
+                    {
+                        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                            Task.FromResult(new HttpResponseMessage(HttpStatusCode.Accepted));
+                    }
+
+                    [Fact]
+                    public void HttpClient_UsesTheFakeHandler()
+                    {
+                        using var client = new HttpClient(new FakeHandler());
+                        Assert.Equal(HttpStatusCode.Accepted, client.GetAsync("https://example.invalid/").GetAwaiter().GetResult().StatusCode);
+                    }
+                }
+                """);
 
             // Exactly the sample steps: AccountRelatedContacts 1, AccountPostCreate 1, ContactRouter 2, ContactSync 1,
             // AccountSyncRouter 2. The abstract AccountMessageReference cheat-sheet (16 steps) is never deployed.

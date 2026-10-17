@@ -49,7 +49,7 @@ shape, or is removed. A new field is added without a version change, so read the
   "diagnostics": [],
   "notes": ["Compared local .nupkg plugin metadata with live Dataverse state.", "This is a preview; nothing was written to Dataverse."],
   "unmanaged": [],
-  "info": ["Plugin assembly 'Zava.Plugins' not found in Dataverse (first deployment); apply will create it."]
+  "info": ["Plugin assembly 'Zava.Plugins' not found in Dataverse (first deployment)."]
 }
 ```
 
@@ -93,7 +93,7 @@ per-operation report (completed / failed / not applied) is on stderr; re-run `ap
   "current": { "assemblies": [], "steps": [], "customApis": [] },
   "unmanaged": [],
   "diagnostics": [],
-  "info": ["Plugin assembly 'Zava.Plugins' not found in Dataverse (first deployment); apply will create it."]
+  "info": ["Plugin assembly 'Zava.Plugins' not found in Dataverse (first deployment)."]
 }
 ```
 

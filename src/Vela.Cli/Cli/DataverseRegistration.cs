@@ -84,7 +84,8 @@ internal static partial class DataverseRegistration
             Entity? pluginAssembly = GetPluginAssembly(service, assemblyName);
             if (pluginAssembly == null)
             {
-                info.Add($"Plugin assembly '{assemblyName}' not found in Dataverse (first deployment); apply will create it.");
+                // No promise that apply creates it: an empty package (no plugin or Custom API) is not created.
+                info.Add($"Plugin assembly '{assemblyName}' not found in Dataverse (first deployment).");
                 continue;
             }
 

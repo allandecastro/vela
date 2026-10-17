@@ -199,6 +199,57 @@ public sealed class PlanApplyCommandTests : IDisposable
     }
 
     [Fact]
+    public void Plan_does_not_propose_creating_an_empty_package()
+    {
+        // A freshly scaffolded project: the package registers nothing and is not in Dataverse. Nothing to do, but say why.
+        string package = WritePackage("zava_Plugins");
+        RegistrationState local = Local(packages: [new PluginPackagePayload("zava_Plugins", "1.0.0", package, HasRegistrations: false)]);
+
+        int exit = Run("plan", Options(detailedExitCode: true), Host(Org(), local));
+
+        Assert.Equal(CliExitCodes.ExitSuccess, exit);
+        JsonElement json = StdoutJson();
+        Assert.False(json.GetProperty("hasChanges").GetBoolean());
+        Assert.Empty(json.GetProperty("operations").EnumerateArray());
+        Assert.Contains(json.GetProperty("info").EnumerateArray(),
+            i => i.GetString() == "Plugin package 'zava_Plugins' contains no plugin or Custom API; it is not created in Dataverse until it does.");
+    }
+
+    [Fact]
+    public void Plan_still_republishes_an_empty_package_already_in_Dataverse()
+    {
+        string package = WritePackage("zava_Plugins");
+        Guid packageId = Guid.NewGuid();
+        FakeOrgService org = Org();
+        org.PackageFiles.Store(packageId, [1, 2, 3]); // a different stored .nupkg
+        Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
+        org.OnRetrieveMultiple = q => q.EntityName == "pluginpackage"
+            ? FakeOrgService.Collection(new Entity("pluginpackage", packageId) { ["name"] = "zava_Plugins", ["version"] = "1.0.0" })
+            : inner(q);
+        RegistrationState local = Local(packages: [new PluginPackagePayload("zava_Plugins", "1.0.0", package, HasRegistrations: false)]);
+
+        int exit = Run("plan", Options(detailedExitCode: true), Host(org, local));
+
+        Assert.Equal(CliExitCodes.ExitChangesPending, exit);
+        JsonElement op = Assert.Single(StdoutJson().GetProperty("operations").EnumerateArray());
+        Assert.Equal("package", op.GetProperty("kind").GetString());
+        Assert.Equal("update", op.GetProperty("action").GetString());
+    }
+
+    [Fact]
+    public void Plan_accepts_an_unprefixed_empty_package_without_a_solution()
+    {
+        // The package is not imported, so the prefix guard does not apply to it.
+        string package = WritePackage("Plugins");
+        RegistrationState local = Local(packages: [new PluginPackagePayload("Plugins", "1.0.0", package, HasRegistrations: false)]);
+
+        int exit = Run("plan", Options(), Host(Org(), local));
+
+        Assert.Equal(CliExitCodes.ExitSuccess, exit);
+        Assert.False(StdoutJson().GetProperty("hasChanges").GetBoolean());
+    }
+
+    [Fact]
     public void Plan_fails_up_front_on_an_unprefixed_package_without_a_solution()
     {
         string package = WritePackage("Plugins");
@@ -432,6 +483,35 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Equal(CliExitCodes.ExitSuccess, exit);
         Assert.Single(org.Created, e => e.LogicalName == "pluginpackage");
         Assert.True(StdoutJson().GetProperty("executed").GetProperty("packageRepublished").GetBoolean());
+    }
+
+    [Fact]
+    public void Apply_does_not_create_an_empty_package()
+    {
+        FakeOrgService org = Org();
+        string package = WritePackage("zava_Plugins");
+        RegistrationState local = Local(packages: [new PluginPackagePayload("zava_Plugins", "1.0.0", package, HasRegistrations: false)]);
+
+        int exit = Run("apply", Options(autoApprove: true), Host(org, local));
+
+        Assert.Equal(CliExitCodes.ExitSuccess, exit);
+        Assert.DoesNotContain(org.Created, e => e.LogicalName == "pluginpackage");
+        Assert.False(StdoutJson().GetProperty("executed").GetProperty("packageRepublished").GetBoolean());
+    }
+
+    [Fact]
+    public void Apply_with_changes_elsewhere_still_skips_the_empty_package()
+    {
+        // Another change runs apply's write phase; the empty package must not be created by EnsurePluginPackages.
+        FakeOrgService org = Org();
+        string empty = WritePackage("zava_Empty");
+        RegistrationState local = Local([LocalStep()], packages: [new PluginPackagePayload("zava_Empty", "1.0.0", empty, HasRegistrations: false)]);
+
+        int exit = Run("apply", Options(autoApprove: true), Host(org, local));
+
+        Assert.Equal(CliExitCodes.ExitSuccess, exit);
+        Assert.DoesNotContain(org.Created, e => e.LogicalName == "pluginpackage");
+        Assert.Single(org.Created, e => e.LogicalName == "sdkmessageprocessingstep");
     }
 
     [Fact]

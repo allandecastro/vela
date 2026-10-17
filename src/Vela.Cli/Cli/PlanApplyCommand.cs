@@ -138,11 +138,12 @@ internal static class PlanApplyCommand
     {
         diff = BuildDiff(local, current);
 
+        List<string> info = [.. local.Info ?? [], .. current.Info ?? []];
         IReadOnlyList<PackagePublishAction> packageActions = [];
         if (local.PackagePayloads.Length > 0)
         {
             DataverseRegistration.EnsurePluginPackagesImportable(local.PackagePayloads, options.SolutionUniqueName);
-            packageActions = DataverseRegistration.ComputePackagePublishActions(service, local.PackagePayloads, options.SolutionUniqueName, tempDirectories);
+            packageActions = DataverseRegistration.ComputePackagePublishActions(service, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, info);
         }
 
         string[] diagnostics = local.Diagnostics;
@@ -153,7 +154,6 @@ internal static class PlanApplyCommand
             diagnostics = [.. diagnostics, .. DataverseRegistration.ComputeCustomApiPrefixDiagnostics(solutionPrefix, customApiNames)];
         }
 
-        List<string> info = [.. local.Info ?? [], .. current.Info ?? []];
         IReadOnlyList<SolutionMembershipAction> membership = OnlyUnwritten(MissingFromSolution(service, local, options, info), diff, packageActions.Count > 0);
         return BuildPlanPreview(mode, options.Environment, diff, diagnostics, current.Diagnostics, packageActions, unmanaged, [.. info], membership);
     }

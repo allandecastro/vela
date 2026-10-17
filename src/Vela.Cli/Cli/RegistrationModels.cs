@@ -47,7 +47,9 @@ public sealed class DataverseConnectionException : Exception
 public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, string? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool AutoApprove, bool Interactive, bool Strict, bool Verbose, string? WebResourcesRoot = null, bool Json = false, int? TimeoutMinutes = null, int? BatchChunkSize = null, string[]? SecureConfigs = null, bool DetailedExitCode = false);
 public sealed record ExtractedPackage(string PackagePath, string TempDirectory, string PrimaryAssemblyPath, string[] RegistrableAssemblyPaths);
 public sealed record AssemblyPayload(string AssemblyName, string AssemblyPath);
-public sealed record PluginPackagePayload(string PackageName, string Version, string PackagePath);
+// HasRegistrations (local scan): false when the package holds no step, Custom API or unmanaged plugin type (a freshly
+// scaffolded, still empty project). Such a package is not created in Dataverse; one that already exists is republished.
+public sealed record PluginPackagePayload(string PackageName, string Version, string PackagePath, bool HasRegistrations = true);
 public sealed record RegistrationItem(string Kind, string Type, JsonElement Definition);
 // Local package scan only (the live state leaves both null), keyed by full step key (DiffEngine.GetStepKey):
 // SecureConfigNameByStepKey is the secure configuration NAME each step declares (WithSecureConfigFrom);
