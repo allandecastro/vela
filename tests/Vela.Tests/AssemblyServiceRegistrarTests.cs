@@ -161,6 +161,56 @@ namespace Vela.Tests
             Assert.Equal("plugin", probe.Seen); // ConfigureServices runs after the assembly registrar and wins
         }
 
+        [Fact]
+        public void A_test_WithService_overrides_the_assembly_registrar()
+        {
+            SentinelProbe probe = new SentinelProbe();
+
+            PluginContext.For<TestAccount>()
+                .OnCreate().Stage(PluginStages.PostOperation).Sync()
+                .WithTarget(new TestAccount { Id = Guid.NewGuid(), Name = "Zava" })
+                .WithService<ISentinel>(new Sentinel("test"))
+                .Execute(probe);
+
+            Assert.Equal("test", probe.Seen);
+        }
+
+        [Fact]
+        public void A_test_WithService_overrides_both_the_registrar_and_ConfigureServices()
+        {
+            OverrideProbe probe = new OverrideProbe();
+
+            PluginContext.For<TestAccount>()
+                .OnCreate().Stage(PluginStages.PostOperation).Sync()
+                .WithTarget(new TestAccount { Id = Guid.NewGuid(), Name = "Zava" })
+                .WithService<ISentinel>(new Sentinel("test"))
+                .Execute(probe);
+
+            Assert.Equal("test", probe.Seen); // applied after the registrar and ConfigureServices
+        }
+
+        [Fact]
+        public void A_pipeline_WithService_overrides_the_assembly_registrar()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<PipelineSentinelProbe>()
+                .WithService<ISentinel>(new Sentinel("test"));
+
+            Guid id = pipeline.Service.Create(new Entity("account") { ["name"] = "Zava" });
+
+            Assert.Equal("test", pipeline.Service.Retrieve("account", id, new Microsoft.Xrm.Sdk.Query.ColumnSet("description"))["description"]);
+        }
+
+        private sealed class PipelineSentinelProbe : EntityPluginBase<TestAccount>
+        {
+            public PipelineSentinelProbe(string unsecure, string secure) : base(unsecure, secure) { }
+
+            protected override void RegisterPluginSteps()
+                => RegisterStep().OnCreate().PreOperation().Sync().FilterOn(a => a.Name).Handle(OnCreating);
+
+            private void OnCreating(ICreatePreContext<TestAccount> ctx)
+                => ctx.Request.Target["description"] = ctx.GetRequiredService<ISentinel>().Value;
+        }
+
         private sealed class SentinelProbe : EntityPluginBase<TestAccount>
         {
             public string? Seen;

@@ -497,6 +497,12 @@ namespace Vela.Testing
                 [typeof(Vela.Context.IHandlerObserver)] = new EntryHandlerObserver(entry),
             };
 
+            // Not a platform service either: the services the test replaced with WithService, for every plugin it runs.
+            if (!_serviceOverrides.IsEmpty)
+            {
+                services[typeof(Vela.DI.IServiceOverrides)] = _serviceOverrides;
+            }
+
             return new DictionaryServiceProvider(services);
         }
 
