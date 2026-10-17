@@ -32,5 +32,6 @@ namespace Vela
         public const string ParallelExecution = "VELA024";
         public const string IpAddressCall = "VELA025";
         public const string HttpClientTimeout = "VELA026";
+        public const string EmptyCatch = "VELA027";
     }
 }
