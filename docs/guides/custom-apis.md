@@ -167,7 +167,7 @@ follows the API's metadata, so an invalid registration does not compile:
 using Vela.Context;
 using Vela.Plugin;
 
-public sealed class AfterEstimate(string unsecureConfig, string secureConfig)
+public sealed partial class AfterEstimate(string unsecureConfig, string secureConfig)
     : EntityPluginBase<Account>(unsecureConfig, secureConfig)   // the API is bound to account
 {
     protected override void RegisterPluginSteps()
@@ -175,9 +175,17 @@ public sealed class AfterEstimate(string unsecureConfig, string secureConfig)
             .PostOperation().Async()                  // AsyncOnly API: .Sync() does not compile
             .Handle(OnEstimated);
 
-    private void OnEstimated(IMessagePostContext<zava_AccountEstimateValueRequest> ctx) { /* ... */ }
+    private void OnEstimated(OnEstimatedContext ctx)
+    {
+        var request = ctx.Request;   // zava_AccountEstimateValueRequest, typed
+    }
 }
 ```
+
+The handler gets its generated `{Handler}Context`, as with `On<TRequest>()`: a `MessagePostContext<TRequest, TEntity>`
+(`MessagePreContext<TRequest, TEntity>` at a pre-stage) nested in the plugin class, which is why the class is
+`partial`. It has a typed `ctx.Request` and, when the step captures an image, `ctx.PreImage` / `ctx.PostImage`
+typed to the captured columns.
 
 - **Entity.** A bound or collection-bound API extends `IStepTrigger<TEntity>` for its table only. A global API gets
   a generic `On<Name><TEntity>()`.
