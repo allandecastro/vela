@@ -190,6 +190,21 @@ public class ScaffoldOptionsTests
         Assert.Equal("zava", options.EffectivePublisherPrefix);
     }
 
+    [Fact]
+    public void TryParse_ManagedIdentity_RequiresAValidPublisherPrefix_AndPrefixesTheIntegrationsPackageId()
+    {
+        // The signed Integrations package is named with the publisher prefix before signing (renaming it at apply
+        // --solution time would break the signature), so an invalid derived prefix is refused here too.
+        Assert.False(ScaffoldOptions.TryParse(["ZavaSales", "--managed-identity"], out _, out int exitCode));
+        Assert.Equal(ExitInvalidArguments, exitCode);
+
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--managed-identity", "--publisher-prefix", "zs"], out ScaffoldOptions options, out _));
+        Assert.Equal("zs_Zava.Integrations", options.IntegrationsPackageId);
+
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--integrations"], out ScaffoldOptions unsigned, out _));
+        Assert.Equal("Zava.Integrations", unsigned.IntegrationsPackageId);
+    }
+
     [Theory]
     [InlineData("--minimal")]
     [InlineData("--no-demos")]
@@ -277,10 +292,10 @@ public class ScaffoldOptionsTests
         Assert.True(ScaffoldOptions.TryParse(["MySolution"], out ScaffoldOptions plain, out _));
         Assert.False(plain.ManagedIdentity);
 
-        Assert.True(ScaffoldOptions.TryParse(["MySolution", "--managed-identity"], out ScaffoldOptions mi, out _));
+        Assert.True(ScaffoldOptions.TryParse(["MySolution", "--managed-identity", "--publisher-prefix", "my"], out ScaffoldOptions mi, out _));
         Assert.True(mi.ManagedIdentity);
 
-        Assert.True(ScaffoldOptions.TryParse(["MySolution", "--mi"], out ScaffoldOptions alias, out _));
+        Assert.True(ScaffoldOptions.TryParse(["MySolution", "--mi", "--publisher-prefix", "my"], out ScaffoldOptions alias, out _));
         Assert.True(alias.ManagedIdentity);
     }
 
@@ -309,7 +324,7 @@ public class ScaffoldOptionsTests
     [InlineData("--mi")]
     public void TryParse_ManagedIdentity_ImpliesIntegrations(string flag)
     {
-        Assert.True(ScaffoldOptions.TryParse(["MySolution", flag], out ScaffoldOptions options, out _));
+        Assert.True(ScaffoldOptions.TryParse(["MySolution", flag, "--publisher-prefix", "my"], out ScaffoldOptions options, out _));
 
         Assert.True(options.ManagedIdentity);
         Assert.True(options.IncludeIntegrations);

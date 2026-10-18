@@ -63,6 +63,12 @@ internal sealed record ScaffoldOptions(
     /// </summary>
     public string EffectivePublisherPrefix => PublisherPrefix ?? ScaffoldTemplates.ApiPrefix(Prefix);
 
+    /// <summary>
+    /// The package id of the Integrations project: with <see cref="ManagedIdentity"/> it carries the publisher prefix
+    /// (<c>zava_Zava.Integrations</c>), since a signed package cannot be renamed at <c>vela apply --solution</c> time.
+    /// </summary>
+    public string IntegrationsPackageId => ManagedIdentity ? $"{EffectivePublisherPrefix}_{Prefix}.Integrations" : $"{Prefix}.Integrations";
+
     // A Dataverse publisher customization prefix: 2-8 characters, starts with a letter, alphanumeric, and not the
     // reserved "mscrm" (Dataverse rejects it).
     private static readonly Regex PublisherPrefixPattern = new("^[a-z][a-z0-9]{1,7}$", RegexOptions.Compiled);
@@ -277,10 +283,18 @@ internal sealed record ScaffoldOptions(
             return false;
         }
 
+        // Managed-identity signing only applies to the Integrations project, which the flag includes (see above).
+        bool managedIdentity = managedIdentityFlag;
+        if (interactive && includeIntegrations && !managedIdentity)
+        {
+            managedIdentity = PromptYesNo("Enable managed identity for the Integrations project (adds the required signing step)? [y/N]:", defaultYes: false);
+        }
+
         // The publisher customization prefix of the target solution is distinct from the .NET namespace prefix. It
         // names the Custom APIs, so an explicit value is validated (2-8 chars, letter first, alphanumeric) and recorded
         // in the generated projects for `vela add customapi`. Without it the prefix is derived from --prefix; that
-        // guess is only needed for the sample Custom APIs, and is refused when it is not a valid publisher prefix.
+        // guess is only needed for the sample Custom APIs and the signed Integrations package name, and is refused
+        // when it is not a valid publisher prefix.
         string? publisherPrefix = TryReadOption(args, "--publisher-prefix")?.Trim().ToLowerInvariant();
         if (publisherPrefix is not null && !IsValidPublisherPrefix(publisherPrefix))
         {
@@ -288,7 +302,10 @@ internal sealed record ScaffoldOptions(
             return false;
         }
 
-        if (publisherPrefix is null && includeSamples && interactive && !IsValidPublisherPrefix(ScaffoldTemplates.ApiPrefix(prefix)))
+        // The sample Custom APIs are named with the publisher prefix, and a managed-identity (signed) Integrations
+        // package is named with it before signing: renaming it at apply --solution time would break the signature.
+        bool needsPublisherPrefix = includeSamples || managedIdentity;
+        if (publisherPrefix is null && needsPublisherPrefix && interactive && !IsValidPublisherPrefix(ScaffoldTemplates.ApiPrefix(prefix)))
         {
             publisherPrefix = Prompt($"Publisher prefix of your solution ('{ScaffoldTemplates.ApiPrefix(prefix)}' is not valid; 2-8 characters, letter first):", allowEmpty: true)?.Trim().ToLowerInvariant();
             if (string.IsNullOrEmpty(publisherPrefix))
@@ -302,20 +319,14 @@ internal sealed record ScaffoldOptions(
             }
         }
 
-        if (publisherPrefix is null && includeSamples && !IsValidPublisherPrefix(ScaffoldTemplates.ApiPrefix(prefix)))
+        if (publisherPrefix is null && needsPublisherPrefix && !IsValidPublisherPrefix(ScaffoldTemplates.ApiPrefix(prefix)))
         {
-            exitCode = Fail($"The sample Custom APIs need a publisher prefix, and '{ScaffoldTemplates.ApiPrefix(prefix)}' (derived from --prefix '{prefix}') is not a valid one (2-8 characters, letter first, alphanumeric). Pass --publisher-prefix <prefix> with your solution publisher's prefix.", ExitInvalidArguments, includeUsage: false);
+            string needer = includeSamples ? "The sample Custom APIs need" : "The signed Integrations package needs";
+            exitCode = Fail($"{needer} a publisher prefix, and '{ScaffoldTemplates.ApiPrefix(prefix)}' (derived from --prefix '{prefix}') is not a valid one (2-8 characters, letter first, alphanumeric). Pass --publisher-prefix <prefix> with your solution publisher's prefix.", ExitInvalidArguments, includeUsage: false);
             return false;
         }
 
         bool force = HasFlag(args, "--force");
-
-        // Managed-identity signing only applies to the Integrations project, which the flag includes (see above).
-        bool managedIdentity = managedIdentityFlag;
-        if (interactive && includeIntegrations && !managedIdentity)
-        {
-            managedIdentity = PromptYesNo("Enable managed identity for the Integrations project (adds the required signing step)? [y/N]:", defaultYes: false);
-        }
 
         // The web-resources (TypeScript) project is opt-in: off unless --web-resources or the interactive prompt.
         bool includeWebResources = HasFlag(args, "--web-resources") || HasFlag(args, "--webresources");

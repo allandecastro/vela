@@ -55,7 +55,7 @@ $$"""
 
     // ---- Plugin / Integration project file -------------------------------
 
-    public static string PluginCsproj(string projectName, string sharedProjectName, string coreVersion, bool withSigningTarget = false, string? publisherPrefix = null)
+    public static string PluginCsproj(string projectName, string sharedProjectName, string coreVersion, bool withSigningTarget = false, string? publisherPrefix = null, string? packageId = null)
     {
         string signingTarget = withSigningTarget ? SigningBuildTarget() : string.Empty;
         return
@@ -69,7 +69,7 @@ $$"""
     <TargetFramework>net48</TargetFramework>
     <RootNamespace>{{projectName}}</RootNamespace>
     <AssemblyName>{{projectName}}</AssemblyName>
-    <PackageId>{{projectName}}</PackageId>
+    <PackageId>{{packageId ?? projectName}}</PackageId>
     <Version>1.0.0</Version>
     <!-- Auto-increment the assembly version on every build. Dataverse caches plugin assemblies by version, so
          re-deploying changed code under the SAME version can serve a stale assembly and fail at runtime with

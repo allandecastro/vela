@@ -5,9 +5,9 @@ trusted signature. `vela sign` applies one by calling `dotnet nuget sign` (so it
 does - Windows, Linux, macOS):
 
 ```powershell
-vela sign --package artifacts/Zava.Integrations.1.0.0.nupkg --fingerprint <sha256-fingerprint>
-vela sign --package artifacts/Zava.Integrations.1.0.0.nupkg --pfx cert.pfx --pfx-credential <cred>
-vela sign --package artifacts/Zava.Integrations.1.0.0.nupkg --pfx-base64-env PFX_B64 --pfx-password-env PFX_PW
+vela sign --package artifacts/zava_Zava.Integrations.1.0.0.nupkg --fingerprint <sha256-fingerprint>
+vela sign --package artifacts/zava_Zava.Integrations.1.0.0.nupkg --pfx cert.pfx --pfx-credential <cred>
+vela sign --package artifacts/zava_Zava.Integrations.1.0.0.nupkg --pfx-base64-env PFX_B64 --pfx-password-env PFX_PW
 ```
 
 Certificate sources (exactly one): `--fingerprint` (cert in `CurrentUser\My` - recommended, no secret on
@@ -28,6 +28,10 @@ MSBuild properties, e.g. `dotnet build src/Zava.Integrations -c Release
 -p:PluginSigningFingerprint=<sha256>` (or `-p:PluginSigningCertificate=path.pfx -p:PluginSigningCredential=<cred>`).
 A `PluginSigningPassword` reaches `vela sign` through an environment variable, not its command line. The
 generated solution's README documents the full property set.
+
+The signed package's id carries the solution publisher prefix (`zava_Zava.Integrations`): `vela apply --solution`
+adds that prefix to an unprefixed package by renaming it, which would invalidate the signature. `vela init
+--managed-identity` therefore needs a valid publisher prefix, from `--publisher-prefix` or derived from `--prefix`.
 
 ## Signed packages and `apply --solution`
 

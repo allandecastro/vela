@@ -155,13 +155,20 @@ public class ProjectScaffolderTests
 
             string root = Path.Combine(temp, "ZavaSales");
             string integrations = Path.Combine(root, "src", "Zava.Integrations");
-            Assert.Contains("SignPluginPackage", File.ReadAllText(Path.Combine(integrations, "Zava.Integrations.csproj")));
-            Assert.DoesNotContain("SignPluginPackage", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj")));
+            string integrationsCsproj = File.ReadAllText(Path.Combine(integrations, "Zava.Integrations.csproj"));
+            string pluginsCsproj = File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj"));
+            Assert.Contains("SignPluginPackage", integrationsCsproj);
+            Assert.DoesNotContain("SignPluginPackage", pluginsCsproj);
+            // The signed package is named with the publisher prefix up front; the assembly keeps the project name.
+            Assert.Contains("<PackageId>zava_Zava.Integrations</PackageId>", integrationsCsproj);
+            Assert.Contains("<AssemblyName>Zava.Integrations</AssemblyName>", integrationsCsproj);
+            Assert.Contains("<PackageId>Zava.Plugins</PackageId>", pluginsCsproj);
             Assert.Empty(Directory.GetFiles(integrations, "*.cs", SearchOption.AllDirectories));
             Assert.False(Directory.Exists(Path.Combine(root, "tests")));
 
             string readme = File.ReadAllText(Path.Combine(root, "README.md"));
             Assert.Contains("This solution wires **opt-in** NuGet signing into the build of the **`Zava.Integrations`** project", readme);
+            Assert.Contains("vela sign --package artifacts/zava_Zava.Integrations.1.0.0.nupkg", readme);
             Assert.DoesNotContain("Integrations.Tests", readme);
         });
     }
@@ -953,7 +960,7 @@ public class ProjectScaffolderTests
             string root = Path.Combine(temp, "ZavaSales");
 
             BuildTestAndScan(temp, root, expectedCustomApis: [], minimumSteps: 0, maximumSteps: 0, runTests: false);
-            Assert.True(File.Exists(Path.Combine(root, "artifacts", "Zava.Integrations.1.0.0.nupkg")), "the empty Integrations package should still be built");
+            Assert.True(File.Exists(Path.Combine(root, "artifacts", "zava_Zava.Integrations.1.0.0.nupkg")), "the empty Integrations package should still be built, named with the publisher prefix");
 
             Directory.CreateDirectory(Path.Combine(root, "src", "Zava.Shared", "Models", "Generated"));
             File.WriteAllText(Path.Combine(root, "src", "Zava.Shared", "Models", "Generated", "Account.cs"), ScaffoldTemplates.AccountModel("Zava"));

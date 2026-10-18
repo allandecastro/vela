@@ -20,7 +20,7 @@ internal static partial class ScaffoldTemplates
             : string.Empty;
         string signingSection = !options.IncludeIntegrations
             ? string.Empty
-            : "\n" + (options.ManagedIdentity ? SigningSectionEnabled(prefix) : SigningSectionDisabled(prefix, "--managed-identity"));
+            : "\n" + (options.ManagedIdentity ? SigningSectionEnabled(prefix, options.IntegrationsPackageId) : SigningSectionDisabled(prefix, "--managed-identity"));
         string webResourcesLine = options.IncludeWebResources
             ? $"- `src/{prefix}.WebResources` - a TypeScript web-resources project (preview); see its own README.\n"
             : string.Empty;
@@ -100,7 +100,7 @@ and edited ones are kept.
         // Signing is an Integrations-only concern, so the whole section is omitted when that project is excluded.
         string signingSection = !options.IncludeIntegrations
             ? string.Empty
-            : options.ManagedIdentity ? SigningSectionEnabled(prefix) : SigningSectionDisabled(prefix, "--samples --managed-identity");
+            : options.ManagedIdentity ? SigningSectionEnabled(prefix, options.IntegrationsPackageId) : SigningSectionDisabled(prefix, "--samples --managed-identity");
 
         return
 $$"""
@@ -344,13 +344,15 @@ runtime, and the harness seeds a role's real privileges in tests via `Role(Roles
     }
 
     // README signing section when `vela init --managed-identity` wired the build-time signing target into Integrations.
-    private static string SigningSectionEnabled(string prefix) =>
+    private static string SigningSectionEnabled(string prefix, string packageId) =>
 $$"""
 ## Signing the plugin package
 
 This solution wires **opt-in** NuGet signing into the build of the **`{{prefix}}.Integrations`** project (the
 integration-facing package - the one most likely to call out using a managed identity). The signature is
-applied to the produced `.nupkg`, which is the artifact deployed to Dataverse.
+applied to the produced `.nupkg`, which is the artifact deployed to Dataverse. Its package id,
+`{{packageId}}`, already carries the solution publisher prefix: `vela apply --solution` adds that prefix by renaming
+an unprefixed package, which would break the signature.
 
 A `SignPluginPackage` MSBuild target runs after the Integrations package is packed and shells out to
 `vela sign` (which calls `dotnet nuget sign`). It is **inert until you configure a certificate source**, and
@@ -406,8 +408,8 @@ dotnet build src/{{prefix}}.Integrations -c Release `
 `.nupkg` directly:
 
 ```powershell
-vela sign --package artifacts/{{prefix}}.Integrations.1.0.0.nupkg --fingerprint <fingerprint>
-vela sign --package artifacts/{{prefix}}.Integrations.1.0.0.nupkg --pfx cert.pfx --pfx-credential AcmeSigningCert
+vela sign --package artifacts/{{packageId}}.1.0.0.nupkg --fingerprint <fingerprint>
+vela sign --package artifacts/{{packageId}}.1.0.0.nupkg --pfx cert.pfx --pfx-credential AcmeSigningCert
 ```
 
 In a **pipeline**, the build target stays inert (CI is detected); add an explicit sign step and pass the
@@ -416,7 +418,7 @@ certificate as a base64 secret rather than a file. Pass both secrets by environm
 host can read them:
 
 ```powershell
-vela sign --package artifacts/{{prefix}}.Integrations.1.0.0.nupkg `
+vela sign --package artifacts/{{packageId}}.1.0.0.nupkg `
   --pfx-base64-env CODE_SIGN_PFX_BASE64 --pfx-password-env CODE_SIGN_PFX_PASSWORD
 ```
 

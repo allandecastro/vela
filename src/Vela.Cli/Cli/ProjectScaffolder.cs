@@ -181,7 +181,7 @@ internal static class ProjectScaffolder
         if (options.IncludeIntegrations)
         {
             AddProject(integrationsName, "src");
-            Add(Path.Combine("src", integrationsName, $"{integrationsName}.csproj"), PluginCsproj(integrationsName, sharedName, options.CoreVersion, withSigningTarget: options.ManagedIdentity, publisherPrefix: recordedPublisherPrefix));
+            Add(Path.Combine("src", integrationsName, $"{integrationsName}.csproj"), PluginCsproj(integrationsName, sharedName, options.CoreVersion, withSigningTarget: options.ManagedIdentity, publisherPrefix: recordedPublisherPrefix, packageId: options.IntegrationsPackageId));
         }
 
         if (options.IncludeIntegrations && options.IncludeSamples)
