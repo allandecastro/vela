@@ -20,7 +20,8 @@ namespace {{prefix}}.Integrations.Contact.Plugins
     /// Single-step integration plugin: runs asynchronously after a contact is created. Demonstrates
     /// dependency injection of the cross-table <see cref="IGreetingService"/> in a second plugin package.
     /// </summary>
-    // partial: capturing a typed image (WithPostImage selectors) generates a nested projection type (VELA014).
+    // partial: the handler's context (OnContactCreatedContext) and its typed image projection are generated as
+    // nested types inside this class (VELA014).
     public sealed partial class ContactSyncPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Contact>(unsecureConfig, secureConfig)
     {
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
@@ -39,7 +40,7 @@ namespace {{prefix}}.Integrations.Contact.Plugins
                 .Handle(OnContactCreated);
         }
 
-        private void OnContactCreated(ICreatePostContext<Contact> ctx)
+        private void OnContactCreated(OnContactCreatedContext ctx)
         {
             Contact target = ctx.GetTarget<Contact>();
             IGreetingService greetings = ctx.GetRequiredService<IGreetingService>();

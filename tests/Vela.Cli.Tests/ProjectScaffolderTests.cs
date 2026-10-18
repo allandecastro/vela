@@ -910,7 +910,33 @@ public class ProjectScaffolderTests
             string touchedTests = File.ReadAllText(Path.Combine(root, "tests", "Zava.Plugins.Tests", "Account", "Plugins", "AccountTouchedTests.cs"));
             Assert.Contains("public void Fires_On_Update_PostOperation()", touchedTests);
 
-            BuildTestAndScan(temp, root, expectedCustomApis: ["zava_Recalculate", "zava_Score"], minimumSteps: 13, maximumSteps: 13);
+            // Every handler `add` writes takes its generated {Handler}Context, at a PreValidation stage too, and `add
+            // step` makes a hand-written, non-partial plugin partial so that context compiles; the existing handler
+            // typed with the message interface keeps compiling.
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountChecked", "--entity", "Account", "--message", "Update", "--stage", "PreValidation", "--filtering-attributes", "Name", "--project", plugins]));
+            string legacy = Path.Combine(root, "src", "Zava.Plugins", "Account", "Plugins", "AccountLegacy.cs");
+            File.WriteAllText(legacy, """
+                namespace Zava.Plugins.Account.Plugins
+                {
+                    using Vela.Context;
+                    using Vela.Plugin;
+                    using Zava.Shared.Models.Generated;
+
+                    public sealed class AccountLegacy(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
+                    {
+                        protected override void RegisterPluginSteps()
+                        {
+                            RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnCreated);
+                        }
+
+                        private void OnCreated(ICreatePostContext<Account> ctx) => ctx.Trace("Created {0}.", ctx.Response.id);
+                    }
+                }
+                """);
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountLegacy", "--entity", "Account", "--message", "Delete", "--stage", "PreOperation", "--project", plugins]));
+            Assert.Contains("public sealed partial class AccountLegacy(", File.ReadAllText(legacy));
+
+            BuildTestAndScan(temp, root, expectedCustomApis: ["zava_Recalculate", "zava_Score"], minimumSteps: 16, maximumSteps: 16);
         });
     }
 

@@ -173,7 +173,7 @@ public class ScaffoldTemplatesTests
         Assert.Contains("GetRequiredService<IAccountFollowUpService>", code);
         // Binds a typed post-stage handler that resolves the DI service and reads the typed response.
         Assert.Contains(".Handle(OnAccountCreated)", code);
-        Assert.Contains("ICreatePostContext<Account>", code);
+        Assert.Contains("private void OnAccountCreated(OnAccountCreatedContext ctx)", code);
         Assert.Contains("ctx.Response.id", code);
     }
 
@@ -187,20 +187,20 @@ public class ScaffoldTemplatesTests
 
         // One typed handler per modelled message shown on account (CRUD/bulk, relationships, merge, sharing,
         // and the account-valid sharing reads).
-        string[] contexts =
+        // Each takes its generated {Handler}Context, never the message interface.
+        string[] handlers =
         {
-            "ICreatePostContext<Account>", "IUpdatePostContext<Account>", "IDeletePreContext<Account>",
-            "ICreateMultiplePostContext<Account>", "IUpdateMultiplePostContext<Account>",
-            "IRetrievePostContext<Account>", "IRetrieveMultiplePostContext<Account>",
-            "IAssociatePostContext<Account>", "IDisassociatePostContext<Account>", "IMergePostContext<Account>",
-            "IGrantAccessPostContext<Account>", "IModifyAccessPostContext<Account>", "IRevokeAccessPostContext<Account>",
-            "IAssignPostContext<Account>",
-            "IRetrievePrincipalAccessPostContext<Account>", "IRetrieveSharedPrincipalsAndAccessPostContext<Account>",
+            "OnCreate", "OnUpdate", "OnDelete", "OnCreateMultiple", "OnUpdateMultiple", "OnRetrieve", "OnRetrieveMultiple",
+            "OnAssociate", "OnDisassociate", "OnMerge", "OnGrantAccess", "OnModifyAccess", "OnRevokeAccess", "OnAssign",
+            "OnRetrievePrincipalAccess", "OnRetrieveSharedPrincipalsAndAccess",
         };
-        foreach (string ctxType in contexts)
+        foreach (string handler in handlers)
         {
-            Assert.Contains(ctxType, code);
+            Assert.Contains($".Handle({handler});", code);
+            Assert.Contains($"private void {handler}({handler}Context ctx)", code);
         }
+
+        Assert.DoesNotMatch(@"private void \w+\(I\w+Context<", code);
 
         // Every message reads its primary record via ctx.Request.Target (early-bound on Create / Update) /
         // ctx.Request.Targets (the SDK-typed EntityReference / EntityCollection for the rest); there is no

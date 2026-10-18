@@ -74,12 +74,12 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_AddsRegistrationAndHandler_WithBalancedBraces()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out string result, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, "Update", "OnUpdate()", "HandleUpdate", Name, out string result, out string error);
 
         Assert.True(ok, error);
         Assert.Contains("RegisterStep().OnUpdate()", result);
         Assert.Contains(".Handle(HandleUpdate);", result);
-        Assert.Contains("private void HandleUpdate(IUpdatePostContext<Account> ctx)", result);
+        Assert.Contains("private void HandleUpdate(HandleUpdateContext ctx)", result);
         // The original step is preserved.
         Assert.Contains(".Handle(HandleCreate);", result);
         // Braces stay balanced — the edit didn't corrupt the file.
@@ -89,18 +89,79 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_CustomMessage_UsesRequestTypedTriggerAndContext()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "acme_DoThing", "On<acme_DoThingRequest>()", "HandleDoThing", null, out string result, out _);
+        bool ok = StepInjector.TryInject(HandlerBased, "acme_DoThing", "On<acme_DoThingRequest>()", "HandleDoThing", null, out string result, out _);
 
         Assert.True(ok);
         Assert.Contains("RegisterStep().On<acme_DoThingRequest>()", result);
-        Assert.Contains("private void HandleDoThing(IMessagePostContext<acme_DoThingRequest> ctx)", result);
+        Assert.Contains("private void HandleDoThing(HandleDoThingContext ctx)", result);
         Assert.Contains("ctx.Request", result);
+    }
+
+    [Fact]
+    public void TryInject_MakesANonPartialPluginPartial_SoItsGeneratedContextCompiles()
+    {
+        Assert.Contains("public sealed class AccountRouter", HandlerBased);
+
+        bool ok = StepInjector.TryInject(HandlerBased, "Retrieve", "OnRetrieve()", "HandleRetrieve", null, out string result, out string error);
+
+        Assert.True(ok, error);
+        Assert.Contains("private void HandleRetrieve(HandleRetrieveContext ctx)", result);
+        Assert.Contains("public sealed partial class AccountRouter : EntityPluginBase<Account>", result);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(result, @"\bpartial\b"));
+    }
+
+    [Fact]
+    public void TryInject_LeavesAPartialPluginAsIs()
+    {
+        string source = HandlerBased.Replace("public sealed class AccountRouter", "public sealed partial class AccountRouter");
+
+        bool ok = StepInjector.TryInject(source, "Delete", "OnDelete()", "HandleDelete", null, out string result, out string error);
+
+        Assert.True(ok, error);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(result, @"\bpartial\b"));
+        Assert.Contains("private void HandleDelete(HandleDeleteContext ctx)", result);
+    }
+
+    [Fact]
+    public void TryInject_MakesEveryEnclosingTypePartial_AndNoOtherType()
+    {
+        // The generator reopens the plugin's enclosing types too; a sibling type, a 'class' constraint and a type
+        // named in a comment or string are left alone.
+        string source = HandlerBased
+            .Replace("    public sealed class AccountRouter : EntityPluginBase<Account>\n    {\n",
+                "    // class Commented { }\n    public static class Outer\n    {\n    internal sealed class Sibling { }\n    public sealed class AccountRouter : EntityPluginBase<Account>\n    {\n        private static T Make<T>() where T : class, new() => new T();\n        private const string Text = \"record Fake { }\";\n")
+            .Replace("        private void HandleCreate(ILocalPluginContext ctx)\n        {\n        }\n    }\n", "        private void HandleCreate(ILocalPluginContext ctx)\n        {\n        }\n    }\n    }\n");
+        Assert.NotEqual(HandlerBased, source);
+
+        bool ok = StepInjector.TryInject(source, "Delete", "OnDelete()", "HandleDelete", null, out string result, out string error);
+
+        Assert.True(ok, error);
+        Assert.Contains("public static partial class Outer", result);
+        Assert.Contains("public sealed partial class AccountRouter", result);
+        Assert.Contains("internal sealed class Sibling", result);
+        Assert.Contains("// class Commented { }", result);
+        Assert.Contains("\"record Fake { }\"", result);
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(result, @"\bpartial\b").Count);
+    }
+
+    [Fact]
+    public void TryInject_MakesARecordStructPluginHostPartial()
+    {
+        string source = HandlerBased
+            .Replace("    public sealed class AccountRouter : EntityPluginBase<Account>\n    {\n", "    public readonly record struct Host(int Id)\n    {\n    public sealed class AccountRouter : EntityPluginBase<Account>\n    {\n")
+            .Replace("        private void HandleCreate(ILocalPluginContext ctx)\n        {\n        }\n    }\n", "        private void HandleCreate(ILocalPluginContext ctx)\n        {\n        }\n    }\n    }\n");
+        Assert.NotEqual(HandlerBased, source);
+
+        Assert.True(StepInjector.TryInject(source, "Delete", "OnDelete()", "HandleDelete", null, out string result, out string error), error);
+
+        Assert.Contains("public readonly partial record struct Host(int Id)", result);
+        Assert.Contains("public sealed partial class AccountRouter", result);
     }
 
     [Fact]
     public void TryInject_RejectsSingleStepPlugin()
     {
-        bool ok = StepInjector.TryInject(SingleStep, "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out _, out string error);
+        bool ok = StepInjector.TryInject(SingleStep, "Update", "OnUpdate()", "HandleUpdate", Name, out _, out string error);
 
         Assert.False(ok);
         Assert.Contains("handler-bound step", error);
@@ -109,7 +170,7 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_RejectsDuplicateHandlerName()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleCreate", Name, out _, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, "Update", "OnUpdate()", "HandleCreate", Name, out _, out string error);
 
         Assert.False(ok);
         Assert.Contains("already exists", error);
@@ -118,7 +179,7 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_RejectsFileWithoutRegisterPluginSteps()
     {
-        bool ok = StepInjector.TryInject("namespace N { public class C { } }", "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out _, out string error);
+        bool ok = StepInjector.TryInject("namespace N { public class C { } }", "Update", "OnUpdate()", "HandleUpdate", Name, out _, out string error);
 
         Assert.False(ok);
         Assert.Contains("RegisterPluginSteps", error);
@@ -133,7 +194,7 @@ namespace Acme.Plugins.Account.Plugins
     {
         // These steps must FilterOn: emitting none (or a placeholder such as e => e.Id, a VELA001 error) would give a
         // plugin that fails to build its steps at runtime.
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", message, $"On{message}()", "HandleNew" + message, null, out string result, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, message, $"On{message}()", "HandleNew" + message, null, out string result, out string error);
 
         Assert.False(ok);
         Assert.Contains("filtering attributes", error);
@@ -143,39 +204,39 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_HandlerTodoUsesTypedRequestNotGetTarget()
     {
-        StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out string single, out _);
+        StepInjector.TryInject(HandlerBased, "Update", "OnUpdate()", "HandleUpdate", Name, out string single, out _);
         Assert.DoesNotContain("GetTarget<", single);
         Assert.Contains("ctx.Request.Target", single);
 
-        StepInjector.TryInject(HandlerBased, "Account", "UpdateMultiple", "OnUpdateMultiple()", "HandleUpdateMultiple", Name, out string bulk, out _);
+        StepInjector.TryInject(HandlerBased, "UpdateMultiple", "OnUpdateMultiple()", "HandleUpdateMultiple", Name, out string bulk, out _);
         Assert.Contains("ctx.Request.Targets", bulk);
     }
 
     [Fact]
     public void TryInject_PreStage_EmitsPreStageCallAndPreContext()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PreOperation()", ".Sync()", postStage: false, explicitFilterAttributes: Name, out string result, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, "Update", "OnUpdate()", "HandleUpdate", ".PreOperation()", ".Sync()", explicitFilterAttributes: Name, out string result, out string error);
 
         Assert.True(ok, error);
         Assert.Contains(".PreOperation()", result);
         Assert.DoesNotContain(".PostOperation()", result[result.IndexOf("HandleUpdate", System.StringComparison.Ordinal)..]);
-        Assert.Contains("private void HandleUpdate(IUpdatePreContext<Account> ctx)", result);
+        Assert.Contains("private void HandleUpdate(HandleUpdateContext ctx)", result);
     }
 
     [Fact]
     public void TryInject_AsyncMode_EmitsAsyncCall()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PostOperation()", ".Async()", postStage: true, explicitFilterAttributes: Name, out string result, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, "Update", "OnUpdate()", "HandleUpdate", ".PostOperation()", ".Async()", explicitFilterAttributes: Name, out string result, out string error);
 
         Assert.True(ok, error);
         Assert.Contains(".Async()", result);
-        Assert.Contains("IUpdatePostContext<Account>", result);
+        Assert.Contains("private void HandleUpdate(HandleUpdateContext ctx)", result);
     }
 
     [Fact]
     public void TryInject_ExplicitFilterAttributes_EmitsFilterOnAndNoTodo()
     {
-        bool ok = StepInjector.TryInject(HandlerBased, "Account", "Update", "OnUpdate()", "HandleUpdate", ".PostOperation()", ".Sync()", postStage: true, new[] { "Name", "Telephone1" }, out string result, out string error);
+        bool ok = StepInjector.TryInject(HandlerBased, "Update", "OnUpdate()", "HandleUpdate", ".PostOperation()", ".Sync()", new[] { "Name", "Telephone1" }, out string result, out string error);
 
         Assert.True(ok, error);
         Assert.Contains(".FilterOn(e => e.Name, e => e.Telephone1)", result);
@@ -195,7 +256,7 @@ namespace Acme.Plugins.Account.Plugins
         string source = FilteredCreate();
         Assert.NotEqual(HandlerBased, source);
 
-        bool ok = StepInjector.TryInject(source, "Account", "Create", registrationCall, "HandleOther", stageCall, modeCall, postStage: true, Name, out string result, out string error, out _);
+        bool ok = StepInjector.TryInject(source, "Create", registrationCall, "HandleOther", stageCall, modeCall, Name, out string result, out string error, out _);
 
         Assert.False(ok);
         Assert.Contains("already registers a Create PostOperation Sync step with the same filtering columns", error);
@@ -205,7 +266,7 @@ namespace Acme.Plugins.Account.Plugins
     [Fact]
     public void TryInject_AllowsASharedTrigger_ToldApartByItsFilterColumns_AndSuggestsAStepKey()
     {
-        bool ok = StepInjector.TryInject(FilteredCreate(), "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, ["Telephone1"], out string result, out string error, out string? note);
+        bool ok = StepInjector.TryInject(FilteredCreate(), "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", ["Telephone1"], out string result, out string error, out string? note);
 
         Assert.True(ok, error);
         Assert.Contains(".FilterOn(e => e.Telephone1)", result);
@@ -221,7 +282,7 @@ namespace Acme.Plugins.Account.Plugins
     [InlineData("\n                .ForRelationship(\"contact_customer_accounts\")")]
     public void TryInject_AllowsTheSameFilterColumns_WhenTheExistingStepIsToldApartOtherwise(string modifier)
     {
-        bool ok = StepInjector.TryInject(FilteredCreate(modifier), "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, Name, out _, out string error, out string? note);
+        bool ok = StepInjector.TryInject(FilteredCreate(modifier), "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", Name, out _, out string error, out string? note);
 
         Assert.True(ok, error);
         Assert.NotNull(note);
@@ -232,7 +293,7 @@ namespace Acme.Plugins.Account.Plugins
     [InlineData(".PostOperation()", ".Async()")] // other mode
     public void TryInject_OtherTrigger_IsNeitherRefusedNorNoted(string stageCall, string modeCall)
     {
-        bool ok = StepInjector.TryInject(FilteredCreate(), "Account", "Create", "OnCreate()", "HandleOther", stageCall, modeCall, postStage: stageCall == ".PostOperation()", Name, out _, out string error, out string? note);
+        bool ok = StepInjector.TryInject(FilteredCreate(), "Create", "OnCreate()", "HandleOther", stageCall, modeCall, Name, out _, out string error, out string? note);
 
         Assert.True(ok, error);
         Assert.Null(note);
@@ -243,7 +304,7 @@ namespace Acme.Plugins.Account.Plugins
     {
         string source = FilteredCreate().Replace(".FilterOn(a => a.Name)", ".FilterOn(a => a.Name, a => a.Telephone1)");
 
-        Assert.False(StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, ["Telephone1", "Name"], out _, out _, out _));
+        Assert.False(StepInjector.TryInject(source, "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", ["Telephone1", "Name"], out _, out _, out _));
     }
 
     [Fact]
@@ -254,7 +315,7 @@ namespace Acme.Plugins.Account.Plugins
             "            RegisterStep().OnUpdate()\n                .PostOperation()\n                .Sync()\n                .FilterOn(e => e.Name)\n                .Handle(HandleCreate);\n            // RegisterStep().OnCreate().PostOperation().Sync().Handle(Old);");
         Assert.NotEqual(HandlerBased, source);
 
-        bool ok = StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleNew", ".PostOperation()", ".Sync()", postStage: true, Name, out _, out string error, out string? note);
+        bool ok = StepInjector.TryInject(source, "Create", "OnCreate()", "HandleNew", ".PostOperation()", ".Sync()", Name, out _, out string error, out string? note);
 
         Assert.True(ok, error);
         Assert.Null(note);
@@ -271,7 +332,7 @@ namespace Acme.Plugins.Account.Plugins
             "            RegisterStep().OnCreate()",
             "            string raw = $$\"\"\"{ \"json\": {{1}} }\"\"\";\n            RegisterStep().OnCreate()");
 
-        bool ok = StepInjector.TryInject(source, "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out string result, out string error);
+        bool ok = StepInjector.TryInject(source, "Update", "OnUpdate()", "HandleUpdate", Name, out string result, out string error);
 
         Assert.True(ok, error);
         // The new step lands inside RegisterPluginSteps, before its closing brace, and the handler after it.
@@ -291,7 +352,7 @@ namespace Acme.Plugins.Account.Plugins
         Assert.NotEqual(FilteredCreate(), source);
 
         // A Create on Telephone1 duplicates only the fake: it is allowed (a shared trigger with the live step).
-        bool ok = StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, ["Telephone1"], out _, out string error, out string? note);
+        bool ok = StepInjector.TryInject(source, "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", ["Telephone1"], out _, out string error, out string? note);
 
         Assert.True(ok, error);
         Assert.NotNull(note);
@@ -306,7 +367,7 @@ namespace Acme.Plugins.Account.Plugins
         Assert.NotEqual(FilteredCreate(), source);
 
         // The chain does not end at the ';' in the description, so its FilterOn(a => a.Name) is read: exact duplicate.
-        bool ok = StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, Name, out _, out string error, out _);
+        bool ok = StepInjector.TryInject(source, "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", Name, out _, out string error, out _);
 
         Assert.False(ok);
         Assert.Contains("same filtering columns", error);
@@ -318,7 +379,7 @@ namespace Acme.Plugins.Account.Plugins
         string source = HandlerBased.Replace("RegisterStep().OnCreate()", "RegisterStep().OnMessage(\"new_Recalc\")");
         Assert.NotEqual(HandlerBased, source);
 
-        Assert.False(StepInjector.TryInject(source, "Account", "new_recalc", "OnMessage(\"new_recalc\")", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, null, out _, out string error, out _));
+        Assert.False(StepInjector.TryInject(source, "new_recalc", "OnMessage(\"new_recalc\")", "HandleOther", ".PostOperation()", ".Sync()", null, out _, out string error, out _));
         Assert.Contains("new_Recalc PostOperation Sync", error);
     }
 
@@ -340,7 +401,7 @@ namespace Acme.Plugins.Account.Plugins
             "            RegisterStep().OnCreate()",
             "            string b = " + prefix + "\"\"\"x\"\" " + close + " \";\n            RegisterStep().OnCreate()");
 
-        bool ok = StepInjector.TryInject(source, "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out string result, out string error);
+        bool ok = StepInjector.TryInject(source, "Update", "OnUpdate()", "HandleUpdate", Name, out string result, out string error);
 
         Assert.True(ok, error);
         int registration = result.IndexOf("RegisterStep().OnUpdate()", StringComparison.Ordinal);
@@ -359,11 +420,11 @@ namespace Acme.Plugins.Account.Plugins
     {
         string source = Crlf(FilteredCreate());
 
-        Assert.False(StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, Name, out string unchanged, out string error, out _));
+        Assert.False(StepInjector.TryInject(source, "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", Name, out string unchanged, out string error, out _));
         Assert.Contains("same filtering columns", error);
         Assert.Equal(source, unchanged);
 
-        Assert.True(StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, ["Telephone1"], out _, out string sharedError, out string? note));
+        Assert.True(StepInjector.TryInject(source, "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", ["Telephone1"], out _, out string sharedError, out string? note));
         Assert.True(sharedError.Length == 0, sharedError);
         Assert.NotNull(note);
     }
@@ -377,9 +438,9 @@ namespace Acme.Plugins.Account.Plugins
         Assert.Contains("\r\n", source);
 
         // Only the live step counts: same filter (Name) is a duplicate, Telephone1 (the raw-string fake's) is not.
-        Assert.False(StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, Name, out _, out string error, out _));
+        Assert.False(StepInjector.TryInject(source, "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", Name, out _, out string error, out _));
         Assert.Contains("same filtering columns", error);
-        Assert.True(StepInjector.TryInject(source, "Account", "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", postStage: true, ["Telephone1"], out _, out string sharedError, out _));
+        Assert.True(StepInjector.TryInject(source, "Create", "OnCreate()", "HandleOther", ".PostOperation()", ".Sync()", ["Telephone1"], out _, out string sharedError, out _));
         Assert.True(sharedError.Length == 0, sharedError);
     }
 
@@ -395,7 +456,7 @@ namespace Acme.Plugins.Account.Plugins
                 "        private void HandleCreate(ILocalPluginContext ctx)\n        {\n            string a = " + prefix + "\"\"\"quoted\"\" text " + open + " \";\n            string r = \"\"\"\n{ raw\n\"\"\";\n        }"));
         Assert.Contains("\r\n", source);
 
-        bool ok = StepInjector.TryInject(source, "Account", "Update", "OnUpdate()", "HandleUpdate", Name, out string result, out string error);
+        bool ok = StepInjector.TryInject(source, "Update", "OnUpdate()", "HandleUpdate", Name, out string result, out string error);
 
         Assert.True(ok, error);
         int registration = result.IndexOf("RegisterStep().OnUpdate()", StringComparison.Ordinal);

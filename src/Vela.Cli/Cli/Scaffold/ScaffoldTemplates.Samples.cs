@@ -265,7 +265,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
                 .Handle(OnAccountUpdated);
         }
 
-        private void OnAccountUpdated(IUpdatePostContext<Account> ctx)
+        private void OnAccountUpdated(OnAccountUpdatedContext ctx)
         {
             Account target = ctx.GetTarget<Account>();
 
@@ -304,7 +304,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
 
     /// <summary>
     /// After an account is created, schedules a follow-up task a week out. Uses a typed post-stage handler
-    /// (<see cref="ICreatePostContext{TEntity}"/>) so <c>ctx.Response.id</c> and <c>ctx.Request.Target</c> are strongly
+    /// (its generated context derives from <see cref="CreatePostContext{TEntity}"/>) so <c>ctx.Response.id</c> and <c>ctx.Request.Target</c> are strongly
     /// typed, and shows dependency injection via <see cref="ConfigureServices"/> plus a table-scoped service
     /// (<see cref="IAccountFollowUpService"/>) resolved with <c>ctx.GetRequiredService&lt;T&gt;()</c>.
     /// </summary>
@@ -330,11 +330,10 @@ namespace {{prefix}}.Plugins.Account.Plugins
                 .Handle(OnAccountCreated);
         }
 
-        // Typed handler: because the step is PostOperation, ctx is an ICreatePostContext<Account>, so ctx.Response
-        // (the CreateResponse) and ctx.Request.Target (the created Account) are strongly typed. It is still an
-        // ILocalPluginContext, so images and services work as usual.
-        // The parameter is the generated typed step context (OnAccountCreatedContext, a subclass of
-        // ICreatePostContext<Account>): ctx.PostImage is the captured post-image, typed to the captured columns only.
+        // Typed handler: the parameter is the generated step context (OnAccountCreatedContext, a subclass of
+        // CreatePostContext<Account> because the step is a PostOperation Create), so ctx.Response (the CreateResponse)
+        // and ctx.Request.Target (the created Account) are strongly typed, and ctx.PostImage is the captured
+        // post-image, typed to the captured columns only. It is still an ILocalPluginContext, so services work as usual.
         private void OnAccountCreated(OnAccountCreatedContext ctx)
         {
             var postImage = ctx.PostImage;
@@ -357,8 +356,10 @@ namespace {{prefix}}.Plugins.Account.Plugins
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
-    /// REFERENCE / CHEAT-SHEET - one handler per typed message Vela models, showing the strongly-typed context
-    /// each receives. The class is <c>abstract</c>, so it compiles (the analyzers check it) but is never deployed:
+    /// REFERENCE / CHEAT-SHEET - one handler per typed message Vela models, showing what the strongly-typed context
+    /// each receives exposes. Each handler takes its generated <c>{Handler}Context</c> (nested in this partial class),
+    /// which derives from the message context of its step: <c>OnCreateContext</c> is a <c>CreatePostContext&lt;Account&gt;</c>,
+    /// <c>OnDeleteContext</c> a <c>DeletePreContext&lt;Account&gt;</c>, and so on. The class is <c>abstract</c>, so it compiles (the analyzers check it) but is never deployed:
     /// neither <c>vela plan</c>/<c>apply</c> nor Dataverse registers an abstract plugin type. Its steps are also
     /// <c>.Disabled()</c>, in case you copy them as they are. Copy the handler for the message you need into a real
     /// (sealed) plugin. Each handler infers its request/response from the message (no cast); the primary record is read via
@@ -410,63 +411,63 @@ namespace {{prefix}}.Plugins.Account.Plugins
 
         // ctx.Request.Target is the early-bound Account; ctx.Response.id is the new record id (Post step). Trace
         // ids, not column values: a trace also reaches telemetry, and a column such as Name can be personal data.
-        private void OnCreate(ICreatePostContext<Account> ctx)
+        private void OnCreate(OnCreateContext ctx)
             => ctx.Trace("Create -> id {0}", ctx.Response.id);
 
         // ctx.Request.Target carries the columns that changed on this update.
-        private void OnUpdate(IUpdatePostContext<Account> ctx)
+        private void OnUpdate(OnUpdateContext ctx)
             => ctx.Trace("Update {0}", ctx.Request.Target.Id);
 
         // Delete carries an EntityReference, exposed as ctx.Request.Target. This step is PreOperation, so the
         // handler receives the PRE context (ctx.Request but no ctx.Response - the record is not deleted yet).
-        private void OnDelete(IDeletePreContext<Account> ctx)
+        private void OnDelete(OnDeleteContext ctx)
             => ctx.Trace("Delete {0}", ctx.Request.Target.Id);
 
         // Bulk create: ctx.Request.Targets is the whole batch; ctx.Response.Ids are the new ids.
-        private void OnCreateMultiple(ICreateMultiplePostContext<Account> ctx)
+        private void OnCreateMultiple(OnCreateMultipleContext ctx)
             => ctx.Trace("CreateMultiple of {0}", ctx.Request.Targets.Entities.Count);
 
-        private void OnUpdateMultiple(IUpdateMultiplePostContext<Account> ctx)
+        private void OnUpdateMultiple(OnUpdateMultipleContext ctx)
             => ctx.Trace("UpdateMultiple of {0}", ctx.Request.Targets.Entities.Count);
 
         // Retrieve: ctx.Request.Target is the record read; ctx.Request.ColumnSet the requested columns.
-        private void OnRetrieve(IRetrievePostContext<Account> ctx)
+        private void OnRetrieve(OnRetrieveContext ctx)
             => ctx.Trace("Retrieve {0} ({1} columns)", ctx.Request.Target.Id, ctx.Request.ColumnSet.Columns.Count);
 
         // RetrieveMultiple has no primary Target; the query is on ctx.Request.Query.
-        private void OnRetrieveMultiple(IRetrieveMultiplePostContext<Account> ctx)
+        private void OnRetrieveMultiple(OnRetrieveMultipleContext ctx)
             => ctx.Trace("RetrieveMultiple, query type {0}", ctx.Request.Query.GetType().Name);
 
         // Associate / Disassociate: ctx.Request.Target plus ctx.Request.Relationship / RelatedEntities.
-        private void OnAssociate(IAssociatePostContext<Account> ctx)
+        private void OnAssociate(OnAssociateContext ctx)
             => ctx.Trace("Associate {0} via {1}", ctx.Request.Target.Id, ctx.Request.Relationship.SchemaName);
 
-        private void OnDisassociate(IDisassociatePostContext<Account> ctx)
+        private void OnDisassociate(OnDisassociateContext ctx)
             => ctx.Trace("Disassociate {0} via {1}", ctx.Request.Target.Id, ctx.Request.Relationship.SchemaName);
 
         // Merge: ctx.Request.Target is the master, ctx.Request.SubordinateId the record merged into it.
-        private void OnMerge(IMergePostContext<Account> ctx)
+        private void OnMerge(OnMergeContext ctx)
             => ctx.Trace("Merge {0} into {1}", ctx.Request.SubordinateId, ctx.Request.Target.Id);
 
         // Sharing: ctx.Request.PrincipalAccess (grant/modify) and ctx.Request.Revokee (revoke).
-        private void OnGrantAccess(IGrantAccessPostContext<Account> ctx)
+        private void OnGrantAccess(OnGrantAccessContext ctx)
             => ctx.Trace("Grant on {0} to {1}", ctx.Request.Target.Id, ctx.Request.PrincipalAccess.Principal.Id);
 
-        private void OnModifyAccess(IModifyAccessPostContext<Account> ctx)
+        private void OnModifyAccess(OnModifyAccessContext ctx)
             => ctx.Trace("Modify access on {0}", ctx.Request.Target.Id);
 
-        private void OnRevokeAccess(IRevokeAccessPostContext<Account> ctx)
+        private void OnRevokeAccess(OnRevokeAccessContext ctx)
             => ctx.Trace("Revoke on {0} from {1}", ctx.Request.Target.Id, ctx.Request.Revokee.Id);
 
         // Assign: ctx.Request.Target is the reassigned record; ctx.Request.Assignee the new owner.
-        private void OnAssign(IAssignPostContext<Account> ctx)
+        private void OnAssign(OnAssignContext ctx)
             => ctx.Trace("Assign {0} to {1}", ctx.Request.Target.Id, ctx.Request.Assignee.Id);
 
         // Sharing reads: ctx.Response.AccessRights (one principal) / ctx.Response.PrincipalAccesses (all shares).
-        private void OnRetrievePrincipalAccess(IRetrievePrincipalAccessPostContext<Account> ctx)
+        private void OnRetrievePrincipalAccess(OnRetrievePrincipalAccessContext ctx)
             => ctx.Trace("Access of {0} on {1}: {2}", ctx.Request.Principal.Id, ctx.Request.Target.Id, ctx.Response.AccessRights);
 
-        private void OnRetrieveSharedPrincipalsAndAccess(IRetrieveSharedPrincipalsAndAccessPostContext<Account> ctx)
+        private void OnRetrieveSharedPrincipalsAndAccess(OnRetrieveSharedPrincipalsAndAccessContext ctx)
             => ctx.Trace("{0} share(s) on {1}", ctx.Response.PrincipalAccesses.Length, ctx.Request.Target.Id);
     }
 }
@@ -517,8 +518,8 @@ namespace {{prefix}}.Plugins.Contact.Plugins
                 .Handle(OnUpdatePost);
         }
 
-        // Each handler receives the message-typed context: ICreateContext exposes a CreateRequest, IUpdateContext
-        // an UpdateRequest (in a Post step, a matching Response too), each strongly typed to this message. The
+        // Each handler receives its generated context, derived from the message context: a Create one exposes a
+        // CreateRequest, an Update one an UpdateRequest (in a Post step, a matching Response too), each strongly typed to this message. The
         // record is available already typed as ctx.Request.Target - no cast, no type argument. The context is still an
         // ILocalPluginContext, so images, services and tracing remain available.
         // Generated typed step context (OnCreatePostContext): ctx.PostImage is the captured post-image, typed to the

@@ -412,15 +412,14 @@ internal static class AddCommand
         return $"On<{message}Request>()";
     }
 
-    // The handler context for a registration call: the curated message's stage context, or the request-typed
-    // IMessagePre/PostContext<TRequest> of an On<TRequest>() trigger.
-    internal static string HandlerContextType(string registrationCall, string message, string entityType, bool postStage)
-    {
-        string stage = postStage ? "Post" : "Pre";
-        return TryGetRequestType(registrationCall, out string requestType)
-            ? $"IMessage{stage}Context<{requestType}>"
-            : $"I{message}{stage}Context<{entityType}>";
-    }
+    // The handler parameter type: the {Handler}Context the image projection generator emits, nested in the (partial)
+    // plugin class, for every named handler `add` can bind - a typed On{Message}() trigger (each has its
+    // Vela.Context.{Message}Pre/PostContext) and an On<TRequest>() trigger (MessagePre/PostContext<TRequest, TEntity>).
+    // One signature for every step, and it stays the same when an image is captured later.
+    internal static string HandlerContextType(string handlerName) => handlerName + "Context";
+
+    // The handler `vela add plugin` binds its step to.
+    internal const string PluginHandlerName = "OnExecute";
 
     // The TRequest of an On<TRequest>() registration call.
     internal static bool TryGetRequestType(string registrationCall, out string requestType)
@@ -464,7 +463,7 @@ internal static class AddCommand
             return Fail($"Invalid --handler '{handler}'. Use a valid C# method name.", ExitInvalidArguments, includeUsage: false);
         }
 
-        if (!TryResolveStageMode(args, out string stageCall, out string modeCall, out bool postStage, out string stageError))
+        if (!TryResolveStageMode(args, out string stageCall, out string modeCall, out string stageError))
         {
             return Fail(stageError, ExitInvalidArguments, includeUsage: false);
         }
@@ -504,7 +503,7 @@ internal static class AddCommand
             return Fail($"{filePath} does not look like an EntityPluginBase<{entity}> plugin.", ExitInvalidArguments, includeUsage: false);
         }
 
-        if (!StepInjector.TryInject(source, entity!, message, registrationCall, handler, stageCall, modeCall, postStage, filterAttributes, out string updated, out string error, out string? note))
+        if (!StepInjector.TryInject(source, message, registrationCall, handler, stageCall, modeCall, filterAttributes, out string updated, out string error, out string? note))
         {
             return Fail(error, ExitInvalidArguments, includeUsage: false);
         }
@@ -840,7 +839,7 @@ internal static class AddCommand
         string message = known ?? request;
         string registrationCall = RegistrationCall(known, message);
 
-        if (!TryResolveStageMode(args, out string stageCall, out string modeCall, out bool postStage, out string stageError))
+        if (!TryResolveStageMode(args, out string stageCall, out string modeCall, out string stageError))
         {
             return Fail(stageError, ExitInvalidArguments, includeUsage: false);
         }
@@ -874,14 +873,9 @@ internal static class AddCommand
             }
         }
 
-        // The redesigned builder ends the chain with .Handle(...), bound to a named instance handler. A modelled
-        // message gets the strongly-typed stage context (I{Message}PostContext<TEntity>); any other message gets
-        // the request-typed context of its On<XxxRequest>() trigger (IMessagePostContext<XxxRequest>).
-        string handlerContextType = HandlerContextType(registrationCall, message, entity!, postStage);
-
         string ns = $"{rootNamespace}.{entity}.Plugins";
         string relativePath = Path.Combine(entity!, "Plugins", $"{name}.cs");
-        string content = AddPluginFile(ns, name, entity!, modelsNamespace, message, registrationCall, stageCall, modeCall, filteringCall, handlerContextType);
+        string content = AddPluginFile(ns, name, entity!, modelsNamespace, message, registrationCall, stageCall, modeCall, filteringCall, PluginHandlerName);
         return WriteFile(projectDir, relativePath, content, force, $"plugin {name} ({message} {entity})", HasFlag(args, "--json"));
     }
 
@@ -1167,14 +1161,13 @@ internal static class AddCommand
     private static bool IsHelp(string arg) =>
         arg is "--help" or "-h" or "-?" or "/?" or "help";
 
-    // Resolves --stage / --mode into the fluent builder calls and whether the step runs at a post stage
-    // (which selects the pre- vs post- typed handler context). Defaults: PostOperation + Sync (the prior
+    // Resolves --stage / --mode into the fluent builder calls. Defaults: PostOperation + Sync (the prior
     // hard-coded behaviour). Dataverse only allows asynchronous steps at PostOperation.
-    private static bool TryResolveStageMode(string[] args, out string stageCall, out string modeCall, out bool postStage, out string error)
+    private static bool TryResolveStageMode(string[] args, out string stageCall, out string modeCall, out string error)
     {
         stageCall = ".PostOperation()";
         modeCall = ".Sync()";
-        postStage = true;
+        bool postStage = true;
         error = string.Empty;
 
         string? rawStage = TryReadOption(args, "--stage");

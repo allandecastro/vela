@@ -108,8 +108,66 @@ public class AddCommandTests
             // generates, and the handler gets its request-typed context.
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountCustom.cs"));
             Assert.Contains("RegisterStep().On<acme_DoThingRequest>()", content);
-            Assert.Contains("private void OnExecute(IMessagePostContext<acme_DoThingRequest> ctx)", content);
+            Assert.Contains("private void OnExecute(OnExecuteContext ctx)", content);
+            Assert.DoesNotContain("IMessagePostContext", content);
             Assert.DoesNotContain("OnMessage(", content);
+        });
+    }
+
+    // Every message `add plugin` registers (each typed trigger, an SDK request, a generated request) at every stage
+    // binds the handler to its generated OnExecuteContext in a partial class, never the message interface. The
+    // build smoke test (ProjectScaffolderTests.Generate_ThenDotnetBuild_Succeeds_Minimal) compiles these forms.
+    public static TheoryData<string, string> EveryMessageAndStage()
+    {
+        TheoryData<string, string> data = [];
+        foreach (string message in AddCommand.KnownMessages.Concat(["SetState", "acme_DoThing"]))
+        {
+            foreach (string stage in new[] { "PreValidation", "PreOperation", "PostOperation" })
+            {
+                data.Add(message, stage);
+            }
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryMessageAndStage))]
+    public void Add_Plugin_BindsTheGeneratedHandlerContext_ForEveryMessageAndStage(string message, string stage)
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            string[] filter = AddCommand.RequiresFilter(message) ? ["--filtering-attributes", "Name"] : [];
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountStep", "--entity", "Account", "--message", message, "--stage", stage, .. filter, "--project", project]));
+
+            string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
+            Assert.Contains("public sealed partial class AccountStep(", content);
+            Assert.Contains("                .Handle(OnExecute);", content);
+            Assert.Contains("private void OnExecute(OnExecuteContext ctx)", content);
+            Assert.DoesNotMatch(@"I\w*(Pre|Post)Context<", content);
+        });
+    }
+
+    [Theory]
+    [InlineData("Delete", "OnDelete()", "HandleDelete")]
+    [InlineData("SetState", "On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()", "HandleSetState")]
+    [InlineData("acme_DoThing", "On<acme_DoThingRequest>()", "HandleAcme_DoThing")]
+    public void Add_Step_BindsTheGeneratedHandlerContext_AndMakesThePluginPartial(string message, string trigger, string handler)
+    {
+        RunInProject("Acme.Plugins", (project, dir) =>
+        {
+            string pluginPath = Path.Combine(dir, "Account", "Plugins", "AccountRouter.cs");
+            Directory.CreateDirectory(Path.GetDirectoryName(pluginPath)!);
+            File.WriteAllText(pluginPath, HandlerBasedPlugin);
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--message", message, "--handler", handler, "--stage", "PreOperation", "--project", project]));
+
+            string content = File.ReadAllText(pluginPath);
+            Assert.Contains($"RegisterStep().{trigger}", content);
+            Assert.Contains($"private void {handler}({handler}Context ctx)", content);
+            Assert.Contains("public sealed partial class AccountRouter : EntityPluginBase<Account>", content);
+            // The existing handler keeps its parameter type.
+            Assert.Contains("private void HandleCreate(ILocalPluginContext ctx)", content);
         });
     }
 
@@ -123,7 +181,7 @@ public class AddCommandTests
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountPre.cs"));
             Assert.Contains(".PreOperation()", content);
-            Assert.Contains("IDeletePreContext<Account>", content);
+            Assert.Contains("private void OnExecute(OnExecuteContext ctx)", content);
         });
     }
 
@@ -360,7 +418,7 @@ public class AddCommandTests
 
             string content = File.ReadAllText(Path.Combine(dir, entity, "Plugins", "AccountStep.cs"));
             Assert.Contains($"RegisterStep().On<{requestType}>()", content);
-            Assert.Contains($"IMessagePostContext<{requestType}> ctx", content);
+            Assert.Contains("private void OnExecute(OnExecuteContext ctx)", content);
         });
     }
 
@@ -638,7 +696,9 @@ public class AddCommandTests
             string content = File.ReadAllText(pluginPath);
             Assert.Contains("RegisterStep().OnUpdate()", content);
             Assert.Contains(".Handle(HandleUpdate);", content);
-            Assert.Contains("private void HandleUpdate(IUpdatePostContext<Account> ctx)", content);
+            Assert.Contains("private void HandleUpdate(HandleUpdateContext ctx)", content);
+            // The generated context is nested in the plugin class, so add step makes the class partial.
+            Assert.Contains("public sealed partial class AccountRouter : EntityPluginBase<Account>", content);
             // The original step is preserved.
             Assert.Contains(".Handle(HandleCreate);", content);
         });
@@ -693,7 +753,7 @@ namespace Acme.Plugins.Account.Plugins
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountAssign.cs"));
             Assert.Contains("RegisterStep().OnAssign()", content);
-            Assert.Contains("private void OnExecute(IAssignPostContext<Account> ctx)", content);
+            Assert.Contains("private void OnExecute(OnExecuteContext ctx)", content);
             Assert.DoesNotContain("OnMessage(", content);
         });
     }

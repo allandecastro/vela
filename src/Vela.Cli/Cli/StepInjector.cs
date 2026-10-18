@@ -14,17 +14,17 @@ namespace Vela.Cli;
 internal static class StepInjector
 {
     // Convenience overload: default to a PostOperation + Sync step (the historical behaviour), no explicit filter.
-    public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string[]? explicitFilterAttributes, out string result, out string error)
-        => TryInject(source, entityType, message, registrationCall, handlerName, ".PostOperation()", ".Sync()", true, explicitFilterAttributes, out result, out error, out _);
+    public static bool TryInject(string source, string message, string registrationCall, string handlerName, string[]? explicitFilterAttributes, out string result, out string error)
+        => TryInject(source, message, registrationCall, handlerName, ".PostOperation()", ".Sync()", explicitFilterAttributes, out result, out error, out _);
 
-    public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string stageCall, string modeCall, bool postStage, string[]? explicitFilterAttributes, out string result, out string error)
-        => TryInject(source, entityType, message, registrationCall, handlerName, stageCall, modeCall, postStage, explicitFilterAttributes, out result, out error, out _);
+    public static bool TryInject(string source, string message, string registrationCall, string handlerName, string stageCall, string modeCall, string[]? explicitFilterAttributes, out string result, out string error)
+        => TryInject(source, message, registrationCall, handlerName, stageCall, modeCall, explicitFilterAttributes, out result, out error, out _);
 
     // <paramref name="explicitFilterAttributes"/>: the resolved property name(s) to emit as a FilterOn selector.
     // Required for the messages AddCommand.RequiresFilter names; null or empty for any other message.
     // <paramref name="note"/>: set (and the step still added) when the plugin already has a step on the same trigger
     // that this one is told apart from; null otherwise.
-    public static bool TryInject(string source, string entityType, string message, string registrationCall, string handlerName, string stageCall, string modeCall, bool postStage, string[]? explicitFilterAttributes, out string result, out string error, out string? note)
+    public static bool TryInject(string source, string message, string registrationCall, string handlerName, string stageCall, string modeCall, string[]? explicitFilterAttributes, out string result, out string error, out string? note)
     {
         result = source;
         error = string.Empty;
@@ -114,9 +114,9 @@ internal static class StepInjector
             filtering +
             $"                .Handle({handlerName});";
 
-        // A modelled message binds the strongly-typed stage context (pre or post to match the step's stage); an
-        // On<XxxRequest>() step binds the request-typed IMessagePre/PostContext<XxxRequest>.
-        string handlerContextType = AddCommand.HandlerContextType(registrationCall, message, entityType, postStage);
+        // The handler takes its generated {Handler}Context, which the generator nests in the plugin class: every
+        // declaration enclosing RegisterPluginSteps() must therefore be partial (made so below).
+        string handlerContextType = AddCommand.HandlerContextType(handlerName);
 
         // Point the author at the idiomatic, typed access for this message rather than the low-level
         // ctx.GetTarget<T>(): a single record is ctx.Request.Target, a bulk message is ctx.Request.Targets,
@@ -135,12 +135,55 @@ internal static class StepInjector
             $"            // TODO: implement the {message} step ({accessHint}).\n" +
             "        }";
 
-        result = source.Substring(0, lineStart)
+        string injected = source.Substring(0, lineStart)
             + registration
             + source.Substring(lineStart, closeBrace + 1 - lineStart)
             + handler
             + source.Substring(closeBrace + 1);
+        result = MakeEnclosingTypesPartial(injected, method.Index);
         return true;
+    }
+
+    // A type declaration: its keyword ("record class" / "record struct" before the bare keywords) and name.
+    private static readonly Regex TypeDeclaration = new(
+        @"\b(?<keyword>record\s+(?:class|struct)|class|struct|record|interface)\s+(?<name>@?[A-Za-z_]\w*)",
+        RegexOptions.Compiled);
+
+    private static readonly Regex EndsWithPartial = new(@"\bpartial\s*$", RegexOptions.Compiled);
+
+    // Adds the 'partial' modifier (right before the type keyword, where C# wants it) to every type declaration whose
+    // body encloses <paramref name="position"/> and lacks it. Declarations inside comments or literals are ignored.
+    internal static string MakeEnclosingTypesPartial(string source, int position)
+    {
+        string masked = MaskCommentsAndLiterals(source);
+        List<int> insertions = [];
+        foreach (Match declaration in TypeDeclaration.Matches(masked))
+        {
+            if (declaration.Index >= position)
+            {
+                break;
+            }
+
+            // The body opens at the first '{' after the declaration, unless a ';' comes first (a positional record,
+            // or a 'class' generic constraint read as a declaration).
+            int open = masked.IndexOfAny(['{', ';'], declaration.Index + declaration.Length);
+            if (open < 0 || open > position || masked[open] != '{' || FindMatchingBrace(source, open) < position)
+            {
+                continue;
+            }
+
+            if (!EndsWithPartial.IsMatch(masked.Substring(0, declaration.Index)))
+            {
+                insertions.Add(declaration.Index);
+            }
+        }
+
+        for (int i = insertions.Count - 1; i >= 0; i--)
+        {
+            source = source.Insert(insertions[i], "partial ");
+        }
+
+        return source;
     }
 
     // One registration chain: RegisterStep().On<Message>() or OnMessage("name"), then everything up to its ';'.
