@@ -21,6 +21,13 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.27.1] - 2026-10-18 (Vela.Cli)
+
+### Changed
+
+- `vela init` references framework 0.39.0 (Vela.Plugins, Vela.Testing, Vela.Messages), so a generated handler on an
+  `On<Name>()` extension from `vela models` gets its `{Handler}Context`.
+
 ## [0.39.0] - 2026-10-18 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
 ### Added
