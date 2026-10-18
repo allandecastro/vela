@@ -17,7 +17,8 @@ namespace Vela.Analyzers
     /// <c>WithSubordinatePostImage(...)</c>). The handler reads it via
     /// <c>ctx.PreImageAs&lt;T&gt;()</c> / <c>ctx.PostImageAs&lt;T&gt;()</c>, so reading a column the step did not
     /// capture is a compile error instead of a silent <c>null</c>. Covers the guided (<c>OnCreate()</c>...), typed
-    /// (<c>On&lt;TRequest&gt;()</c>) and permissive (<c>OnMessage("...")</c> / <c>OnMessage&lt;TMessage&gt;()</c>)
+    /// (<c>On&lt;TRequest&gt;()</c>, <c>OnAsyncOnly&lt;TRequest&gt;()</c> and the generated <c>On{X}()</c> step extensions,
+    /// recognized from the typed stages they return) and permissive (<c>OnMessage("...")</c> / <c>OnMessage&lt;TMessage&gt;()</c>)
     /// trigger paths. Each type is emitted as a nested type inside the plugin's own <c>partial</c> class (named
     /// <c>{Handler}_{PreImage|PostImage|SubordinatePreImage|SubordinatePostImage}</c>, so the handler reads it unqualified), which is why a plugin declaring
     /// typed images must be <c>partial</c> (VELA014). The generator is purely additive (it never rewrites the fluent
@@ -163,8 +164,15 @@ namespace Vela.Analyzers
                 return ProjectionResult.Skipped(invocation, method, accessor, "its image alias is not a compile-time constant");
             }
 
-            // Message + stage from the chain that precedes this call.
+            // Message + stage from the chain that precedes this call. A request-typed trigger (On<TRequest>(),
+            // OnAsyncOnly<TRequest>() or a generated On{X}() extension) names it from its request type.
             (string? messageLabel, string? stageLabel) = ResolveMessageAndStage(member.Expression, model, cancellationToken);
+            INamedTypeSymbol? request = FindTypedRequestType(member.Expression, model, cancellationToken, out bool fromTypedStages);
+            if (messageLabel is null && fromTypedStages)
+            {
+                messageLabel = MessageFromRequestName(request!.Name);
+            }
+
             if (messageLabel is null || stageLabel is null)
             {
                 // A chain split across locals legitimately hides its trigger here, so only a chain that starts at
@@ -208,9 +216,9 @@ namespace Vela.Analyzers
             // the context, the message + stage pick its base concrete context, and the entity types its generic arg.
             bool isPost = stageLabel == "PostOp";
             string entityType = plugin.Entity.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            // For a typed On<TRequest>() step the generated context derives from MessagePre/PostContext<TRequest,
-            // TEntity>; capture the request type so the context can name it. null for the guided / string paths.
-            string? requestType = FindTypedRequestType(member.Expression, model, cancellationToken);
+            // For a request-typed step the generated context derives from MessagePre/PostContext<TRequest, TEntity>;
+            // capture the request type so the context can name it. null for the guided / permissive paths.
+            string? requestType = request?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             return new ProjectionResult(new ProjectionModel(NamespaceOf(plugin.Plugin), ContainingDeclarations(plugin.Plugin), typeName,
                 columns.ToImmutableArray(), handlerName, messageLabel, isPost, isPre, isSubordinate, entityType, requestType, alias));
@@ -226,8 +234,8 @@ namespace Vela.Analyzers
 
         // One HandlerModel per named .Handle(OnX) step, so a {Handler}Context is emitted for every entity-bound
         // modelled handler - with or without a captured image (a bare subclass when imageless, so adding an image
-        // later never changes the handler signature). OnMessage("string") / OnMessage<T>() and Custom API handlers
-        // are intentionally skipped (no modelled typed context to derive from).
+        // later never changes the handler signature). OnMessage("string") / OnMessage<T>() handlers are skipped: their
+        // request type is chosen by the handler, not the trigger, so there is no context base to derive from.
         private static HandlerModel? ExtractHandler(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
         {
             if (!FluentStep.IsHandleCall(invocation, out MemberAccessExpressionSyntax member, out ExpressionSyntax handler) ||
@@ -237,19 +245,26 @@ namespace Vela.Analyzers
                 return null;
             }
 
+            // A request-typed trigger (On<TRequest>(), OnAsyncOnly<TRequest>(), or a generated On{X}() extension
+            // returning the typed stages) is recognized from its request type; every other trigger by its name.
+            INamedTypeSymbol? request = FindTypedRequestType(member.Expression, model, cancellationToken, out bool fromTypedStages);
+            string? requestType = request?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             (string? messageLabel, string? stageLabel) = ResolveMessageAndStageForContext(member.Expression);
+            if (fromTypedStages)
+            {
+                messageLabel = MessageFromRequestName(request!.Name);
+            }
+
             if (messageLabel is null || stageLabel is null)
             {
                 return null;
             }
 
-            string? requestType = FindTypedRequestType(member.Expression, model, cancellationToken);
             bool isPost = stageLabel == "PostOp";
 
-            // Emit only when a real modelled context base exists. The typed On<TRequest>() path always has
+            // Emit only when a real modelled context base exists. A request-typed trigger always has
             // MessagePre/PostContext; a guided On{Msg}() needs its Vela.Context.{Msg}{Pre|Post}Context to exist. This
-            // is what excludes generated Custom API On{X} extensions (e.g. OnRecalc -> no RecalcPostContext) and any
-            // other non-modelled trigger, without classifying the trigger method itself.
+            // excludes any trigger that is neither modelled nor request-typed.
             if (requestType is null)
             {
                 string contextMetadata = $"Vela.Context.{messageLabel}{(isPost ? "Post" : "Pre")}Context`1";
@@ -351,22 +366,43 @@ namespace Vela.Analyzers
             _ => null,
         };
 
-        // The fully-qualified request type of an On<TRequest>() step in the chain, or null (guided OnCreate()...,
-        // permissive OnMessage<TMessage>()). Used to build the generic message context base for a typed step.
-        private static string? FindTypedRequestType(ExpressionSyntax? receiver, SemanticModel model, CancellationToken cancellationToken)
+        // The request type of a request-typed step in the chain, or null (guided OnCreate()..., permissive
+        // OnMessage<TMessage>()). Used to build the generic message context base for a typed step. Recognized from
+        // On<TRequest>() itself, or from any trigger call whose return type is the step builder's typed stages
+        // (Vela.Steps.ITypedStages<TEntity, TRequest> / IAsyncOnlyTypedStages<TEntity, TRequest>): that is
+        // OnAsyncOnly<TRequest>() and the On{X}() extensions `vela models --messages/--custom-apis` generate
+        // (fromTypedStages: the message label then comes from the request type, as the trigger name does not carry it).
+        private static INamedTypeSymbol? FindTypedRequestType(ExpressionSyntax? receiver, SemanticModel model, CancellationToken cancellationToken, out bool fromTypedStages)
         {
+            fromTypedStages = false;
             foreach (ChainCall call in FluentStep.Spine(receiver))
             {
                 if (call.Name is GenericNameSyntax generic && generic.Identifier.ValueText == "On" &&
                     generic.TypeArgumentList.Arguments.Count == 1)
                 {
-                    return model.GetSymbolInfo(generic.TypeArgumentList.Arguments[0], cancellationToken).Symbol is INamedTypeSymbol request
-                        ? request.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                        : null;
+                    return model.GetSymbolInfo(generic.TypeArgumentList.Arguments[0], cancellationToken).Symbol as INamedTypeSymbol;
+                }
+
+                if (model.GetSymbolInfo(call.Invocation, cancellationToken).Symbol is IMethodSymbol method &&
+                    TypedStagesRequest(method.ReturnType) is { } typed)
+                {
+                    fromTypedStages = true;
+                    return typed;
                 }
             }
 
             return null;
+        }
+
+        // TRequest of Vela.Steps.ITypedStages<TEntity, TRequest> / IAsyncOnlyTypedStages<TEntity, TRequest>, or null.
+        private static INamedTypeSymbol? TypedStagesRequest(ITypeSymbol type)
+        {
+            return type is INamedTypeSymbol { TypeArguments.Length: 2 } named &&
+                named.Name is "ITypedStages" or "IAsyncOnlyTypedStages" &&
+                named.ContainingNamespace?.ToDisplayString() == "Vela.Steps" &&
+                named.TypeArguments[1] is INamedTypeSymbol { TypeKind: not TypeKind.Error } request
+                ? request
+                : null;
         }
 
         // The method name bound in the terminal .Handle(...) of this step's chain (walking outward from the
@@ -430,6 +466,15 @@ namespace Vela.Analyzers
             return (message, stage);
         }
 
+        // The message label of a request type's simple name: minus a trailing "Request" (DeleteRequest -> Delete).
+        private static string MessageFromRequestName(string typeName)
+        {
+            const string suffix = "Request";
+            return typeName.Length > suffix.Length && typeName.EndsWith(suffix, System.StringComparison.Ordinal)
+                ? typeName.Substring(0, typeName.Length - suffix.Length)
+                : typeName;
+        }
+
         // The message label for a typed On<TRequest>() step: the request type's simple name minus a trailing
         // "Request" (DeleteRequest -> Delete, UpdateRequest<T> -> Update). Returns null if the shape is unexpected.
         private static string? DeriveMessageFromRequest(TypeSyntax requestType)
@@ -447,10 +492,7 @@ namespace Vela.Analyzers
                 return null;
             }
 
-            const string suffix = "Request";
-            return typeName!.Length > suffix.Length && typeName.EndsWith(suffix, System.StringComparison.Ordinal)
-                ? typeName.Substring(0, typeName.Length - suffix.Length)
-                : typeName;
+            return MessageFromRequestName(typeName!);
         }
 
         // The optional leading alias and the column selectors. The alias may be any compile-time string constant (a

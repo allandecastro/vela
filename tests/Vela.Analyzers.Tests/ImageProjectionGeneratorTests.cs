@@ -40,6 +40,7 @@ namespace Vela.Steps
         IStepConfig<TEntity> OnRecalc();
         IStepConfig<TEntity> On<TRequest>();
         IStepConfig<TEntity> OnMessage<TMessage>();
+        IAsyncOnlyTypedStages<TEntity, TRequest> OnAsyncOnly<TRequest>();
         IStepConfig<TEntity> PreValidation();
         IStepConfig<TEntity> PreOperation();
         IStepConfig<TEntity> PostOperation();
@@ -54,6 +55,19 @@ namespace Vela.Steps
         IStepConfig<TEntity> WithSubordinatePostImage(params Expression<Func<TEntity, object>>[] a);
         IStepConfig<TEntity> WithSubordinatePostImage(string alias, params Expression<Func<TEntity, object>>[] a);
         void Handle(Action handler);
+    }
+
+    // The typed stages On<TRequest>() / OnAsyncOnly<TRequest>() return, which the On{X}() extensions
+    // `vela models --messages/--custom-apis` generate return too.
+    public interface ITypedStages<TEntity, TRequest> : IFluentStep
+    {
+        IStepConfig<TEntity> PreValidation();
+        IStepConfig<TEntity> PreOperation();
+        IStepConfig<TEntity> PostOperation();
+    }
+    public interface IAsyncOnlyTypedStages<TEntity, TRequest> : IFluentStep
+    {
+        IStepConfig<TEntity> PostOperation();
     }
 }
 
@@ -112,6 +126,15 @@ namespace Demo
     }
 
     public sealed class DeleteRequest { }
+    public sealed class new_RecalculateScoreRequest { }
+
+    // The shape of a Messages/{Name}.Steps.cs extension `vela models --custom-apis` writes: sync-capable and
+    // async-only.
+    internal static class new_RecalculateScoreStepExtensions
+    {
+        public static Vela.Steps.ITypedStages<Account, new_RecalculateScoreRequest> OnRecalculateScore(this Vela.Steps.IStepConfig<Account> builder) => null;
+        public static Vela.Steps.IAsyncOnlyTypedStages<Account, new_RecalculateScoreRequest> OnRecalculateScoreLater(this Vela.Steps.IStepConfig<Account> builder) => null;
+    }
 }
 ";
 
@@ -1054,6 +1077,112 @@ namespace Demo
 
         Assert.DoesNotContain("OnRecalcedContext", output);
         Assert.DoesNotContain("RecalcPostContext", output);
+    }
+
+    [Fact]
+    public void Emits_a_pre_stage_message_context_for_a_generated_message_extension()
+    {
+        // A generated On{X}() extension is recognized from the typed stages it returns: its handler gets the same
+        // base context On<TRequest>() gives it.
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountScore : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnRecalculateScore().PreOperation().Sync().Handle(OnScoring);
+        private void OnScoring() { }
+    }
+}
+");
+
+        Assert.Contains("class OnScoringContext : global::Vela.Context.MessagePreContext<global::Demo.new_RecalculateScoreRequest, global::Demo.Account>", output);
+    }
+
+    [Fact]
+    public void Emits_a_post_stage_message_context_with_images_for_a_generated_message_extension()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountScore : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnRecalculateScore().PostOperation().Sync()
+                .WithPreImage(a => a.Name)
+                .WithPostImage(a => a.Revenue)
+                .Handle(OnScored);
+        private void OnScored() { }
+    }
+}
+");
+
+        Assert.Contains("class OnScoredContext : global::Vela.Context.MessagePostContext<global::Demo.new_RecalculateScoreRequest, global::Demo.Account>", output);
+        Assert.Contains("public new OnScored_PreImage? PreImage", output);
+        Assert.Contains("public new OnScored_PostImage? PostImage", output);
+    }
+
+    [Fact]
+    public void Emits_a_post_stage_message_context_for_an_async_only_generated_message_extension()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountScore : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnRecalculateScoreLater().PostOperation().Handle(OnScoredLater);
+        private void OnScoredLater() { }
+    }
+}
+");
+
+        Assert.Contains("class OnScoredLaterContext : global::Vela.Context.MessagePostContext<global::Demo.new_RecalculateScoreRequest, global::Demo.Account>", output);
+    }
+
+    [Fact]
+    public void Emits_a_post_stage_message_context_for_an_async_only_typed_trigger()
+    {
+        string output = RunAndConcat(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed class AccountScore : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnAsyncOnly<new_RecalculateScoreRequest>().PostOperation().Handle(OnScoredAsync);
+        private void OnScoredAsync() { }
+    }
+}
+");
+
+        Assert.Contains("class OnScoredAsyncContext : global::Vela.Context.MessagePostContext<global::Demo.new_RecalculateScoreRequest, global::Demo.Account>", output);
+    }
+
+    [Fact]
+    public void Generated_message_extension_context_compiles()
+    {
+        ImmutableArray<Diagnostic> diagnostics = CompileDiagnostics(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class AccountScore : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnRecalculateScore().PostOperation().Sync()
+                .WithPostImage(a => a.Revenue)
+                .Handle(OnScored);
+
+        private void OnScored() { }
+        private static decimal? Read(OnScoredContext ctx) => ctx.PostImage?.Revenue;
+    }
+}
+");
+
+        Assert.Empty(diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error));
     }
 
     [Fact]
