@@ -30,6 +30,10 @@ namespace Vela.Steps
         IStepConfig<TEntity> WithPostImage(params Expression<Func<TEntity, object>>[] a);
         void Handle(Action handler);
     }
+    public interface ITypedStages<TEntity, TRequest> : IFluentStep
+    {
+        IStepConfig<TEntity> PostOperation();
+    }
 }
 
 namespace Vela.Plugin
@@ -56,6 +60,12 @@ namespace Demo
 {
     using Microsoft.Xrm.Sdk;
     public sealed class Account : Entity { public string Name { get; set; } }
+    public sealed class new_ScoreRequest { }
+    // The shape of the On{X}() extension `vela models --custom-apis` generates.
+    internal static class new_ScoreStepExtensions
+    {
+        public static Vela.Steps.ITypedStages<Account, new_ScoreRequest> OnScore(this Vela.Steps.IStepConfig<Account> builder) => null!;
+    }
 }
 ";
 
@@ -99,6 +109,21 @@ namespace Demo
     }");
 
         await Verify.VerifyAnalyzerAsync(code, At(0, "Validate", "Validate"));
+    }
+
+    [Fact]
+    public async Task Flags_a_named_handler_on_a_generated_message_extension()
+    {
+        // The handler gets a {Handler}Context deriving from MessagePostContext<TRequest, TEntity>, nested in the plugin.
+        string code = InPlugin(@"
+    public sealed class {|#0:Score|} : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnScore().PostOperation().Sync().Handle(OnScored);
+        private void OnScored() { }
+    }");
+
+        await Verify.VerifyAnalyzerAsync(code, At(0, "Score", "Score"));
     }
 
     [Fact]

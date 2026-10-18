@@ -244,7 +244,8 @@ RegisterStep().OnMerge().PreOperation().Sync()
 
 ### Typed step context (read images as `ctx.PreImage` / `ctx.PostImage`)
 
-Every **named** handler on a typed trigger (and on `On<TRequest>()`) gets a generated context named
+Every **named** handler on a typed trigger (and on `On<TRequest>()`, `OnAsyncOnly<TRequest>()` and the `On<Name>()`
+extensions `vela models` generates) gets a generated context named
 `{Handler}Context`, nested in the plugin class. It derives from the message context (`UpdatePostContext<Account>`
 for a PostOperation Update) and, on Create, Update, Delete, Assign and Merge, exposes `ctx.PreImage` /
 `ctx.PostImage` typed to **exactly the captured columns**. Reading a column the step did not capture is a compile
