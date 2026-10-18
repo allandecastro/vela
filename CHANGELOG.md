@@ -21,7 +21,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Changed (CLI)
+## [0.27.0] - 2026-10-18 (Vela.Cli)
+
+### Changed
 
 - Every handler `vela init` and `vela add` generate takes its generated `{Handler}Context` (for example
   `OnExecuteContext`) instead of the message interface (`ICreatePostContext<T>`, `IMessagePostContext<TRequest>`...):
