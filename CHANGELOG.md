@@ -21,6 +21,23 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-10-18 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Added
+
+- A handler on a step registered through an `On<Name>()` extension that `vela models --messages` /
+  `--custom-apis` writes to `Messages/<Name>.Steps.cs` (for example `OnAccountEstimateValue()`) now gets its
+  generated `{Handler}Context`, like `On<TRequest>()`: a `MessagePreContext<TRequest, TEntity>` /
+  `MessagePostContext<TRequest, TEntity>` with a typed `ctx.Request` and the step's typed `ctx.PreImage` /
+  `ctx.PostImage`. The extension is recognized from the typed stages it returns, so `OnAsyncOnly<TRequest>()` gets
+  one too. Handlers typed with `IMessagePostContext<TRequest>` keep compiling.
+
+### Changed (breaking)
+
+- A plugin that binds a named handler on such an `On<Name>()` extension or on `OnAsyncOnly<TRequest>()` must now be
+  declared `partial`, since its `{Handler}Context` is generated inside it. VELA014 reports the missing `partial` and
+  its code fix adds it.
+
 ## [0.27.0] - 2026-10-18 (Vela.Cli)
 
 ### Changed
@@ -31,21 +48,6 @@ All notable changes to Vela are documented here. The format is based on
   Capturing an image later no longer changes the handler's signature. `vela add step` now makes the plugin class
   (and any type enclosing it) `partial` when it is not, since the context is generated inside it. Existing handlers
   typed with the message interface keep compiling and are left as they are.
-
-### Added (Framework)
-
-- A handler on a step registered through an `On<Name>()` extension that `vela models --messages` /
-  `--custom-apis` writes to `Messages/<Name>.Steps.cs` (for example `OnAccountEstimateValue()`) now gets its
-  generated `{Handler}Context`, like `On<TRequest>()`: a `MessagePreContext<TRequest, TEntity>` /
-  `MessagePostContext<TRequest, TEntity>` with a typed `ctx.Request` and the step's typed `ctx.PreImage` /
-  `ctx.PostImage`. The extension is recognized from the typed stages it returns, so `OnAsyncOnly<TRequest>()` gets
-  one too. Handlers typed with `IMessagePostContext<TRequest>` keep compiling.
-
-### Changed (Framework, breaking)
-
-- A plugin that binds a named handler on such an `On<Name>()` extension or on `OnAsyncOnly<TRequest>()` must now be
-  declared `partial`, since its `{Handler}Context` is generated inside it. VELA014 reports the missing `partial` and
-  its code fix adds it.
 
 ## [0.38.0] - 2026-10-17 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
