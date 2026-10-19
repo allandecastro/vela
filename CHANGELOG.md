@@ -21,6 +21,13 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Vela.Testing: each harness gives the plug-in a cache of its own (`IPluginCacheService`), one per `PluginPipeline`
+  and one per `PluginContext` builder, kept across its executions. It expires on the harness clock: the existing
+  `PluginPipeline.WithClock` and the new `PluginContextBuilder.WithClock`, so a test moves time past a TTL instead of
+  sleeping. The harnesses used the process-wide cache on the real clock, which also leaked entries between tests.
+
 ### Fixed
 
 - `vela plan` / `vela apply` find the plugin assembly of a package whose id carries the publisher prefix

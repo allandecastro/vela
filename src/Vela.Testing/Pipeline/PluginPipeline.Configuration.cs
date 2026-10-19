@@ -172,7 +172,11 @@ namespace Vela.Testing
             return this;
         }
 
-        /// <summary>Overrides the clock used to stamp <c>createdon</c>/<c>modifiedon</c> (default <see cref="DateTime.UtcNow"/>).</summary>
+        /// <summary>
+        /// Overrides the pipeline's clock (default <see cref="DateTime.UtcNow"/>): it stamps <c>createdon</c> /
+        /// <c>modifiedon</c> and expires the plug-in cache (<c>IPluginCacheService</c>), so a test moves time past a
+        /// TTL instead of sleeping. The pipeline has a cache of its own, kept across its executions.
+        /// </summary>
         public PluginPipeline WithClock(Func<DateTime> clock)
         {
             _store.WithClock(clock);

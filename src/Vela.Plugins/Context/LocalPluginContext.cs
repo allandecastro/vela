@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Vela.Caching;
 using Vela.Constants;
 using Vela.DI;
 using Microsoft.Xrm.Sdk;
@@ -61,6 +62,9 @@ namespace Vela.Context
             // a Microsoft.Extensions.Logging.ILogger). It is a no-op when the environment exports no telemetry.
             Logger = serviceProvider.GetService(typeof(ILogger)) as ILogger ?? NullPluginTelemetryLogger.Instance;
             ManagedIdentityService = serviceProvider.GetService(typeof(IManagedIdentityService)) as IManagedIdentityService;
+            // Only the Vela.Testing harnesses serve one (Dataverse never does): a cache of their own, on the test's
+            // clock, so a test can expire an entry and never sees another test's entries.
+            CacheStore = serviceProvider.GetService(typeof(PluginCacheService)) as PluginCacheService;
             // The newer members are read through their SDK interface, never by name on the concrete type: the
             // platform's context class is opaque and may implement them explicitly, and the compiler then pins each
             // member's type (EnvironmentId is a string, TenantId a Guid).
@@ -78,6 +82,9 @@ namespace Vela.Context
                 ?? Array.Empty<EntityImageCollection>();
             Resolver = SimpleServiceResolver.CreateDefault(this);
         }
+
+        // The process-wide cache the injected IPluginCacheService views, when a test harness supplies its own.
+        internal PluginCacheService? CacheStore { get; }
 
         /// <summary>
         /// Gets per-execution service resolver.

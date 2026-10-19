@@ -74,7 +74,8 @@ namespace Vela.DI
             // across organizations, and Clear() only drops this organization's entries (the framework's own entries
             // included, since the built-in services go through the same view).
             IPluginCacheService? scopedCache = null;
-            IPluginCacheService ScopedCache() => scopedCache ??= new OrganizationScopedCacheService(GlobalCacheService, context.OrganizationId);
+            PluginCacheService store = (context as LocalPluginContext)?.CacheStore ?? GlobalCacheService;
+            IPluginCacheService ScopedCache() => scopedCache ??= new OrganizationScopedCacheService(store, context.OrganizationId);
             yield return Scoped<IPluginCacheService>(ScopedCache);
             yield return Scoped<IEnvironmentVariableReader>(() => new EnvironmentVariableReader(context, ScopedCache()));
             yield return Scoped<IMessageService>(() => new MessageService(context, ScopedCache()));

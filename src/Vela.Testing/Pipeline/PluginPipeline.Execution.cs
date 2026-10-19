@@ -502,6 +502,9 @@ namespace Vela.Testing
                 services[typeof(IManagedIdentityService)] = _managedIdentityService;
             }
 
+            // Not a platform service: the pipeline's own plug-in cache, on its clock.
+            services[typeof(Vela.Caching.PluginCacheService)] = Cache;
+
             // Not a platform service either: the services the test replaced with WithService, for every plugin it runs.
             if (!_serviceOverrides.IsEmpty)
             {
