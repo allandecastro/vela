@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.27.4] - 2026-10-19 (Vela.Cli)
+
+### Changed
+
+- `vela init` references framework 0.41.0 (Vela.Plugins, Vela.Testing, Vela.Messages), so a generated test runs on
+  the harness's inherited access and sharing rules as Dataverse applies them.
+
+## [0.41.0] - 2026-10-19 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
 ### Changed (breaking)
 
 - Vela.Testing: inherited access over a parental relationship follows the rules verified live on Dataverse. A child
