@@ -35,7 +35,7 @@ internal static class ContractFixturePackage
             .Single(a => a.Key == "ContractPluginFixtureDir").Value!;
 
     /// <summary>Writes the package to a new temp file and returns its path; the caller deletes it.</summary>
-    internal static string Build(string version = "1.0.0")
+    internal static string Build(string version = "1.0.0", bool withoutPlugins = false)
     {
         string dir = FixtureDirectory;
         string nupkg = Path.Combine(Path.GetTempPath(), $"{PackageId}.{Guid.NewGuid():N}.nupkg");
@@ -52,12 +52,28 @@ internal static class ContractFixturePackage
 
         foreach (string file in PackedAssemblies)
         {
+            if (withoutPlugins && file == $"{AssemblyName}.dll")
+            {
+                // The plugin project after its last plugin class was deleted: same assembly name, no type at all.
+                ZipArchiveEntry empty = zip.CreateEntry("lib/net462/" + file);
+                using Stream es = empty.Open();
+                EmptyAssembly(AssemblyName).Save(es);
+                continue;
+            }
+
             string path = Path.Combine(dir, file);
             Assert.True(File.Exists(path), $"contract fixture output not found: {path} (build tests/ContractPluginFixture)");
             zip.CreateEntryFromFile(path, "lib/net462/" + file);
         }
 
         return nupkg;
+    }
+
+    private static System.Reflection.Emit.PersistedAssemblyBuilder EmptyAssembly(string name)
+    {
+        System.Reflection.Emit.PersistedAssemblyBuilder builder = new(new AssemblyName(name), typeof(object).Assembly);
+        builder.DefineDynamicModule(name);
+        return builder;
     }
 
     internal static SharedOptions Options(IReadOnlyList<string> packages, string? outPath = null, bool detailedExitCode = false) => new(
