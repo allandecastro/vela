@@ -21,6 +21,13 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (CLI)
+
+- `vela apply --solution` no longer tries to add the assembly of a plug-in package to the solution on its own when
+  the package was deployed before without that solution. Dataverse refuses it ("cannot be exported as it is part of
+  a Plugin Package"), so the run failed with exit 7 before adding the steps. The package is added, and carries its
+  assembly.
+
 ## [0.27.5] - 2026-10-19 (Vela.Cli)
 
 ### Fixed
