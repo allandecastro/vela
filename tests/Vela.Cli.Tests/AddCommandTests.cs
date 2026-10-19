@@ -543,12 +543,23 @@ public class AddCommandTests
     }
 
     [Fact]
-    public void Add_Service_WithoutEntity_Fails()
+    public void Add_Service_WithoutEntity_GeneratesASharedServiceOnTheLateBoundEntity()
     {
-        RunInProject("Acme.Plugins", (project, _) =>
+        // A service used by the plugins of several tables: no table folder, no early-bound type.
+        RunInProject("Acme.Plugins", (project, dir) =>
         {
-            int exit = AddCommand.Run(["service", "OrphanService", "--project", project]);
-            Assert.Equal(ExitInvalidArguments, exit);
+            int exit = AddCommand.Run(["service", "AuditService", "--project", project]);
+            Assert.Equal(ExitSuccess, exit);
+
+            string file = Path.Combine(dir, "Services", "AuditService.cs");
+            Assert.True(File.Exists(file));
+
+            string content = File.ReadAllText(file);
+            Assert.Contains("namespace Acme.Plugins.Services", content);
+            Assert.DoesNotContain("Models.Generated", content);
+            Assert.Contains("public sealed class AuditService(IOrganizationService service) : IAuditService", content);
+            Assert.Contains("void Execute(Entity target)", content);
+            Assert.Contains("lives under <c>Services/</c>", content);
         });
     }
 

@@ -21,6 +21,11 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `vela add service <Name>` without `--entity` generates a service shared by several tables, under `Services/`, taking
+  the late-bound `Entity`. `--entity` was required, so a service used by two tables had to pick one of them.
+
 ### Fixed
 
 - `vela plan` / `vela apply` find the plugin assembly of a package whose id carries the publisher prefix

@@ -8,6 +8,7 @@ follow the same by-table layout as `vela init` (so they drop straight into a sca
 # run inside the project folder, or pass --project <csproj>
 vela add plugin AccountValidatorPlugin --entity Account --message Update --filtering-attributes Name
 vela add service AccountFollowUpService --entity Account  # table-scoped interface + implementation
+vela add service AuditService                             # shared by several tables, under Services/
 vela add customapi RecalculateTotals                  # global (unbound), lightweight Custom API
 vela add customapi ExportContact --entity Contact     # typed Custom API bound to a table
 
@@ -72,7 +73,8 @@ vela add --interactive
   Dataverse only allows asynchronous steps at
   `PostOperation`, so `--mode Async` with a pre-stage is rejected with a clear message.
 - `vela add service` scaffolds a table-scoped `I<Name>` interface + sealed implementation (injecting
-  `IOrganizationService`) under `<Table>/Services/`, and surfaces the `services.AddScoped<...>(...)` line to drop
+  `IOrganizationService`) under `<Table>/Services/`, typed on the table's early-bound class. Without `--entity` the
+  service is shared by several tables: it goes under `Services/` and takes the late-bound `Entity`. It surfaces the `services.AddScoped<...>(...)` line to drop
   into your plugin's `ConfigureServices(...)`. With `--json` that line is returned in a structured `registration`
   field (omitted for every other `add` kind), so an agent driving the CLI can wire the service up without parsing
   the human prose.
