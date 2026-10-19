@@ -21,6 +21,8 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.27.5] - 2026-10-19 (Vela.Cli)
+
 ### Fixed
 
 - `vela models --roles` / `--solution-roles` give a privilege shared by several tables to each of them. The
