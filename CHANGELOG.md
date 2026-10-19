@@ -21,6 +21,12 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Docs
+
+- `docs/llms.txt` links each page to its Markdown copy on the documentation site
+  (`https://allandecastro.github.io/vela/guides/plugins.md`), published next to the HTML page, instead of
+  `raw.githubusercontent.com`, which returns 404 for a private repository. The CHANGELOG is published there too.
+
 ### Fixed
 
 - `vela plan` / `vela apply` find the plugin assembly of a package whose id carries the publisher prefix

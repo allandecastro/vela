@@ -61,13 +61,22 @@ jobs:
         run: dotnet tool update -g docfx
       - name: Build the docs site
         run: docfx docs/docfx.json --warningsAsErrors
-      # llms.txt (copied as a resource) indexes the pages; llms-full.txt is every page it lists, concatenated in
-      # that order, for tools that read the whole documentation in one request.
-      - name: Write llms-full.txt
+      # llms.txt (copied as a resource) indexes the pages by their Markdown URL on this site: the repository is
+      # private, so raw.githubusercontent.com links 404. Each listed page is published next to its .html, and
+      # llms-full.txt is every page it lists, concatenated in that order, for tools that read the whole
+      # documentation in one request.
+      - name: Publish the llms.txt pages and write llms-full.txt
         shell: powershell
         run: |
-          $pages = Select-String -Path docs\llms.txt -Pattern '/main/docs/([^)]+\.md)\)' -AllMatches |
-            ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value }
+          $pages = Select-String -Path docs\llms.txt -Pattern 'allandecastro\.github\.io/vela/([^)]+\.md)\)' -AllMatches |
+            ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -ne 'CHANGELOG.md' }
+          if (-not $pages) { throw 'docs/llms.txt lists no page' }
+          foreach ($page in $pages) {
+            $target = Join-Path docs\_site $page
+            New-Item -ItemType Directory -Force -Path (Split-Path $target) | Out-Null
+            Copy-Item (Join-Path docs $page) $target
+          }
+          Copy-Item CHANGELOG.md docs\_site\CHANGELOG.md
           $out = foreach ($page in $pages) { "<!-- $page -->"; Get-Content -Raw -Encoding UTF8 (Join-Path docs $page); '' }
           Set-Content -Path docs\_site\llms-full.txt -Value $out -Encoding UTF8
       - uses: actions/configure-pages@v5
