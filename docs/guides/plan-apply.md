@@ -21,7 +21,9 @@ vela apply --package ./artifacts/Zava.Plugins.1.0.0.nupkg --solution ZavaSales \
 
 Always pass `--solution <uniqueName>` to `plan` and `apply`: Dataverse imports a plugin package only when its name
 carries a publisher prefix (`pfx_Name`), and Vela takes that prefix from the solution (`apply` renames `Zava.Plugins`
-to `zava_Zava.Plugins` in memory). Without `--solution`, `plan` and `apply` both fail on a package whose name has no
+to `zava_Zava.Plugins` in memory). A package already named with a prefix is uploaded as is: `vela init
+--publisher-prefix zava` (or `--samples`, `--managed-identity`) names the packages `zava_Zava.Plugins` and
+`zava_Zava.Integrations`. Without `--solution`, `plan` and `apply` both fail on a package whose name has no
 prefix, before anything is written (exit 4). `inspect` is read-only and does not check this.
 `--solution` also places every written component in that solution. See [Authentication](../configuration/authentication.md)
 for the other ways to connect.
@@ -82,7 +84,7 @@ Reading a package's steps and Custom APIs instantiates its plugin types and call
 
 Keep secrets off the command line, where every process on the machine can see them: prefer `DATAVERSE_CLIENT_SECRET` or `--client-secret-stdin` to `--client-secret`, `DATAVERSE_CONNECTION_STRING` to `--connection-string`, `VELA_SECURE_CONFIG_<NAME>` or `--secure-config NAME=@file` to an inline value, or no secret at all with `--interactive` (cached token) or the ambient Azure credential (`--url` alone: `az login`, managed identity). Set `VELA_SCAN_IN_PROCESS=1` to scan in-process (debugging).
 
-By default the plugin assembly is inferred from the package: the assembly named like the package id, or like the id without its publisher prefix (`zava_Zava.Integrations` ships `Zava.Integrations.dll`). If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
+By default the plugin assembly is inferred from the package: the assembly named like the package id, or like the id without its publisher prefix (`zava_Zava.Plugins`, as `vela init --publisher-prefix zava` names it, ships `Zava.Plugins.dll`). If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
 
 ### Assembly name collisions across projects
 

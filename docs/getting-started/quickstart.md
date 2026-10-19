@@ -23,8 +23,11 @@ vela plan  --packages-dir artifacts --solution ZavaSales --interactive
 vela apply --packages-dir artifacts --solution ZavaSales --interactive
 ```
 
-`--solution` names a solution that already exists in the environment: it gives the plugin package the publisher
-prefix Dataverse requires, so `plan` and `apply` fail without it.
+`--solution` names a solution that already exists in the environment; `plan` and `apply` add the components to it.
+Dataverse imports a plugin package only when its name carries the publisher prefix: `--publisher-prefix zava`
+names the package `zava_Zava.Plugins` (built as `artifacts/zava_Zava.Plugins.1.0.0.nupkg`). Without
+`--publisher-prefix`, the package is `Zava.Plugins` and `--solution` gives it the prefix, so `plan` and `apply` fail
+without it.
 
 What you get from `vela init`: a minimal solution that references `Vela.Plugins` as a NuGet package - empty
 model and plugin projects plus a no-connection test project, and an `AGENTS.md` that tells AI coding agents how to write steps,

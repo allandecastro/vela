@@ -20,7 +20,7 @@ internal static partial class ScaffoldTemplates
             : string.Empty;
         string signingSection = !options.IncludeIntegrations
             ? string.Empty
-            : "\n" + (options.ManagedIdentity ? SigningSectionEnabled(prefix, options.IntegrationsPackageId) : SigningSectionDisabled(prefix, "--managed-identity"));
+            : "\n" + (options.ManagedIdentity ? SigningSectionEnabled(prefix, options.IntegrationsPackageId) : SigningSectionDisabled(prefix, options.IntegrationsPackageId, "--managed-identity"));
         string webResourcesLine = options.IncludeWebResources
             ? $"- `src/{prefix}.WebResources` - a TypeScript web-resources project (preview); see its own README.\n"
             : string.Empty;
@@ -28,6 +28,10 @@ internal static partial class ScaffoldTemplates
             ? $"4. Test it: `vela add test MyPlugin --entity Account --project tests/{prefix}.Plugins.Tests`, then `dotnet test tests/{prefix}.Plugins.Tests -c Release`.\n"
             : string.Empty;
         string deployStep = options.IncludeTests ? "5" : "4";
+        // With a known publisher prefix the packages are already named with it; otherwise --solution supplies it.
+        string solutionNote = options.KnownPublisherPrefix is { } knownPrefix
+            ? $"use your solution's unique name; the packages are already named with the publisher prefix `{knownPrefix}` (`{options.PluginsPackageId}`), which Dataverse requires to import them"
+            : "use your solution's unique name; `--solution` gives the package its publisher prefix, without which `vela plan` refuses an unprefixed package";
         string publisherNote = options.PublisherPrefix is null
             ? $"`vela add customapi` names a Custom API `<publisherprefix>_<Name>`. It derives the publisher prefix from the project prefix (`{ApiPrefix(prefix)}`) unless you pass `--prefix <publisherprefix>`; it must match the publisher of the solution you deploy into. Re-run `vela init --force --publisher-prefix <prefix>` to record it in the projects."
             : $"`vela add customapi` names a Custom API `{options.PublisherPrefix}_<Name>`: the publisher prefix recorded in the projects (`VelaPublisherPrefix`).";
@@ -56,7 +60,7 @@ Run these from the solution root:
 1. Generate early-bound models from your environment: `vela models --entities account,contact --project src/{{prefix}}.Shared/{{prefix}}.Shared.csproj --interactive` (it writes into the project's `Models/Generated` folder, in the `{{prefix}}.Shared.Models.Generated` namespace).
 2. Add a plugin or Custom API (`--entity` is the early-bound model type): `vela add plugin MyPlugin --entity Account --filtering-attributes Name --project src/{{prefix}}.Plugins` (a Create/Update step needs its filtering columns) or `vela add customapi MyApi --global --project src/{{prefix}}.Plugins`.
 3. Build: `dotnet build {{options.SolutionName}}.sln -c Release`.
-{{testStep}}{{deployStep}}. Preview and deploy into your Dataverse solution: `vela plan --packages-dir artifacts --solution {{options.SolutionName}}`, then `vela apply --packages-dir artifacts --solution {{options.SolutionName}}` (use your solution's unique name; `--solution` gives the package its publisher prefix, without which `vela plan` refuses an unprefixed package).
+{{testStep}}{{deployStep}}. Preview and deploy into your Dataverse solution: `vela plan --packages-dir artifacts --solution {{options.SolutionName}}`, then `vela apply --packages-dir artifacts --solution {{options.SolutionName}}` ({{solutionNote}}).
 
 Until you add a plugin, the package registers nothing - `vela plan --packages-dir artifacts --solution {{options.SolutionName}}` simply reports no changes.
 
@@ -100,7 +104,7 @@ and edited ones are kept.
         // Signing is an Integrations-only concern, so the whole section is omitted when that project is excluded.
         string signingSection = !options.IncludeIntegrations
             ? string.Empty
-            : options.ManagedIdentity ? SigningSectionEnabled(prefix, options.IntegrationsPackageId) : SigningSectionDisabled(prefix, "--samples --managed-identity");
+            : options.ManagedIdentity ? SigningSectionEnabled(prefix, options.IntegrationsPackageId) : SigningSectionDisabled(prefix, options.IntegrationsPackageId, "--samples --managed-identity");
 
         return
 $$"""
@@ -136,11 +140,11 @@ during the build (from the publish output), so a cold `dotnet pack` emits an ass
 
 ```powershell
 # Preview (read-only)
-vela plan --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --solution {{options.SolutionName}} --interactive --verbose
+vela plan --package artifacts/{{options.PluginsPackageId}}.1.0.0.nupkg --solution {{options.SolutionName}} --interactive --verbose
 
 # Apply (idempotent create/update/delete). apply writes by default and prompts on a terminal;
 # add --auto-approve to skip the prompt in CI.
-vela apply --package artifacts/{{prefix}}.Plugins.1.0.0.nupkg --solution {{options.SolutionName}} --interactive --verbose
+vela apply --package artifacts/{{options.PluginsPackageId}}.1.0.0.nupkg --solution {{options.SolutionName}} --interactive --verbose
 ```
 
 ## What's inside the plugin project
@@ -428,7 +432,7 @@ vela sign --package artifacts/{{packageId}}.1.0.0.nupkg `
 
     // README signing section when signing was not requested (but Integrations exists, so it is relevant).
     // initFlags: the `vela init` flags that re-scaffold this solution with the signing step.
-    private static string SigningSectionDisabled(string prefix, string initFlags) =>
+    private static string SigningSectionDisabled(string prefix, string packageId, string initFlags) =>
 $$"""
 ## Signing the plugin package
 
@@ -438,7 +442,7 @@ The build does **not** sign the assembly. If the `{{prefix}}.Integrations` plugi
 sign a packed `.nupkg` yourself:
 
 ```powershell
-vela sign --package artifacts/{{prefix}}.Integrations.1.0.0.nupkg --fingerprint <fingerprint>
+vela sign --package artifacts/{{packageId}}.1.0.0.nupkg --fingerprint <fingerprint>
 ```
 
 """;
