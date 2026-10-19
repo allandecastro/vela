@@ -29,6 +29,10 @@ namespace Vela.Testing
         private IManagedIdentityService? _managedIdentityService;
         private readonly ServiceOverrides _serviceOverrides = new ServiceOverrides(PlatformServices);
 
+        // The plug-in cache of this builder, kept across its executions and expiring on its clock (WithClock).
+        private Func<DateTime> _clock = () => DateTime.UtcNow;
+        private Vela.Caching.PluginCacheService? _cache;
+
         // The platform services WithService rejects, with the builder method that replaces each one.
         private static readonly IReadOnlyList<KeyValuePair<Type, string>> PlatformServices = new[]
         {
@@ -289,6 +293,17 @@ namespace Vela.Testing
         }
 
         /// <summary>
+        /// Overrides the clock the plug-in cache (<c>IPluginCacheService</c>) expires by (default
+        /// <see cref="DateTime.UtcNow"/>), so a test executes, moves time past a TTL and executes again instead of
+        /// sleeping. The builder has a cache of its own, kept across its executions.
+        /// </summary>
+        public PluginContextBuilder<TEntity> WithClock(Func<DateTime> clock)
+        {
+            _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+            return this;
+        }
+
+        /// <summary>
         /// Uses the given organization service for both user and system contexts. For an
         /// <see cref="InMemoryOrganizationService"/>, <c>ctx.SystemService</c> is its SYSTEM view: not subject to the
         /// store's security model (<c>WithSecurity</c>), as on a real org, while <c>ctx.Service</c> is.
@@ -401,6 +416,9 @@ namespace Vela.Testing
             {
                 services[typeof(IManagedIdentityService)] = _managedIdentityService;
             }
+
+            // Not a platform service: the builder's own plug-in cache, on its clock.
+            services[typeof(Vela.Caching.PluginCacheService)] = _cache ??= Vela.Caching.PluginCacheService.OnClock(() => _clock());
 
             // Not a platform service: the services the test replaced with WithService.
             if (!_serviceOverrides.IsEmpty)

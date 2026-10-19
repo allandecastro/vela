@@ -81,6 +81,12 @@ namespace Vela.Testing
         // The services the test replaced with WithService, handed to every plugin the pipeline runs.
         private readonly ServiceOverrides _serviceOverrides = new ServiceOverrides(PlatformServices);
 
+        // The plug-in cache of this pipeline, kept across its executions like the worker process's, and expiring on
+        // the store's clock (WithClock) so a test moves time forward instead of sleeping.
+        private Vela.Caching.PluginCacheService? _cache;
+
+        private Vela.Caching.PluginCacheService Cache => _cache ??= Vela.Caching.PluginCacheService.OnClock(_store.Now);
+
         // The platform services WithService rejects, with how the pipeline supplies or replaces each one.
         private static readonly IReadOnlyList<KeyValuePair<Type, string>> PlatformServices = new[]
         {

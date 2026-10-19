@@ -65,6 +65,14 @@ namespace Vela.Caching
             _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         }
 
+        // A cache on a test harness's clock (a DateTime as PluginPipeline.WithClock takes it; Unspecified means UTC).
+        internal static PluginCacheService OnClock(Func<DateTime> utcNow)
+            => new PluginCacheService(DefaultMaxEntries, () =>
+            {
+                DateTime now = utcNow();
+                return new DateTimeOffset(now.Kind == DateTimeKind.Local ? now.ToUniversalTime() : DateTime.SpecifyKind(now, DateTimeKind.Utc));
+            });
+
         /// <summary>Gets the maximum number of live entries this cache retains.</summary>
         public int MaxEntries => _maxEntries;
 
