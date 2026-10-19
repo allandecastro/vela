@@ -42,7 +42,10 @@ vela apply --package ./artifacts/zava_Zava.Integrations.1.0.0.nupkg --solution Z
   linked to now. A link to write is a pending change (`hasChanges`, exit 8 with `--detailed-exitcode`).
 - `apply` sets `pluginpackage.managedidentityid` right after the package publish, so a package created by the same run
   is linked too. With `--solution`, the update carries the solution like the other writes.
-- Without `--managed-identity`, the link is neither read nor changed: a package linked by hand keeps its link.
+- Without `--managed-identity`, the link is neither read nor changed: a package linked by hand keeps its link, and
+  republishing the package keeps it too.
+- With `--solution`, the `managedidentity` record itself is not added to the solution: it belongs to the environment,
+  and each environment links the package to its own record at deployment.
 
 Only the plugin packages of the run are linked; Vela deploys packages, not standalone plugin assemblies. The JSON
 fields are in [Machine-readable output](../reference/machine-readable-output.md); the option is described with the other
