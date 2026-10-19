@@ -122,5 +122,5 @@ Notes on the scores:
   Windows run before their mutation tests landed; the full run above has them at 89.9-95.2%. The **plugin runtime**
   areas used to carry estimates from a throwaway net10 build; `plugins-context`, `plugins-services` and
   `plugins-runtime` now have their Windows scores. `plugins-steps` still needs one (its 2026-10-11 job lost the
-  runner), and so does `analyzers`, whose timeout went from 45 to 90 minutes after it ran out on the self-hosted
-  runner (`diff-engine`, done in 28 of its 30 minutes, went to 60).
+  runner), and so does `analyzers`, whose timeout went from 45 to 90 minutes, then to 180 after it ran out at 90 twice on the
+  self-hosted runner (`diff-engine`, done in 28 of its 30 minutes, went to 60).
