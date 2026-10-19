@@ -143,7 +143,7 @@ internal static class LogsCommand
     // The parsed filter set. Pure, so the query builders below are unit-testable at the IOrganizationService seam.
     internal sealed record LogFilters(int Top, DateTime? Since, string? Type, string? Message, string? Entity, Guid? Correlation, bool ErrorsOnly, bool AllStatuses);
 
-    // plugintracelog, newest first. --errors keeps only rows carrying an exception; the other filters narrow by
+    // plugintracelog, newest first. --errors keeps only rows carrying an exception (non-empty exceptiondetails); the other filters narrow by
     // plugin type / message / primary entity / correlation / time.
     internal static QueryExpression BuildTraceLogQuery(LogFilters filters)
     {
@@ -161,7 +161,10 @@ internal static class LogsCommand
 
         if (filters.ErrorsOnly)
         {
+            // Dataverse stores exceptiondetails as an empty string, not null, on a row without an exception: NotNull
+            // alone keeps every row. NotEqual "" drops those; NotNull keeps the intent explicit for a null value.
             query.Criteria.AddCondition("exceptiondetails", ConditionOperator.NotNull);
+            query.Criteria.AddCondition("exceptiondetails", ConditionOperator.NotEqual, string.Empty);
         }
 
         AddTextCondition(query, "typename", filters.Type);
