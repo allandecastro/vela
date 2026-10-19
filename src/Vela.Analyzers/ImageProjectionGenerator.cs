@@ -108,7 +108,7 @@ namespace Vela.Analyzers
         private static (INamedTypeSymbol Plugin, INamedTypeSymbol Entity)? ResolvePlugin(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
         {
             INamedTypeSymbol? fluent = model.Compilation.GetTypeByMetadataName(FluentStep.FluentStepMetadataName);
-            if (fluent is null || !FluentStep.IsFluentMethod(model, invocation, fluent, cancellationToken))
+            if (fluent is null || !(FluentStep.IsFluentMethod(model, invocation, fluent, cancellationToken) || ContinuesAFluentChain(invocation, model, fluent, cancellationToken)))
             {
                 return null;
             }
@@ -123,7 +123,38 @@ namespace Vela.Analyzers
             return entity is null ? null : (pluginSymbol, entity);
         }
 
+        // A call that does not bind, on a chain one of whose earlier calls is a step-builder method: a broken chain
+        // such as PostOperation().FilterOn(...) without its Sync()/Async(). Its context and projection types are still
+        // emitted, so the compiler reports the chain's own error (CS1061 on FilterOn) rather than only a CS0246 on the
+        // {Handler}Context the handler names: the compiler drops the body's errors while a signature has one.
+        private static bool ContinuesAFluentChain(InvocationExpressionSyntax invocation, SemanticModel model, INamedTypeSymbol fluent, CancellationToken cancellationToken)
+        {
+            if (model.GetSymbolInfo(invocation, cancellationToken).Symbol is not null ||
+                invocation.Expression is not MemberAccessExpressionSyntax member)
+            {
+                return false;
+            }
+
+            foreach (ChainCall call in FluentStep.Spine(member.Expression))
+            {
+                if (model.GetSymbolInfo(call.Invocation, cancellationToken).Symbol is IMethodSymbol)
+                {
+                    return FluentStep.IsFluentMethod(model, call.Invocation, fluent, cancellationToken);
+                }
+            }
+
+            return false;
+        }
+
         private static ProjectionResult ExtractProjection(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
+        {
+            ProjectionResult result = ExtractProjectionCore(invocation, model, cancellationToken);
+            // On a chain that does not bind (ContinuesAFluentChain), the selector lambdas do not bind either: the chain's
+            // own compiler error says what is wrong, so a VELA021 about the capture would only be noise.
+            return result.Skip is not null && model.GetSymbolInfo(invocation, cancellationToken).Symbol is null ? default : result;
+        }
+
+        private static ProjectionResult ExtractProjectionCore(InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
         {
             MemberAccessExpressionSyntax member = (MemberAccessExpressionSyntax)invocation.Expression;
             string method = member.Name.Identifier.ValueText;
