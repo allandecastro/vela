@@ -21,20 +21,39 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.27.3] - 2026-10-19 (Vela.Cli)
+
+### Added
+
+- `vela add service <Name>` without `--entity` generates a service shared by several tables, under `Services/`, taking
+  the late-bound `Entity`. `--entity` was required, so a service used by two tables had to pick one of them.
+
+### Changed
+
+- `vela init` references framework 0.40.0 (Vela.Plugins, Vela.Testing, Vela.Messages), so a generated test can move
+  the harness clock past a cache TTL.
+
+## [0.40.0] - 2026-10-19 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
 ### Added
 
 - Vela.Testing: each harness gives the plug-in a cache of its own (`IPluginCacheService`), one per `PluginPipeline`
   and one per `PluginContext` builder, kept across its executions. It expires on the harness clock: the existing
   `PluginPipeline.WithClock` and the new `PluginContextBuilder.WithClock`, so a test moves time past a TTL instead of
   sleeping. The harnesses used the process-wide cache on the real clock, which also leaked entries between tests.
-- `vela add service <Name>` without `--entity` generates a service shared by several tables, under `Services/`, taking
-  the late-bound `Entity`. `--entity` was required, so a service used by two tables had to pick one of them.
 
 ### Changed
 
 - VELA025 (outbound call to an IP address) and VELA026 (`HttpClient` without `Timeout`) check every type of a plugin
   assembly, not only its plugin / Custom API types: a service or helper that makes the call runs in the sandbox
   too. A test project (it references `Vela.Testing`) is still checked only inside its plugin types.
+
+### Fixed
+
+- A step chain that does not compile after a bound call, such as `OnCreate().PostOperation().FilterOn(...)` without
+  its `Sync()` / `Async()`, still gets its `{Handler}Context` and image projections. The compiler then reports the
+  chain's own error (CS1061 on `FilterOn`); it only showed a CS0246 on `{Handler}Context`, because it drops a
+  method body's errors while the handler's signature has one. No VELA021 is reported on such a chain.
 
 ### Docs
 
@@ -43,13 +62,6 @@ All notable changes to Vela are documented here. The format is based on
   `raw.githubusercontent.com`, which returns 404 for a private repository. The CHANGELOG is published there too.
 
 ## [0.27.2] - 2026-10-19 (Vela.Cli)
-
-### Fixed
-
-- A step chain that does not compile after a bound call, such as `OnCreate().PostOperation().FilterOn(...)` without
-  its `Sync()` / `Async()`, still gets its `{Handler}Context` and image projections. The compiler then reports the
-  chain's own error (CS1061 on `FilterOn`); it only showed a CS0246 on `{Handler}Context`, because it drops a
-  method body's errors while the handler's signature has one. No VELA021 is reported on such a chain.
 
 ### Fixed
 
