@@ -214,9 +214,9 @@ public sealed class LocalPluginContextLoggingTests
 
         Assert.StartsWith("A metric name is required.", Assert.Throws<ArgumentException>(() => ctx.LogMetric(" ", 1)).Message, StringComparison.Ordinal);
         Assert.StartsWith("User id cannot be empty.", Assert.Throws<ArgumentException>(() => ctx.AsUser(Guid.Empty)).Message, StringComparison.Ordinal);
-        Assert.Equal("IManagedIdentityService is unavailable.",
+        Assert.Equal(LocalPluginContext.ManagedIdentityUnavailableMessage,
             Assert.Throws<InvalidPluginExecutionException>(() => ctx.AcquireManagedIdentityToken(new[] { "s" })).Message);
-        Assert.Equal("IManagedIdentityService is unavailable.",
+        Assert.Equal(LocalPluginContext.ManagedIdentityUnavailableMessage,
             Assert.Throws<InvalidPluginExecutionException>(() => ctx.AcquireManagedIdentityToken(Guid.NewGuid(), new[] { "s" })).Message);
     }
 

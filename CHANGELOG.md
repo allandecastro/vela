@@ -21,6 +21,13 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- `AcquireManagedIdentityToken` (both overloads), when no `IManagedIdentityService` is available, throws a message
+  that says how to provide one: `WithManagedIdentityService(...)` in a Vela.Testing harness, or a managed identity
+  linked to the plug-in package or assembly on Dataverse (with a link to the Learn page). It said only
+  "IManagedIdentityService is unavailable.". (Vela.Plugins)
+
 ## [0.27.5] - 2026-10-19 (Vela.Cli)
 
 ### Fixed
