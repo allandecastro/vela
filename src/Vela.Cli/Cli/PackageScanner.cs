@@ -434,6 +434,14 @@ internal static class PackageScanner
             string.Equals(Path.GetFileName(x), preferredFileName, StringComparison.OrdinalIgnoreCase));
     }
 
+    // A package named with the solution publisher prefix (zava_Zava.Integrations, as a signed package applied with
+    // --solution must be) still ships its assembly under the unprefixed name (Zava.Integrations.dll).
+    if (primary == null && string.IsNullOrWhiteSpace(preferredAssemblyName) && UnprefixedPackageId(packageId) is { } unprefixed)
+    {
+        primary = extractedDllPaths.FirstOrDefault(x =>
+            string.Equals(Path.GetFileName(x), $"{unprefixed}.dll", StringComparison.OrdinalIgnoreCase));
+    }
+
     if (primary == null)
     {
         primary = extractedDllPaths
@@ -543,7 +551,22 @@ internal static class PackageScanner
     return fileName.StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
            fileName.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase) ||
            fileName.StartsWith("Newtonsoft.", StringComparison.OrdinalIgnoreCase) ||
-           fileName.StartsWith("Vela.Plugins", StringComparison.OrdinalIgnoreCase);
+           fileName.StartsWith("Vela.Plugins", StringComparison.OrdinalIgnoreCase) ||
+           fileName.StartsWith("Vela.Messages", StringComparison.OrdinalIgnoreCase);
+}
+
+    // "zava_Zava.Integrations" -> "Zava.Integrations": strips a leading Dataverse publisher prefix ("<prefix>_").
+    internal static string? UnprefixedPackageId(string? packageId)
+{
+    if (string.IsNullOrWhiteSpace(packageId))
+    {
+        return null;
+    }
+
+    int underscore = packageId.IndexOf('_');
+    return underscore > 0 && underscore < packageId.Length - 1 && ScaffoldOptions.IsValidPublisherPrefix(packageId[..underscore])
+        ? packageId[(underscore + 1)..]
+        : null;
 }
 
     internal static bool IsRegistrableAssembly(string fileName)

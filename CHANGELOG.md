@@ -21,6 +21,16 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- `vela plan` / `vela apply` find the plugin assembly of a package whose id carries the publisher prefix
+  (`zava_Zava.Integrations` ships `Zava.Integrations.dll`). They took `Vela.Messages.dll` instead and reported the
+  package as containing no plugin; `--package-assembly` was the only workaround.
+- `vela init --managed-identity` names the Integrations package with the publisher prefix
+  (`zava_Zava.Integrations`). A signed package cannot be renamed at `vela apply --solution` time without breaking
+  its signature, so the unprefixed id could not be applied to a solution. It now requires a valid publisher
+  prefix, from `--publisher-prefix` or derived from `--prefix`, as `--samples` does.
+
 ## [0.27.1] - 2026-10-18 (Vela.Cli)
 
 ### Changed
