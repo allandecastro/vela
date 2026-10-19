@@ -449,7 +449,7 @@ needed), or move it out of the sandbox: an asynchronous step, a Power Automate f
 
 **Outbound call to an IP address.** A plug-in in the sandbox can't call an IP address: see the web access restrictions
 in [Access external web services](https://learn.microsoft.com/power-apps/developer/data-platform/access-web-services).
-Vela reports, inside a plugin / Custom API type, a string whose host is an IPv4 or IPv6 literal when it is given to:
+Vela reports, in plugin code (see [Scope](#scope-of-vela025-and-vela026)), a string whose host is an IPv4 or IPv6 literal when it is given to:
 
 - `new Uri(...)` (so `client.BaseAddress = new Uri("https://10.0.0.1/")` and `request.RequestUri = new Uri(...)` are
   covered);
@@ -462,16 +462,23 @@ constant start already holds the whole host (`$"https://10.0.0.1/items/{id}"`, `
 host is parsed with `System.Uri`, and only `http` / `https` URIs whose host is an IP literal (`10.0.0.1`,
 `[2001:db8::1]`) are reported. Not reported: a named host (`localhost` included), a relative or non-HTTP string, a
 string that is never given to one of the members above, a URI built from a variable or configuration, and a host
-cut by an interpolation (`$"https://10.0.0.{n}/"`). Like VELA019, code outside a plugin type is left alone.
+cut by an interpolation (`$"https://10.0.0.{n}/"`).
 
 **Fix:** give the service a DNS name and call that name.
+
+### Scope of VELA025 and VELA026
+
+Both rules check plugin code: a plugin / Custom API type and, in an assembly that declares one, every other type
+too (the services and helpers it resolves run in the sandbox with it). A test project, one that references
+`Vela.Testing`, is only checked inside its plugin types. A shared library that declares no plugin type is not
+checked.
 
 ## VELA026
 
 **HttpClient without a timeout.** Microsoft recommends
 [setting a timeout on external calls from a plug-in](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-timeout-for-external-calls-from-plug-ins):
 the default `HttpClient` timeout is 100 seconds, close to the time a plug-in has to complete. Vela reports a
-`new HttpClient(...)` (or a target-typed `new()`) inside a plugin / Custom API type when its `Timeout` is never set
+`new HttpClient(...)` (or a target-typed `new()`) in plugin code (see [Scope](#scope-of-vela025-and-vela026)) when its `Timeout` is never set
 in the member that creates it: the method, constructor or accessor (lambdas and local functions in it included), or
 the field / property initializer. The client is fine when:
 
