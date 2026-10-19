@@ -164,7 +164,7 @@ internal static class CliCommands
             ["vela add (plugin|service|customapi|test|step|form-script|ribbon-script) <Name> [options]", "vela add --interactive"],
             [
                 ("Options", [
-                    new("--entity", CliOptionKind.Value, "Table model type (plugin/service/step; optional for customapi).", "ModelType", ["-e"]),
+                    new("--entity", CliOptionKind.Value, "Table model type (plugin/step; optional for service and customapi).", "ModelType", ["-e"]),
                     new("--message", CliOptionKind.Value, "SDK message (plugin/step/test).", "Message"),
                     new("--stage", CliOptionKind.Value, "PreValidation | PreOperation | PostOperation.", "stage"),
                     new("--mode", CliOptionKind.Value, "Sync | Async.", "mode"),
@@ -184,7 +184,7 @@ internal static class CliCommands
             ],
             Notes: [
                 "plugin <Name> --entity <ModelType> [--message] [--stage] [--mode] [--filtering-attributes] (required for Create/Update(+Multiple)).",
-                "service <Name> --entity <ModelType>.",
+                "service <Name> [--entity <ModelType>]: without --entity, a service shared by several tables, under Services/.",
                 "customapi <Name> [--entity <ModelType>] [--bound|--global] [--function|--action] [--prefix <publisherprefix>].",
                 "test <Name> [--kind plugin|customapi] [--entity] [--message] [--prefix]: run inside the test project (RootNamespace ending in .Tests). An existing test class is completed with the tests of the steps it lacks.",
                 "step <PluginName> --entity <ModelType> [--message] [--handler] [--stage] [--mode] [--filtering-attributes]: edits an existing multi-step plugin.",

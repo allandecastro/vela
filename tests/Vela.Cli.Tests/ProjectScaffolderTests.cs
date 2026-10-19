@@ -968,6 +968,7 @@ public class ProjectScaffolderTests
             string integrationsTests = Path.Combine(root, "tests", "Zava.Integrations.Tests", "Zava.Integrations.Tests.csproj");
             Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountSync", "--entity", "Account", "--filtering-attributes", "Name", "--project", integrations]));
             Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Export", "--global", "--project", integrations]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["service", "AuditService", "--project", integrations]));
             Assert.Equal(ExitSuccess, AddCommand.Run(["test", "Export", "--kind", "customapi", "--project", integrationsTests]));
 
             // Every generated tests project must run at least one test, so give the Plugins pair one too.

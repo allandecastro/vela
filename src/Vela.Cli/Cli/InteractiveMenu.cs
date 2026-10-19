@@ -105,7 +105,11 @@ internal static class InteractiveMenu
                 filteringAttributes = PromptFilteringAttributes(message);
                 break;
             case "service":
-                entity = PromptEntity();
+                if (!AnsiConsole.Confirm("Shared by several tables?", false))
+                {
+                    entity = PromptEntity();
+                }
+
                 break;
             case "step":
                 entity = PromptEntity();
