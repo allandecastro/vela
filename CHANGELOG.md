@@ -21,6 +21,14 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- VELA025 (outbound call to an IP address) now reads a local through its declaration: `string url =
+  "http://10.0.0.1/api"; client.GetAsync(url);` (or `new Uri(url)`, `new HttpRequestMessage(method, url)`) is
+  reported, as is a chain of locals (`var path = root + "orders";`). A local that is written anywhere else in its
+  method (assigned, also in a branch or a lambda, compound-assigned, incremented, deconstructed into, passed by `ref` /
+  `out` / `in`, aliased by `ref`), a field and a parameter stay unreported.
+
 ## [0.27.5] - 2026-10-19 (Vela.Cli)
 
 ### Fixed
