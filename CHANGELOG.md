@@ -21,6 +21,16 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (Framework)
+
+- Vela.Testing: a seeded child of a parental relationship gets its inherited access whatever the setup order. Since
+  0.41.0 the grants were derived only when `Seed` ran, so a `Seed` before `WithSecurity(...)` or before the
+  relationship was declared gave the child nothing, and a `WithSharedRecord` on the parent after the child was
+  seeded did not reach it. The seeded rows are now derived again on each `WithSecurity`, `WithRelationship` /
+  `WithParentalRelationship` / `WithReferentialRelationship` and `WithSharedRecord` call; a row a run-time
+  Share/Unshare cascade has reached keeps that grant. Within one `Seed`, a grandchild listed before its parent now
+  inherits through it too.
+
 ## [0.27.5] - 2026-10-19 (Vela.Cli)
 
 ### Fixed

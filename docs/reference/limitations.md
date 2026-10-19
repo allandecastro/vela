@@ -212,7 +212,9 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   the four access levels, business units, teams (incl. the Member's-privilege-inheritance mode), record sharing
   (PoA, incl. org-wide), inherited access from parental relationships (Reparent and Share cascades; a reparent
   re-derives only the moved record, not its descendants, and an Assign of the parent re-derives nothing - neither
-  case was probed), 1:N relationship cascades, access teams,
+  case was probed; a setup call such as `WithSharedRecord` made after the test has started re-derives the seeded
+  rows from the store's current state, except those a run-time Share/Unshare cascade reached), 1:N relationship
+  cascades, access teams,
   **manager and position** hierarchy security, field-level (column) security, and link-entity (joined-table)
   read-trimming (a join to a record the caller can't read drops the primary row on an inner join, or omits the
   linked columns on a left-outer join, recursively through nested joins). A parent's Delete PreValidation steps
