@@ -6,7 +6,8 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Vela.Analyzers
 {
     /// <summary>
-    /// Flags a <c>new HttpClient(...)</c> in a plugin / Custom API type whose <c>Timeout</c> is never set. The default
+    /// Flags a <c>new HttpClient(...)</c> in plugin code (a plugin / Custom API type, or any type of a plugin
+    /// assembly: its services and helpers) whose <c>Timeout</c> is never set. The default
     /// <c>HttpClient</c> timeout (100 seconds) is close to the time a plug-in has to complete, so Microsoft recommends
     /// setting an explicit, short <c>Timeout</c> on outbound calls. The check is local to the member that creates the
     /// client (a method, constructor, accessor, or a field / property initializer of the plugin type, lambdas and
@@ -57,7 +58,7 @@ namespace Vela.Analyzers
                 return;
             }
 
-            if (NeedsTimeout(creation, httpClient) && plugins.Encloses(creation.Syntax, creation.SemanticModel!, context.CancellationToken))
+            if (NeedsTimeout(creation, httpClient) && plugins.InPluginAssembly(creation.Syntax, creation.SemanticModel!, context.CancellationToken))
             {
                 context.ReportDiagnostic(Diagnostic.Create(Rule, creation.Syntax.GetLocation()));
             }

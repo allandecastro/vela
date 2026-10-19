@@ -21,6 +21,12 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- VELA025 (outbound call to an IP address) and VELA026 (`HttpClient` without `Timeout`) check every type of a plugin
+  assembly, not only its plugin / Custom API types: a service or helper that makes the call runs in the sandbox
+  too. A test project (it references `Vela.Testing`) is still checked only inside its plugin types.
+
 ### Docs
 
 - `docs/llms.txt` links each page to its Markdown copy on the documentation site

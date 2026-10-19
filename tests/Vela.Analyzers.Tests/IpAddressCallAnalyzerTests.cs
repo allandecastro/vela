@@ -116,6 +116,40 @@ namespace Demo
         await Verify.VerifyAnalyzerAsync(code);
     }
 
+    [Fact]
+    public async Task Flags_a_service_of_a_plugin_assembly()
+    {
+        // The service runs in the sandbox with the plugin that resolves it, so the whole plugin assembly is checked.
+        string code = Plugin("") + @"
+namespace Demo
+{
+    public sealed class ErpClient
+    {
+        public System.Uri Endpoint() => new System.Uri({|#0:""https://10.0.0.9/erp""|});
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code, Expected("10.0.0.9"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_helper_of_a_test_project_that_declares_a_plugin()
+    {
+        // A test project (it references Vela.Testing) may declare a fake plugin; its helpers are not sandbox code.
+        var test = new Microsoft.CodeAnalysis.CSharp.Testing.CSharpAnalyzerTest<Vela.Analyzers.IpAddressCallAnalyzer, Microsoft.CodeAnalysis.Testing.DefaultVerifier>
+        {
+            TestCode = Plugin("") + @"
+namespace Demo
+{
+    public static class Helper
+    {
+        public static System.Uri Local() => new System.Uri(""http://127.0.0.1/"");
+    }
+}",
+        };
+        test.TestState.AdditionalReferences.Add(AnalyzerTestReferences.VelaTesting);
+        await test.RunAsync();
+    }
+
     [Theory]
     [InlineData("https://10.0.0.1/", "10.0.0.1")]
     [InlineData("https://10.0.0.1?q", "10.0.0.1")]
