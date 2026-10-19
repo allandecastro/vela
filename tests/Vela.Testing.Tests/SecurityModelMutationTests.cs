@@ -239,7 +239,8 @@ namespace Vela.Testing.Tests
                         Privilege.Create, Privilege.Read, Privilege.Write, Privilege.Delete,
                         Privilege.Share, Privilege.Assign, Privilege.Append, Privilege.AppendTo))
                     .User(Alice, SalesBu, "admin")
-                    .User(Bob, SalesBu)
+                    .Role("basic", r => r.Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write)) // a share needs the table privilege
+                    .User(Bob, SalesBu, "basic")
                     .User(Stranger, SalesBu))
                 .Seed(AccountOwnedBy(record, Alice, SalesBu))
                 .WithSharedRecord(new EntityReference("account", record), new EntityReference("systemuser", Bob), AccessRights.ReadAccess);

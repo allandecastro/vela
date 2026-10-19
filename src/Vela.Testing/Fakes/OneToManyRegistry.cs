@@ -14,7 +14,30 @@ namespace Vela.Testing
     {
         private readonly List<OneToMany> _relationships = new List<OneToMany>();
 
-        public void Add(OneToMany relationship) => _relationships.Add(relationship);
+        /// <summary>
+        /// Registers a relationship. A table can have only one parental relationship (Dataverse rejects a second one
+        /// with 0x80047007, verified live), except over the same lookup column — a polymorphic lookup such as a
+        /// customer lookup to account and contact is one parental relationship per target table.
+        /// </summary>
+        public void Add(OneToMany relationship)
+        {
+            if (relationship.IsParental)
+            {
+                OneToMany? existing = ParentRelationshipsOf(relationship.ReferencingEntity).FirstOrDefault(r =>
+                    r.IsParental && !string.Equals(r.ReferencingAttribute, relationship.ReferencingAttribute, StringComparison.OrdinalIgnoreCase));
+                if (existing != null)
+                {
+                    throw new InvalidOperationException(
+                        $"Entity: {relationship.ReferencingEntity} is parented to Entity: {existing.ReferencedEntity} (through " +
+                        $"'{existing.ReferencingAttribute}'). Cannot create another parental relation with Entity: " +
+                        $"{relationship.ReferencedEntity} (through '{relationship.ReferencingAttribute}'). Dataverse allows one " +
+                        "parental relationship per table (0x80047007); declare this one as referential, or with no Assign/" +
+                        "Reparent/Share/Unshare cascade and a Delete behaviour other than Cascade.");
+                }
+            }
+
+            _relationships.Add(relationship);
+        }
 
         /// <summary>The relationships in which <paramref name="referencedEntity"/> is the parent (referenced) table.</summary>
         public IEnumerable<OneToMany> ChildRelationshipsOf(string referencedEntity) =>
@@ -55,6 +78,17 @@ namespace Vela.Testing
             public string ReferencingAttribute { get; }
 
             public CascadeConfiguration Cascade { get; }
+
+            /// <summary>
+            /// Whether the relationship is parental (Learn): any of Assign/Reparent/Share/Unshare cascades (All, Active
+            /// or User-owned), or Delete is Cascade.
+            /// </summary>
+            public bool IsParental =>
+                Cascades(Cascade.Assign) || Cascades(Cascade.Reparent) || Cascades(Cascade.Share) || Cascades(Cascade.Unshare) ||
+                Cascade.Delete == CascadeType.Cascade;
+
+            private static bool Cascades(CascadeType? type) =>
+                type == CascadeType.Cascade || type == CascadeType.Active || type == CascadeType.UserOwned;
         }
     }
 }

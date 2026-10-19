@@ -172,7 +172,9 @@ namespace Vela.Testing
         /// <summary>
         /// Pre-shares a record with a principal (arrange helper, like <see cref="Seed"/>): grants the principal
         /// (a user or team) the given <paramref name="rights"/> on the target, without going through the
-        /// GrantAccess message or its Share-privilege check. Only takes effect once <see cref="WithSecurity"/> is set.
+        /// GrantAccess message or its Share-privilege check. Only takes effect once <see cref="WithSecurity"/> is set,
+        /// and only for the privileges the principal holds on the table. It shares that record alone: nothing
+        /// cascades to existing children, but a child created or seeded under it afterwards inherits the share.
         /// </summary>
         public InMemoryOrganizationService WithSharedRecord(EntityReference target, EntityReference principal, AccessRights rights)
         {
@@ -311,7 +313,9 @@ namespace Vela.Testing
         /// cascade from the parent (<paramref name="referencedEntity"/>) to the children
         /// (<paramref name="referencingEntity"/> rows whose <paramref name="referencingAttribute"/> lookup points at
         /// the parent). Use <see cref="WithParentalRelationship"/>/<see cref="WithReferentialRelationship"/> for the
-        /// common presets.
+        /// common presets. Like Dataverse, a table can be the child of only one <b>parental</b> relationship (one
+        /// where Assign/Reparent/Share/Unshare cascades or Delete is Cascade); declaring a second one throws
+        /// <see cref="InvalidOperationException"/>, unless it is over the same lookup column (a polymorphic lookup).
         /// </summary>
         public InMemoryOrganizationService WithRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, CascadeConfiguration cascade)
         {
@@ -437,9 +441,15 @@ namespace Vela.Testing
 
         private static string DefaultStatusKey(string entityLogicalName, int state) => entityLogicalName + "|" + state;
 
-        /// <summary>Pre-populates the store without going through Create (ids are assigned when empty).</summary>
+        /// <summary>
+        /// Pre-populates the store without going through Create (ids are assigned when empty). With a security model
+        /// configured, a seeded child of a parental relationship gets the inherited access a Create under its parent
+        /// would give it, so call <see cref="WithSecurity"/> (and <see cref="WithSharedRecord"/> for parent shares
+        /// the child should inherit) before seeding.
+        /// </summary>
         public InMemoryOrganizationService Seed(params Entity[] entities)
         {
+            List<Entity> seeded = new List<Entity>();
             foreach (Entity entity in entities)
             {
                 Entity stored = EntityValues.Clone(entity);
@@ -449,6 +459,14 @@ namespace Vela.Testing
                 }
 
                 Table(stored.LogicalName)[stored.Id] = stored;
+                seeded.Add(stored);
+            }
+
+            // A seeded child gets the inherited access a Create under its parent would give it, once every row of the
+            // call is stored (so a parent may be listed after its child); rows are derived in the order given.
+            foreach (Entity stored in seeded)
+            {
+                DeriveInheritedAccess(stored);
             }
 
             return this;
@@ -522,6 +540,7 @@ namespace Vela.Testing
             RealignOwningBusinessUnit(stored);
             _alternateKeys.Enforce(stored, Table(stored.LogicalName).Values);
             Table(stored.LogicalName)[stored.Id] = stored;
+            DeriveInheritedAccess(stored);
             return stored.Id;
         }
 
@@ -973,10 +992,13 @@ namespace Vela.Testing
 
             _alternateKeys.Enforce(candidate, Table(entity.LogicalName).Values);
 
+            Dictionary<string, EntityReference?> previousParents = ReparentLookups(stored);
             foreach (KeyValuePair<string, object> attribute in candidate.Attributes)
             {
                 stored[attribute.Key] = attribute.Value;
             }
+
+            DeriveInheritedAccessIfReparented(stored, previousParents);
 
             _systemFields.ApplyOnUpdate(entity, stored, Actor(), _clock(), NextVersion());
             if (changesOwner)
@@ -1261,7 +1283,7 @@ namespace Vela.Testing
                     DemandAccess(grant.Target.LogicalName, Privilege.Share, StoredOrThrow(grant.Target));
                     PrincipalAccess granted = ClampToSharerRights(grant.Target, grant.PrincipalAccess);
                     _sharing.Grant(grant.Target, granted);
-                    CascadeShare(grant.Target.LogicalName, grant.Target.Id, granted, new HashSet<Guid>());
+                    CascadeShare(grant.Target.LogicalName, grant.Target.Id, granted, replace: false, new HashSet<Guid>());
                     return new GrantAccessResponse();
                 }
 
@@ -1270,7 +1292,7 @@ namespace Vela.Testing
                     DemandAccess(modify.Target.LogicalName, Privilege.Share, StoredOrThrow(modify.Target));
                     PrincipalAccess modified = ClampToSharerRights(modify.Target, modify.PrincipalAccess);
                     _sharing.Modify(modify.Target, modified);
-                    CascadeShare(modify.Target.LogicalName, modify.Target.Id, modified, new HashSet<Guid>());
+                    CascadeShare(modify.Target.LogicalName, modify.Target.Id, modified, replace: true, new HashSet<Guid>());
                     return new ModifyAccessResponse();
                 }
 

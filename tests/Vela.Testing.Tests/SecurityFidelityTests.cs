@@ -90,7 +90,8 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .Role("owner", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write, Privilege.Delete, Privilege.Share))
                     .User(Alice, SalesBu, "owner")
-                    .User(Bob, SalesBu)) // Bob holds no role of his own
+                    .Role("basic", r => r.Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write, Privilege.Delete))
+                    .User(Bob, SalesBu, "basic")) // Basic only: reaches none of these records without a share
                 .Seed(AccountOwnedBy(record, Alice, SalesBu));
 
             // Before any grant, Bob has no access.
@@ -145,7 +146,8 @@ namespace Vela.Testing.Tests
                     // Alice can Read and Share, but has no Write on the table.
                     .Role("reader-sharer", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Share))
                     .User(Alice, SalesBu, "reader-sharer")
-                    .User(Bob, SalesBu))
+                    .Role("basic", r => r.Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write))
+                    .User(Bob, SalesBu, "basic")) // Bob could hold a shared Write
                 .Seed(AccountOwnedBy(record, Alice, SalesBu));
 
             svc.Execute(new GrantAccessRequest
@@ -197,12 +199,13 @@ namespace Vela.Testing.Tests
         public void A_record_shared_to_a_user_becomes_readable_by_that_user()
         {
             Guid record = Guid.NewGuid();
-            // Bob is the current user and holds no role, so the only way he can read is via the share.
+            // Bob is the current user and holds only Basic Read and owns nothing, so the only way he can read is via the share.
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Bob)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .User(Bob, SalesBu))
+                    .Role("basic", r => r.Grant("account", AccessLevel.User, Privilege.Read))
+                    .User(Bob, SalesBu, "basic"))
                 .Seed(AccountOwnedBy(record, Alice, SalesBu))
                 .WithSharedRecord(new EntityReference("account", record), new EntityReference("systemuser", Bob), AccessRights.ReadAccess);
 

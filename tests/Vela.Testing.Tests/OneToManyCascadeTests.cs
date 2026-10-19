@@ -237,9 +237,12 @@ namespace Vela.Testing.Tests
                 .WithParentalRelationship("account", "contact", "parentcustomerid")
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("acctreader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read)) // nothing on contact
-                    .User(Alice, SalesBu, "acctreader"))
-                .Seed(AccountOwned(account, Bob), ContactOf(contact, account));
+                    // Basic only: Alice reaches the account she owns, and no contact by ownership.
+                    .Role("basic", r => r
+                        .Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write)
+                        .Grant("contact", AccessLevel.User, Privilege.Read, Privilege.Write, Privilege.Delete))
+                    .User(Alice, SalesBu, "basic"))
+                .Seed(AccountOwned(account, Alice), ContactOwned(contact, account, Bob));
 
             RetrievePrincipalAccessResponse response = (RetrievePrincipalAccessResponse)svc.Execute(
                 new RetrievePrincipalAccessRequest
@@ -248,8 +251,8 @@ namespace Vela.Testing.Tests
                     Principal = new EntityReference("systemuser", Alice),
                 });
 
-            // Alice holds no role on contact but inherits Read from the parent account she can read.
-            Assert.True(response.AccessRights.HasFlag(AccessRights.ReadAccess));
+            // Alice owns the parent account: Bob's contact inherits her rights on it (Read+Write), not her Delete on contact.
+            Assert.Equal(AccessRights.ReadAccess | AccessRights.WriteAccess, response.AccessRights);
         }
 
         [Fact]
@@ -390,8 +393,9 @@ namespace Vela.Testing.Tests
 
         // --- Cascade Share / Unshare --------------------------------------------------------------------
         // Security is ON so RetrievePrincipalAccess reflects the real PoA share: Alice owns the records and can share;
-        // Bob holds NO role, so his only access to a record is a share. The relationships set Reparent = NoCascade, so
-        // Bob gets NO inherited access from the parent — that isolates the cascade share/unshare from inherited access.
+        // Bob holds only Basic Read and owns nothing, so his only access to a record is a share or a grant it cascades.
+        // The relationships set Reparent = NoCascade, so nothing is inherited when a child is parented — that isolates
+        // the cascade share/unshare.
 
         private static readonly Guid ShareBu = new Guid("b0000000-0000-0000-0000-0000000003b2");
 
@@ -402,7 +406,11 @@ namespace Vela.Testing.Tests
                 .Grant("contact", AccessLevel.Organization, Privilege.Read, Privilege.Share)
                 .Grant("task", AccessLevel.Organization, Privilege.Read, Privilege.Share))
             .User(Alice, ShareBu, "sharer")
-            .User(Bob, ShareBu); // no role: access comes only from a share
+            .Role("basic", r => r
+                .Grant("account", AccessLevel.User, Privilege.Read)
+                .Grant("contact", AccessLevel.User, Privilege.Read)
+                .Grant("task", AccessLevel.User, Privilege.Read))
+            .User(Bob, ShareBu, "basic"); // Basic Read and owns nothing: access comes only from a share
 
         private static CascadeConfiguration ShareCascade(CascadeType share, CascadeType unshare) => new CascadeConfiguration
         {

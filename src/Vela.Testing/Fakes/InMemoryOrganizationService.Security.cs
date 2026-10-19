@@ -232,8 +232,8 @@ namespace Vela.Testing
         }
 
         // Enforces a privilege for the current user when security is configured; a no-op otherwise (default-off).
-        // Access is the union of role access, sharing (both in the SecurityModel) and inherited access from a
-        // parental parent record — so a user who can act on the parent can act on the child.
+        // Access is the union of role access, sharing and the inherited grants a parental child received from its
+        // parent (all in the SecurityModel).
         private void DemandAccess(string entityName, Privilege privilege, Entity? record)
         {
             if (Enforcing == null)
@@ -263,45 +263,87 @@ namespace Vela.Testing
             }
         }
 
-        // The full access decision for the current user: role + shared access, or access inherited from the record's
-        // parent in a parental relationship. Assumes security is configured.
+        // The full access decision for the current user: role access plus record-level access (explicit shares,
+        // inherited grants, access teams), all evaluated by the security model. Assumes security is configured.
         private bool CanAccess(string entityName, Privilege privilege, Entity? record) =>
-            _security!.IsGranted(_currentUserId, entityName, privilege, record) ||
-            HasInheritedAccess(_currentUserId, entityName, privilege, record, new HashSet<Guid>());
+            _security!.IsGranted(_currentUserId, entityName, privilege, record);
 
-        // Inherited access: in a parental relationship (one that cascades Reparent), a child inherits the access the
-        // user has on its parent — for every privilege except Create. Walks up the hierarchy, guarding against cycles.
-        private bool HasInheritedAccess(Guid userId, string entityName, Privilege privilege, Entity? record, HashSet<Guid> visited)
+        // Reparent cascade (verified live, 2026-10-19): when a child is created under a parental parent, or its lookup
+        // is moved to one, it gets inherited grants for the parent's OWNER (bounded by the owner's effective rights on
+        // the parent — never Create) and for every principal the parent is ALREADY shared with, explicitly or by
+        // inheritance, with that grant's mask. The grants from the previous parent are dropped first. A share made on
+        // the parent later does not flow down here (only the Share cascade carries it). Only the record whose parent
+        // changed is re-derived: its existing descendants keep their grants (multi-level re-derivation is not
+        // modelled). Role access to the parent confers nothing. Needs a security model to compute the owner's rights.
+        private void DeriveInheritedAccess(Entity child)
         {
-            if (_security == null || record == null || privilege == Privilege.Create || !visited.Add(record.Id))
+            if (_security == null)
             {
-                return false;
+                return;
             }
 
-            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ParentRelationshipsOf(entityName))
+            EntityReference childRef = new EntityReference(child.LogicalName, child.Id);
+            _sharing.ClearInherited(childRef);
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ParentRelationshipsOf(child.LogicalName))
             {
-                if (!ConfersInheritedAccess(relationship) ||
-                    record.GetAttributeValue<EntityReference>(relationship.ReferencingAttribute) is not EntityReference parentRef)
+                CascadeType reparent = relationship.Cascade.Reparent ?? CascadeType.NoCascade;
+                if (reparent == CascadeType.NoCascade ||
+                    child.GetAttributeValue<EntityReference>(relationship.ReferencingAttribute) is not EntityReference parentRef ||
+                    !string.Equals(parentRef.LogicalName, relationship.ReferencedEntity, StringComparison.OrdinalIgnoreCase) ||
+                    StoredOrNull(parentRef.LogicalName, parentRef.Id) is not Entity parent)
                 {
                     continue;
                 }
 
-                Entity? parent = StoredOrNull(parentRef.LogicalName, parentRef.Id);
-                if (parent != null &&
-                    (_security.IsGranted(userId, parentRef.LogicalName, privilege, parent) ||
-                     HasInheritedAccess(userId, parentRef.LogicalName, privilege, parent, visited)))
+                EntityReference? owner = parent.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId);
+                if (!MatchesCascadeScope(child, reparent, owner))
                 {
-                    return true;
+                    continue;
+                }
+
+                if (owner != null)
+                {
+                    AccessRights ownerRights = _security.EffectiveAccess(owner.Id, parentRef.LogicalName, parent);
+                    _sharing.GrantInherited(childRef, new PrincipalAccess { Principal = owner, AccessMask = ownerRights });
+                }
+
+                foreach (PrincipalAccess share in _sharing.SharesOf(parentRef).Concat(_sharing.InheritedOf(parentRef)))
+                {
+                    _sharing.GrantInherited(childRef, share);
+                }
+            }
+        }
+
+        // Re-derives the record's inherited access when an Update moved one of its Reparent-cascading lookups to
+        // another record (or cleared it). <paramref name="previous"/> holds the lookups' values before the update;
+        // record ids are unique across tables, so comparing ids also catches a polymorphic lookup switching table.
+        private void DeriveInheritedAccessIfReparented(Entity stored, Dictionary<string, EntityReference?> previous)
+        {
+            foreach (KeyValuePair<string, EntityReference?> lookup in previous)
+            {
+                if (stored.GetAttributeValue<EntityReference>(lookup.Key)?.Id != lookup.Value?.Id)
+                {
+                    DeriveInheritedAccess(stored);
+                    return;
+                }
+            }
+        }
+
+        // The current values of the record's Reparent-cascading lookups, captured before an Update so a change of
+        // parent can be detected afterwards.
+        private Dictionary<string, EntityReference?> ReparentLookups(Entity stored)
+        {
+            Dictionary<string, EntityReference?> lookups = new Dictionary<string, EntityReference?>(StringComparer.OrdinalIgnoreCase);
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ParentRelationshipsOf(stored.LogicalName))
+            {
+                if ((relationship.Cascade.Reparent ?? CascadeType.NoCascade) != CascadeType.NoCascade)
+                {
+                    lookups[relationship.ReferencingAttribute] = stored.GetAttributeValue<EntityReference>(relationship.ReferencingAttribute);
                 }
             }
 
-            return false;
+            return lookups;
         }
-
-        // A relationship confers inherited access when it cascades the Reparent action (the parental behaviour that
-        // re-derives inherited rights); a purely referential relationship (Reparent = NoCascade) does not.
-        private static bool ConfersInheritedAccess(OneToManyRegistry.OneToMany relationship) =>
-            relationship.Cascade.Reparent is CascadeType reparent && reparent != CascadeType.NoCascade;
 
         // Create is checked at depth against the record's PROSPECTIVE owner/BU, exactly like Read/Write/Delete are
         // checked against an existing record — so a User-level Create only covers records the caller will own, a
@@ -437,8 +479,7 @@ namespace Vela.Testing
                        AccessRights.AppendAccess | AccessRights.AppendToAccess | AccessRights.AssignAccess | AccessRights.ShareAccess;
             }
 
-            return _security.EffectiveAccess(principal.Id, target.LogicalName, stored,
-                privilege => HasInheritedAccess(principal.Id, target.LogicalName, privilege, stored, new HashSet<Guid>()));
+            return _security.EffectiveAccess(principal.Id, target.LogicalName, stored);
         }
 
         // A user can only share rights they themselves hold on the record (Dataverse: "you can't give rights you
@@ -621,8 +662,10 @@ namespace Vela.Testing
         }
 
         // Cascades a share (GrantAccess/ModifyAccess) from a parent to its children per the Share cascade mode, then
-        // recurses down the hierarchy. The sharer already has inherited share rights on the children (parental).
-        private void CascadeShare(string entityName, Guid id, PrincipalAccess access, HashSet<Guid> visited)
+        // recurses down the hierarchy. The children get an INHERITED grant, not an explicit share (verified live: the
+        // PoA row carries only the inherited mask), so it is not listed by RetrieveSharedPrincipalsAndAccess. A
+        // GrantAccess adds to the principal's inherited rights, a ModifyAccess (<paramref name="replace"/>) replaces them.
+        private void CascadeShare(string entityName, Guid id, PrincipalAccess access, bool replace, HashSet<Guid> visited)
         {
             if (!visited.Add(id))
             {
@@ -645,13 +688,24 @@ namespace Vela.Testing
                         continue;
                     }
 
-                    _sharing.Grant(new EntityReference(relationship.ReferencingEntity, child.Id), access);
-                    CascadeShare(relationship.ReferencingEntity, child.Id, access, visited);
+                    EntityReference childRef = new EntityReference(relationship.ReferencingEntity, child.Id);
+                    if (replace)
+                    {
+                        _sharing.ModifyInherited(childRef, access);
+                    }
+                    else
+                    {
+                        _sharing.GrantInherited(childRef, access);
+                    }
+
+                    CascadeShare(relationship.ReferencingEntity, child.Id, access, replace, visited);
                 }
             }
         }
 
-        // Cascades an unshare (RevokeAccess) from a parent to its children per the Unshare cascade mode.
+        // Cascades an unshare (RevokeAccess) from a parent to its children per the Unshare cascade mode: it removes the
+        // principal's INHERITED grant only — a share made on the child itself is kept (Learn: removing a parent's share
+        // removes what the children inherited from it).
         private void CascadeUnshare(string entityName, Guid id, EntityReference principal, HashSet<Guid> visited)
         {
             if (!visited.Add(id))
@@ -675,7 +729,7 @@ namespace Vela.Testing
                         continue;
                     }
 
-                    _sharing.Revoke(new EntityReference(relationship.ReferencingEntity, child.Id), principal);
+                    _sharing.RevokeInherited(new EntityReference(relationship.ReferencingEntity, child.Id), principal);
                     CascadeUnshare(relationship.ReferencingEntity, child.Id, principal, visited);
                 }
             }
@@ -714,7 +768,7 @@ namespace Vela.Testing
             }
         }
         // The predicate the query engine uses to keep only rows the current user may read (null = no security).
-        // Includes access inherited from a parental parent, and reads the stored record's own owner columns so
+        // Includes the record's inherited grants, and reads the stored record's own owner columns so
         // filtering is correct regardless of the query's ColumnSet.
         private Func<Entity, bool>? ReadFilter() =>
             Enforcing == null ? null : row => SecurityInfraTables.Contains(row.LogicalName) || CanAccess(row.LogicalName, Privilege.Read, row);

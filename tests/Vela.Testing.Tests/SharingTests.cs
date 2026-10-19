@@ -29,21 +29,59 @@ namespace Vela.Testing.Tests
                 ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
             };
 
-        // Alice holds no role on account, so any access she has comes purely from sharing.
-        private static InMemoryOrganizationService NoRoleForAlice(Guid record, Guid owner) =>
+        // Every record privilege on account at User (Basic) level: it reaches only records the user owns, and it is what
+        // a share needs to count (Learn: a share can't give a right the user's role doesn't hold for the table).
+        private static void BasicAccount(RoleBuilder role) => role.Grant("account", AccessLevel.User,
+            Privilege.Read, Privilege.Write, Privilege.Delete, Privilege.Append, Privilege.AppendTo, Privilege.Assign, Privilege.Share);
+
+        // Alice holds only Basic privileges on account and owns nothing, so any access she has comes purely from sharing.
+        private static InMemoryOrganizationService BasicRoleForAlice(Guid record, Guid owner) =>
             new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu))
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("basic", BasicAccount).User(Alice, SalesBu, "basic"))
                 .Seed(AccountOwnedBy(record, owner));
 
         [Fact]
-        public void A_shared_record_is_readable_by_a_user_without_the_role()
+        public void A_shared_record_is_readable_by_a_user_whose_role_reaches_only_their_own_records()
         {
             Guid record = Guid.NewGuid();
-            InMemoryOrganizationService svc = NoRoleForAlice(record, Bob)
+            InMemoryOrganizationService svc = BasicRoleForAlice(record, Bob)
                 .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess);
 
             Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
+        }
+
+        [Fact]
+        public void A_share_confers_nothing_without_the_table_privilege()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu)) // no role at all
+                .Seed(AccountOwnedBy(record, Bob))
+                .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess | AccessRights.WriteAccess);
+
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Retrieve("account", record, new ColumnSet(true)));
+            Assert.Equal(AccessRights.None, AliceAccess(svc, record));
+            Assert.Empty(svc.RetrieveMultiple(new QueryExpression("account")).Entities);
+        }
+
+        [Fact]
+        public void A_share_counts_only_for_the_privileges_the_role_holds_on_the_table()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read)) // Read only, at the lowest depth
+                    .User(Alice, SalesBu, "reader"))
+                .Seed(AccountOwnedBy(record, Bob))
+                .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess | AccessRights.WriteAccess);
+
+            Assert.Equal(AccessRights.ReadAccess, AliceAccess(svc, record)); // the shared Write needs a Write privilege
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Update(new Entity("account", record) { ["name"] = "edited" }));
         }
 
         [Fact]
@@ -51,7 +89,7 @@ namespace Vela.Testing.Tests
         {
             Guid shared = Guid.NewGuid();
             Guid other = Guid.NewGuid();
-            InMemoryOrganizationService svc = NoRoleForAlice(shared, Bob)
+            InMemoryOrganizationService svc = BasicRoleForAlice(shared, Bob)
                 .Seed(AccountOwnedBy(other, Bob))
                 .WithSharedRecord(Account(shared), User(Alice), AccessRights.ReadAccess);
 
@@ -64,7 +102,7 @@ namespace Vela.Testing.Tests
         public void A_shared_record_appears_in_retrieve_multiple()
         {
             Guid record = Guid.NewGuid();
-            InMemoryOrganizationService svc = NoRoleForAlice(record, Bob)
+            InMemoryOrganizationService svc = BasicRoleForAlice(record, Bob)
                 .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess);
 
             EntityCollection visible = svc.RetrieveMultiple(
@@ -74,10 +112,10 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void Shared_write_allows_update_without_the_write_role()
+        public void Shared_write_allows_update_with_only_user_level_write()
         {
             Guid record = Guid.NewGuid();
-            InMemoryOrganizationService svc = NoRoleForAlice(record, Bob)
+            InMemoryOrganizationService svc = BasicRoleForAlice(record, Bob)
                 .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess | AccessRights.WriteAccess);
 
             svc.Update(new Entity("account", record) { ["name"] = "edited" });
@@ -93,7 +131,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .User(Alice, SalesBu)
+                    .Role("basic", BasicAccount).User(Alice, SalesBu, "basic")
                     .Team(SalesTeam, SalesBu)
                     .Member(Alice, SalesTeam))
                 .Seed(AccountOwnedBy(record, Bob))
@@ -111,7 +149,7 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .Role("sharer", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Share))
                     .User(Sharer, SalesBu, "sharer")
-                    .User(Alice, SalesBu))
+                    .Role("basic", BasicAccount).User(Alice, SalesBu, "basic"))
                 .Seed(AccountOwnedBy(record, Sharer));
 
         private static AccessRights AliceAccess(InMemoryOrganizationService svc, Guid record) =>
@@ -128,7 +166,7 @@ namespace Vela.Testing.Tests
 
             svc.Execute(new RevokeAccessRequest { Target = Account(record), Revokee = User(Alice) });
 
-            Assert.Equal(AccessRights.None, AliceAccess(svc, record)); // Alice has no role either, so nothing remains
+            Assert.Equal(AccessRights.None, AliceAccess(svc, record)); // Alice owns nothing, so her Basic role reaches nothing once the share is gone
         }
 
         [Fact]
@@ -160,7 +198,7 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
                     .User(Sharer, SalesBu, "reader")   // can read, cannot share
-                    .User(Alice, SalesBu))
+                    .Role("basic", BasicAccount).User(Alice, SalesBu, "basic"))
                 .Seed(AccountOwnedBy(record, Sharer));
 
             GrantAccessRequest grant = new GrantAccessRequest
@@ -176,7 +214,7 @@ namespace Vela.Testing.Tests
                 .BusinessUnit(SalesBu)
                 .Role("sharer", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Share))
                 .User(Sharer, SalesBu, "sharer")
-                .User(Alice, SalesBu));
+                .Role("basic", BasicAccount).User(Alice, SalesBu, "basic"));
             svc.Execute(grant);
 
             svc.WithCurrentUser(Alice);
@@ -191,7 +229,9 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
+                    .Role("reader", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Read)
+                        .Grant("account", AccessLevel.User, Privilege.Write)) // reaches Bob's record only through a share
                     .User(Alice, SalesBu, "reader"))
                 .Seed(AccountOwnedBy(record, Bob))
                 .WithSharedRecord(Account(record), User(Alice), AccessRights.WriteAccess); // shared write on top of role read
@@ -208,7 +248,7 @@ namespace Vela.Testing.Tests
         public void RetrieveSharedPrincipalsAndAccess_lists_every_share()
         {
             Guid record = Guid.NewGuid();
-            InMemoryOrganizationService svc = NoRoleForAlice(record, Sharer)
+            InMemoryOrganizationService svc = BasicRoleForAlice(record, Sharer)
                 .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess)
                 .WithSharedRecord(Account(record), User(Bob), AccessRights.ReadAccess | AccessRights.WriteAccess);
 
@@ -224,7 +264,7 @@ namespace Vela.Testing.Tests
         public void GrantAccess_accumulates_rights_across_grants()
         {
             Guid record = Guid.NewGuid();
-            InMemoryOrganizationService svc = NoRoleForAlice(record, Bob)
+            InMemoryOrganizationService svc = BasicRoleForAlice(record, Bob)
                 .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess)
                 // A second grant that OVERLAPS the first (Read again + Write): a union keeps Read, an XOR would drop it.
                 .WithSharedRecord(Account(record), User(Alice), AccessRights.ReadAccess | AccessRights.WriteAccess);
@@ -261,10 +301,10 @@ namespace Vela.Testing.Tests
         public void Each_shared_right_maps_exactly_through_retrieve_principal_access(AccessRights right)
         {
             Guid record = Guid.NewGuid();
-            InMemoryOrganizationService svc = NoRoleForAlice(record, Bob)
+            InMemoryOrganizationService svc = BasicRoleForAlice(record, Bob)
                 .WithSharedRecord(Account(record), User(Alice), right);
 
-            // Alice holds no role, so her effective mask must equal exactly the single shared right — this pins the
+            // Alice owns nothing, so her effective mask must equal exactly the single shared right — this pins the
             // Privilege <-> AccessRights mapping and the per-principal rights union.
             Assert.Equal(right, AliceAccess(svc, record));
         }
@@ -279,7 +319,7 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .Role("sharer", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Share)) // no Write
                     .User(Sharer, SalesBu, "sharer")
-                    .User(Alice, SalesBu))
+                    .Role("basic", BasicAccount).User(Alice, SalesBu, "basic"))
                 .Seed(AccountOwnedBy(record, Sharer));
 
             // The sharer asks to grant Read+Write, but holds no Write, so Write is clamped out of the grant.
@@ -304,28 +344,33 @@ namespace Vela.Testing.Tests
                 .WithParentalRelationship("account", "contact", "parentcustomerid")
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("acctsharer", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Share))
-                    .User(Sharer, SalesBu, "acctsharer")  // Share+Read on account only — nothing on contact directly
-                    .User(Alice, SalesBu))
+                    // Read+Share on account; on contact only Basic Read+Share, which reaches no contact by ownership.
+                    .Role("acctsharer", r => r
+                        .Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Share)
+                        .Grant("contact", AccessLevel.User, Privilege.Read, Privilege.Share))
+                    .Role("contactreader", r => r.Grant("contact", AccessLevel.User, Privilege.Read, Privilege.Write))
+                    .User(Sharer, SalesBu, "acctsharer")
+                    .User(Alice, SalesBu, "contactreader"))
                 .Seed(
                     AccountOwnedBy(account, Sharer),
                     new Entity("contact", contact)
                     {
                         ["parentcustomerid"] = new EntityReference("account", account),
-                        ["ownerid"] = new EntityReference("systemuser", Sharer),
+                        ["ownerid"] = new EntityReference("systemuser", Bob),
                         ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
                     });
 
-            // The sharer's Share/Read on the contact is inherited from the parent account; the grant must honour it.
+            // The sharer's Read/Share on Bob's contact is inherited as the owner of its parent account; the grant
+            // (clamped to the sharer's rights) must honour it.
             svc.Execute(new GrantAccessRequest
             {
                 Target = new EntityReference("contact", contact),
-                PrincipalAccess = new PrincipalAccess { Principal = User(Alice), AccessMask = AccessRights.ReadAccess },
+                PrincipalAccess = new PrincipalAccess { Principal = User(Alice), AccessMask = AccessRights.ReadAccess | AccessRights.WriteAccess },
             });
 
             RetrievePrincipalAccessResponse alice = (RetrievePrincipalAccessResponse)svc.Execute(
                 new RetrievePrincipalAccessRequest { Target = new EntityReference("contact", contact), Principal = User(Alice) });
-            Assert.True(alice.AccessRights.HasFlag(AccessRights.ReadAccess)); // share succeeded (would be clamped to None without the fix)
+            Assert.Equal(AccessRights.ReadAccess, alice.AccessRights); // Write clamped out: the sharer holds no Write
         }
 
         [Fact]
@@ -334,7 +379,7 @@ namespace Vela.Testing.Tests
             Guid record = Guid.NewGuid();
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu)) // Alice holds no role
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("basic", BasicAccount).User(Alice, SalesBu, "basic")) // Alice owns nothing
                 .Seed(AccountOwnedBy(record, Bob))
                 .WithSharedRecord(Account(record), new EntityReference("organization", Guid.NewGuid()), AccessRights.ReadAccess);
 
