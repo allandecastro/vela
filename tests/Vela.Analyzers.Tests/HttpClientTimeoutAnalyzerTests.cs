@@ -129,6 +129,39 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Flags_a_service_of_a_plugin_assembly()
+    {
+        // The service runs in the sandbox with the plugin that resolves it, so the whole plugin assembly is checked.
+        string code = Plugin("") + @"
+namespace Demo
+{
+    public sealed class ErpClient
+    {
+        private readonly System.Net.Http.HttpClient _http = {|#0:new System.Net.Http.HttpClient()|};
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code, Expected());
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_helper_of_a_test_project_that_declares_a_plugin()
+    {
+        var test = new Microsoft.CodeAnalysis.CSharp.Testing.CSharpAnalyzerTest<Vela.Analyzers.HttpClientTimeoutAnalyzer, Microsoft.CodeAnalysis.Testing.DefaultVerifier>
+        {
+            TestCode = Plugin("") + @"
+namespace Demo
+{
+    public static class Helper
+    {
+        public static System.Net.Http.HttpClient Create() { var c = new System.Net.Http.HttpClient(); return c; }
+    }
+}",
+        };
+        test.TestState.AdditionalReferences.Add(AnalyzerTestReferences.VelaTesting);
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task Does_not_flag_a_client_outside_a_plugin_type()
     {
         string code = Harness + @"
