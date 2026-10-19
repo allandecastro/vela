@@ -21,6 +21,8 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.27.2] - 2026-10-19 (Vela.Cli)
+
 ### Fixed
 
 - `vela plan` / `vela apply` find the plugin assembly of a package whose id carries the publisher prefix
