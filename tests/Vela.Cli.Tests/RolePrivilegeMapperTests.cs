@@ -45,12 +45,10 @@ public class RolePrivilegeMapperTests
         Guid misc = Guid.NewGuid();        // e.g. "Export to Excel" — not in any table's privileges
         Guid none = Guid.NewGuid();        // an entity privilege of type None
 
-        var privileges = new Dictionary<Guid, (string Entity, PrivilegeType Type)>
-        {
-            [read] = ("account", PrivilegeType.Read),
-            [write] = ("account", PrivilegeType.Write),
-            [none] = ("account", PrivilegeType.None),
-        };
+        var privileges = Map(
+            (read, "account", PrivilegeType.Read),
+            (write, "account", PrivilegeType.Write),
+            (none, "account", PrivilegeType.None));
 
         var rolePrivileges = new[]
         {
@@ -72,11 +70,7 @@ public class RolePrivilegeMapperTests
     {
         Guid p1 = Guid.NewGuid();
         Guid p2 = Guid.NewGuid();
-        var privileges = new Dictionary<Guid, (string, PrivilegeType)>
-        {
-            [p1] = ("account", PrivilegeType.Read),
-            [p2] = ("account", PrivilegeType.Read),
-        };
+        var privileges = Map((p1, "account", PrivilegeType.Read), (p2, "account", PrivilegeType.Read));
 
         IReadOnlyList<RoleGrantModel> grants = RolePrivilegeMapper.ToGrants(
             new[] { (p1, 1 /* User */), (p2, 4 /* ParentChild */) }, privileges);
@@ -91,12 +85,10 @@ public class RolePrivilegeMapperTests
         Guid a = Guid.NewGuid();
         Guid b = Guid.NewGuid();
         Guid c = Guid.NewGuid();
-        var privileges = new Dictionary<Guid, (string, PrivilegeType)>
-        {
-            [a] = ("contact", PrivilegeType.Read),
-            [b] = ("account", PrivilegeType.Write),   // same entity as c, later verb
-            [c] = ("account", PrivilegeType.Create),  // same entity as b, earlier verb
-        };
+        var privileges = Map(
+            (a, "contact", PrivilegeType.Read),
+            (b, "account", PrivilegeType.Write),   // same entity as c, later verb
+            (c, "account", PrivilegeType.Create)); // same entity as b, earlier verb
 
         var grants = RolePrivilegeMapper.ToGrants(new[] { (a, 8), (b, 8), (c, 8) }, privileges).ToList();
 
@@ -104,4 +96,45 @@ public class RolePrivilegeMapperTests
         Assert.Equal(("account", "Write"), (grants[1].Entity, grants[1].Privilege));
         Assert.Equal("contact", grants[2].Entity);
     }
+
+    [Fact]
+    public void ToGrants_gives_a_privilege_shared_by_several_tables_to_each_of_them()
+    {
+        // prvReadAccount also covers customeraddress, prvReadActivity every activity table: each table gets the grant.
+        Guid readAccount = Guid.NewGuid();
+        Guid readActivity = Guid.NewGuid();
+        var privileges = Map(
+            (readAccount, "account", PrivilegeType.Read),
+            (readAccount, "customeraddress", PrivilegeType.Read),
+            (readActivity, "email", PrivilegeType.Read),
+            (readActivity, "task", PrivilegeType.Read),
+            (readActivity, "activitypointer", PrivilegeType.None));
+
+        IReadOnlyList<RoleGrantModel> grants = RolePrivilegeMapper.ToGrants(new[] { (readAccount, 8), (readActivity, 2) }, privileges);
+
+        Assert.Equal(
+            new[]
+            {
+                new RoleGrantModel("account", "Read", "Organization"),
+                new RoleGrantModel("customeraddress", "Read", "Organization"),
+                new RoleGrantModel("email", "Read", "BusinessUnit"),
+                new RoleGrantModel("task", "Read", "BusinessUnit"),
+            },
+            grants);
+    }
+
+    [Fact]
+    public void ToGrants_skips_a_privilege_with_no_access_on_every_table_it_covers()
+    {
+        Guid shared = Guid.NewGuid();
+        var privileges = Map((shared, "account", PrivilegeType.Read), (shared, "customeraddress", PrivilegeType.Read));
+
+        Assert.Empty(RolePrivilegeMapper.ToGrants(new[] { (shared, 0) }, privileges));
+    }
+
+    private static IReadOnlyDictionary<Guid, IReadOnlyList<(string Entity, PrivilegeType Type)>> Map(
+        params (Guid Id, string Entity, PrivilegeType Type)[] entries) =>
+        entries
+            .GroupBy(e => e.Id)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<(string Entity, PrivilegeType Type)>)g.Select(e => (e.Entity, e.Type)).ToList());
 }
