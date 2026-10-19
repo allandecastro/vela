@@ -272,7 +272,9 @@ them behave like they do online:
 - **Backdating:** a caller-supplied `overriddencreatedon` sets `createdon` to that value on Create, like a
   data migration online.
 - **Timestamps** use `DateTime.UtcNow` by default; pin them with `WithClock(() => fixedInstant)` to assert
-  `createdon`/`modifiedon` deterministically.
+  `createdon`/`modifiedon` deterministically. The same clock expires the plug-in cache (`IPluginCacheService`):
+  each harness has a cache of its own, so move the clock past a TTL instead of sleeping (see
+  [Caching](caching.md#test-a-ttl)).
 - **Ids** are random `Guid`s by default; make them reproducible with `WithIdSequence()` (deterministic
   `00000000-0000-0000-0000-000000000001`, `...0002`, ...; assert with `SequentialIds.At(n)`) or
   `WithIdSequence(() => myGuid)` for a custom generator. Virtual tables get none of these system columns.

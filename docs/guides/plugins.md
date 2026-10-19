@@ -609,7 +609,8 @@ recursion prevention. `PluginPipeline` caps the cascade at the same depth by def
   [keep-alive](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-keepalive-false-interacting-external-hosts-plugin)).
   Vela warns on an `HttpClient` whose `Timeout` is never set ([VELA026](../reference/analyzers.md#vela026)) and on a
   call to an IP address instead of a named host ([VELA025](../reference/analyzers.md#vela025); see the
-  [web access restrictions](https://learn.microsoft.com/power-apps/developer/data-platform/access-web-services)):
+  [web access restrictions](https://learn.microsoft.com/power-apps/developer/data-platform/access-web-services)),
+  in the plugin and in the services of its assembly:
 
   ```csharp
   string token = ctx.AcquireManagedIdentityToken(new[] { "https://graph.microsoft.com/.default" });

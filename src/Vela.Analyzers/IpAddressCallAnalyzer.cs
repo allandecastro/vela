@@ -8,7 +8,8 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Vela.Analyzers
 {
     /// <summary>
-    /// Flags an outbound HTTP call to an IP address from a plugin / Custom API type. The Dataverse sandbox only lets a
+    /// Flags an outbound HTTP call to an IP address from plugin code: a plugin / Custom API type, or any type of a
+    /// plugin assembly (its services and helpers). The Dataverse sandbox only lets a
     /// plug-in reach a named host resolved by DNS, so a request to <c>http(s)://10.0.0.1/...</c> or
     /// <c>http(s)://[::1]/...</c> fails at runtime. Checked: the string given to <c>new Uri(...)</c>, to an
     /// <c>HttpClient</c> / <c>HttpRequestMessage</c> / <c>WebRequest</c> / <c>HttpWebRequest</c> member or constructor
@@ -60,7 +61,7 @@ namespace Vela.Analyzers
             }
 
             string? host = IpHost(argument.Value);
-            if (host is not null && plugins.Encloses(argument.Syntax, argument.SemanticModel!, context.CancellationToken))
+            if (host is not null && plugins.InPluginAssembly(argument.Syntax, argument.SemanticModel!, context.CancellationToken))
             {
                 context.ReportDiagnostic(Diagnostic.Create(Rule, argument.Value.Syntax.GetLocation(), host));
             }

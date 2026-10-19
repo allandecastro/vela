@@ -197,7 +197,7 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   `WithCurrentBusinessUnit` / `WithOrganizationId`) - not server-computed. Without `WithCurrentUser` a stable
   non-empty default user (`DefaultCallingUser`) is used. `statecode`/`statuscode`/`versionnumber` and
   `overriddencreatedon` backdating are also stamped; `WithClock(...)` and `WithIdSequence(...)` make timestamps
-  and ids deterministic. Ownership type is inferred from the early-bound `OwnerId` property or declared
+  and ids deterministic; the same clock expires the harness's own plug-in cache. Ownership type is inferred from the early-bound `OwnerId` property or declared
   explicitly (`AsOrganizationOwned` / `AsUserOwned` / `AsVirtual` / `AsElastic`); elastic tables are ownable.
   `Seed(...)` deliberately stamps nothing (raw setup).
 - **Virtual tables.** `AsVirtual(...)` suppresses all system-column population; `AsVirtual(name, readOnly: true)`

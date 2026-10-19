@@ -10,8 +10,11 @@ namespace Vela.Tests;
 // organizations, and Clear() drops only the executing organization's entries.
 public sealed class CacheScopeTests
 {
-    private static IPluginCacheService CacheFor(Guid organizationId) =>
-        new PluginContextBuilder().WithOrganizationId(organizationId).Build().GetRequiredService<IPluginCacheService>();
+    // One builder per test: its cache stands for the worker process's, shared by every execution it builds.
+    private readonly PluginContextBuilder _builder = new PluginContextBuilder();
+
+    private IPluginCacheService CacheFor(Guid organizationId) =>
+        _builder.WithOrganizationId(organizationId).Build().GetRequiredService<IPluginCacheService>();
 
     [Fact]
     public void The_same_user_key_holds_one_value_per_organization()
@@ -87,5 +90,45 @@ public sealed class CacheScopeTests
         Assert.Equal(2, cache.RemoveByPrefix("org:a:"));
         Assert.Equal(3, cache.GetOrCreate("org:b:1", TimeSpan.FromMinutes(1), () => 0));
         Assert.Equal(9, cache.GetOrCreate("org:a:1", TimeSpan.FromMinutes(1), () => 9));
+    }
+
+    // On Dataverse the service provider serves no PluginCacheService, so every execution views the process-wide cache.
+    [Fact]
+    public void Without_a_harness_cache_every_execution_views_the_process_wide_cache()
+    {
+        Guid org = Guid.NewGuid();
+        string key = "scope-test:" + Guid.NewGuid().ToString("N");
+        IPluginCacheService PlatformCache() => new LocalPluginContext(
+            new WithoutHarnessCache(new PluginContextBuilder().WithOrganizationId(org).BuildServiceProvider()))
+            .GetRequiredService<IPluginCacheService>();
+
+        PlatformCache().GetOrCreate(key, TimeSpan.FromMinutes(5), () => 1);
+
+        Assert.Equal(1, PlatformCache().GetOrCreate(key, TimeSpan.FromMinutes(5), () => 2));
+        PlatformCache().Invalidate(key);
+    }
+
+    // A harness clock in local or unspecified time is read as the same instant as UTC would be, so a TTL is
+    // measured the same way whichever DateTimeKind the test's clock returns.
+    [Theory]
+    [InlineData(DateTimeKind.Utc)]
+    [InlineData(DateTimeKind.Unspecified)]
+    [InlineData(DateTimeKind.Local)]
+    public void A_harness_cache_expires_on_its_clock_whatever_its_kind(DateTimeKind kind)
+    {
+        DateTime utc = new DateTime(2026, 10, 19, 8, 0, 0, DateTimeKind.Utc);
+        DateTime now = kind == DateTimeKind.Local ? utc.ToLocalTime() : DateTime.SpecifyKind(utc, kind);
+        PluginCacheService cache = PluginCacheService.OnClock(() => now);
+
+        cache.GetOrCreate("k", TimeSpan.FromMinutes(5), () => 1);
+        now = now.AddMinutes(4);
+        Assert.Equal(1, cache.GetOrCreate("k", TimeSpan.FromMinutes(5), () => 2));
+        now = now.AddMinutes(2);
+        Assert.Equal(3, cache.GetOrCreate("k", TimeSpan.FromMinutes(5), () => 3));
+    }
+
+    private sealed class WithoutHarnessCache(IServiceProvider inner) : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => serviceType == typeof(PluginCacheService) ? null : inner.GetService(serviceType);
     }
 }

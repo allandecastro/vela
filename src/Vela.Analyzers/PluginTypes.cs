@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -23,9 +25,11 @@ namespace Vela.Analyzers
         private readonly INamedTypeSymbol? _pluginBase;
         private readonly INamedTypeSymbol? _entityPluginBase;
         private readonly INamedTypeSymbol? _customApiBase;
+        private readonly Lazy<bool> _isPluginAssembly;
 
         private PluginTypes(Compilation compilation)
         {
+            _isPluginAssembly = new Lazy<bool>(() => IsPluginAssembly(compilation));
             _plugin = compilation.GetTypeByMetadataName(PluginInterfaceMetadataName);
             _pluginBase = compilation.GetTypeByMetadataName(PluginBaseMetadataName);
             _entityPluginBase = compilation.GetTypeByMetadataName(EntityPluginBaseMetadataName);
@@ -89,6 +93,32 @@ namespace Vela.Analyzers
                 if (current is TypeDeclarationSyntax type)
                 {
                     return IsPluginType(model.GetDeclaredSymbol(type, cancellationToken) as INamedTypeSymbol);
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// True when <paramref name="node"/> is plugin code (see <see cref="Encloses"/>) or any code of a plugin
+        /// assembly: one that declares a plugin type and is not a test project (it does not reference Vela.Testing).
+        /// Everything in such an assembly runs in the sandbox, so its services and helpers are scoped in too.
+        /// </summary>
+        public bool InPluginAssembly(SyntaxNode node, SemanticModel model, CancellationToken cancellationToken)
+            => _isPluginAssembly.Value || Encloses(node, model, cancellationToken);
+
+        private bool IsPluginAssembly(Compilation compilation)
+            => !compilation.ReferencedAssemblyNames.Any(a => a.Name == "Vela.Testing")
+               && DeclaresPluginType(compilation.Assembly.GlobalNamespace);
+
+        private bool DeclaresPluginType(INamespaceOrTypeSymbol container)
+        {
+            foreach (ISymbol member in container.GetMembers())
+            {
+                if (member is INamespaceSymbol ns ? DeclaresPluginType(ns)
+                    : member is INamedTypeSymbol type && (IsPluginType(type) || DeclaresPluginType(type)))
+                {
+                    return true;
                 }
             }
 

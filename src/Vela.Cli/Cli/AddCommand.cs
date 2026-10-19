@@ -881,19 +881,17 @@ internal static class AddCommand
 
     private static int AddService(string name, string? entity, bool force, string projectDir, string rootNamespace, string modelsNamespace, bool json)
     {
-        if (string.IsNullOrWhiteSpace(entity))
-        {
-            return Fail("A service needs an entity. Pass --entity <ModelType> (the early-bound class name, e.g. Account); services scaffold table-scoped like 'vela init'.", ExitInvalidArguments, includeUsage: false);
-        }
-
+        // With --entity the service is table-scoped, next to that table's plugins; without it, it is shared by
+        // several tables and lives under Services/ at the project root, taking a late-bound Entity.
+        bool shared = string.IsNullOrWhiteSpace(entity);
         string interfaceName = $"I{name}";
-        string ns = $"{rootNamespace}.{entity}.Services";
-        string relativePath = Path.Combine(entity!, "Services", $"{name}.cs");
-        string content = AddServiceFile(ns, interfaceName, name, entity!, modelsNamespace);
+        string ns = shared ? $"{rootNamespace}.Services" : $"{rootNamespace}.{entity}.Services";
+        string relativePath = shared ? Path.Combine("Services", $"{name}.cs") : Path.Combine(entity!, "Services", $"{name}.cs");
+        string content = AddServiceFile(ns, interfaceName, name, shared ? null : entity, modelsNamespace);
         // The exact line to wire the service into a plugin's ConfigureServices. Surfaced both in the human
         // output and in the --json report (field "registration") so an agent driving the CLI gets it too.
         string registration = $"services.AddScoped<{interfaceName}>(r => new {name}(r.GetRequiredService<IOrganizationService>()));";
-        return WriteFile(projectDir, relativePath, content, force, $"service {name} (scoped to {entity})", json, registration);
+        return WriteFile(projectDir, relativePath, content, force, shared ? $"service {name} (shared)" : $"service {name} (scoped to {entity})", json, registration);
     }
 
     private static int AddCustomApi(string[] args, string name, string? entity, bool force, string projectFile, string projectDir, string rootNamespace, string modelsNamespace, string prefix)

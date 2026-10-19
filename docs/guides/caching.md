@@ -58,6 +58,24 @@ Key design tips:
 - Keep TTL explicit per use case (short for volatile data, longer for reference data).
 - Cache pure/read-only results; avoid caching mutable workflow state.
 
+## Test a TTL
+
+In the Vela.Testing harnesses the plug-in gets a cache of its own: one per `PluginPipeline`, kept across its
+executions, and one per `PluginContext` builder, kept across the builder's `Execute` calls. A test never sees
+another test's entries. It expires on the harness's clock, so a test moves time forward instead of sleeping:
+
+```csharp
+DateTime now = new DateTime(2026, 10, 19, 8, 0, 0, DateTimeKind.Utc);
+PluginPipeline pipeline = PluginPipeline.Empty().WithClock(() => now).Register<SettingsPlugin>();
+
+pipeline.Service.Create(new Account { Name = "a" });   // loads and caches for 5 minutes
+now = now.AddMinutes(6);
+pipeline.Service.Create(new Account { Name = "b" });   // past the TTL: loads again
+```
+
+`PluginContext.For<T>()...WithClock(() => now)` does the same for one plugin: execute, move `now`, execute again
+on the same builder.
+
 ## See also
 
 - [Write a plugin](plugins.md) - `IPluginCacheService` is a built-in context service.

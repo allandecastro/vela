@@ -190,6 +190,9 @@ namespace Vela.Testing
             return this;
         }
 
+        // The current time on the store's clock (WithClock), which the pipeline's plug-in cache expires by too.
+        internal DateTime Now() => _clock();
+
         /// <summary>
         /// Overrides how ids are generated for records created without one (default <see cref="Guid.NewGuid"/>),
         /// so generated ids are reproducible. Companion to <see cref="WithClock"/>.
