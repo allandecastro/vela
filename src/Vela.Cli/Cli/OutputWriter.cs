@@ -111,7 +111,33 @@ internal static class OutputWriter
             }
         }
 
+        WriteManagedIdentity(preview.ManagedIdentity, writer, color);
         WriteDiagnostics(preview.Diagnostics, writer, color);
+    }
+
+    // --managed-identity: each published package's link, so an already linked package is visible too.
+    public static void WriteManagedIdentity(ManagedIdentityPlan? managedIdentity, TextWriter writer, bool color)
+    {
+        if (managedIdentity == null)
+        {
+            return;
+        }
+
+        writer.WriteLine(ConsoleTheme.Muted($"managed identity {managedIdentity.Id}:", color));
+        if (managedIdentity.Packages.Length == 0)
+        {
+            writer.WriteLine(ConsoleTheme.Muted("  (no plugin package to link)", color));
+        }
+
+        foreach (ManagedIdentityPackageLink link in managedIdentity.Packages)
+        {
+            writer.WriteLine(link.Status switch
+            {
+                ManagedIdentityPackageLink.Linked => ConsoleTheme.Muted($"  = package: {link.Package} (already linked)", color),
+                ManagedIdentityPackageLink.Change => ConsoleTheme.Changed($"  ~ package: {link.Package} (will change from {link.CurrentManagedIdentityId})", color),
+                _ => ConsoleTheme.Added($"  + package: {link.Package} (will link)", color),
+            });
+        }
     }
 
     /// <summary>
@@ -355,7 +381,7 @@ internal static class OutputWriter
         return baseName;
     }
 
-    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics, IReadOnlyList<PackagePublishAction>? packageActions = null, string[]? unmanaged = null, string[]? info = null, IReadOnlyList<SolutionMembershipAction>? membership = null)
+    public static PlanPreview BuildPlanPreview(string mode, string? environment, RegistrationDiff diff, string[] localDiagnostics, string[] currentDiagnostics, IReadOnlyList<PackagePublishAction>? packageActions = null, string[]? unmanaged = null, string[]? info = null, IReadOnlyList<SolutionMembershipAction>? membership = null, ManagedIdentityPlan? managedIdentity = null)
     {
         List<ApplyOperation> operations = [];
         operations.AddRange(diff.Added.Select(item => new ApplyOperation("create", item.Kind, item.Type, "Exists locally but not in Dataverse.")));
@@ -381,10 +407,20 @@ internal static class OutputWriter
         operations.AddRange(missingFromSolution.Select(action => new ApplyOperation(
             "add-to-solution", action.Kind, action.Name, "Exists in Dataverse but is not in the target solution; apply will add it.")));
 
+        // --managed-identity: a package not linked yet, or linked to another managed identity, is one more write.
+        ManagedIdentityPackageLink[] pendingLinks = managedIdentity?.Pending ?? [];
+        operations.AddRange(pendingLinks.Select(link => new ApplyOperation(
+            "link",
+            "package",
+            link.Package,
+            link.CurrentManagedIdentityId is { } current
+                ? $"Plugin package is linked to managed identity {current}; apply will link it to {managedIdentity!.Id}."
+                : $"Plugin package is not linked to managed identity {managedIdentity!.Id}; apply will link it.")));
+
         return new PlanPreview(
             Mode: mode,
             Environment: environment,
-            HasChanges: diff.Summary.Added > 0 || diff.Summary.Removed > 0 || diff.Summary.Changed > 0 || packages.Count > 0 || missingFromSolution.Count > 0,
+            HasChanges: diff.Summary.Added > 0 || diff.Summary.Removed > 0 || diff.Summary.Changed > 0 || packages.Count > 0 || missingFromSolution.Count > 0 || pendingLinks.Length > 0,
             Summary: diff.Summary,
             Operations: operations.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
             Diff: diff,
@@ -395,7 +431,8 @@ internal static class OutputWriter
                 "This is a preview; nothing was written to Dataverse."
             ],
             Unmanaged: unmanaged ?? [],
-            Info: info ?? []);
+            Info: info ?? [],
+            ManagedIdentity: managedIdentity);
     }
 
     // Top-level `vela --help`, generated from the command table (CliCommands) so it lists every command.

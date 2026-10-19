@@ -21,6 +21,17 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- `vela plan` / `vela apply --managed-identity <managedidentityid>` link the published plugin packages to a
+  `managedidentity` record of the target environment, so the same package ships to each environment with that
+  environment's managed identity. Plan reports each package as already linked, to link, or to change from another
+  managed identity (a `link` operation and a `managedIdentity` block in the JSON, counted in `hasChanges` and
+  `--detailed-exitcode`); apply sets `pluginpackage.managedidentityid` right after the publish, including on a package
+  it creates, through `--solution` when given, and reports it in `executed.linkedToManagedIdentity`. An id with no
+  `managedidentity` record fails the run (exit 4) before anything is written. Without the option the link is neither
+  read nor changed. The link was set by hand after every first deployment.
+
 ## [0.27.5] - 2026-10-19 (Vela.Cli)
 
 ### Fixed
