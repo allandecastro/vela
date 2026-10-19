@@ -28,6 +28,12 @@ All notable changes to Vela are documented here. The format is based on
   linked to the plug-in package or assembly on Dataverse (with a link to the Learn page). It said only
   "IManagedIdentityService is unavailable.". (Vela.Plugins)
 
+### Fixed
+
+- `vela logs --errors` keeps only the trace log rows that carry an exception. It filtered on `exceptiondetails` not
+  null, but Dataverse stores an empty string on a row without an exception, so every row was kept (and shown without
+  an exception). The query now also requires a non-empty `exceptiondetails`.
+
 ## [0.27.5] - 2026-10-19 (Vela.Cli)
 
 ### Fixed
