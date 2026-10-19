@@ -138,6 +138,32 @@ public sealed class PlanApplyRoundTripTests : IDisposable
         Assert.Empty(Output().GetProperty("operations").EnumerateArray());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Removing_every_plugin_from_the_package_unregisters_the_deployed_steps_and_custom_apis(bool isolatedScan)
+    {
+        Assert.Equal(ExitSuccess, Run("apply"));
+        Assert.Equal(7, _org.Rows("sdkmessageprocessingstep").Count);
+        Assert.Equal(2, _org.Rows("customapi").Count);
+
+        // The same package, rebuilt after every plugin class was deleted: the assembly keeps its name but holds no type.
+        File.Delete(_nupkg);
+        _nupkg = ContractFixturePackage.Build(version: "1.0.1", withoutPlugins: true);
+        _org.DefinePackage(ContractFixturePackage.PackageId, ContractFixturePackage.AssemblyName);
+
+        Assert.Equal(ExitChangesPending, Run("plan", detailedExitCode: true, isolatedScan));
+        JsonElement plan = Output();
+        AssertSummary(plan, added: 0, changed: 0, removed: 9);
+
+        Assert.Equal(ExitSuccess, Run("apply", isolatedScan: isolatedScan));
+        Assert.Empty(_org.Rows("sdkmessageprocessingstep"));
+        Assert.Empty(_org.Rows("customapi"));
+
+        Assert.Equal(ExitSuccess, Run("plan", detailedExitCode: true, isolatedScan));
+        AssertSummary(Output(), added: 0, changed: 0, removed: 0);
+    }
+
     private static StatefulOrgService NewEnvironment()
     {
         StatefulOrgService org = new();
@@ -155,7 +181,7 @@ public sealed class PlanApplyRoundTripTests : IDisposable
         return org;
     }
 
-    private int Run(string command, bool detailedExitCode = false)
+    private int Run(string command, bool detailedExitCode = false, bool isolatedScan = false)
     {
         SharedOptions options = ContractFixturePackage.Options([_nupkg], _out, detailedExitCode) with
         {
@@ -163,7 +189,10 @@ public sealed class PlanApplyRoundTripTests : IDisposable
         };
         PlanApplyHost host = new()
         {
-            ScanLocal = PackageScanner.BuildLocalStateFromPackages,
+            // The isolated scan runs the package scan in a child Vela.Cli process, as the shipped CLI does.
+            ScanLocal = isolatedScan
+                ? (o, j, t) => IsolatedPackageScan.Scan(o, j, t, (Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "Vela.Cli.exe" : "Vela.Cli"), []), _ => null)
+                : PackageScanner.BuildLocalStateFromPackages,
             Connect = _ => new OrganizationConnection(_org),
             IsInputRedirected = () => true,
             IsOutputRedirected = () => true,
