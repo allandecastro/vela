@@ -65,7 +65,8 @@ jobs:
             git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             $changed = Join-Path $env:RUNNER_TEMP 'changed.txt'
-            git diff --name-only "origin/${{ github.base_ref }}...HEAD" | Set-Content -Path $changed
+            # -Value, not a pipeline: an empty diff (the PR already merged when the run starts) still writes the file.
+            Set-Content -Path $changed -Value @(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
             $areas = & ./tests/stryker/select-areas.ps1 -ChangedFiles $changed
           } elseif ($env:ONLY_AREAS) {
             $areas = & ./tests/stryker/select-areas.ps1 -Only $env:ONLY_AREAS
