@@ -21,6 +21,24 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (breaking)
+
+- Vela.Testing: inherited access over a parental relationship follows the rules verified live on Dataverse. A child
+  no longer inherits whatever the user can do on its parent through a role: role access to the parent confers nothing.
+  Instead the child holds inherited grants, kept apart from explicit shares. Through the Reparent cascade, a child
+  created under a parent, or moved to one, gets a grant for the parent's owner (user or team), bounded by the owner's
+  rights on the parent, and for every principal the parent is already shared with. Moving the child replaces the
+  grants from its previous parent. A share made on the parent later reaches the children only through the Share
+  cascade, which now writes inherited grants instead of explicit shares, so `RetrieveSharedPrincipalsAndAccess` on a
+  child no longer lists them, and the Unshare cascade removes only those grants. A seeded child gets the grants a
+  Create would give it when `WithSecurity` is configured first.
+- Vela.Testing: a share or an inherited grant counts only for a privilege the principal holds on the table at some
+  access level, as on Dataverse. A user with no role on a table reaches nothing on it through `GrantAccess` or
+  `WithSharedRecord`; give the sharee at least User-level privileges on the table.
+- Vela.Testing: declaring a second parental relationship on the same child table (one where Assign, Reparent, Share or
+  Unshare cascades, or Delete is Cascade) throws `InvalidOperationException`, mirroring Dataverse's 0x80047007. Two
+  parental relationships over the same lookup column (a polymorphic lookup) are still allowed.
+
 ## [0.27.3] - 2026-10-19 (Vela.Cli)
 
 ### Added

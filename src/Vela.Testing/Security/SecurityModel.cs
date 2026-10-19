@@ -641,13 +641,18 @@ namespace Vela.Testing.Security
                 }
             }
 
-            // Shared access is unioned with role access: an explicit record share (PoA, to the user or any of its
-            // teams) or an access-team grant (to the user) also confers the privilege. Create is never record-scoped.
+            // Record-level access is unioned with role access: an explicit share or an inherited grant (PoA, to the
+            // user or any of its teams) or an access-team grant (to the user) also confers the privilege. Create is
+            // never record-scoped. A PoA grant only counts when the user holds the privilege on the table at some
+            // depth (Learn: sharing can't give rights the user's role doesn't have for that table; inherited access
+            // was verified live to need at least User-level privilege on the child table too).
             AccessRights right = ToAccessRight(privilege);
             if (record != null && right != AccessRights.None)
             {
-                AccessRights shared = _sharing.RightsFor(table, record.Id, PrincipalIds(userId))
-                    | _accessTeams.RightsFor(table, record.Id, userId);
+                AccessRights poa = GrantedLevels(userId, table, privilege).Any()
+                    ? _sharing.RightsFor(table, record.Id, PrincipalIds(userId))
+                    : AccessRights.None;
+                AccessRights shared = poa | _accessTeams.RightsFor(table, record.Id, userId);
                 if ((shared & right) == right)
                 {
                     return true;
@@ -720,8 +725,8 @@ namespace Vela.Testing.Security
         }
 
         // Every user that has direct access to the record, tagged with the rights they hold: the owning user (all
-        // hierarchy rights), each member of the owning team (all), and each user a PoA share reaches — directly or via a
-        // team it belongs to — with the shared mask. This is the set of "reports" whose access the hierarchy extends up.
+        // hierarchy rights), each member of the owning team (all), and each user a PoA share or inherited grant reaches —
+        // directly or via a team it belongs to — with the granted mask. This is the set of "reports" whose access the hierarchy extends up.
         private IEnumerable<(Guid User, AccessRights Held)> ReportsWithAccess(string table, Entity record)
         {
             Dictionary<Guid, AccessRights> access = new Dictionary<Guid, AccessRights>();
@@ -745,7 +750,8 @@ namespace Vela.Testing.Security
                 }
             }
 
-            foreach (PrincipalAccess share in _sharing.SharesOf(new EntityReference(table, record.Id)))
+            EntityReference target = new EntityReference(table, record.Id);
+            foreach (PrincipalAccess share in _sharing.SharesOf(target).Concat(_sharing.InheritedOf(target)))
             {
                 if (share.Principal == null)
                 {
@@ -865,14 +871,14 @@ namespace Vela.Testing.Security
 
         /// <summary>
         /// The effective <see cref="AccessRights"/> mask the user holds on the record — the union of role access,
-        /// ownership and sharing — used to answer RetrievePrincipalAccess.
+        /// ownership, sharing and inherited access — used to answer RetrievePrincipalAccess.
         /// </summary>
-        public AccessRights EffectiveAccess(Guid userId, string entity, Entity record, Func<Privilege, bool>? inherited = null)
+        public AccessRights EffectiveAccess(Guid userId, string entity, Entity record)
         {
             AccessRights rights = AccessRights.None;
             foreach (Privilege privilege in ShareablePrivileges)
             {
-                if (IsGranted(userId, entity, privilege, record) || (inherited?.Invoke(privilege) ?? false))
+                if (IsGranted(userId, entity, privilege, record))
                 {
                     rights |= ToAccessRight(privilege);
                 }

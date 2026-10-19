@@ -9,8 +9,8 @@ using Xunit;
 
 namespace Vela.Testing.Tests
 {
-    // Cascade Share/Unshare across a 1:N relationship, and the Reparent behaviour (changing a child's parent
-    // re-derives its inherited access — which is automatic here because inherited access is computed live).
+    // Cascade Share/Unshare across a 1:N relationship (the children get an inherited grant, not an explicit share),
+    // and the Reparent behaviour (changing a child's parent re-derives its inherited grants).
     public sealed class CascadeSharingReparentTests
     {
         private static readonly Guid Alice = new Guid("a11ce000-0000-0000-0000-000000000501");
@@ -38,7 +38,14 @@ namespace Vela.Testing.Tests
             return share?.AccessMask ?? AccessRights.None;
         }
 
-        // Alice can read + share accounts; Bob is the sharee (no roles).
+        private static AccessRights RightsOf(InMemoryOrganizationService svc, Guid contactId, Guid principal) =>
+            ((RetrievePrincipalAccessResponse)svc.Execute(new RetrievePrincipalAccessRequest
+            {
+                Target = new EntityReference("contact", contactId),
+                Principal = new EntityReference("systemuser", principal),
+            })).AccessRights;
+
+        // Alice can read + share accounts; Bob is the sharee (Basic contact Read only, owns nothing).
         private static InMemoryOrganizationService Sharing(Guid account, Guid contact, bool parental)
         {
             InMemoryOrganizationService svc = new InMemoryOrganizationService().WithCurrentUser(Alice);
@@ -50,7 +57,8 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .Role("sharer", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Share))
                     .User(Alice, SalesBu, "sharer")
-                    .User(Bob, SalesBu))
+                    .Role("basic", r => r.Grant("contact", AccessLevel.User, Privilege.Read))
+                    .User(Bob, SalesBu, "basic"))
                 .Seed(AccountOwnedBy(account, Alice), ContactUnder(contact, account, Alice));
         }
 
@@ -69,7 +77,8 @@ namespace Vela.Testing.Tests
 
             svc.Execute(GrantRead(account, Bob));
 
-            Assert.True(SharedRightsOf(svc, contact, Bob).HasFlag(AccessRights.ReadAccess)); // child shared by cascade
+            Assert.Equal(AccessRights.ReadAccess, RightsOf(svc, contact, Bob));  // child reached by the cascade...
+            Assert.Equal(AccessRights.None, SharedRightsOf(svc, contact, Bob)); // ...as an inherited grant, not a share
         }
 
         [Fact]
@@ -81,7 +90,7 @@ namespace Vela.Testing.Tests
 
             svc.Execute(GrantRead(account, Bob));
 
-            Assert.Equal(AccessRights.None, SharedRightsOf(svc, contact, Bob)); // no cascade
+            Assert.Equal(AccessRights.None, RightsOf(svc, contact, Bob)); // no cascade
         }
 
         [Fact]
@@ -91,7 +100,7 @@ namespace Vela.Testing.Tests
             Guid contact = Guid.NewGuid();
             InMemoryOrganizationService svc = Sharing(account, contact, parental: true);
             svc.Execute(GrantRead(account, Bob));
-            Assert.True(SharedRightsOf(svc, contact, Bob).HasFlag(AccessRights.ReadAccess)); // cascaded in
+            Assert.Equal(AccessRights.ReadAccess, RightsOf(svc, contact, Bob)); // cascaded in
 
             svc.Execute(new RevokeAccessRequest
             {
@@ -99,7 +108,7 @@ namespace Vela.Testing.Tests
                 Revokee = new EntityReference("systemuser", Bob),
             });
 
-            Assert.Equal(AccessRights.None, SharedRightsOf(svc, contact, Bob)); // unshare cascaded out
+            Assert.Equal(AccessRights.None, RightsOf(svc, contact, Bob)); // unshare cascaded out
         }
 
         [Fact]
@@ -113,10 +122,12 @@ namespace Vela.Testing.Tests
                 .WithParentalRelationship("account", "contact", "parentcustomerid")
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    // Alice owns account A (User-read reaches it), can move the contact's lookup, but has no contact Read.
+                    // Alice owns account A (User-read reaches it), can move the contact's lookup, and holds only
+                    // User-level Read on contact, which reaches no contact she doesn't own.
                     .Role("reparenter", r => r
                         .Grant("account", AccessLevel.User, Privilege.Read)
                         .Grant("account", AccessLevel.Organization, Privilege.AppendTo)
+                        .Grant("contact", AccessLevel.User, Privilege.Read)
                         .Grant("contact", AccessLevel.Organization, Privilege.Write, Privilege.Append))
                     .User(Alice, SalesBu, "reparenter"))
                 .Seed(

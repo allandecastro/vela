@@ -314,11 +314,27 @@ namespace Vela.Testing.Tests
             Guid contact = Guid.NewGuid();
             EntityReference accountRef = new EntityReference("account", account);
             EntityReference alice = new EntityReference("systemuser", Alice);
+            EntityReference contactRef = new EntityReference("contact", contact);
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Bob)
                 .WithParentalRelationship("account", "contact", "parentcustomerid")
-                .Seed(new Entity("account", account), new Entity("contact", contact) { ["parentcustomerid"] = accountRef })
-                .WithSharedRecord(accountRef, alice, AccessRights.ReadAccess);
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("sharer", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write, Privilege.Share))
+                    .Role("basic", r => r
+                        .Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write)
+                        .Grant("contact", AccessLevel.User, Privilege.Read, Privilege.Write))
+                    .User(Bob, SalesBu, "sharer")
+                    .User(Alice, SalesBu, "basic"))
+                .Seed(
+                    new Entity("account", account) { ["ownerid"] = new EntityReference("systemuser", Bob) },
+                    new Entity("contact", contact) { ["parentcustomerid"] = accountRef, ["ownerid"] = new EntityReference("systemuser", Bob) });
 
+            svc.Execute(new GrantAccessRequest
+            {
+                Target = accountRef,
+                PrincipalAccess = new PrincipalAccess { Principal = alice, AccessMask = AccessRights.ReadAccess },
+            });
             svc.Execute(new ModifyAccessRequest
             {
                 Target = accountRef,
@@ -326,7 +342,10 @@ namespace Vela.Testing.Tests
             });
 
             Assert.Equal(AccessRights.WriteAccess, ShareOf(svc, accountRef, Alice).AccessMask);
-            Assert.True(ShareOf(svc, new EntityReference("contact", contact), Alice).AccessMask.HasFlag(AccessRights.WriteAccess));
+            // The child's inherited Read is REPLACED by Write (not unioned), and it is not an explicit share.
+            Assert.Equal(AccessRights.WriteAccess, ((RetrievePrincipalAccessResponse)svc.Execute(
+                new RetrievePrincipalAccessRequest { Target = contactRef, Principal = alice })).AccessRights);
+            Assert.Null(ShareOf(svc, contactRef, Alice));
         }
 
         [Fact]

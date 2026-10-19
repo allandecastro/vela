@@ -29,7 +29,8 @@ namespace Vela.Testing.Tests
                 Privilege.Create, Privilege.Read, Privilege.Write, Privilege.Delete,
                 Privilege.Share, Privilege.Assign, Privilege.Append, Privilege.AppendTo))
             .User(Alice, SalesBu, "admin")
-            .User(Bob, SalesBu);
+            .Role("basic", r => r.Grant("account", AccessLevel.User, Privilege.Read)) // a share needs the table privilege
+            .User(Bob, SalesBu, "basic");
 
         private static Entity AccountOwnedByAlice(Guid id) => new Entity("account", id)
         {

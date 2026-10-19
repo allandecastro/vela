@@ -41,7 +41,8 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .Role("sharer", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Share))
                     .User(Sharer, SalesBu, "sharer")
-                    .User(Alice, SalesBu))
+                    .Role("basic", r => r.Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write))
+                    .User(Alice, SalesBu, "basic"))
                 .Seed(AccountOwnedBy(record, Sharer));
 
         [Fact]
@@ -54,7 +55,8 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .User(Alice, SalesBu)
+                    .Role("basic", r => r.Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write))
+                    .User(Alice, SalesBu, "basic")
                     .Team(SalesTeam, SalesBu)
                     .Member(Alice, SalesTeam))
                 .Seed(AccountOwnedBy(record, Bob))
