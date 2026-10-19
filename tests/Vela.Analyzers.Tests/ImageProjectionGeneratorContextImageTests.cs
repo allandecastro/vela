@@ -132,4 +132,46 @@ namespace Demo
 
         return hash.ToString("x8");
     }
+
+    [Fact]
+    public void A_chain_broken_after_a_bound_step_call_still_gets_its_context_and_projection()
+    {
+        // A chain that stops binding after PostOperation() (here Mode() stands for a missing Sync()/Async()): the
+        // context and the projection are still emitted, so the compiler reports the chain's own error rather than
+        // only a CS0246 on OnStepContext, and no VELA021 is added about a capture whose lambda cannot bind.
+        GeneratorHarness.Run run = GeneratorHarness.Execute(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class P : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps() =>
+            RegisterStep().OnCreate().PostOperation().Mode().FilterOn(a => a.Name).WithPostImage(a => a.Name).Handle(OnStep);
+        private void OnStep(OnStepContext ctx) { }
+    }
+}
+");
+        Assert.Contains("Demo_P_OnStepContext.Context.g.cs", run.Sources.Keys);
+        Assert.Contains(run.CompileErrors, e => e.Id == "CS1061" && e.GetMessage().Contains("Mode"));
+        Assert.DoesNotContain(run.CompileErrors, e => e.Id == "CS0246");
+        Assert.DoesNotContain(run.GeneratorDiagnostics, d => d.Id == "VELA021");
+    }
+
+    [Fact]
+    public void A_call_on_an_unrelated_broken_chain_gets_nothing()
+    {
+        // The first call that binds is not a step-builder method: not a Vela chain.
+        GeneratorHarness.Run run = GeneratorHarness.Execute(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    public sealed partial class P : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps() => ""x"".Trim().Mode().WithPostImage(a => a.Name).Handle(OnStep);
+        private void OnStep() { }
+    }
+}
+");
+        Assert.Empty(run.Sources);
+    }
 }

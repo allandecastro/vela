@@ -46,6 +46,13 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed
 
+- A step chain that does not compile after a bound call, such as `OnCreate().PostOperation().FilterOn(...)` without
+  its `Sync()` / `Async()`, still gets its `{Handler}Context` and image projections. The compiler then reports the
+  chain's own error (CS1061 on `FilterOn`); it only showed a CS0246 on `{Handler}Context`, because it drops a
+  method body's errors while the handler's signature has one. No VELA021 is reported on such a chain.
+
+### Fixed
+
 - `vela plan` / `vela apply` find the plugin assembly of a package whose id carries the publisher prefix
   (`zava_Zava.Integrations` ships `Zava.Integrations.dll`). They took `Vela.Messages.dll` instead and reported the
   package as containing no plugin; `--package-assembly` was the only workaround.
