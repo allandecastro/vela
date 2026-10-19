@@ -60,34 +60,39 @@ public static class RolePrivilegeMapper
     }
 
     /// <summary>
-    /// Turns a role's privileges into grants, resolving each privilege id to its (table, type) via
-    /// <paramref name="privileges"/>. Privileges not on any table (miscellaneous) or with no access are skipped;
-    /// a (table, verb) that appears more than once keeps the highest access level.
+    /// Turns a role's privileges into grants, resolving each privilege id to the (table, type) pairs it covers via
+    /// <paramref name="privileges"/>: one privilege can belong to several tables (prvReadActivity covers every
+    /// activity table, prvReadAccount covers account and customeraddress), and each of them gets the grant.
+    /// Privileges not on any table (miscellaneous) or with no access are skipped; a (table, verb) that appears more
+    /// than once keeps the highest access level.
     /// </summary>
     public static IReadOnlyList<RoleGrantModel> ToGrants(
         IEnumerable<(Guid PrivilegeId, int DepthMask)> rolePrivileges,
-        IReadOnlyDictionary<Guid, (string Entity, PrivilegeType Type)> privileges)
+        IReadOnlyDictionary<Guid, IReadOnlyList<(string Entity, PrivilegeType Type)>> privileges)
     {
         Dictionary<(string Entity, string Verb), string> highest = new Dictionary<(string, string), string>();
 
         foreach ((Guid privilegeId, int depthMask) in rolePrivileges)
         {
-            if (!privileges.TryGetValue(privilegeId, out (string Entity, PrivilegeType Type) privilege))
-            {
-                continue;
-            }
-
-            string? verb = Verb(privilege.Type);
             string? level = AccessLevel(depthMask);
-            if (verb == null || level == null || string.IsNullOrWhiteSpace(privilege.Entity))
+            if (level == null || !privileges.TryGetValue(privilegeId, out IReadOnlyList<(string Entity, PrivilegeType Type)>? tables))
             {
                 continue;
             }
 
-            var key = (privilege.Entity, verb);
-            if (!highest.TryGetValue(key, out string? existing) || Rank(level) > Rank(existing))
+            foreach ((string entity, PrivilegeType type) in tables)
             {
-                highest[key] = level;
+                string? verb = Verb(type);
+                if (verb == null || string.IsNullOrWhiteSpace(entity))
+                {
+                    continue;
+                }
+
+                var key = (entity, verb);
+                if (!highest.TryGetValue(key, out string? existing) || Rank(level) > Rank(existing))
+                {
+                    highest[key] = level;
+                }
             }
         }
 

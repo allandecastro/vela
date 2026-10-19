@@ -21,6 +21,14 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- `vela models --roles` / `--solution-roles` give a privilege shared by several tables to each of them. The
+  generated `Roles` kept only one table per privilege, the last one read: a Salesperson role had no grant at all on
+  `account` (they went to `customeraddress`, which shares `prvReadAccount`) and read only `untrackedemail` among the
+  activity tables (they share `prvReadActivity`). About 90 privileges are shared this way (Activity, Account, Product,
+  SdkMessage, Solution, ...). Regenerate `Roles.cs` to pick up the missing grants.
+
 ## [0.27.4] - 2026-10-19 (Vela.Cli)
 
 ### Changed

@@ -56,7 +56,7 @@ internal static class RoleReader
                 $"None of the requested security role(s) were found in the connected environment: {string.Join(", ", roleNames)}.");
         }
 
-        IReadOnlyDictionary<Guid, (string Entity, PrivilegeType Type)> privileges = BuildPrivilegeMap(service);
+        IReadOnlyDictionary<Guid, IReadOnlyList<(string Entity, PrivilegeType Type)>> privileges = BuildPrivilegeMap(service);
         return roots
             .OrderBy(r => r.Value, StringComparer.Ordinal)
             .Select(r => new RoleModel(r.Value, r.Key, RolePrivilegeMapper.ToGrants(ReadRolePrivileges(service, r.Key), privileges)))
@@ -109,14 +109,16 @@ internal static class RoleReader
             .ToList();
     }
 
-    // privilegeId -> (owning table, privilege type), from every table's Privileges metadata. Miscellaneous
-    // (non-table) privileges aren't in any table's collection, so they're naturally excluded from generation.
-    private static IReadOnlyDictionary<Guid, (string Entity, PrivilegeType Type)> BuildPrivilegeMap(IOrganizationService service)
+    // privilegeId -> every (table, privilege type) it appears on, from every table's Privileges metadata. A privilege
+    // can be shared by several tables (the activity tables share prvReadActivity, customeraddress shares
+    // prvReadAccount), so each table is kept. Miscellaneous (non-table) privileges aren't in any table's collection,
+    // so they're naturally excluded from generation.
+    private static IReadOnlyDictionary<Guid, IReadOnlyList<(string Entity, PrivilegeType Type)>> BuildPrivilegeMap(IOrganizationService service)
     {
         RetrieveAllEntitiesResponse response = (RetrieveAllEntitiesResponse)service.Execute(
             new RetrieveAllEntitiesRequest { EntityFilters = EntityFilters.Entity | EntityFilters.Privileges, RetrieveAsIfPublished = true });
 
-        Dictionary<Guid, (string, PrivilegeType)> map = new Dictionary<Guid, (string, PrivilegeType)>();
+        Dictionary<Guid, List<(string Entity, PrivilegeType Type)>> map = new Dictionary<Guid, List<(string Entity, PrivilegeType Type)>>();
         foreach (EntityMetadata entity in response.EntityMetadata)
         {
             if (entity.Privileges == null || string.IsNullOrWhiteSpace(entity.LogicalName))
@@ -126,10 +128,16 @@ internal static class RoleReader
 
             foreach (SecurityPrivilegeMetadata privilege in entity.Privileges)
             {
-                map[privilege.PrivilegeId] = (entity.LogicalName, privilege.PrivilegeType);
+                if (!map.TryGetValue(privilege.PrivilegeId, out List<(string Entity, PrivilegeType Type)>? tables))
+                {
+                    tables = new List<(string Entity, PrivilegeType Type)>();
+                    map[privilege.PrivilegeId] = tables;
+                }
+
+                tables.Add((entity.LogicalName, privilege.PrivilegeType));
             }
         }
 
-        return map;
+        return map.ToDictionary(x => x.Key, x => (IReadOnlyList<(string Entity, PrivilegeType Type)>)x.Value);
     }
 }
