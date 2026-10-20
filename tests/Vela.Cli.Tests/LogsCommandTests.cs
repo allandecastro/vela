@@ -82,6 +82,20 @@ public sealed class LogsCommandTests
         QueryExpression q = LogsCommand.BuildTraceLogQuery(Filters(errorsOnly: false));
 
         Assert.False(Has(q, "exceptiondetails", ConditionOperator.NotNull));
+        Assert.False(Has(q, "exceptiondetails", ConditionOperator.NotEqual));
+    }
+
+    [Fact]
+    public void Trace_query_errors_flag_excludes_rows_with_an_empty_exception()
+    {
+        // Dataverse stores exceptiondetails as "" (not null) on a row without an exception, so NotNull alone keeps
+        // every row: --errors must also require a non-empty value.
+        QueryExpression q = LogsCommand.BuildTraceLogQuery(Filters(errorsOnly: true));
+
+        ConditionExpression notEmpty = q.Criteria.Conditions.Single(
+            c => c.AttributeName == "exceptiondetails" && c.Operator == ConditionOperator.NotEqual);
+        Assert.Equal(string.Empty, notEmpty.Values.Single());
+        Assert.Equal(LogicalOperator.And, q.Criteria.FilterOperator);
     }
 
     // --- BuildSystemJobQuery -------------------------------------------------------------------

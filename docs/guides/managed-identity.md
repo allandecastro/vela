@@ -40,8 +40,9 @@ PluginPipeline pipeline = PluginPipeline.Empty()
     .WithManagedIdentityService(fake);
 ```
 
-Without it, neither harness serves a managed-identity service, so `AcquireManagedIdentityToken` throws as it does on
-an environment without one. `WithService<IManagedIdentityService>(...)` is rejected: use `WithManagedIdentityService`.
+Without it, neither harness serves a managed-identity service, so `AcquireManagedIdentityToken` throws an
+`InvalidPluginExecutionException` as it does on an environment without one; the message names
+`WithManagedIdentityService(...)` for a test and links the Learn page on linking a managed identity for Dataverse. `WithService<IManagedIdentityService>(...)` is rejected: use `WithManagedIdentityService`.
 
 ## See also
 

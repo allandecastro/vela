@@ -13,6 +13,12 @@ namespace Vela.Context
     /// </summary>
     public sealed class LocalPluginContext : ILocalPluginContext, IServiceResolverContext
     {
+        // Thrown by both AcquireManagedIdentityToken overloads when the host serves no IManagedIdentityService.
+        internal const string ManagedIdentityUnavailableMessage =
+            "No IManagedIdentityService was provided to this plug-in. In a test, give the harness one with "
+            + "WithManagedIdentityService(...). On Dataverse, the plug-in package or assembly must be linked to a "
+            + "managed identity record: see https://learn.microsoft.com/power-platform/admin/set-up-managed-identity.";
+
         private readonly ITracingService _safeTracingService;
         private readonly string? _pluginTypeName;
         private string? _currentHandler;
@@ -468,7 +474,7 @@ namespace Vela.Context
         {
             scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
             return ManagedIdentityService?.AcquireToken(scopes)
-                ?? throw new InvalidPluginExecutionException("IManagedIdentityService is unavailable.");
+                ?? throw new InvalidPluginExecutionException(ManagedIdentityUnavailableMessage);
         }
 
         /// <inheritdoc />
@@ -476,7 +482,7 @@ namespace Vela.Context
         {
             scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
             return ManagedIdentityService?.AcquireToken(applicationUserId, scopes)
-                ?? throw new InvalidPluginExecutionException("IManagedIdentityService is unavailable.");
+                ?? throw new InvalidPluginExecutionException(ManagedIdentityUnavailableMessage);
         }
 
         private static Guid? NullIfEmpty(Guid? value) => value == Guid.Empty ? null : value;
