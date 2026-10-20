@@ -31,6 +31,22 @@ public sealed class ManagedIdentityTests
         InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
             () => context.AcquireManagedIdentityToken(new[] { "https://graph.microsoft.com/.default" }));
 
-        Assert.Contains("IManagedIdentityService is unavailable", ex.Message);
+        Assert.Equal(ExpectedUnavailableMessage, ex.Message);
+    }
+
+    private const string ExpectedUnavailableMessage =
+        "No IManagedIdentityService was provided to this plug-in. In a test, give the harness one with WithManagedIdentityService(...). On Dataverse, the plug-in package or assembly must be linked to a managed identity record: see https://learn.microsoft.com/power-platform/admin/set-up-managed-identity.";
+
+    [Fact]
+    public void AcquireManagedIdentityToken_BothOverloadsExplainHowToProvideTheService()
+    {
+        LocalPluginContext context = new PluginContextBuilder().Build();
+        string[] scopes = { "https://graph.microsoft.com/.default" };
+
+        Assert.Equal(ExpectedUnavailableMessage,
+            Assert.Throws<InvalidPluginExecutionException>(() => context.AcquireManagedIdentityToken(scopes)).Message);
+        Assert.Equal(ExpectedUnavailableMessage,
+            Assert.Throws<InvalidPluginExecutionException>(() => context.AcquireManagedIdentityToken(Guid.NewGuid(), scopes)).Message);
+        Assert.Equal(LocalPluginContext.ManagedIdentityUnavailableMessage, ExpectedUnavailableMessage);
     }
 }

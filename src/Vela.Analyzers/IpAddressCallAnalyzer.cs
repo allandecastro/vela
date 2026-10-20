@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
 
@@ -14,10 +16,13 @@ namespace Vela.Analyzers
     /// <c>http(s)://[::1]/...</c> fails at runtime. Checked: the string given to <c>new Uri(...)</c>, to an
     /// <c>HttpClient</c> / <c>HttpRequestMessage</c> / <c>WebRequest</c> / <c>HttpWebRequest</c> member or constructor
     /// (<c>BaseAddress = new Uri(...)</c> goes through the <c>Uri</c>), when it is a compile-time constant, or an
-    /// interpolated string / concatenation whose constant prefix already holds the whole host. The host is parsed with
-    /// <see cref="Uri"/>, not guessed: only <c>http</c> / <c>https</c> URIs whose host is an IPv4 or IPv6 literal are
-    /// reported, so a named host (<c>localhost</c> included), a relative or non-HTTP string, or a URI built from a
-    /// variable is left alone.
+    /// interpolated string / concatenation whose constant prefix already holds the whole host. A local is followed to
+    /// its declaration initializer (through a chain of such locals too) when nothing else in the member writes it: no
+    /// assignment, compound assignment, increment, deconstruction, <c>ref</c> / <c>out</c> / <c>in</c> argument or
+    /// <c>ref</c> alias. The host is parsed with <see cref="Uri"/>, not guessed: only <c>http</c> / <c>https</c> URIs
+    /// whose host is an IPv4 or IPv6 literal are reported, so a named host (<c>localhost</c> included), a relative or
+    /// non-HTTP string, or a URI built from a field, a parameter, a method result or a local written after its
+    /// declaration is left alone.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class IpAddressCallAnalyzer : DiagnosticAnalyzer
@@ -94,11 +99,7 @@ namespace Vela.Analyzers
         /// <summary>The IP host of <paramref name="value"/> when it is an http(s) URI to an IP literal, else null.</summary>
         internal static string? IpHost(IOperation value)
         {
-            while (value is IConversionOperation conversion)
-            {
-                value = conversion.Operand;
-            }
-
+            value = Resolve(value);
             if (value.ConstantValue is { HasValue: true, Value: string constant })
             {
                 return IpHostOf(constant);
@@ -127,15 +128,73 @@ namespace Vela.Analyzers
 
                     return text.Length == 0 ? null : text.ToString();
                 case IBinaryOperation { OperatorKind: BinaryOperatorKind.Add } binary:
-                    IOperation left = binary.LeftOperand;
-                    while (left is IConversionOperation conversion)
-                    {
-                        left = conversion.Operand;
-                    }
-
+                    IOperation left = Resolve(binary.LeftOperand);
                     return left.ConstantValue is { HasValue: true, Value: string constant } ? constant : ConstantPrefix(left);
                 default:
                     return null;
+            }
+        }
+
+        // The value behind conversions and single-assignment locals: string url = "..."; new Uri(url) reads the literal.
+        private static IOperation Resolve(IOperation value)
+        {
+            var seen = new HashSet<ILocalSymbol>(SymbolEqualityComparer.Default);
+            while (true)
+            {
+                while (value is IConversionOperation conversion)
+                {
+                    value = conversion.Operand;
+                }
+
+                if (value is not ILocalReferenceOperation reference || !seen.Add(reference.Local) ||
+                    InitializerOfUnwrittenLocal(reference) is not IOperation initializer)
+                {
+                    return value;
+                }
+
+                value = initializer;
+            }
+        }
+
+        // The declaration initializer of the referenced local when nothing else in its member writes it, else null.
+        private static IOperation? InitializerOfUnwrittenLocal(ILocalReferenceOperation reference)
+        {
+            ILocalSymbol local = reference.Local;
+            IOperation root = reference;
+            while (root.Parent is IOperation parent)
+            {
+                root = parent;
+            }
+
+            IOperation? initializer = null;
+            foreach (IOperation operation in root.Descendants())
+            {
+                switch (operation)
+                {
+                    case IVariableDeclaratorOperation declarator when SymbolEqualityComparer.Default.Equals(declarator.Symbol, local):
+                        initializer = declarator.GetVariableInitializer()?.Value;
+                        break;
+                    case ILocalReferenceOperation other when SymbolEqualityComparer.Default.Equals(other.Local, local) && IsWritten(other):
+                        return null;
+                }
+            }
+
+            return initializer;
+        }
+
+        // A reference that may change the local: assigned (also compound or ??=), incremented, part of a tuple (a
+        // deconstruction target), passed by ref / out / in, or aliased by ref (ref string r = ref url).
+        private static bool IsWritten(ILocalReferenceOperation reference)
+        {
+            switch (reference.Parent)
+            {
+                case IAssignmentOperation assignment when assignment.Target == reference:
+                case IIncrementOrDecrementOperation:
+                case ITupleOperation:
+                case IArgumentOperation { Parameter.RefKind: not RefKind.None }:
+                    return true;
+                default:
+                    return reference.Syntax.Parent is RefExpressionSyntax;
             }
         }
 

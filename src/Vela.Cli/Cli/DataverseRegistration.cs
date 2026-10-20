@@ -182,7 +182,7 @@ internal static partial class DataverseRegistration
 {
     QueryExpression query = new QueryExpression("pluginassembly")
     {
-        ColumnSet = new ColumnSet("pluginassemblyid", "name", "createdon", "modifiedon")
+        ColumnSet = new ColumnSet("pluginassemblyid", "name", "createdon", "modifiedon", "packageid")
     };
     query.Criteria.AddCondition("name", ConditionOperator.Equal, assemblyName);
     Entity[] candidates = service.RetrieveAll(query).ToArray();

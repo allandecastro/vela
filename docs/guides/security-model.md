@@ -53,8 +53,10 @@ var crm = new InMemoryOrganizationService()
   - **Reparent** cascade: when the child is created under a parent, or its lookup is moved to one, it gets a grant
     for the parent's owner (user or team; the owner's effective rights on the parent) and for every principal the
     parent is already shared with, explicitly or by inheritance (that grant's rights). Moving the child replaces
-    the grants from its previous parent. A seeded child (`Seed`) is treated like a created one, so configure
-    `WithSecurity` first.
+    the grants from its previous parent. A seeded child (`Seed`) is treated like a created one, whatever the setup
+    order: its grants are derived again when `WithSecurity`, a relationship or a `WithSharedRecord` comes after the
+    `Seed`, so a share set up on the parent is inherited by a child seeded before it. A child created with `Create`
+    keeps the grants it got when it was created.
   - **Share** cascade: `GrantAccess`/`ModifyAccess` on the parent adds/replaces an inherited grant on its children
     in scope (recursively); `RevokeAccess` with the **Unshare** cascade removes it, leaving the children's own shares.
   - Like a share, an inherited grant only counts for a privilege the principal holds on the child table. Role

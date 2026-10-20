@@ -59,14 +59,15 @@ shape, or is removed. A new field is added without a version change, so read the
 | `mode` | `plan`; for `apply`: `apply-execute` (finished, including "no changes"), `apply-not-converged` (every write ran but the environment still differs; `summary` and `diff` show what remains, exit 5) or `apply-failed` (stopped mid-run, exit 7). |
 | `environment` | `--environment`, else `--url`. |
 | `hasChanges` | `true` when apply would write anything: a registration change, a package publish, or a component to add to `--solution`. Use this, not `summary`, to decide whether to apply. |
-| `summary` | Counts of the registration diff (steps, Custom APIs, and web resources on a `--webresources` run): the same numbers as `diff.summary` and the human `summary: +N -N ~N` line. It deliberately excludes the `package` operations and every `add-to-solution` operation, so it can be lower than the number of `operations[]` (above, `added` is 1 for three operations), and it can be all zero while `hasChanges` is `true` (a code-only rebuild). Count `operations[]` by `action` and `kind` for every write. After a successful apply it is what remains (normally all zero), which is how `apply-not-converged` is decided. |
-| `operations[]` | Every write apply would perform. `action` is `create`, `update`, `delete` or `add-to-solution`; `kind` is `step`, `custom-api`, `web-resource`, `package`, `assembly`, `custom-api-parameter` or `custom-api-response-property`; `type` is the plugin type, unique name or package name. |
+| `summary` | Counts of the registration diff (steps, Custom APIs, and web resources on a `--webresources` run): the same numbers as `diff.summary` and the human `summary: +N -N ~N` line. It deliberately excludes the `package` operations, every `add-to-solution` operation and the managed-identity `link` operations, so it can be lower than the number of `operations[]` (above, `added` is 1 for three operations), and it can be all zero while `hasChanges` is `true` (a code-only rebuild, a pending link). Count `operations[]` by `action` and `kind` for every write. After a successful apply it is what remains (normally all zero), which is how `apply-not-converged` is decided. |
+| `operations[]` | Every write apply would perform. `action` is `create`, `update`, `delete`, `add-to-solution` or `link` (a `package` linked to `--managed-identity`); `kind` is `step`, `custom-api`, `web-resource`, `package`, `assembly`, `custom-api-parameter` or `custom-api-response-property`; `type` is the plugin type, unique name or package name. |
 | `diff` | The full before/after definitions. `added` / `removed` items carry `definition`; `changed` items carry `before` and `after`. Secure configuration values appear only as a keyed digest, never in clear. A local step scoped with `ForRelationship(...)` carries `relationships` (the relationship schema names). It is absent from live definitions and from steps without a scope, and it is not compared (see [Plan & Apply](../guides/plan-apply.md)). |
 | `diagnostics[]` | Warnings: rank collisions, a declared secure configuration without a value, a Custom API name without the solution's publisher prefix. `--strict` fails (exit 4) when this array is not empty. |
 | `info[]` | Information that is not a problem, such as an assembly not yet in Dataverse on a first deployment. Never fails `--strict`. |
 | `unmanaged[]` | Plugin types in the deployed assembly that Vela does not own (classic `IPlugin` / `CodeActivity`); their registrations are left untouched. Information, not a warning. |
 | `notes[]` | Free text for humans. Do not parse it. |
 | `executed` | `apply` only: what the run did, from the pre-apply diff. |
+| `managedIdentity` | Only with `--managed-identity`: `id` (the option) and `packages[]`, one per plugin package the run publishes, with `package` (its name in Dataverse), `status` (`linked`: already that managed identity; `link`: not linked yet, or created by this apply; `change`: linked to another one) and, for `change`, `currentManagedIdentityId`. A `link` or `change` package is also a `link` operation and counts in `hasChanges`. After an apply, it is the state read back (normally all `linked`). |
 
 `executed` on `apply-execute`:
 
@@ -75,7 +76,19 @@ shape, or is removed. A new field is added without a version change, so read the
   "created": 2, "updated": 1, "deleted": 0,
   "packageRepublished": true,
   "addedToSolution": 3,
+  "linkedToManagedIdentity": 0,
   "byKind": [ { "kind": "step", "created": 2, "updated": 1, "deleted": 0 } ]
+}
+```
+
+`managedIdentity` with `--managed-identity`:
+
+```json
+"managedIdentity": {
+  "id": "0b9a3c1e-2222-4a2b-9c3d-000000000002",
+  "packages": [
+    { "package": "zava_Zava.Integrations", "status": "change", "currentManagedIdentityId": "0b9a3c1e-1111-4a2b-9c3d-000000000001" }
+  ]
 }
 ```
 

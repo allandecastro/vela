@@ -492,7 +492,7 @@ public sealed class DataverseRegistrationReadShapeTests
     }
 
     [Fact]
-    public void GetPluginAssembly_queries_by_name_with_timestamp_columns()
+    public void GetPluginAssembly_queries_by_name_with_timestamp_and_package_columns()
     {
         QueryExpression? captured = null;
         var svc = new TestSupport.FakeOrgService
@@ -503,7 +503,7 @@ public sealed class DataverseRegistrationReadShapeTests
         DataverseRegistration.GetPluginAssembly(svc, "Zava.Plugins");
 
         Assert.Equal("pluginassembly", captured!.EntityName);
-        Assert.Equal(new[] { "pluginassemblyid", "name", "createdon", "modifiedon" }, captured.ColumnSet.Columns);
+        Assert.Equal(new[] { "pluginassemblyid", "name", "createdon", "modifiedon", "packageid" }, captured.ColumnSet.Columns);
         ConditionExpression c = Assert.Single(captured.Criteria.Conditions);
         Assert.Equal("name", c.AttributeName);
         Assert.Equal("Zava.Plugins", c.Values.Single());

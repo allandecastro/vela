@@ -85,7 +85,13 @@ internal static partial class DataverseRegistration
                 continue;
             }
 
-            candidates.Add(new SolutionMembershipAction("assembly", assemblyName, PluginAssemblyComponentType, assembly.Id));
+            // The assembly of a plug-in package travels with the package: Dataverse refuses to add it to a solution on
+            // its own ("cannot be exported as it is part of a Plugin Package", verified live), so only the package is.
+            if (assembly.GetAttributeValue<EntityReference>("packageid") == null)
+            {
+                candidates.Add(new SolutionMembershipAction("assembly", assemblyName, PluginAssemblyComponentType, assembly.Id));
+            }
+
             Guid[] typeIds = GetPluginTypes(service, assembly.Id)
                 .Where(t => !unmanaged.Contains(t.Value))
                 .Select(t => t.Key)

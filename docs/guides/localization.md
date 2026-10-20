@@ -5,27 +5,35 @@ Surface messages, in particular business errors, in the user's language from a p
 language and then `DefaultLanguageCode`, formats it with `string.Format`, and caches labels so a run does not query
 per message.
 
-```csharp
-using Vela.Context;
-using Vela.Localization;
+## Register the project's messages once
 
-// Register sources once, in the plugin's ConfigureServices override:
-protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context) =>
-    context.GetRequiredService<IMessageService>()
-        .AddSource(new DictionaryMessageSource()
-            .Add(1033, "ERR_REQUIRED", "The field {0} is required.")
-            .Add(1036, "ERR_REQUIRED", "Le champ {0} est obligatoire."));
+Messages belong to the project, not to one plugin, so register their source once for the whole assembly with an
+[`IServiceRegistrar`](dependency-injection.md#share-services-across-the-assembly). Keep the keys and the source
+in one class:
 
-// In the handler, throw a localized business error:
-throw ctx.BusinessError("ERR_REQUIRED", "name");
-// or just resolve the text:
-string text = ctx.GetMessage("ERR_REQUIRED", "name");
-```
+[!code-csharp[](../samples/Vela.DocSamples/LocalizationSample.cs#messages)]
+
+Point the assembly at the registrar, once, at assembly scope:
+
+[!code-csharp[](../samples/Vela.DocSamples/LocalizationSample.cs#registrar)]
+
+The registrar runs for every plugin and Custom API of the assembly before its own `ConfigureServices`, so a handler
+throws a localized business error without registering anything itself:
+
+[!code-csharp[](../samples/Vela.DocSamples/LocalizationSample.cs#plugin)]
+
+`ctx.GetMessage(key, args)` resolves the text without throwing it. The key constants make a typo a compile error,
+and switching the project to another source (a [Dataverse labels table](#dataverse-labels-table) or
+[String (RESX) web resources](#string-resx-web-resources)) changes only the registrar.
+
+A plugin can still add a source in its own `ConfigureServices` override for keys only it uses. Sources are consulted
+in the order they are added, and the registrar's comes first, so a key the project source defines keeps the
+project's text.
 
 ## Message sources
 
 Sources are consulted in the order they are added; the first with a template for the requested key and language
-wins. Three sources ship in the box - an in-code dictionary, a Dataverse labels table, and String (RESX) web
+wins. Each snippet below goes in the registrar's `Register`, where `context` is the live plugin context. Three sources ship in the box - an in-code dictionary, a Dataverse labels table, and String (RESX) web
 resources - and you can add your own by implementing `IMessageSource`.
 
 ### In-code dictionary
@@ -116,9 +124,14 @@ only as long as the Dataverse sandbox worker process, so treat it as a performan
 
 ## Testing
 
-Sources resolve through the context's system service, so seed the label rows (and a `usersettings` row for the
-user's language, and an `organization` row with a `languagecode` to exercise the organization fallback) into the
-in-memory org and read them back:
+A plugin test runs the assembly's registrar too, so the project's messages are there. Seed a `usersettings` row to
+pick the user's language:
+
+[!code-csharp[](../samples/Vela.DocSamples/LocalizationSample.cs#test)]
+
+To test a source on its own: sources resolve through the context's system service, so seed the label rows (and a
+`usersettings` row for the user's language, and an `organization` row with a `languagecode` to exercise the
+organization fallback) into the in-memory org and read them back:
 
 ```csharp
 Guid user = Guid.NewGuid();
