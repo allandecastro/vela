@@ -272,9 +272,10 @@ namespace Vela.Testing
         // is moved to one, it gets inherited grants for the parent's OWNER (bounded by the owner's effective rights on
         // the parent — never Create) and for every principal the parent is ALREADY shared with, explicitly or by
         // inheritance, with that grant's mask. The grants from the previous parent are dropped first. A share made on
-        // the parent later does not flow down here (only the Share cascade carries it). Only the record whose parent
-        // changed is re-derived: its existing descendants keep their grants (multi-level re-derivation is not
-        // modelled). Role access to the parent confers nothing. Needs a security model to compute the owner's rights.
+        // the parent later does not flow down here (only the Share cascade carries it; a WithSharedRecord re-derives the
+        // seeded rows, see DeriveSeededAccess). Only the record whose parent changed is re-derived: its existing
+        // descendants keep their grants (multi-level re-derivation is not modelled). Role access to the parent confers
+        // nothing. Needs a security model to compute the owner's rights.
         private void DeriveInheritedAccess(Entity child)
         {
             if (_security == null)
@@ -312,6 +313,38 @@ namespace Vela.Testing
                     _sharing.GrantInherited(childRef, share);
                 }
             }
+        }
+
+        // Re-derives the inherited access of every seeded row still derived from the setup (see _seededRows), each after
+        // the seeded parent it inherits from, so neither the setup order nor the order of the rows in a Seed matters.
+        // Clearing and re-deriving makes a repeat call idempotent: no grant is counted twice.
+        private void DeriveSeededAccess()
+        {
+            HashSet<Guid> derived = new HashSet<Guid>();
+            foreach (KeyValuePair<Guid, string> row in _seededRows)
+            {
+                DeriveSeededAccess(row.Value, row.Key, derived);
+            }
+        }
+
+        private void DeriveSeededAccess(string entityName, Guid id, HashSet<Guid> derived)
+        {
+            // A row is derived once per pass (which also stops a cycle of parents); a row deleted since is skipped.
+            if (!derived.Add(id) || StoredOrNull(entityName, id) is not Entity row)
+            {
+                return;
+            }
+
+            foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ParentRelationshipsOf(entityName))
+            {
+                if (row.GetAttributeValue<EntityReference>(relationship.ReferencingAttribute) is EntityReference parent &&
+                    _seededRows.TryGetValue(parent.Id, out string? parentEntity))
+                {
+                    DeriveSeededAccess(parentEntity, parent.Id, derived);
+                }
+            }
+
+            DeriveInheritedAccess(row);
         }
 
         // Re-derives the record's inherited access when an Update moved one of its Reparent-cascading lookups to
@@ -689,6 +722,7 @@ namespace Vela.Testing
                     }
 
                     EntityReference childRef = new EntityReference(relationship.ReferencingEntity, child.Id);
+                    _seededRows.Remove(child.Id); // its grants now come from a run-time cascade too
                     if (replace)
                     {
                         _sharing.ModifyInherited(childRef, access);
@@ -729,6 +763,7 @@ namespace Vela.Testing
                         continue;
                     }
 
+                    _seededRows.Remove(child.Id);
                     _sharing.RevokeInherited(new EntityReference(relationship.ReferencingEntity, child.Id), principal);
                     CascadeUnshare(relationship.ReferencingEntity, child.Id, principal, visited);
                 }
