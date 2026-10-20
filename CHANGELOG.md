@@ -21,6 +21,19 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- `AcquireManagedIdentityToken` (both overloads), when no `IManagedIdentityService` is available, throws a message
+  that says how to provide one: `WithManagedIdentityService(...)` in a Vela.Testing harness, or a managed identity
+  linked to the plug-in package or assembly on Dataverse (with a link to the Learn page). It said only
+  "IManagedIdentityService is unavailable.". (Vela.Plugins)
+
+### Fixed
+
+- `vela logs --errors` keeps only the trace log rows that carry an exception. It filtered on `exceptiondetails` not
+  null, but Dataverse stores an empty string on a row without an exception, so every row was kept (and shown without
+  an exception). The query now also requires a non-empty `exceptiondetails`.
+
 ### Docs
 
 - The localization guide registers the project's message source once, in an `[assembly: VelaServiceRegistrar]`, with
