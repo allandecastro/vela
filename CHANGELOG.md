@@ -32,6 +32,42 @@ All notable changes to Vela are documented here. The format is based on
   `managedidentity` record fails the run (exit 4) before anything is written. Without the option the link is neither
   read nor changed. The link was set by hand after every first deployment.
 
+### Changed
+
+- `AcquireManagedIdentityToken` (both overloads), when no `IManagedIdentityService` is available, throws a message
+  that says how to provide one: `WithManagedIdentityService(...)` in a Vela.Testing harness, or a managed identity
+  linked to the plug-in package or assembly on Dataverse (with a link to the Learn page). It said only
+  "IManagedIdentityService is unavailable.". (Vela.Plugins)
+
+### Fixed
+
+- VELA025 (outbound call to an IP address) now reads a local through its declaration: `string url =
+  "http://10.0.0.1/api"; client.GetAsync(url);` (or `new Uri(url)`, `new HttpRequestMessage(method, url)`) is
+  reported, as is a chain of locals (`var path = root + "orders";`). A local that is written anywhere else in its
+  method (assigned, also in a branch or a lambda, compound-assigned, incremented, deconstructed into, passed by `ref` /
+  `out` / `in`, aliased by `ref`), a field and a parameter stay unreported.
+- `vela logs --errors` keeps only the trace log rows that carry an exception. It filtered on `exceptiondetails` not
+  null, but Dataverse stores an empty string on a row without an exception, so every row was kept (and shown without
+  an exception). The query now also requires a non-empty `exceptiondetails`.
+
+### Docs
+
+- The localization guide registers the project's message source once, in an `[assembly: VelaServiceRegistrar]`, with
+  the keys and the source in one class, instead of in each plugin's `ConfigureServices`. Its samples are compiled and
+  tested (`docs/samples/Vela.DocSamples/LocalizationSample.cs`).
+- The Markdown copies of the pages listed in `docs/llms.txt` (and `llms-full.txt`) inline the code a page includes
+  from the compiled samples. They showed the raw `[!code-csharp[](...)]` include instead.
+
+### Fixed (Framework)
+
+- Vela.Testing: a seeded child of a parental relationship gets its inherited access whatever the setup order. Since
+  0.41.0 the grants were derived only when `Seed` ran, so a `Seed` before `WithSecurity(...)` or before the
+  relationship was declared gave the child nothing, and a `WithSharedRecord` on the parent after the child was
+  seeded did not reach it. The seeded rows are now derived again on each `WithSecurity`, `WithRelationship` /
+  `WithParentalRelationship` / `WithReferentialRelationship` and `WithSharedRecord` call; a row a run-time
+  Share/Unshare cascade has reached keeps that grant. Within one `Seed`, a grandchild listed before its parent now
+  inherits through it too.
+
 ## [0.27.5] - 2026-10-19 (Vela.Cli)
 
 ### Fixed

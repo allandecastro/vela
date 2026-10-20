@@ -77,6 +77,11 @@ namespace Vela.Testing
         // security model; only consulted for enforcement when _security is set.
         private readonly SharingTable _sharing = new SharingTable();
 
+        // Rows stored by Seed (id -> table) whose inherited access is still derived from the setup: re-derived whenever
+        // WithSecurity, a relationship or a WithSharedRecord is declared, so setup order does not matter. A run-time
+        // Share/Unshare cascade that reaches a row removes it, so a later setup call does not overwrite that grant.
+        private Dictionary<Guid, string> _seededRows = new Dictionary<Guid, string>();
+
         // Access-team grants (AddUserToRecordTeam) and the registered team templates (template id -> rights).
         private readonly AccessTeamGrants _accessTeams = new AccessTeamGrants();
         private readonly Dictionary<Guid, AccessRights> _accessTeamTemplates = new Dictionary<Guid, AccessRights>();
@@ -140,6 +145,7 @@ namespace Vela.Testing
             configure(configuration);
             _security = configuration.Build(_sharing, _accessTeams);
             MaterializeSecurityTables();
+            DeriveSeededAccess();
             return this;
         }
 
@@ -173,12 +179,14 @@ namespace Vela.Testing
         /// Pre-shares a record with a principal (arrange helper, like <see cref="Seed"/>): grants the principal
         /// (a user or team) the given <paramref name="rights"/> on the target, without going through the
         /// GrantAccess message or its Share-privilege check. Only takes effect once <see cref="WithSecurity"/> is set,
-        /// and only for the privileges the principal holds on the table. It shares that record alone: nothing
-        /// cascades to existing children, but a child created or seeded under it afterwards inherits the share.
+        /// and only for the privileges the principal holds on the table. A child seeded under the record inherits the
+        /// share through the Reparent cascade, whether it is seeded before or after this call, and so does a child
+        /// created under it afterwards; a child already created under it gets nothing.
         /// </summary>
         public InMemoryOrganizationService WithSharedRecord(EntityReference target, EntityReference principal, AccessRights rights)
         {
             _sharing.Grant(target, new PrincipalAccess { Principal = principal, AccessMask = rights });
+            DeriveSeededAccess();
             return this;
         }
 
@@ -326,6 +334,7 @@ namespace Vela.Testing
 
             _oneToMany.Add(new OneToManyRegistry.OneToMany(
                 $"{referencedEntity}_{referencingEntity}", referencedEntity, referencingEntity, referencingAttribute, cascade));
+            DeriveSeededAccess();
             return this;
         }
 
@@ -444,12 +453,11 @@ namespace Vela.Testing
         /// <summary>
         /// Pre-populates the store without going through Create (ids are assigned when empty). With a security model
         /// configured, a seeded child of a parental relationship gets the inherited access a Create under its parent
-        /// would give it, so call <see cref="WithSecurity"/> (and <see cref="WithSharedRecord"/> for parent shares
-        /// the child should inherit) before seeding.
+        /// would give it. The setup may come in any order: the seeded rows are re-derived when
+        /// <see cref="WithSecurity"/>, a relationship or a <see cref="WithSharedRecord"/> is declared after them.
         /// </summary>
         public InMemoryOrganizationService Seed(params Entity[] entities)
         {
-            List<Entity> seeded = new List<Entity>();
             foreach (Entity entity in entities)
             {
                 Entity stored = EntityValues.Clone(entity);
@@ -459,16 +467,11 @@ namespace Vela.Testing
                 }
 
                 Table(stored.LogicalName)[stored.Id] = stored;
-                seeded.Add(stored);
+                _seededRows[stored.Id] = stored.LogicalName;
             }
 
-            // A seeded child gets the inherited access a Create under its parent would give it, once every row of the
-            // call is stored (so a parent may be listed after its child); rows are derived in the order given.
-            foreach (Entity stored in seeded)
-            {
-                DeriveInheritedAccess(stored);
-            }
-
+            // Derived once every row of the call is stored, so a parent may be listed after its child.
+            DeriveSeededAccess();
             return this;
         }
 
@@ -1825,7 +1828,8 @@ namespace Vela.Testing
         }
 
         // Captures ALL mutable stores so a transaction/operation rollback is complete: the record store, the sharing
-        // (PoA) table, the access-team grants, the file blobs, and the row-version counter. A partial snapshot would
+        // (PoA) table, the access-team grants, the seeded rows still derived from the setup, the file blobs, and the
+        // row-version counter. A partial snapshot would
         // leave a rolled-back batch with, say, a share or a file that its failed write had created. Auto-number
         // counters and open upload/download sessions are left out on purpose: the platform does not roll an
         // auto-number back either (a failed create still consumes its number), and a block upload is not part of
@@ -1836,6 +1840,7 @@ namespace Vela.Testing
             {
                 Sharing = _sharing.Clone(),
                 AccessTeams = _accessTeams.Clone(),
+                SeededRows = new Dictionary<Guid, string>(_seededRows),
                 Version = _version,
             };
 
@@ -1875,6 +1880,9 @@ namespace Vela.Testing
             _sharing.CopyFrom(snapshot.Sharing);
             _accessTeams.CopyFrom(snapshot.AccessTeams);
 
+            // A rolled-back cascade gives the seeded rows it reached back to the setup.
+            _seededRows = new Dictionary<Guid, string>(snapshot.SeededRows);
+
             _files.Clear();
             foreach (KeyValuePair<Guid, FileBlob> file in snapshot.Files)
             {
@@ -1906,6 +1914,8 @@ namespace Vela.Testing
             public SharingTable Sharing { get; set; } = new SharingTable();
 
             public AccessTeamGrants AccessTeams { get; set; } = new AccessTeamGrants();
+
+            public Dictionary<Guid, string> SeededRows { get; set; } = new Dictionary<Guid, string>();
 
             public long Version { get; set; }
         }

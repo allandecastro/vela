@@ -155,7 +155,7 @@ vela logs --since 2h --type AccountNamePlugin --json
 ```
 
 Filters: `--top <n>` (1-200, default 20, newest first), `--since 30m|2h|3d|<date>`, `--type <plugin type>`,
-`--message <sdk message>`, `--entity <logical name>`, `--correlation <guid>`, `--errors` (trace log only),
+`--message <sdk message>`, `--entity <logical name>`, `--correlation <guid>`, `--errors` (trace log only: rows with a non-empty exception),
 `--full` (do not truncate the trace/exception text). `--json` emits `{ mode, count, logs: [...] }`; the trace text
 and exception are always complete in JSON. Connects with the usual options (`-i` or `--connection-string` /
 client-secret flags); it never writes or deletes anything.
