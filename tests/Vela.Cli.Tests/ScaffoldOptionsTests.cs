@@ -205,6 +205,28 @@ public class ScaffoldOptionsTests
         Assert.Equal("Zava.Integrations", unsigned.IntegrationsPackageId);
     }
 
+    [Fact]
+    public void PluginsPackageId_CarriesTheKnownPublisherPrefix_AndStaysUnprefixedWithoutOne()
+    {
+        // An explicit --publisher-prefix names every plugin package, minimal scaffold included.
+        Assert.True(ScaffoldOptions.TryParse(["VpmiSales", "--prefix", "Vpmi", "--publisher-prefix", "vpmi", "--integrations"], out ScaffoldOptions given, out _));
+        Assert.Equal("vpmi", given.KnownPublisherPrefix);
+        Assert.Equal("vpmi_Vpmi.Plugins", given.PluginsPackageId);
+        Assert.Equal("vpmi_Vpmi.Integrations", given.IntegrationsPackageId);
+
+        // --samples and --managed-identity already rely on the derived prefix, so the packages take it too.
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--samples"], out ScaffoldOptions samples, out _));
+        Assert.Equal("zava_Zava.Plugins", samples.PluginsPackageId);
+        Assert.Equal("zava_Zava.Integrations", samples.IntegrationsPackageId);
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--managed-identity"], out ScaffoldOptions signed, out _));
+        Assert.Equal("zava_Zava.Plugins", signed.PluginsPackageId);
+
+        // A minimal scaffold never guesses: apply --solution adds the solution's prefix.
+        Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava"], out ScaffoldOptions minimal, out _));
+        Assert.Null(minimal.KnownPublisherPrefix);
+        Assert.Equal("Zava.Plugins", minimal.PluginsPackageId);
+    }
+
     [Theory]
     [InlineData("--minimal")]
     [InlineData("--no-demos")]

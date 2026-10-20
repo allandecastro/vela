@@ -58,6 +58,16 @@ All notable changes to Vela are documented here. The format is based on
 - The Markdown copies of the pages listed in `docs/llms.txt` (and `llms-full.txt`) inline the code a page includes
   from the compiled samples. They showed the raw `[!code-csharp[](...)]` include instead.
 
+### Changed (CLI)
+
+- `vela init` names the plugin packages with the publisher prefix when one is known: `--publisher-prefix zava` (or
+  the prefix derived from `--prefix` with `--samples` or `--managed-identity`) gives the package ids
+  `zava_Zava.Plugins` and `zava_Zava.Integrations` (built as `artifacts/zava_Zava.Plugins.1.0.0.nupkg`), so
+  `vela plan` and `vela apply` import them without `--solution` instead of refusing an unprefixed package. The
+  assemblies keep the project names (`Zava.Plugins.dll`). A minimal scaffold without `--publisher-prefix` keeps
+  `Zava.Plugins`, which `vela apply --solution` prefixes as before. The generated README and AGENTS.md name the
+  prefixed package.
+
 ### Fixed (CLI)
 
 - `vela apply --solution` no longer tries to add the assembly of a plug-in package to the solution on its own when
