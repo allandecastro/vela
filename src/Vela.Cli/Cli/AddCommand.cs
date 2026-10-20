@@ -393,6 +393,13 @@ internal static class AddCommand
     private static string MissingFilterMessage(string message) =>
         $"A {message} step needs a filtering attribute: pass --filtering-attributes <Column[,Column]> with the early-bound property name(s), e.g. --filtering-attributes Name. The step then fires only when the request sets one of them.";
 
+    // SetStateRequest is deprecated in favour of an Update of statecode, whose Update steps also run for a caller that
+    // still sends SetStateRequest, so the note points at the Update step.
+    internal const string SetStateDeprecatedNote =
+        "Note: SetStateRequest is deprecated (Microsoft: use an Update of statecode). An Update step filtered on statecode " +
+        "also runs when a caller still sends SetStateRequest: prefer '--message Update --filtering-attributes StateCode'. " +
+        "Keep On<SetStateRequest>() only for logic that needs its own inputs (EntityMoniker, State, Status).";
+
     // The trigger for --message: the curated On{Message}() when Vela models it, else On<XxxRequest>() over the
     // message's request type - the SDK class (fully qualified, so no using is needed) when one ships, otherwise the
     // request `vela models --messages` generates into the models namespace (a note says to generate it).
@@ -405,6 +412,12 @@ internal static class AddCommand
 
         if (SdkMessageClassResolver.TryGetSdkRequestTypeName(message, out string sdkType))
         {
+            // ResolveRequestName already maps the SetStateDynamicEntity sdkmessage to its SetState request.
+            if (message.Equals("SetState", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine(SetStateDeprecatedNote);
+            }
+
             return $"On<{sdkType}>()";
         }
 

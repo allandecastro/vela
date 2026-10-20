@@ -21,6 +21,12 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (CLI)
+
+- `vela add plugin|step --message SetState` (or `SetStateDynamicEntity`) still renders `On<SetStateRequest>()`, and
+  now notes that `SetStateRequest` is deprecated: an Update step filtered on `statecode` (`--message Update
+  --filtering-attributes StateCode`) also runs for a caller that still sends it.
+
 ### Added
 
 - `vela plan` / `vela apply --managed-identity <managedidentityid>` link the published plugin packages to a
