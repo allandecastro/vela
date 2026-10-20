@@ -30,6 +30,11 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed
 
+- VELA025 (outbound call to an IP address) now reads a local through its declaration: `string url =
+  "http://10.0.0.1/api"; client.GetAsync(url);` (or `new Uri(url)`, `new HttpRequestMessage(method, url)`) is
+  reported, as is a chain of locals (`var path = root + "orders";`). A local that is written anywhere else in its
+  method (assigned, also in a branch or a lambda, compound-assigned, incremented, deconstructed into, passed by `ref` /
+  `out` / `in`, aliased by `ref`), a field and a parameter stay unreported.
 - `vela logs --errors` keeps only the trace log rows that carry an exception. It filtered on `exceptiondetails` not
   null, but Dataverse stores an empty string on a row without an exception, so every row was kept (and shown without
   an exception). The query now also requires a non-empty `exceptiondetails`.
