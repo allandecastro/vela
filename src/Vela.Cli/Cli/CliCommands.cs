@@ -78,7 +78,8 @@ internal static class CliCommands
     private static readonly CliOption Environment = new("--environment", CliOptionKind.Value, "Label shown in the output (defaults to --url).", "label");
     private static readonly CliOption Out = new("--out", CliOptionKind.Value, "Write the JSON document to a file instead of stdout.", "file");
     private static readonly CliOption SecureConfig = new("--secure-config", CliOptionKind.Value, "Value of a step's named secure configuration (repeatable); or VELA_SECURE_CONFIG_<NAME>.", "NAME=VALUE|NAME=@file");
-    private static readonly CliOption Strict = new("--strict", CliOptionKind.Flag, "Fail (exit 4) when there is any warning in diagnostics. Info notices never fail.");
+    private static readonly CliOption ManagedIdentity = new("--managed-identity", CliOptionKind.Value, "Link the published plugin package(s) to this managedidentity record of the environment; without it the link is left untouched.", "managedidentityid");
+    private static readonly CliOption Strict =new("--strict", CliOptionKind.Flag, "Fail (exit 4) when there is any warning in diagnostics. Info notices never fail.");
 
     private static readonly CliOption[] ModelsPackageInputs =
     [
@@ -98,7 +99,7 @@ internal static class CliCommands
         new("plan", "Preview registration changes; never writes to Dataverse.",
             ["vela plan (--package <file.nupkg>... | --packages-dir <folder>) [options] [connection options]"],
             [
-                ("Inputs", [.. PackageInputs, Solution, WebResources, SecureConfig]),
+                ("Inputs", [.. PackageInputs, Solution, WebResources, SecureConfig, ManagedIdentity]),
                 ("Output", [Environment, Out, Json, Verbose, Strict,
                     new("--detailed-exitcode", CliOptionKind.Flag, "Exit 8 when the plan has changes to apply, 0 when there is nothing to do.")]),
                 ("Connection", ConnectionOptions),
@@ -113,7 +114,7 @@ internal static class CliCommands
         new("apply", "Apply the plan (prompts for confirmation on a terminal).",
             ["vela apply (--package <file.nupkg>... | --packages-dir <folder>) [options] [connection options]"],
             [
-                ("Inputs", [.. PackageInputs, Solution, WebResources, SecureConfig]),
+                ("Inputs", [.. PackageInputs, Solution, WebResources, SecureConfig, ManagedIdentity]),
                 ("Execution", [
                     new("--auto-approve", CliOptionKind.Flag, "Apply without the confirmation prompt (required in a non-interactive session).", Aliases: ["--yes"]),
                     new("--batch-size", CliOptionKind.Value, "ExecuteMultiple chunk size (1-1000, default 100).", "n"),

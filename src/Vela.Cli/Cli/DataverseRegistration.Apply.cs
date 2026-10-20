@@ -22,7 +22,7 @@ namespace Vela.Cli;
 /// <summary> Applies a registration diff: ordering, package/assembly/type sync, resume report. </summary>
 internal static partial class DataverseRegistration
 {
-    internal static void ApplyDiff(IOrganizationService service, RegistrationDiff diff, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose, IReadOnlyDictionary<string, string>? secureConfigByStepKey = null, int batchChunkSize = DefaultBatchChunkSize)
+    internal static void ApplyDiff(IOrganizationService service, RegistrationDiff diff, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose, IReadOnlyDictionary<string, string>? secureConfigByStepKey = null, int batchChunkSize = DefaultBatchChunkSize, ManagedIdentityPlan? managedIdentity = null)
 {
     // When a solution is given, route every create/update through it so all components (package, assembly, types,
     // steps, images, secure config, Custom APIs and their parameters) are added to it — not just the package.
@@ -57,6 +57,9 @@ internal static partial class DataverseRegistration
     List<RegistrationChange> reimplementedApis = changedApis.Where(IsCustomApiImplementationChange).ToList();
     planned.AddRange(reimplementedApis.Select(x => $"detach custom-api {TryGetString(x.After, "uniqueName") ?? x.Type} from {TryGetString(x.Before, "pluginTypeName")}"));
     planned.Add(publishOperation);
+    // --managed-identity: linked right after the publish, so a package this apply creates is linked too.
+    ManagedIdentityPackageLink[] managedIdentityLinks = managedIdentity?.Pending ?? [];
+    planned.AddRange(managedIdentityLinks.Select(link => DescribeManagedIdentityLink(link.Package, managedIdentity!.Id)));
     planned.AddRange(addedApis.Select(x => $"create custom-api {x.Type}"));
     planned.AddRange(changedApis.Select(x => $"update custom-api {x.Type}"));
     // A plugin type can own several steps, so a step is labelled with its key too: the report names the exact step.
@@ -117,6 +120,12 @@ internal static partial class DataverseRegistration
         }
 
         progress.CompleteNext(); // publish + resolve plugin types
+
+        foreach (ManagedIdentityPackageLink link in managedIdentityLinks)
+        {
+            LinkPluginPackageToManagedIdentity(svc, service, link.Package, managedIdentity!.Id, verbose);
+            progress.CompleteNext();
+        }
 
         // When applying into a solution, Custom API unique names must carry the publisher prefix. Resolve it once
         // (only when there is a Custom API to write) so UpsertCustomApi can validate the prefix locally.
@@ -494,6 +503,85 @@ internal static partial class DataverseRegistration
     return actions;
 }
 
+    // --managed-identity takes the id of a managedidentity record, and each environment has its own: check it exists
+    // here before anything is planned or written. A query rather than a Retrieve, so a missing record reads as "not
+    // found" whatever fault the service raises for an unknown id.
+    internal static void EnsureManagedIdentityExists(IOrganizationService service, Guid managedIdentityId)
+    {
+        QueryExpression query = new QueryExpression("managedidentity")
+        {
+            ColumnSet = new ColumnSet("managedidentityid"),
+            TopCount = 1,
+        };
+        query.Criteria.AddCondition("managedidentityid", ConditionOperator.Equal, managedIdentityId);
+        if (service.RetrieveMultiple(query).Entities.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Managed identity not found: {managedIdentityId}. --managed-identity takes the id (managedidentityid) of a " +
+                "managedidentity record in the target environment; create that record first.");
+        }
+    }
+
+    // The link state of every plugin package the run publishes, against --managed-identity. Read-only: plan lists it,
+    // apply writes the pending links after the publish and reads it again to check it converged. Same package name and
+    // same create/skip decision as ComputePackagePublishActions / UpsertPluginPackage: a package absent from Dataverse is
+    // created by apply, so it is to link; one without registrations is never created, so it is left out.
+    internal static ManagedIdentityPackageLink[] ComputeManagedIdentityLinks(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, Guid managedIdentityId)
+    {
+        if (packagePayloads.Length == 0)
+        {
+            return [];
+        }
+
+        string? solutionPrefix = string.IsNullOrWhiteSpace(solutionUniqueName)
+            ? null
+            : ResolveSolutionCustomizationPrefix(service, solutionUniqueName);
+
+        List<ManagedIdentityPackageLink> links = [];
+        foreach (PluginPackagePayload package in packagePayloads)
+        {
+            string packageName = NormalizePackageNameWithPrefix(package.PackageName, solutionPrefix);
+            Entity? existing = GetPluginPackage(service, packageName, withManagedIdentity: true);
+            if (existing == null)
+            {
+                if (package.HasRegistrations)
+                {
+                    links.Add(new ManagedIdentityPackageLink(packageName, ManagedIdentityPackageLink.Link));
+                }
+
+                continue;
+            }
+
+            Guid? current = existing.GetAttributeValue<EntityReference>("managedidentityid")?.Id;
+            links.Add(current == managedIdentityId
+                ? new ManagedIdentityPackageLink(packageName, ManagedIdentityPackageLink.Linked)
+                : current.HasValue
+                    ? new ManagedIdentityPackageLink(packageName, ManagedIdentityPackageLink.Change, current)
+                    : new ManagedIdentityPackageLink(packageName, ManagedIdentityPackageLink.Link));
+        }
+
+        return links.ToArray();
+    }
+
+    // Sets pluginpackage.managedidentityid, through the caller's writer (solution-scoped under --solution, like every other
+    // write). The package is looked up again: one created by this apply had no id when the plan was computed.
+    internal static void LinkPluginPackageToManagedIdentity(IOrganizationService writer, IOrganizationService reader, string packageName, Guid managedIdentityId, bool verbose)
+    {
+        Entity package = GetPluginPackage(reader, packageName)
+            ?? throw new InvalidOperationException(
+                $"Plugin package '{packageName}' was not found after the publish, so it cannot be linked to managed identity {managedIdentityId}.");
+
+        Entity link = new Entity("pluginpackage", package.Id)
+        {
+            ["managedidentityid"] = new EntityReference("managedidentity", managedIdentityId),
+        };
+        writer.Update(link);
+        LogOperation("package", "link", packageName, $"managed identity {managedIdentityId}", verbose);
+    }
+
+    internal static string DescribeManagedIdentityLink(string packageName, Guid managedIdentityId) =>
+        $"link plugin package {packageName} to managed identity {managedIdentityId}";
+
     internal static string NormalizePackageNameWithPrefix(string packageName, string? solutionPrefix)
 {
     if (string.IsNullOrWhiteSpace(solutionPrefix) || packageName.StartsWith(solutionPrefix + "_", StringComparison.OrdinalIgnoreCase))
@@ -700,13 +788,13 @@ internal static partial class DataverseRegistration
     // The largest block a chunked DownloadBlock serves (4 MB).
     private const long PackageDownloadBlockSize = 4L * 1024 * 1024;
 
-    internal static Entity? GetPluginPackage(IOrganizationService service, string packageName)
+    internal static Entity? GetPluginPackage(IOrganizationService service, string packageName, bool withManagedIdentity = false)
 {
     QueryExpression query = new QueryExpression("pluginpackage")
     {
         // Neither content nor version is read: content reads back empty and version keeps its first value
-        // (PluginPackageMatches compares the stored file instead).
-        ColumnSet = new ColumnSet("pluginpackageid", "name"),
+        // (PluginPackageMatches compares the stored file instead). The managed identity link only for --managed-identity.
+        ColumnSet = withManagedIdentity ? new ColumnSet("pluginpackageid", "name", "managedidentityid") : new ColumnSet("pluginpackageid", "name"),
         TopCount = 1
     };
     query.Criteria.AddCondition("name", ConditionOperator.Equal, packageName);

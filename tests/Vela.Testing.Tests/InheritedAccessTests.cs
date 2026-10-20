@@ -46,9 +46,12 @@ namespace Vela.Testing.Tests
         // Carol (the acting user) and Bob administer everything; Alice holds <paramref name="alice"/> and is the
         // principal whose access each test asserts.
         private static InMemoryOrganizationService Store(CascadeConfiguration contactRelationship, Action<RoleBuilder> alice) =>
+            Secured(alice).WithRelationship("account", "contact", "parentcustomerid", contactRelationship);
+
+        // The same users and roles, with no relationship declared.
+        private static InMemoryOrganizationService Secured(Action<RoleBuilder> alice) =>
             new InMemoryOrganizationService()
                 .WithCurrentUser(Carol)
-                .WithRelationship("account", "contact", "parentcustomerid", contactRelationship)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
                     .Role("admin", r => r
@@ -419,7 +422,28 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void Without_a_security_model_no_inherited_grant_is_recorded()
+        public void A_grandchild_seeded_before_its_parent_inherits_through_it()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            Guid task = Guid.NewGuid();
+            InMemoryOrganizationService svc = Store(ReparentOnly, r => r
+                .Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write)
+                .Grant("contact", AccessLevel.User, Privilege.Read, Privilege.Write)
+                .Grant("task", AccessLevel.User, Privilege.Read))
+                .WithRelationship("contact", "task", "regardingobjectid", ReparentOnly)
+                .Seed(
+                    new Entity("task", task) { ["regardingobjectid"] = new EntityReference("contact", contact) },
+                    new Entity("contact", contact) { ["parentcustomerid"] = new EntityReference("account", account) },
+                    AccountOwnedBy(account, Alice));
+
+            Assert.Equal(AccessRights.ReadAccess, AccessOf(svc, Alice, "task", task));
+        }
+
+        // --- Seeding before the setup it depends on -------------------------------------------------------
+
+        [Fact]
+        public void A_child_seeded_before_WithSecurity_gets_its_inherited_grants()
         {
             Guid account = Guid.NewGuid();
             Guid contact = Guid.NewGuid();
@@ -432,7 +456,145 @@ namespace Vela.Testing.Tests
                     .User(Alice, SalesBu, "alice"));
 
             Assert.Equal(AccessRights.ReadAccess | AccessRights.WriteAccess, AccessOf(svc, Alice, "account", account));
+            Assert.Equal(AccessRights.ReadAccess | AccessRights.WriteAccess, AccessOf(svc, Alice, "contact", contact));
+        }
+
+        [Fact]
+        public void A_child_seeded_before_its_parental_relationship_gets_its_inherited_grants()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = Secured(BasicAccountAndContact)
+                .Seed(AccountOwnedBy(account, Alice), new Entity("contact", contact) { ["parentcustomerid"] = new EntityReference("account", account) });
             Assert.Equal(AccessRights.None, AccessOf(svc, Alice, "contact", contact));
+
+            svc.WithParentalRelationship("account", "contact", "parentcustomerid");
+
+            Assert.Equal(AccessRights.ReadAccess | AccessRights.WriteAccess, AccessOf(svc, Alice, "contact", contact));
+        }
+
+        [Fact]
+        public void A_share_set_up_on_the_parent_after_the_child_is_seeded_is_inherited_through_reparent()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = Store(ReparentOnly, BasicAccountAndContact)
+                .Seed(AccountOwnedBy(account, Bob), new Entity("contact", contact) { ["parentcustomerid"] = new EntityReference("account", account) });
+            Assert.Equal(AccessRights.None, AccessOf(svc, Alice, "contact", contact));
+
+            svc.WithSharedRecord(new EntityReference("account", account), new EntityReference("systemuser", Alice), AccessRights.ReadAccess);
+
+            Assert.Equal(AccessRights.ReadAccess, AccessOf(svc, Alice, "contact", contact));
+            Assert.Empty(ExplicitSharesOf(svc, "contact", contact));
+        }
+
+        [Fact]
+        public void A_child_created_before_a_setup_share_of_its_parent_does_not_inherit_it()
+        {
+            Guid account = Guid.NewGuid();
+            InMemoryOrganizationService svc = Store(ReparentOnly, BasicAccountAndContact).Seed(AccountOwnedBy(account, Bob));
+            Guid contact = svc.Create(ContactUnder(account));
+
+            svc.WithSharedRecord(new EntityReference("account", account), new EntityReference("systemuser", Alice), AccessRights.ReadAccess);
+
+            Assert.Equal(AccessRights.None, AccessOf(svc, Alice, "contact", contact));
+        }
+
+        [Fact]
+        public void A_cascaded_share_on_a_seeded_child_survives_a_later_setup_call()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = Store(ShareOnly, BasicAccountAndContact)
+                .Seed(AccountOwnedBy(account, Bob), new Entity("contact", contact) { ["parentcustomerid"] = new EntityReference("account", account) });
+            Share(svc, account, Alice, AccessRights.ReadAccess);
+
+            svc.WithSharedRecord(new EntityReference("account", account), new EntityReference("systemuser", Bob), AccessRights.WriteAccess);
+
+            Assert.Equal(AccessRights.ReadAccess, AccessOf(svc, Alice, "contact", contact));
+        }
+
+        [Fact]
+        public void A_cascaded_unshare_on_a_seeded_grandchild_survives_a_later_setup_call()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            Guid task = Guid.NewGuid();
+            InMemoryOrganizationService svc = Store(Parental, r => r
+                .Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write)
+                .Grant("contact", AccessLevel.User, Privilege.Read, Privilege.Write)
+                .Grant("task", AccessLevel.User, Privilege.Read))
+                .WithParentalRelationship("contact", "task", "regardingobjectid")
+                .Seed(
+                    AccountOwnedBy(account, Bob),
+                    new Entity("contact", contact) { ["parentcustomerid"] = new EntityReference("account", account) },
+                    new Entity("task", task) { ["regardingobjectid"] = new EntityReference("contact", contact) })
+                .WithSharedRecord(new EntityReference("account", account), new EntityReference("systemuser", Alice), AccessRights.ReadAccess);
+            Assert.Equal(AccessRights.ReadAccess, AccessOf(svc, Alice, "task", task));
+
+            // Revoking on the contact removes the task's inherited grant; the contact keeps the one it inherited.
+            svc.Execute(new RevokeAccessRequest
+            {
+                Target = new EntityReference("contact", contact),
+                Revokee = new EntityReference("systemuser", Alice),
+            });
+            svc.WithSharedRecord(new EntityReference("account", account), new EntityReference("systemuser", Bob), AccessRights.WriteAccess);
+
+            Assert.Equal(AccessRights.ReadAccess, AccessOf(svc, Alice, "contact", contact));
+            Assert.Equal(AccessRights.None, AccessOf(svc, Alice, "task", task));
+        }
+
+        [Fact]
+        public void A_rolled_back_cascade_leaves_the_seeded_child_re_derivable()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = Store(Parental, BasicAccountAndContact)
+                .Seed(AccountOwnedBy(account, Bob), new Entity("contact", contact) { ["parentcustomerid"] = new EntityReference("account", account) });
+
+            ExecuteTransactionRequest tx = new ExecuteTransactionRequest { Requests = new OrganizationRequestCollection() };
+            tx.Requests.Add(new GrantAccessRequest
+            {
+                Target = new EntityReference("account", account),
+                PrincipalAccess = new PrincipalAccess { Principal = new EntityReference("systemuser", Alice), AccessMask = AccessRights.WriteAccess },
+            });
+            tx.Requests.Add(new DeleteRequest { Target = new EntityReference("account", Guid.NewGuid()) }); // does not exist -> throws
+            Assert.ThrowsAny<Exception>(() => svc.Execute(tx));
+
+            svc.WithSharedRecord(new EntityReference("account", account), new EntityReference("systemuser", Alice), AccessRights.ReadAccess);
+
+            Assert.Equal(AccessRights.ReadAccess, AccessOf(svc, Alice, "contact", contact));
+        }
+
+        [Fact]
+        public void Seeded_rows_whose_parents_form_a_cycle_are_each_derived_once()
+        {
+            Guid first = Guid.NewGuid();
+            Guid second = Guid.NewGuid();
+            Entity firstAccount = AccountOwnedBy(first, Alice);
+            firstAccount["parentaccountid"] = new EntityReference("account", second);
+            Entity secondAccount = AccountOwnedBy(second, Bob);
+            secondAccount["parentaccountid"] = new EntityReference("account", first);
+            InMemoryOrganizationService svc = Secured(BasicAccountAndContact)
+                .WithRelationship("account", "account", "parentaccountid", ReparentOnly)
+                .Seed(firstAccount, secondAccount);
+
+            Assert.Equal(AccessRights.ReadAccess | AccessRights.WriteAccess, AccessOf(svc, Alice, "account", second));
+        }
+
+        [Fact]
+        public void A_seeded_child_deleted_before_a_setup_call_is_skipped()
+        {
+            Guid account = Guid.NewGuid();
+            Guid contact = Guid.NewGuid();
+            InMemoryOrganizationService svc = Store(ReparentOnly, BasicAccountAndContact)
+                .Seed(AccountOwnedBy(account, Bob), new Entity("contact", contact) { ["parentcustomerid"] = new EntityReference("account", account) });
+            svc.Delete("contact", contact);
+
+            svc.WithSharedRecord(new EntityReference("account", account), new EntityReference("systemuser", Alice), AccessRights.ReadAccess);
+
+            Assert.Equal(AccessRights.ReadAccess, AccessOf(svc, Alice, "account", account));
+            Assert.Empty(svc.GetAll("contact"));
         }
 
         [Fact]

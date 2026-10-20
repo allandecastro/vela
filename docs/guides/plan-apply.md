@@ -49,7 +49,7 @@ for the other ways to connect.
 
 `apply` applies Dataverse create/update/delete operations to converge with local package metadata, then prints the post-apply state diff (human summary at a terminal, JSON when piped or with `--json`). It writes by default: on a terminal it shows the plan and asks you to type `yes`; in a non-interactive session (no stdin TTY) it refuses unless you pass `--auto-approve` (alias `--yes`), so a script never writes unattended by accident. Use `vela plan` to preview without writing.
 
-> **Reading the apply JSON (scripts/agents).** `summary` on a successful apply is the **post-apply remaining** diff, so it is `{added:0,changed:0,removed:0}` even though work was done. Read the separate **`executed`** block for what actually happened: `{ "created": N, "updated": M, "deleted": K, "packageRepublished": bool, "addedToSolution": S, "byKind": [ { "kind": "step", "created": .., "updated": .., "deleted": .. }, ... ] }`, taken from the pre-apply diff (`byKind` breaks the totals down per component: `step` / `custom-api` / `web-resource`). `executed` is present only on `apply` (mode `apply-execute`, or `apply-not-converged` when the environment still differs after the writes: `summary` is then non-zero and the exit code is `5`), not on `plan`/`inspect`. Do not parse the free-text `notes`. See [Machine-readable output](../reference/machine-readable-output.md).
+> **Reading the apply JSON (scripts/agents).** `summary` on a successful apply is the **post-apply remaining** diff, so it is `{added:0,changed:0,removed:0}` even though work was done. Read the separate **`executed`** block for what actually happened: `{ "created": N, "updated": M, "deleted": K, "packageRepublished": bool, "addedToSolution": S, "linkedToManagedIdentity": L, "byKind": [ { "kind": "step", "created": .., "updated": .., "deleted": .. }, ... ] }`, taken from the pre-apply diff (`byKind` breaks the totals down per component: `step` / `custom-api` / `web-resource`). `executed` is present only on `apply` (mode `apply-execute`, or `apply-not-converged` when the environment still differs after the writes: `summary` is then non-zero and the exit code is `5`), not on `plan`/`inspect`. Do not parse the free-text `notes`. See [Machine-readable output](../reference/machine-readable-output.md).
 
 `plan`, `apply` and `inspect` are safe to run under redirected or piped stdin (CI, agents): they never block waiting on a prompt. The optional "package assembly name" prompt only appears on a real terminal, and interactive OAuth prompts are terminal-only too, so a scripted run that supplies its inputs on the command line runs to completion (or fails with a clear message) without hanging.
 
@@ -72,6 +72,17 @@ Custom API, or remove the existing one first.
 without a value the environment keeps its own. A value read from a file loses one trailing line ending (`\n` or
 `\r\n`, as `echo secret > key.txt` adds); everything else in the file is kept. Deleting a step also deletes its secure-configuration row. See
 the step configuration section of [Write a plugin](plugins.md).
+
+**Managed identity link.** `--managed-identity <managedidentityid>` links every plugin package the run publishes to
+that `managedidentity` record of the target environment (`pluginpackage.managedidentityid`). The package is the same in
+every environment and each environment has its own record, so the id is an option of the run, not a project setting.
+`plan` checks that the record exists (an unknown id fails with exit 4 before anything is written), then reports each
+package as already linked, to link, or to change from the managed identity it is linked to now: a `link` operation of
+kind `package` and a `managedIdentity` block in the JSON, counted in `hasChanges` and `--detailed-exitcode`. `apply`
+writes the link right after the package publish, so a package the same run creates is linked too, through `--solution`
+when given, reads it back to check it converged, and counts it in `executed.linkedToManagedIdentity`. Without the option,
+the link is neither read nor changed. Vela links plugin packages only: it does not deploy standalone plugin assemblies.
+See [Managed identity](managed-identity.md).
 
 ### Package code runs in a separate process (not a sandbox)
 
