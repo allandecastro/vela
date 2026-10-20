@@ -34,6 +34,14 @@ All notable changes to Vela are documented here. The format is based on
   null, but Dataverse stores an empty string on a row without an exception, so every row was kept (and shown without
   an exception). The query now also requires a non-empty `exceptiondetails`.
 
+### Docs
+
+- The localization guide registers the project's message source once, in an `[assembly: VelaServiceRegistrar]`, with
+  the keys and the source in one class, instead of in each plugin's `ConfigureServices`. Its samples are compiled and
+  tested (`docs/samples/Vela.DocSamples/LocalizationSample.cs`).
+- The Markdown copies of the pages listed in `docs/llms.txt` (and `llms-full.txt`) inline the code a page includes
+  from the compiled samples. They showed the raw `[!code-csharp[](...)]` include instead.
+
 ## [0.27.5] - 2026-10-19 (Vela.Cli)
 
 ### Fixed

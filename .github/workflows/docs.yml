@@ -71,13 +71,12 @@ jobs:
           $pages = Select-String -Path docs\llms.txt -Pattern 'allandecastro\.github\.io/vela/([^)]+\.md)\)' -AllMatches |
             ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ -ne 'CHANGELOG.md' }
           if (-not $pages) { throw 'docs/llms.txt lists no page' }
+          # The copies inline the docfx code includes, so a reader of the Markdown sees the sample code.
           foreach ($page in $pages) {
-            $target = Join-Path docs\_site $page
-            New-Item -ItemType Directory -Force -Path (Split-Path $target) | Out-Null
-            Copy-Item (Join-Path docs $page) $target
+            & docs\tools\Expand-CodeIncludes.ps1 -Page (Join-Path docs $page) -Destination (Join-Path docs\_site $page)
           }
           Copy-Item CHANGELOG.md docs\_site\CHANGELOG.md
-          $out = foreach ($page in $pages) { "<!-- $page -->"; Get-Content -Raw -Encoding UTF8 (Join-Path docs $page); '' }
+          $out = foreach ($page in $pages) { "<!-- $page -->"; Get-Content -Raw -Encoding UTF8 (Join-Path docs\_site $page); '' }
           Set-Content -Path docs\_site\llms-full.txt -Value $out -Encoding UTF8
       - uses: actions/configure-pages@v5
         with:
