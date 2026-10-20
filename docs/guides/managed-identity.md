@@ -19,6 +19,38 @@ with `vela init --managed-identity` (it adds the Integrations project) to wire t
 managed identity + federated credential on the environment (see
 [Use managed identity for server-to-server authentication](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/managed-identity-overview)).
 
+## Link the plugin package at deployment
+
+The platform side is set up outside Vela, once per environment: the app registration or user-assigned managed
+identity, its federated credential, the signed package and the `managedidentity` record in Dataverse. Follow
+[Set up managed identity for Dataverse plug-ins](https://learn.microsoft.com/power-platform/admin/set-up-managed-identity)
+for these steps. `vela sign` signs the package.
+
+The last step, binding the plugin package to the `managedidentity` record, is part of `vela plan` and `vela apply`:
+pass the record's id (`managedidentityid`) with `--managed-identity`. Each environment has its own record, so the id
+changes per environment while the package stays the same:
+
+```bash
+vela plan  --package ./artifacts/zava_Zava.Integrations.1.0.0.nupkg --solution ZavaSales \
+  --url https://zava-test.crm.dynamics.com --managed-identity <test-managedidentityid> --detailed-exitcode
+vela apply --package ./artifacts/zava_Zava.Integrations.1.0.0.nupkg --solution ZavaSales \
+  --url https://zava-test.crm.dynamics.com --managed-identity <test-managedidentityid> --auto-approve
+```
+
+- `plan` fails (exit 4) when no `managedidentity` record has that id in the environment, before anything is written.
+- `plan` lists each published package as already linked, to link, or to change from the managed identity it is
+  linked to now. A link to write is a pending change (`hasChanges`, exit 8 with `--detailed-exitcode`).
+- `apply` sets `pluginpackage.managedidentityid` right after the package publish, so a package created by the same run
+  is linked too. With `--solution`, the update carries the solution like the other writes.
+- Without `--managed-identity`, the link is neither read nor changed: a package linked by hand keeps its link, and
+  republishing the package keeps it too.
+- With `--solution`, the `managedidentity` record itself is not added to the solution: it belongs to the environment,
+  and each environment links the package to its own record at deployment.
+
+Only the plugin packages of the run are linked; Vela deploys packages, not standalone plugin assemblies. The JSON
+fields are in [Machine-readable output](../reference/machine-readable-output.md); the option is described with the other
+plan/apply options in [Plan & Apply](plan-apply.md).
+
 ## Testing
 
 Provide a fake managed-identity service on the context so a handler under test can acquire a token without a real

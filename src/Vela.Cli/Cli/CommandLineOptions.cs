@@ -303,6 +303,11 @@ internal static class CommandLineOptions
             return false;
         }
 
+        if (!TryReadManagedIdentityId(args, out Guid? managedIdentityId, out exitCode))
+        {
+            return false;
+        }
+
         if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out exitCode))
         {
             return false;
@@ -330,7 +335,34 @@ internal static class CommandLineOptions
             TimeoutMinutes: timeoutMinutes,
             BatchChunkSize: batchChunkSize,
             SecureConfigs: [.. ReadMultiOption(args, "--secure-config")],
-            DetailedExitCode: HasFlag(args, "--detailed-exitcode"));
+            DetailedExitCode: HasFlag(args, "--detailed-exitcode"),
+            ManagedIdentityId: managedIdentityId);
+        return true;
+    }
+
+    /// <summary>
+    /// Reads the optional <c>--managed-identity</c> plan/apply option: the id (<c>managedidentityid</c>) of the
+    /// managedidentity record the published plugin packages are linked to. Absent: null (the link is left untouched).
+    /// Present: a non-empty GUID, or an invalid-arguments failure.
+    /// </summary>
+    public static bool TryReadManagedIdentityId(string[] args, out Guid? managedIdentityId, out int exitCode)
+    {
+        managedIdentityId = null;
+        exitCode = ExitSuccess;
+
+        string? raw = TryReadOption(args, "--managed-identity");
+        if (raw == null)
+        {
+            return true;
+        }
+
+        if (!Guid.TryParse(raw.Trim(), out Guid id) || id == Guid.Empty)
+        {
+            exitCode = Fail("--managed-identity must be the id (a GUID) of a managedidentity record.", ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
+        managedIdentityId = id;
         return true;
     }
 

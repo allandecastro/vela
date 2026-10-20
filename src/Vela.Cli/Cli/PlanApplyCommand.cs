@@ -70,6 +70,11 @@ internal static class PlanApplyCommand
             return Fail("--detailed-exitcode applies to 'vela plan' only.", ExitInvalidArguments, includeUsage: false);
         }
 
+        if (options.ManagedIdentityId.HasValue && command == InspectMode)
+        {
+            return Fail("--managed-identity applies to 'vela plan' and 'vela apply' only.", ExitInvalidArguments, includeUsage: false);
+        }
+
         List<string> tempDirectories = [];
         try
         {
@@ -155,7 +160,27 @@ internal static class PlanApplyCommand
         }
 
         IReadOnlyList<SolutionMembershipAction> membership = OnlyUnwritten(MissingFromSolution(service, local, options, info), diff, packageActions.Count > 0);
-        return BuildPlanPreview(mode, options.Environment, diff, diagnostics, current.Diagnostics, packageActions, unmanaged, [.. info], membership);
+        return BuildPlanPreview(mode, options.Environment, diff, diagnostics, current.Diagnostics, packageActions, unmanaged, [.. info], membership,
+            ReadManagedIdentityLinks(service, local, options, validate: true));
+    }
+
+    // 4. Managed identity link (--managed-identity only): each published package's pluginpackage.managedidentityid.
+    //    Without the option the link is neither read nor written. The record is validated before the plan (validate);
+    //    apply's convergence re-read skips that.
+    private static ManagedIdentityPlan? ReadManagedIdentityLinks(IOrganizationService service, RegistrationState local, SharedOptions options, bool validate)
+    {
+        if (options.ManagedIdentityId is not { } managedIdentityId)
+        {
+            return null;
+        }
+
+        if (validate)
+        {
+            DataverseRegistration.EnsureManagedIdentityExists(service, managedIdentityId);
+        }
+
+        return new ManagedIdentityPlan(managedIdentityId,
+            DataverseRegistration.ComputeManagedIdentityLinks(service, local.PackagePayloads, options.SolutionUniqueName, managedIdentityId));
     }
 
     // 3. Solution membership (--solution only): a component that did not change is never written, so it was never
@@ -220,6 +245,7 @@ internal static class PlanApplyCommand
 
         // Only a package create/update republishes it; an add-to-solution of the package is not a publish.
         bool packageNeedsPublish = preview.Operations.Any(o => o.Kind == "package" && o.Action is "create" or "update");
+        int linksToWrite = preview.ManagedIdentity?.Pending.Length ?? 0;
         if (!preview.HasChanges)
         {
             const string nothing = "No changes detected; nothing executed.";
@@ -254,8 +280,9 @@ internal static class PlanApplyCommand
         {
             WritePlanSummary(preview, Console.Error, ConsoleTheme.StderrColor);
             string packageNote = packageNeedsPublish ? " + plugin package (code change)" : string.Empty;
+            string linkNote = linksToWrite > 0 ? $" + {linksToWrite} managed identity link(s)" : string.Empty;
             Console.Error.Write(
-                $"Apply {preview.Summary.Added} to create / {preview.Summary.Changed} to update / {preview.Summary.Removed} to delete{packageNote} against {options.Environment ?? "Dataverse"}? Type 'yes' to continue: ");
+                $"Apply {preview.Summary.Added} to create / {preview.Summary.Changed} to update / {preview.Summary.Removed} to delete{packageNote}{linkNote} against {options.Environment ?? "Dataverse"}? Type 'yes' to continue: ");
             return host.ReadLine();
         }))
         {
@@ -271,7 +298,7 @@ internal static class PlanApplyCommand
         int addedToSolution;
         try
         {
-            DataverseRegistration.ApplyDiff(service, diff, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize);
+            DataverseRegistration.ApplyDiff(service, diff, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize, preview.ManagedIdentity);
 
             // Recomputed after the writes: what apply created or updated is already in the solution, a deleted
             // component is gone, and what remains is the unchanged components to add.
@@ -305,8 +332,11 @@ internal static class PlanApplyCommand
         RegistrationDiff afterDiff = BuildDiff(local, after);
         // Every write succeeded, yet the environment can still differ (the platform silently ignored or normalized a
         // value). That is not a success: the next apply would plan the same change again.
-        bool converged = afterDiff.Summary.Added == 0 && afterDiff.Summary.Changed == 0 && afterDiff.Summary.Removed == 0;
-        PlanPreview result = BuildPlanPreview(converged ? "apply-execute" : "apply-not-converged", options.Environment, afterDiff, local.Diagnostics, after.Diagnostics, unmanaged: unmanaged, info: [.. local.Info ?? [], .. after.Info ?? []]) with
+        // The managed identity link is read again too: a link the platform did not keep is not a success either.
+        ManagedIdentityPlan? afterLinks = ReadManagedIdentityLinks(service, local, options, validate: false);
+        int linksRemaining = afterLinks?.Pending.Length ?? 0;
+        bool converged = afterDiff.Summary.Added == 0 && afterDiff.Summary.Changed == 0 && afterDiff.Summary.Removed == 0 && linksRemaining == 0;
+        PlanPreview result = BuildPlanPreview(converged ? "apply-execute" : "apply-not-converged", options.Environment, afterDiff, local.Diagnostics, after.Diagnostics, unmanaged: unmanaged, info: [.. local.Info ?? [], .. after.Info ?? []], managedIdentity: afterLinks) with
         {
             Notes =
             [
@@ -316,7 +346,7 @@ internal static class PlanApplyCommand
                 .. converged ? Array.Empty<string>() : ["The environment still differs from the packages after apply; summary and diff show what did not converge."],
             ],
             // What was DONE, from the pre-apply diff: Summary above is the post-apply remaining diff (0 on success).
-            Executed = ExecutedCounts.FromDiff(diff, packageNeedsPublish) with { AddedToSolution = addedToSolution },
+            Executed = ExecutedCounts.FromDiff(diff, packageNeedsPublish) with { AddedToSolution = addedToSolution, LinkedToManagedIdentity = linksToWrite },
         };
 
         if (FailsStrict(options, result.Diagnostics, afterApply: true, out strictExit))
@@ -332,7 +362,8 @@ internal static class PlanApplyCommand
                 $"Executed against {options.Environment ?? "Dataverse"}: {diff.Added.Length} created, " +
                 $"{diff.Changed.Length} updated, {diff.Removed.Length} deleted" +
                 (packageNeedsPublish ? ", plugin package re-published" : string.Empty) +
-                (addedToSolution > 0 ? $", {addedToSolution} component(s) added to solution '{options.SolutionUniqueName}'" : string.Empty) + ".");
+                (addedToSolution > 0 ? $", {addedToSolution} component(s) added to solution '{options.SolutionUniqueName}'" : string.Empty) +
+                (linksToWrite > 0 ? $", {linksToWrite} plugin package(s) linked to managed identity {options.ManagedIdentityId}" : string.Empty) + ".");
             if (!converged)
             {
                 writer.WriteLine("The environment still shows differences after apply:");
@@ -341,6 +372,7 @@ internal static class PlanApplyCommand
             else
             {
                 // Rank collisions are not resolved by applying, so still surface diagnostics and the info notices.
+                WriteManagedIdentity(result.ManagedIdentity, writer, color);
                 WriteDiagnostics(result.Diagnostics, writer, color);
                 WriteUnmanaged(result.Unmanaged, writer, color);
                 WriteInfo(result.Info, writer, color);
@@ -350,7 +382,8 @@ internal static class PlanApplyCommand
         return converged
             ? ExitSuccess
             : Fail(
-                $"Apply did not converge: {afterDiff.Summary.Added} to create / {afterDiff.Summary.Changed} to update / {afterDiff.Summary.Removed} to delete remain. " +
+                $"Apply did not converge: {afterDiff.Summary.Added} to create / {afterDiff.Summary.Changed} to update / {afterDiff.Summary.Removed} to delete" +
+                (linksRemaining > 0 ? $" / {linksRemaining} managed identity link(s)" : string.Empty) + " remain. " +
                 "Dataverse accepted the writes but did not keep them; re-running apply would plan the same changes.",
                 ExitDriftDetected, includeUsage: false);
     }

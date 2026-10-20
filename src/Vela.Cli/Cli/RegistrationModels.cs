@@ -44,7 +44,7 @@ public sealed class DataverseConnectionException : Exception
         return false;
     }
 }
-public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, string? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool AutoApprove, bool Interactive, bool Strict, bool Verbose, string? WebResourcesRoot = null, bool Json = false, int? TimeoutMinutes = null, int? BatchChunkSize = null, string[]? SecureConfigs = null, bool DetailedExitCode = false);
+public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, string? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool AutoApprove, bool Interactive, bool Strict, bool Verbose, string? WebResourcesRoot = null, bool Json = false, int? TimeoutMinutes = null, int? BatchChunkSize = null, string[]? SecureConfigs = null, bool DetailedExitCode = false, Guid? ManagedIdentityId = null);
 public sealed record ExtractedPackage(string PackagePath, string TempDirectory, string PrimaryAssemblyPath, string[] RegistrableAssemblyPaths);
 public sealed record AssemblyPayload(string AssemblyName, string AssemblyPath);
 // HasRegistrations (local scan): false when the package holds no step, Custom API or unmanaged plugin type (a freshly
@@ -72,7 +72,7 @@ public sealed record DiffSummary(int Added, int Removed, int Changed);
 /// serialized first; it changes only when an existing field changes meaning or shape, never for an added field.
 /// <c>diagnostics</c> are warnings (<c>--strict</c> fails on them); <c>info</c> and <c>unmanaged</c> are information.
 /// </summary>
-public sealed record PlanPreview(string Mode, string? Environment, bool HasChanges, DiffSummary Summary, ApplyOperation[] Operations, RegistrationDiff Diff, string[] Diagnostics, string[] Notes, ExecutedCounts? Executed = null, string[]? Unmanaged = null, string[]? Info = null)
+public sealed record PlanPreview(string Mode, string? Environment, bool HasChanges, DiffSummary Summary, ApplyOperation[] Operations, RegistrationDiff Diff, string[] Diagnostics, string[] Notes, ExecutedCounts? Executed = null, string[]? Unmanaged = null, string[]? Info = null, ManagedIdentityPlan? ManagedIdentity = null)
 {
     [System.Text.Json.Serialization.JsonPropertyOrder(-1)]
     public int SchemaVersion { get; init; } = MachineOutput.SchemaVersion;
@@ -90,7 +90,7 @@ public static class MachineOutput
 /// which after a successful apply is the post-apply remaining diff (all zero). Present only on the <c>apply-execute</c>
 /// JSON so a script/agent reads the executed counts directly instead of parsing the free-text notes.
 /// </summary>
-public sealed record ExecutedCounts(int Created, int Updated, int Deleted, bool PackageRepublished, ExecutedByKind[] ByKind, int AddedToSolution = 0)
+public sealed record ExecutedCounts(int Created, int Updated, int Deleted, bool PackageRepublished, ExecutedByKind[] ByKind, int AddedToSolution = 0, int LinkedToManagedIdentity = 0)
 {
     /// <summary>Builds the executed counts (totals + per-kind breakdown) from the PRE-apply diff.</summary>
     public static ExecutedCounts FromDiff(RegistrationDiff diff, bool packageRepublished)
@@ -120,6 +120,33 @@ public sealed record ApplyOperation(string Action, string Kind, string Type, str
 /// Lets <c>plan</c> surface a code-only rebuild (unchanged steps/custom APIs, rebuilt assembly) that the
 /// step/custom-API diff alone cannot see.</summary>
 public sealed record PackagePublishAction(string PackageName, bool IsCreate);
+
+/// <summary>
+/// <c>--managed-identity</c> on plan/apply: the <c>managedidentity</c> record the run links its plugin packages to, and
+/// the link state of each package the run publishes (<see cref="ManagedIdentityPackageLink"/>). Absent from the JSON
+/// when the option is not given: the link is then neither read nor written.
+/// </summary>
+public sealed record ManagedIdentityPlan(Guid Id, ManagedIdentityPackageLink[] Packages)
+{
+    /// <summary>The packages apply writes the link of: not linked yet, or linked to another managed identity.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ManagedIdentityPackageLink[] Pending => Packages.Where(p => p.NeedsWrite).ToArray();
+}
+
+/// <summary>
+/// One plugin package's <c>managedidentityid</c> compared with <c>--managed-identity</c>. <see cref="Status"/> is
+/// <c>linked</c> (already that managed identity), <c>link</c> (no managed identity yet, or the package is created by
+/// this apply) or <c>change</c> (linked to <see cref="CurrentManagedIdentityId"/>, another managed identity).
+/// </summary>
+public sealed record ManagedIdentityPackageLink(string Package, string Status, Guid? CurrentManagedIdentityId = null)
+{
+    public const string Linked = "linked";
+    public const string Link = "link";
+    public const string Change = "change";
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool NeedsWrite => !string.Equals(Status, Linked, StringComparison.Ordinal);
+}
 public sealed record StepApplyDefinition(string PluginTypeName, string Message, string EntityLogicalName, string StepKey, int Stage, int Mode, int ExecutionOrder, string[] FilteringAttributes, ImageApplyDefinition[] PreImages, ImageApplyDefinition[] PostImages, bool Enabled, string UnsecureConfig, string SecureConfig, Guid ImpersonatingUserId = default, int SupportedDeployment = 0, string Description = "", bool AsyncAutoDelete = false, string? LiveStepKey = null);
 // MessagePropertyName: the request property the image is taken from; empty means the message's own.
 public sealed record ImageApplyDefinition(string Alias, string[] Attributes, string MessagePropertyName = "");
