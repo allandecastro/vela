@@ -21,6 +21,12 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Docs
+
+- The plugin guide, `vela add` and VELA022 say that `SetStateRequest` is deprecated (Learn: use an Update of
+  `statecode`), and recommend `OnUpdate().FilterOn(x => x.StateCode)` for a state change, which also runs for a
+  caller that still sends `SetStateRequest`. `On<SetStateRequest>()` stays for logic that needs its own inputs.
+
 ### Added
 
 - `vela plan` / `vela apply --managed-identity <managedidentityid>` link the published plugin packages to a
