@@ -45,13 +45,15 @@ public sealed class SolutionMembershipTests : IDisposable
         }
     }
 
-    private FakeOrgService Org(HashSet<Guid> members, bool resolveTableTypes = true)
+    private FakeOrgService Org(HashSet<Guid> members, bool resolveTableTypes = true, bool assemblyInPackage = false)
     {
         return new FakeOrgService
         {
             OnRetrieveMultiple = q => q.EntityName switch
             {
-                "pluginassembly" => FakeOrgService.Collection(new Entity("pluginassembly", _assemblyId) { ["name"] = "Zava.Plugins" }),
+                "pluginassembly" => FakeOrgService.Collection(assemblyInPackage
+                    ? new Entity("pluginassembly", _assemblyId) { ["name"] = "Zava.Plugins", ["packageid"] = new EntityReference("pluginpackage", _packageId) }
+                    : new Entity("pluginassembly", _assemblyId) { ["name"] = "Zava.Plugins" }),
                 "plugintype" => FakeOrgService.Collection(
                     new Entity("plugintype", _managedTypeId) { ["typename"] = Managed },
                     new Entity("plugintype", _classicTypeId) { ["typename"] = Classic }),
@@ -107,6 +109,22 @@ public sealed class SolutionMembershipTests : IDisposable
         Assert.Contains(actions, a => a is { Kind: "custom-api-response-property", Name: "Out", ComponentType: ResponseType } && a.ComponentId == _responseId);
         Assert.DoesNotContain(actions, a => a.ComponentId == _mainOperationStepId); // platform-managed, not ours
         Assert.Equal(6, actions.Count); // the assembly listed twice under different casing is read once
+    }
+
+    [Fact]
+    public void The_assembly_of_a_plugin_package_is_not_listed_on_its_own()
+    {
+        // Dataverse refuses AddSolutionComponent for it ("part of a Plugin Package"); the package carries it.
+        FakeOrgService org = Org(members: [], assemblyInPackage: true);
+
+        IReadOnlyList<SolutionMembershipAction> actions = Compute(org, [], Package());
+
+        Assert.DoesNotContain(actions, a => a.Kind == "assembly" || a.ComponentId == _assemblyId);
+        Assert.Contains(actions, a => a is { Kind: "package" } && a.ComponentId == _packageId);
+        Assert.Contains(actions, a => a is { Kind: "step" } && a.ComponentId == _stepId); // its steps are still listed
+        Assert.Equal(5, actions.Count);
+        QueryExpression assemblyQuery = Assert.Single(org.Queries, q => q.EntityName == "pluginassembly");
+        Assert.Contains("packageid", assemblyQuery.ColumnSet.Columns);
     }
 
     [Fact]

@@ -58,6 +58,13 @@ All notable changes to Vela are documented here. The format is based on
 - The Markdown copies of the pages listed in `docs/llms.txt` (and `llms-full.txt`) inline the code a page includes
   from the compiled samples. They showed the raw `[!code-csharp[](...)]` include instead.
 
+### Fixed (CLI)
+
+- `vela apply --solution` no longer tries to add the assembly of a plug-in package to the solution on its own when
+  the package was deployed before without that solution. Dataverse refuses it ("cannot be exported as it is part of
+  a Plugin Package"), so the run failed with exit 7 before adding the steps. The package is added, and carries its
+  assembly.
+
 ### Fixed (Framework)
 
 - Vela.Testing: a seeded child of a parental relationship gets its inherited access whatever the setup order. Since
