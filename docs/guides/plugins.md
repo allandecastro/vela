@@ -47,7 +47,7 @@ The `using` directives sit inside the namespace so that `Account` resolves to th
 | Compare with the previous values | add `WithPreImage(...)` | Never on Create. |
 | Read the saved values | add `WithPostImage(...)` | PostOperation only, never on Delete. |
 | React to a message with no typed trigger (a Custom API, an unmodelled message) | `On<TRequest>()` (or a marker, `OnMessage<TMarker>()`) | See [Other messages](#other-messages). A message with a typed trigger is registered only through it ([VELA023](../reference/analyzers.md#vela023)). |
-| Change a record's state | `OnUpdate().FilterOn(x => x.StateCode)` or `On<SetStateRequest>()` (registers on `SetStateDynamicEntity`) | A step on `SetState` never fires ([VELA022](../reference/analyzers.md#vela022)). |
+| Change a record's state | `OnUpdate().FilterOn(x => x.StateCode)` | `SetStateRequest` is [deprecated](https://learn.microsoft.com/dotnet/api/microsoft.crm.sdk.messages.setstaterequest) in favour of an Update of `statecode`. That Update step also runs, at PreOperation and PostOperation, for a caller that still sends `SetStateRequest`. `On<SetStateRequest>()` (registers on `SetStateDynamicEntity`) is only for logic that needs that request's own inputs (`EntityMoniker`, `State`, `Status`). A step on `SetState` never fires ([VELA022](../reference/analyzers.md#vela022)). |
 
 ## Several steps in one class
 
@@ -385,7 +385,8 @@ knows the sdkmessage, and the handler sees it in `ctx.MessageName`: `SendEmail` 
 `AddItemCampaign` → `AddItem`, `RemoveItemCampaign` → `RemoveItem`, `SendFax` / `SendTemplate` → `Send`.
 The test harness (`For<T>().OnMessage(...)`, `WithRequest(...)`) translates the same way. The translation covers every
 SDK request whose name is not an sdkmessage, so `On<CloseQuoteRequest>()` registers on `Close` too, and
-`On<SetStateRequest>()` on `SetStateDynamicEntity` (a step on `SetState` never fires). A request type outside the table
+`On<SetStateRequest>()` on `SetStateDynamicEntity` (a step on `SetState` never fires; `SetStateRequest` itself is
+deprecated, see [the table above](#choosing-a-step)). A request type outside the table
 states its sdkmessage with `[SdkMessage("...")]` (`Vela.Messages`).
 
 `ReviseQuote`, `FulfillSalesOrder`, `ConvertQuoteToSalesOrder`, `GenerateSalesOrderFromOpportunity`,
