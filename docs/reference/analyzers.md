@@ -458,11 +458,15 @@ Vela reports, in plugin code (see [Scope](#scope-of-vela025-and-vela026)), a str
   `WebRequest` / `HttpWebRequest` (`WebRequest.Create("...")`).
 
 The string must be known at build time: a literal, a `const`, an interpolated string or a `+` concatenation whose
-constant start already holds the whole host (`$"https://10.0.0.1/items/{id}"`, `"https://10.0.0.1:" + port`). The
-host is parsed with `System.Uri`, and only `http` / `https` URIs whose host is an IP literal (`10.0.0.1`,
-`[2001:db8::1]`) are reported. Not reported: a named host (`localhost` included), a relative or non-HTTP string, a
-string that is never given to one of the members above, a URI built from a variable or configuration, and a host
-cut by an interpolation (`$"https://10.0.0.{n}/"`).
+constant start already holds the whole host (`$"https://10.0.0.1/items/{id}"`, `"https://10.0.0.1:" + port`). A
+local is read through its declaration (`string url = "http://10.0.0.1/api"; client.GetAsync(url);`), also along a
+chain of locals (`var root = "https://10.0.0.1/"; var path = root + "orders";`), when nothing else in the method
+writes it: no assignment (in a branch or a lambda too), compound assignment, increment, deconstruction, `ref` /
+`out` / `in` argument or `ref` alias. The host is parsed with `System.Uri`, and only `http` / `https` URIs whose host
+is an IP literal (`10.0.0.1`, `[2001:db8::1]`) are reported. Not reported: a named host (`localhost` included), a
+relative or non-HTTP string, a string that is never given to one of the members above, a URI built from a field, a
+parameter, configuration or a local written after its declaration, and a host cut by an interpolation
+(`$"https://10.0.0.{n}/"`).
 
 **Fix:** give the service a DNS name and call that name.
 

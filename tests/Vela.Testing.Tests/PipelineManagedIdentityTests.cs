@@ -101,7 +101,7 @@ namespace Vela.Testing.Tests
             Exception error = Record.Exception(() => pipeline.Service.Create(new FakeTask { Subject = "follow-up" }));
 
             Assert.NotNull(error);
-            Assert.Contains("IManagedIdentityService is unavailable.", error!.Message);
+            Assert.Contains("No IManagedIdentityService was provided to this plug-in. In a test, give the harness one with WithManagedIdentityService(...).", error!.Message);
         }
 
         [Fact]

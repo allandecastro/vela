@@ -103,6 +103,111 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Flags_a_local_initialized_with_an_IP_uri_and_never_written_again()
+    {
+        string code = Plugin(@"
+            string url = ""http://10.0.0.1/api"";
+            string other = sp.ToString();
+            string later = ""https://10.9.9.9/"";
+            other = url;
+            var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            client.GetAsync({|#0:url|});
+            client.BaseAddress = new Uri({|#1:url|});
+            var req = new HttpRequestMessage(HttpMethod.Post, {|#2:url|});
+            var a = new Uri(other);");
+        await Verify.VerifyAnalyzerAsync(code,
+            Expected("10.0.0.1", 0), Expected("10.0.0.1", 1), Expected("10.0.0.1", 2));
+    }
+
+    [Fact]
+    public async Task Flags_an_interpolated_prefix_a_concatenation_and_a_chain_held_in_locals()
+    {
+        string code = Plugin(@"
+            int id = 3;
+            var items = $""https://10.1.2.3/items/{id}"";
+            var a = new Uri({|#0:items|});
+            var root = ""https://10.1.2.4/"";
+            var b = new Uri({|#1:root + id|});
+            var copy = root;
+            var path = copy + ""orders"";
+            var c = new Uri({|#2:path|});
+            object boxed = ""http://10.1.2.5/"";
+            var d = new Uri({|#3:(string)boxed|});");
+        await Verify.VerifyAnalyzerAsync(code,
+            Expected("10.1.2.3", 0), Expected("10.1.2.4", 1), Expected("10.1.2.4", 2), Expected("10.1.2.5", 3));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_local_written_after_its_declaration()
+    {
+        string code = Plugin(@"
+            string reassigned = ""https://10.0.0.1/"";
+            reassigned = sp.ToString();
+            var a = new Uri(reassigned);
+            string branch = ""https://10.0.0.2/"";
+            if (sp == null) { branch = ""https://api.contoso.com/""; }
+            var b = new Uri(branch);
+            string compound = ""https://10.0.0.3"";
+            compound += "".contoso.com/"";
+            var c = new Uri(compound);
+            string coalesce = ""https://10.0.0.4/"";
+            coalesce ??= ""x"";
+            var d = new Uri(coalesce);
+            string byRef = ""https://10.0.0.5/"";
+            Swap(ref byRef);
+            var e = new Uri(byRef);
+            string byOut = ""https://10.0.0.6/"";
+            Fill(out byOut);
+            var f = new Uri(byOut);
+            string tuple = ""https://10.0.0.7/"";
+            int n;
+            (tuple, n) = (sp.ToString(), 1);
+            var g = new Uri(tuple);
+            string aliased = ""https://10.0.0.8/"";
+            ref string alias = ref aliased;
+            alias = sp.ToString();
+            var h = new Uri(aliased);
+            string captured = ""https://10.0.0.9/"";
+            Action reset = () => captured = sp.ToString();
+            var i = new Uri(captured);
+            Address address = ""https://10.0.0.10/"";
+            address++;
+            var j = new Uri(address);
+            string declared;
+            declared = ""https://10.0.0.11/"";
+            var k = new Uri(declared);",
+            @"private static void Swap(ref string s) { s = ""https://api.contoso.com/""; }
+        private static void Fill(out string s) { s = ""https://api.contoso.com/""; }") + @"
+namespace Demo
+{
+    public struct Address
+    {
+        private readonly string _value;
+        private Address(string value) { _value = value; }
+        public static implicit operator Address(string value) => new Address(value);
+        public static implicit operator string(Address address) => address._value;
+        public static Address operator ++(Address address) => new Address(""https://api.contoso.com/"");
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Does_not_follow_a_field_a_parameter_a_named_host_or_a_self_referencing_local()
+    {
+        string code = Plugin(@"
+            var a = new Uri(_endpoint);
+            Call(""https://10.0.0.2/"");
+            string named = ""https://api.contoso.com/"";
+            var b = new Uri(named);
+            string self = {|#0:self|};
+            var c = new Uri(self);",
+            @"private readonly string _endpoint = ""https://10.0.0.1/"";
+        private static Uri Call(string url) => new Uri(url);");
+        await Verify.VerifyAnalyzerAsync(code, DiagnosticResult.CompilerError("CS0165").WithLocation(0).WithArguments("self"));
+    }
+
+    [Fact]
     public async Task Does_not_flag_an_IP_uri_outside_a_plugin_type()
     {
         string code = Harness + @"
