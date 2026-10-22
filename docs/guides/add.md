@@ -44,8 +44,9 @@ vela add --interactive
   `--message Send` renders `OnSendEmail()`, and `--message Win` renders `OnWinQuote()` or `OnWinOpportunity()`
   from `--entity`. `Assign` gets the typed `OnAssign()` too. Any other name is registered through its request type,
   `On<XxxRequest>()`: the SDK class, fully qualified, when one ships (`--message SetState` renders
-  `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`, which registers on `SetStateDynamicEntity`, the message a state
-  change fires), otherwise the request [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`)
+  `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`, which registers on `SetStateDynamicEntity`, the message a
+  `SetStateRequest` fires; that request is deprecated, and an Update of `statecode` covers both, so for a state change prefer
+  `--message Update` with `--filtering-attributes statecode`), otherwise the request [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`)
   generates, with a note to generate it. Whatever the message, the plugin is `partial` and its handler,
   `OnExecute`, takes its generated `OnExecuteContext` (see [Typed step context](plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage)),
   so its signature stays the same when the step later captures an image. `--project <csproj>` (default:

@@ -69,8 +69,13 @@ namespace matches its folder. Generate a samples solution next to your real one 
 - `--prefix` (default: derived from the name) - the .NET namespace / assembly prefix.
 - `--publisher-prefix` - the Dataverse publisher prefix of your solution (2-8 characters, letter first,
   alphanumeric). It names the Custom APIs (`<publisherprefix>_<Name>`) and is recorded in the projects as
-  `VelaPublisherPrefix`, which `vela add customapi` uses. Without it, the prefix is derived from `--prefix`; with
-  `--samples` a derived value that is not a valid publisher prefix is refused.
+  `VelaPublisherPrefix`, which `vela add customapi` uses. It also prefixes the plugin package ids
+  (`zava_Zava.Plugins`, `zava_Zava.Integrations`), as Dataverse requires to import a package, so `vela plan` and
+  `vela apply` accept them without `--solution`; the assemblies keep the project names (`Zava.Plugins.dll`).
+  Without it, the prefix is derived from `--prefix`; with `--samples` a derived value that is not a valid publisher
+  prefix is refused, and a valid one prefixes the package ids the same way. A minimal scaffold without
+  `--publisher-prefix` keeps unprefixed package ids (`Zava.Plugins`): `vela apply --solution` adds the solution's
+  prefix.
 - `--samples` - add the demo code and the Integrations / ConsoleApp projects (see above). `--minimal` /
   `--no-demos` are accepted aliases of the default.
 - `--integrations` - add the `Zava.Integrations` plugin project (and `Zava.Integrations.Tests` unless `--no-tests`)

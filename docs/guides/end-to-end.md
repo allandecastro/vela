@@ -37,7 +37,8 @@ dotnet build src/Zava.Plugins -c Release
 ```
 
 **3. Preview** the changes (read-only). `--solution` names an existing unmanaged solution: Dataverse imports a plugin
-package only when its name carries the publisher prefix, which Vela takes from that solution, and every component is
+package only when its name carries the publisher prefix (`vela init --publisher-prefix zava` names it
+`zava_Zava.Plugins`; an unprefixed package gets the prefix of that solution's publisher), and every component is
 added to it.
 
 ```bash

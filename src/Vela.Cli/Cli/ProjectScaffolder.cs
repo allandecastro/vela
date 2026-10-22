@@ -161,7 +161,7 @@ internal static class ProjectScaffolder
         // Code is organised by table (Account/, Contact/) with Plugins/ and CustomApis/ subfolders; unbound (global)
         // Custom APIs live under GlobalCustomApis/. A minimal package has no plugin types, so it registers nothing.
         AddProject(pluginsName, "src");
-        Add(Path.Combine("src", pluginsName, $"{pluginsName}.csproj"), PluginCsproj(pluginsName, sharedName, options.CoreVersion, publisherPrefix: recordedPublisherPrefix));
+        Add(Path.Combine("src", pluginsName, $"{pluginsName}.csproj"), PluginCsproj(pluginsName, sharedName, options.CoreVersion, publisherPrefix: recordedPublisherPrefix, packageId: options.PluginsPackageId));
         if (options.IncludeSamples)
         {
             Add(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountPostCreatePlugin.cs"), AccountPostCreatePlugin(prefix));

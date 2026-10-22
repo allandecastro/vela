@@ -183,22 +183,25 @@ public sealed class PackageScannerScanTests : IDisposable
         Assert.Equal("Zava.Plugins.dll", Path.GetFileName(result.PrimaryAssemblyPath));
     }
 
-    [Fact]
-    public void ExtractPackage_matches_a_publisher_prefixed_package_id_to_its_unprefixed_assembly()
+    [Theory]
+    [InlineData("Zava.Integrations")]
+    [InlineData("Zava.Plugins")]
+    public void ExtractPackage_matches_a_publisher_prefixed_package_id_to_its_unprefixed_assembly(string assemblyName)
     {
-        // A signed package is named with the solution publisher prefix (zava_Zava.Integrations) while its assembly
-        // keeps the project name; Vela.Messages sorts first and must not be taken for the plugin assembly.
+        // `vela init` names a package with the solution publisher prefix (zava_Zava.Plugins, zava_Zava.Integrations)
+        // while its assembly keeps the project name; Vela.Messages sorts first and must not be taken for it.
+        string packageId = $"zava_{assemblyName}";
         string nupkg = BuildNupkg(
-            ("zava_Zava.Integrations.nuspec", Nuspec("zava_Zava.Integrations")),
+            ($"{packageId}.nuspec", Nuspec(packageId)),
             ("lib/net48/Vela.Messages.dll", DummyDll),
-            ("lib/net48/Zava.Integrations.dll", DummyDll),
+            ($"lib/net48/{assemblyName}.dll", DummyDll),
             ("lib/net48/Vela.Plugins.dll", DummyDll));
 
         var tempDirs = new List<string>();
         ExtractedPackage result = PackageScanner.ExtractPackage(nupkg, preferredAssemblyName: null, tempDirs);
         _tempPaths.AddRange(tempDirs);
 
-        Assert.Equal("Zava.Integrations.dll", Path.GetFileName(result.PrimaryAssemblyPath));
+        Assert.Equal($"{assemblyName}.dll", Path.GetFileName(result.PrimaryAssemblyPath));
     }
 
     [Fact]

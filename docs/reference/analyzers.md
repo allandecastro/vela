@@ -364,9 +364,10 @@ already errors of VELA001 / VELA010 and are not reported again; a chain split ac
 steps, and an Update of `statecode` fires the Update steps plus nested `SetStateDynamicEntity` steps (verified live
 on every stage). The step's logic would silently never execute.
 
-**Fix:** register on `OnUpdate().FilterOn(x => x.StateCode)` (fires for both a SetState and an Update of the state),
-or drop the `[SdkMessage("SetState")]` and use `On<SetStateRequest>()`, which registers on `SetStateDynamicEntity`
-(inputs `EntityMoniker`, `State`, `Status`).
+**Fix:** register on `OnUpdate().FilterOn(x => x.StateCode)` (fires for both a SetState and an Update of the state;
+`SetStateRequest` is [deprecated](https://learn.microsoft.com/dotnet/api/microsoft.crm.sdk.messages.setstaterequest)
+in favour of that Update), or drop the `[SdkMessage("SetState")]` and use `On<SetStateRequest>()`, which registers on
+`SetStateDynamicEntity` (inputs `EntityMoniker`, `State`, `Status`).
 
 ## VELA023
 

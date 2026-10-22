@@ -64,10 +64,32 @@ internal sealed record ScaffoldOptions(
     public string EffectivePublisherPrefix => PublisherPrefix ?? ScaffoldTemplates.ApiPrefix(Prefix);
 
     /// <summary>
-    /// The package id of the Integrations project: with <see cref="ManagedIdentity"/> it carries the publisher prefix
-    /// (<c>zava_Zava.Integrations</c>), since a signed package cannot be renamed at <c>vela apply --solution</c> time.
+    /// The publisher prefix the generated plugin packages are named with, or null when none is known: the explicit
+    /// <see cref="PublisherPrefix"/>, else the one derived from <see cref="Prefix"/> when the scaffold already relies on
+    /// it (the sample Custom APIs, the signed Integrations package) and it is valid. A minimal scaffold never guesses:
+    /// its packages stay unprefixed and <c>vela apply --solution</c> adds the solution's prefix.
     /// </summary>
-    public string IntegrationsPackageId => ManagedIdentity ? $"{EffectivePublisherPrefix}_{Prefix}.Integrations" : $"{Prefix}.Integrations";
+    public string? KnownPublisherPrefix =>
+        PublisherPrefix is { } given && IsValidPublisherPrefix(given) ? given
+        : (IncludeSamples || ManagedIdentity) && IsValidPublisherPrefix(ScaffoldTemplates.ApiPrefix(Prefix)) ? ScaffoldTemplates.ApiPrefix(Prefix)
+        : null;
+
+    /// <summary>
+    /// The package id of the Plugins project: <c>zava_Zava.Plugins</c> when a publisher prefix is known (see
+    /// <see cref="KnownPublisherPrefix"/>), so <c>vela plan</c> / <c>apply</c> import it without <c>--solution</c>;
+    /// <c>Zava.Plugins</c> otherwise.
+    /// </summary>
+    public string PluginsPackageId => PrefixedPackageId($"{Prefix}.Plugins");
+
+    /// <summary>
+    /// The package id of the Integrations project, prefixed like <see cref="PluginsPackageId"/>. With
+    /// <see cref="ManagedIdentity"/> it always carries the publisher prefix (<c>zava_Zava.Integrations</c>), since a
+    /// signed package cannot be renamed at <c>vela apply --solution</c> time.
+    /// </summary>
+    public string IntegrationsPackageId => ManagedIdentity ? $"{EffectivePublisherPrefix}_{Prefix}.Integrations" : PrefixedPackageId($"{Prefix}.Integrations");
+
+    private string PrefixedPackageId(string projectName) =>
+        KnownPublisherPrefix is { } publisherPrefix ? $"{publisherPrefix}_{projectName}" : projectName;
 
     // A Dataverse publisher customization prefix: 2-8 characters, starts with a letter, alphanumeric, and not the
     // reserved "mscrm" (Dataverse rejects it).

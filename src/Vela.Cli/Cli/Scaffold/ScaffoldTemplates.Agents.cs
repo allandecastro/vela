@@ -18,6 +18,9 @@ internal static partial class ScaffoldTemplates
             : string.Empty;
         // With --no-tests the solution has no test project and no Vela.Testing reference, so the guide names neither.
         string packages = options.IncludeTests ? "`Vela.Plugins`, `Vela.Testing` and the `vela` CLI" : "`Vela.Plugins` and the `vela` CLI";
+        string solutionRule = options.KnownPublisherPrefix is { } knownPrefix
+            ? $"Always pass `--solution`: it adds the components to that solution. The packages are already named with the\npublisher prefix `{knownPrefix}` (`{options.PluginsPackageId}`), which Dataverse requires to import them."
+            : "Always pass `--solution`: it gives the package its publisher prefix, without which plan and apply fail.";
         string testSection = options.IncludeTests ? "\n" + TestSection.Replace("{{prefix}}", prefix) : string.Empty;
 
         return
@@ -46,7 +49,7 @@ vela apply --packages-dir artifacts --solution <uniquename>          # writes; a
 vela help --json                                                     # every command, option and exit code
 ```
 
-Always pass `--solution`: it gives the package its publisher prefix, without which plan and apply fail. Run
+{{solutionRule}} Run
 `vela plan` and read its result before any `vela apply`, and never apply without being asked to.
 
 ## Write a step

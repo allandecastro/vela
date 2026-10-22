@@ -21,12 +21,6 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Changed (CLI)
-
-- `vela add plugin|step --message SetState` (or `SetStateDynamicEntity`) still renders `On<SetStateRequest>()`, and
-  now notes that `SetStateRequest` is deprecated: an Update step filtered on `statecode` (`--message Update
-  --filtering-attributes StateCode`) also runs for a caller that still sends it.
-
 ### Added
 
 - `vela plan` / `vela apply --managed-identity <managedidentityid>` link the published plugin packages to a
@@ -58,11 +52,27 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Docs
 
+- The plugin guide, `vela add` and VELA022 say that `SetStateRequest` is deprecated (Learn: use an Update of
+  `statecode`), and recommend `OnUpdate().FilterOn(x => x.StateCode)` for a state change, which also runs for a
+  caller that still sends `SetStateRequest`. `On<SetStateRequest>()` stays for logic that needs its own inputs.
 - The localization guide registers the project's message source once, in an `[assembly: VelaServiceRegistrar]`, with
   the keys and the source in one class, instead of in each plugin's `ConfigureServices`. Its samples are compiled and
   tested (`docs/samples/Vela.DocSamples/LocalizationSample.cs`).
 - The Markdown copies of the pages listed in `docs/llms.txt` (and `llms-full.txt`) inline the code a page includes
   from the compiled samples. They showed the raw `[!code-csharp[](...)]` include instead.
+
+### Changed (CLI)
+
+- `vela add plugin|step --message SetState` (or `SetStateDynamicEntity`) still renders `On<SetStateRequest>()`, and
+  now notes that `SetStateRequest` is deprecated: an Update step filtered on `statecode` (`--message Update
+  --filtering-attributes StateCode`) also runs for a caller that still sends it.
+- `vela init` names the plugin packages with the publisher prefix when one is known: `--publisher-prefix zava` (or
+  the prefix derived from `--prefix` with `--samples` or `--managed-identity`) gives the package ids
+  `zava_Zava.Plugins` and `zava_Zava.Integrations` (built as `artifacts/zava_Zava.Plugins.1.0.0.nupkg`), so
+  `vela plan` and `vela apply` import them without `--solution` instead of refusing an unprefixed package. The
+  assemblies keep the project names (`Zava.Plugins.dll`). A minimal scaffold without `--publisher-prefix` keeps
+  `Zava.Plugins`, which `vela apply --solution` prefixes as before. The generated README and AGENTS.md name the
+  prefixed package.
 
 ### Fixed (CLI)
 

@@ -162,7 +162,9 @@ public class ProjectScaffolderTests
             // The signed package is named with the publisher prefix up front; the assembly keeps the project name.
             Assert.Contains("<PackageId>zava_Zava.Integrations</PackageId>", integrationsCsproj);
             Assert.Contains("<AssemblyName>Zava.Integrations</AssemblyName>", integrationsCsproj);
-            Assert.Contains("<PackageId>Zava.Plugins</PackageId>", pluginsCsproj);
+            // The Plugins package takes the same prefix, so plan/apply import it without --solution.
+            Assert.Contains("<PackageId>zava_Zava.Plugins</PackageId>", pluginsCsproj);
+            Assert.Contains("<AssemblyName>Zava.Plugins</AssemblyName>", pluginsCsproj);
             Assert.Empty(Directory.GetFiles(integrations, "*.cs", SearchOption.AllDirectories));
             Assert.False(Directory.Exists(Path.Combine(root, "tests")));
 
@@ -188,6 +190,58 @@ public class ProjectScaffolderTests
             {
                 Assert.Contains("<VelaPublisherPrefix>zs</VelaPublisherPrefix>", File.ReadAllText(Path.Combine(root, csproj)));
             }
+        });
+    }
+
+    [Fact]
+    public void Generate_Minimal_WithPublisherPrefix_NamesThePluginPackageWithIt()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.True(ScaffoldOptions.TryParse(["VpmiSales", "--prefix", "Vpmi", "--publisher-prefix", "vpmi", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
+
+            string root = Path.Combine(temp, "VpmiSales");
+            string pluginsCsproj = File.ReadAllText(Path.Combine(root, "src", "Vpmi.Plugins", "Vpmi.Plugins.csproj"));
+            Assert.Contains("<PackageId>vpmi_Vpmi.Plugins</PackageId>", pluginsCsproj);
+            Assert.Contains("<AssemblyName>Vpmi.Plugins</AssemblyName>", pluginsCsproj);
+
+            string readme = File.ReadAllText(Path.Combine(root, "README.md"));
+            Assert.Contains("already named with the publisher prefix `vpmi` (`vpmi_Vpmi.Plugins`)", readme);
+            Assert.DoesNotContain("refuses an unprefixed package", readme);
+            string agents = File.ReadAllText(Path.Combine(root, "AGENTS.md"));
+            Assert.Contains("publisher prefix `vpmi` (`vpmi_Vpmi.Plugins`)", agents);
+        });
+    }
+
+    [Fact]
+    public void Generate_Minimal_WithoutPublisherPrefix_KeepsTheUnprefixedPluginPackage()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
+
+            string root = Path.Combine(temp, "ZavaSales");
+            Assert.Contains("<PackageId>Zava.Plugins</PackageId>", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj")));
+            Assert.Contains("`--solution` gives the package its publisher prefix", File.ReadAllText(Path.Combine(root, "README.md")));
+            Assert.Contains("it gives the package its publisher prefix, without which plan and apply fail", File.ReadAllText(Path.Combine(root, "AGENTS.md")));
+        });
+    }
+
+    [Fact]
+    public void Generate_Samples_NamesThePackagesWithTheDerivedPublisherPrefix()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp)));
+
+            string root = Path.Combine(temp, "ZavaSales");
+            Assert.Contains("<PackageId>zava_Zava.Plugins</PackageId>", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj")));
+            Assert.Contains("<PackageId>zava_Zava.Integrations</PackageId>", File.ReadAllText(Path.Combine(root, "src", "Zava.Integrations", "Zava.Integrations.csproj")));
+            string readme = File.ReadAllText(Path.Combine(root, "README.md"));
+            Assert.Contains("vela plan --package artifacts/zava_Zava.Plugins.1.0.0.nupkg", readme);
+            Assert.Contains("vela sign --package artifacts/zava_Zava.Integrations.1.0.0.nupkg", readme);
         });
     }
 
@@ -961,6 +1015,7 @@ public class ProjectScaffolderTests
 
             BuildTestAndScan(temp, root, expectedCustomApis: [], minimumSteps: 0, maximumSteps: 0, runTests: false);
             Assert.True(File.Exists(Path.Combine(root, "artifacts", "zava_Zava.Integrations.1.0.0.nupkg")), "the empty Integrations package should still be built, named with the publisher prefix");
+            Assert.True(File.Exists(Path.Combine(root, "artifacts", "zava_Zava.Plugins.1.0.0.nupkg")), "the Plugins package should be named with the publisher prefix");
 
             Directory.CreateDirectory(Path.Combine(root, "src", "Zava.Shared", "Models", "Generated"));
             File.WriteAllText(Path.Combine(root, "src", "Zava.Shared", "Models", "Generated", "Account.cs"), ScaffoldTemplates.AccountModel("Zava"));

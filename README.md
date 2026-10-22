@@ -75,7 +75,8 @@ vela plan  --packages-dir artifacts --solution ZavaSales --interactive  # read-o
 vela apply --packages-dir artifacts --solution ZavaSales --interactive  # asks before writing
 ```
 
-`--solution` names an existing Dataverse solution: it gives the package its publisher prefix. The
+`--solution` names an existing Dataverse solution the components are added to. `--publisher-prefix` names the
+package `zava_Zava.Plugins`, as Dataverse requires; without it, `--solution` gives the package that prefix. The
 [quickstart](https://allandecastro.github.io/vela/getting-started/quickstart.html) explains each step, and the
 **[documentation](https://allandecastro.github.io/vela/)** covers plugins, Custom APIs, testing with
 `Vela.Testing` and the `plan` / `apply` workflow. AI coding agents: start with [`AGENTS.md`](AGENTS.md) in this
