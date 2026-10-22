@@ -21,14 +21,53 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Changed (Framework)
+## [0.28.0] - 2026-10-22 (Vela.Cli)
+
+### Added
+
+- `vela plan` / `vela apply --managed-identity <managedidentityid>` link the published plugin packages to a
+  `managedidentity` record of the target environment, so the same package ships to each environment with that
+  environment's managed identity. Plan reports each package as already linked, to link, or to change from another
+  managed identity (a `link` operation and a `managedIdentity` block in the JSON, counted in `hasChanges` and
+  `--detailed-exitcode`); apply sets `pluginpackage.managedidentityid` right after the publish, including on a package
+  it creates, through `--solution` when given, and reports it in `executed.linkedToManagedIdentity`. An id with no
+  `managedidentity` record fails the run (exit 4) before anything is written. Without the option the link is neither
+  read nor changed. The link was set by hand after every first deployment.
+
+### Changed
+
+- `vela add plugin|step --message SetState` (or `SetStateDynamicEntity`) still renders `On<SetStateRequest>()`, and
+  now notes that `SetStateRequest` is deprecated: an Update step filtered on `statecode` (`--message Update
+  --filtering-attributes StateCode`) also runs for a caller that still sends it.
+- `vela init` names the plugin packages with the publisher prefix when one is known: `--publisher-prefix zava` (or
+  the prefix derived from `--prefix` with `--samples` or `--managed-identity`) gives the package ids
+  `zava_Zava.Plugins` and `zava_Zava.Integrations` (built as `artifacts/zava_Zava.Plugins.1.0.0.nupkg`), so
+  `vela plan` and `vela apply` import them without `--solution` instead of refusing an unprefixed package. The
+  assemblies keep the project names (`Zava.Plugins.dll`). A minimal scaffold without `--publisher-prefix` keeps
+  `Zava.Plugins`, which `vela apply --solution` prefixes as before. The generated README and AGENTS.md name the
+  prefixed package.
+- `vela init` references framework 0.41.1 (Vela.Plugins, Vela.Testing, Vela.Messages).
+
+### Fixed
+
+- `vela logs --errors` keeps only the trace log rows that carry an exception. It filtered on `exceptiondetails` not
+  null, but Dataverse stores an empty string on a row without an exception, so every row was kept (and shown without
+  an exception). The query now also requires a non-empty `exceptiondetails`.
+- `vela apply --solution` no longer tries to add the assembly of a plug-in package to the solution on its own when
+  the package was deployed before without that solution. Dataverse refuses it ("cannot be exported as it is part of
+  a Plugin Package"), so the run failed with exit 7 before adding the steps. The package is added, and carries its
+  assembly.
+
+## [0.41.1] - 2026-10-22 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Changed
 
 - `AcquireManagedIdentityToken` (both overloads), when no `IManagedIdentityService` is available, throws a message
   that says how to provide one: `WithManagedIdentityService(...)` in a Vela.Testing harness, or a managed identity
   linked to the plug-in package or assembly on Dataverse (with a link to the Learn page). It said only
   "IManagedIdentityService is unavailable.".
 
-### Fixed (Framework)
+### Fixed
 
 - VELA025 (outbound call to an IP address) now reads a local through its declaration: `string url =
   "http://10.0.0.1/api"; client.GetAsync(url);` (or `new Uri(url)`, `new HttpRequestMessage(method, url)`) is
@@ -42,40 +81,6 @@ All notable changes to Vela are documented here. The format is based on
   `WithParentalRelationship` / `WithReferentialRelationship` and `WithSharedRecord` call; a row a run-time
   Share/Unshare cascade has reached keeps that grant. Within one `Seed`, a grandchild listed before its parent now
   inherits through it too.
-
-### Added (CLI)
-
-- `vela plan` / `vela apply --managed-identity <managedidentityid>` link the published plugin packages to a
-  `managedidentity` record of the target environment, so the same package ships to each environment with that
-  environment's managed identity. Plan reports each package as already linked, to link, or to change from another
-  managed identity (a `link` operation and a `managedIdentity` block in the JSON, counted in `hasChanges` and
-  `--detailed-exitcode`); apply sets `pluginpackage.managedidentityid` right after the publish, including on a package
-  it creates, through `--solution` when given, and reports it in `executed.linkedToManagedIdentity`. An id with no
-  `managedidentity` record fails the run (exit 4) before anything is written. Without the option the link is neither
-  read nor changed. The link was set by hand after every first deployment.
-
-### Changed (CLI)
-
-- `vela add plugin|step --message SetState` (or `SetStateDynamicEntity`) still renders `On<SetStateRequest>()`, and
-  now notes that `SetStateRequest` is deprecated: an Update step filtered on `statecode` (`--message Update
-  --filtering-attributes StateCode`) also runs for a caller that still sends it.
-- `vela init` names the plugin packages with the publisher prefix when one is known: `--publisher-prefix zava` (or
-  the prefix derived from `--prefix` with `--samples` or `--managed-identity`) gives the package ids
-  `zava_Zava.Plugins` and `zava_Zava.Integrations` (built as `artifacts/zava_Zava.Plugins.1.0.0.nupkg`), so
-  `vela plan` and `vela apply` import them without `--solution` instead of refusing an unprefixed package. The
-  assemblies keep the project names (`Zava.Plugins.dll`). A minimal scaffold without `--publisher-prefix` keeps
-  `Zava.Plugins`, which `vela apply --solution` prefixes as before. The generated README and AGENTS.md name the
-  prefixed package.
-
-### Fixed (CLI)
-
-- `vela logs --errors` keeps only the trace log rows that carry an exception. It filtered on `exceptiondetails` not
-  null, but Dataverse stores an empty string on a row without an exception, so every row was kept (and shown without
-  an exception). The query now also requires a non-empty `exceptiondetails`.
-- `vela apply --solution` no longer tries to add the assembly of a plug-in package to the solution on its own when
-  the package was deployed before without that solution. Dataverse refuses it ("cannot be exported as it is part of
-  a Plugin Package"), so the run failed with exit 7 before adding the steps. The package is added, and carries its
-  assembly.
 
 ### Docs
 
