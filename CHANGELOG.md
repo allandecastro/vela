@@ -21,6 +21,26 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Docs
+
+- New "Namespaces and usings" section in [Scaffold a solution](docs/guides/scaffold.md): why the folder-named
+  namespaces need the usings inside a block namespace (CS0118 otherwise), and what the generated `.editorconfig`
+  enforces. The plugin samples of the plugin, end-to-end and Custom API guides and of the NuGet readme use the
+  scaffold's namespace (`Zava.Plugins.Account.Plugins`) with the usings inside it.
+
+### Changed (CLI)
+
+- `vela init` writes a solution-root `.editorconfig` (manifest-tracked like the other generated files) that keeps
+  `using` directives inside a block namespace: `csharp_using_directive_placement = inside_namespace`, so the IDE adds
+  them there, and `dotnet_diagnostic.IDE0065.severity = warning` with `EnforceCodeStyleInBuild` in
+  `Directory.Build.props`, so `dotnet build` warns on one placed outside. The scaffold names namespaces after the
+  folders (`Zava.Plugins.Account.Plugins`): a using above the namespace, or a file-scoped namespace, let the `Account`
+  namespace segment hide the `Account` model type (`error CS0118`). A scaffold without the file gets it on
+  `vela init --force`; an existing `.editorconfig` is kept.
+- The scaffolded `AGENTS.md` shows each sample in the namespace the scaffold gives its folder, with the usings inside
+  it, and adds the conventions: why usings go inside the namespace, handlers named after the behaviour
+  (`--handler`), project-wide services and message sources in `ProjectServices.cs`, a `<summary>` on public types.
+
 ### Fixed (Framework)
 
 - The typed step contexts and image projections the source generator writes document every public member (the

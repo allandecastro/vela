@@ -71,11 +71,29 @@ artifacts/
 *.pfx
 """;
 
+    // The solution-root .editorconfig. The scaffold names each namespace after its folder
+    // ({prefix}.Plugins.Account.Plugins), so a using directive placed above the namespace declaration lets the
+    // `Account` namespace segment hide the `Account` model type (CS0118). Inside the namespace, the using wins. The
+    // option makes the IDE add usings there; the IDE0065 severity (with EnforceCodeStyleInBuild in
+    // Directory.Build.props) makes `dotnet build` warn on a using placed outside.
+    public static string EditorConfig(string prefix) =>
+$$"""
+# Code style for this solution. Namespaces follow the folders ({{prefix}}.Plugins.Account.Plugins), so a `using` placed
+# above the namespace lets the `Account` namespace segment hide the `Account` model type (error CS0118). Keep the
+# usings inside a block namespace: the IDE adds them there, and the build warns (IDE0065) on one placed outside.
+[*.cs]
+csharp_using_directive_placement = inside_namespace:warning
+csharp_style_namespace_declarations = block_scoped:suggestion
+dotnet_diagnostic.IDE0065.severity = warning
+""";
+
     public static string DirectoryBuildProps() =>
 $$"""
 <Project>
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
+    <!-- Report the code-style rules of .editorconfig in the build too (IDE0065: usings inside the namespace). -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <ImplicitUsings>disable</ImplicitUsings>
     <!-- Early-bound models and plugin code follow the classic non-nullable Dataverse conventions. -->
     <Nullable>disable</Nullable>

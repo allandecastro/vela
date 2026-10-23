@@ -284,6 +284,8 @@ internal static class ProjectScaffolder
         Add("Directory.Packages.props", DirectoryPackagesProps());
         Add($"{options.SolutionName}.sln", Solution(entries));
         Add(".gitignore", Gitignore());
+        // Usings inside the namespace: a folder-named namespace segment (Account) would otherwise hide the model type.
+        Add(".editorconfig", EditorConfig(prefix));
         // No nuget.config: Vela.Plugins / Vela.Testing (and the Microsoft SDK packages) all resolve from
         // nuget.org, the default source. Add your own nuget.config only if you use a private feed.
         Add("README.md", RootReadme(options));

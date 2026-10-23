@@ -21,6 +21,7 @@ internal static partial class ScaffoldTemplates
         string solutionRule = options.KnownPublisherPrefix is { } knownPrefix
             ? $"Always pass `--solution`: it adds the components to that solution. The packages are already named with the\npublisher prefix `{knownPrefix}` (`{options.PluginsPackageId}`), which Dataverse requires to import them."
             : "Always pass `--solution`: it gives the package its publisher prefix, without which plan and apply fail.";
+        string testsNamespace = options.IncludeTests ? $", its tests `{prefix}.Plugins.Tests.Account.Plugins`" : string.Empty;
         string testSection = options.IncludeTests ? "\n" + TestSection.Replace("{{prefix}}", prefix) : string.Empty;
 
         return
@@ -52,44 +53,62 @@ vela help --json                                                     # every com
 {{solutionRule}} Run
 `vela plan` and read its result before any `vela apply`, and never apply without being asked to.
 
+## Code conventions
+
+- Namespaces follow the folders: `src/{{prefix}}.Plugins/Account/Plugins/` is `{{prefix}}.Plugins.Account.Plugins`{{testsNamespace}}.
+  Put the `using` directives inside a block `namespace { }`, as below, never above the namespace or with a
+  file-scoped one: there, the `Account` namespace segment hides the `Account` model type (error CS0118).
+  `.editorconfig` makes the IDE add usings inside, and the build warns (IDE0065) on one outside. In the root
+  namespace `{{prefix}}.Plugins` itself, `Account` is always the namespace: keep table code in its table's folder.
+- Name a handler after the behaviour (`OnCreditLimitChanging`, not `OnUpdate`); `vela add plugin` and
+  `vela add step` take `--handler <Method>`.
+- Project-wide services and message sources go in the generated `ProjectServices.cs` (an `IServiceRegistrar` with
+  `[assembly: VelaServiceRegistrar]`), the message keys in `Messages.cs`:
+  https://allandecastro.github.io/vela/guides/localization.html
+- Give every public type a `/// <summary>`: the projects generate their XML documentation.
+
 ## Write a step
 
 ```csharp
-using Microsoft.Xrm.Sdk;
-using Vela.Context;
-using Vela.Plugin;
-using {{prefix}}.Shared.Models.Generated;
-
-public sealed partial class AccountCreditPlugin(string unsecureConfig, string secureConfig)
-    : EntityPluginBase<Account>(unsecureConfig, secureConfig)
+namespace {{prefix}}.Plugins.Account.Plugins
 {
-    protected override void RegisterPluginSteps()
-    {
-        RegisterStep().OnUpdate().PreOperation().Sync()
-            .FilterOn(a => a.CreditLimit)          // required on Create/Update (VELA020)
-            .WithPreImage(a => a.CreditLimit)      // only the columns you read
-            .Handle(OnCreditLimitChanging);
+    using Microsoft.Xrm.Sdk;
+    using Vela.Context;
+    using Vela.Plugin;
+    using {{prefix}}.Shared.Models.Generated;
 
-        RegisterStep().OnUpdate().PostOperation().Async()
-            .FilterOn(a => a.CreditLimit)
-            .WithStepKey("credit-review")          // needed only when two steps on one trigger look identical
-            .Handle(OnCreditLimitChanged);
-    }
-
-    // OnCreditLimitChangingContext is generated (the class must be partial): PreImage holds the captured columns.
-    private void OnCreditLimitChanging(OnCreditLimitChangingContext ctx)
+    /// <summary>Guards and reviews changes to an account's credit limit.</summary>
+    public sealed partial class AccountCreditPlugin(string unsecureConfig, string secureConfig)
+        : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
-        decimal before = ctx.PreImage.CreditLimit?.Value ?? 0m;
-        decimal after = ctx.Request.Target.CreditLimit?.Value ?? 0m;
-        if (before > 0 && after > before * 2)
+        protected override void RegisterPluginSteps()
         {
-            throw new InvalidPluginExecutionException("The credit limit cannot more than double at once.");
-        }
-    }
+            RegisterStep().OnUpdate().PreOperation().Sync()
+                .FilterOn(a => a.CreditLimit)          // required on Create/Update (VELA020)
+                .WithPreImage(a => a.CreditLimit)      // only the columns you read
+                .Handle(OnCreditLimitChanging);
 
-    // An async step runs after the commit: write through a service, never to the Target (VELA018).
-    private void OnCreditLimitChanged(OnCreditLimitChangedContext ctx) =>
-        ctx.Service.Update(new Account { Id = ctx.PrimaryEntityId, Description = "Credit limit reviewed." });
+            RegisterStep().OnUpdate().PostOperation().Async()
+                .FilterOn(a => a.CreditLimit)
+                .WithStepKey("credit-review")          // needed only when two steps on one trigger look identical
+                .Handle(OnCreditLimitChanged);
+        }
+
+        // OnCreditLimitChangingContext is generated (the class must be partial): PreImage holds the captured columns.
+        private void OnCreditLimitChanging(OnCreditLimitChangingContext ctx)
+        {
+            decimal before = ctx.PreImage.CreditLimit?.Value ?? 0m;
+            decimal after = ctx.Request.Target.CreditLimit?.Value ?? 0m;
+            if (before > 0 && after > before * 2)
+            {
+                throw new InvalidPluginExecutionException("The credit limit cannot more than double at once.");
+            }
+        }
+
+        // An async step runs after the commit: write through a service, never to the Target (VELA018).
+        private void OnCreditLimitChanged(OnCreditLimitChangedContext ctx) =>
+            ctx.Service.Update(new Account { Id = ctx.PrimaryEntityId, Description = "Credit limit reviewed." });
+    }
 }
 ```
 
@@ -108,44 +127,50 @@ public sealed partial class AccountCreditPlugin(string unsecureConfig, string se
 ## Write a Custom API
 
 ```csharp
-using System;
-using Vela.Context;
-using Vela.CustomApi;
-using Vela.Messages;
-
-public sealed class EstimateValueApi(string unsecureConfig, string secureConfig)
-    : CustomApiBase<EstimateValueRequest, EstimateValueResponse>(unsecureConfig, secureConfig)
+namespace {{prefix}}.Plugins.GlobalCustomApis
 {
-    protected override void RegisterCustomApi()
+    using System;
+    using Vela.Context;
+    using Vela.CustomApi;
+    using Vela.Messages;
+
+    /// <summary>Estimates the value of an account.</summary>
+    public sealed class EstimateValueApi(string unsecureConfig, string secureConfig)
+        : CustomApiBase<EstimateValueRequest, EstimateValueResponse>(unsecureConfig, secureConfig)
     {
-        RegisterCustomApi("{{options.EffectivePublisherPrefix}}_EstimateValue")
-            .DisplayName("Estimate value")
-            .Description("Estimates the value of an account.")
-            .AsFunction()
-            .Request(r => r
-                .Add(x => x.AccountId)                                       // required by default
-                .Add(x => x.Discount, optional: true, "Discount to apply."))
-            .Response(r => r.Add(x => x.Value));                             // a function needs a response
+        protected override void RegisterCustomApi()
+        {
+            RegisterCustomApi("{{options.EffectivePublisherPrefix}}_EstimateValue")
+                .DisplayName("Estimate value")
+                .Description("Estimates the value of an account.")
+                .AsFunction()
+                .Request(r => r
+                    .Add(x => x.AccountId)                                       // required by default
+                    .Add(x => x.Discount, optional: true, "Discount to apply."))
+                .Response(r => r.Add(x => x.Value));                             // a function needs a response
+        }
+
+        protected override EstimateValueResponse Execute(ILocalPluginContext ctx, EstimateValueRequest request) =>
+            new EstimateValueResponse { Value = 1000m - request.Discount };
     }
 
-    protected override EstimateValueResponse Execute(ILocalPluginContext ctx, EstimateValueRequest request) =>
-        new EstimateValueResponse { Value = 1000m - request.Discount };
-}
+    /// <summary>The request of the EstimateValue Custom API.</summary>
+    public sealed class EstimateValueRequest : CustomApiRequest
+    {
+        public EstimateValueRequest() : base("{{options.EffectivePublisherPrefix}}_EstimateValue") { }
 
-public sealed class EstimateValueRequest : CustomApiRequest
-{
-    public EstimateValueRequest() : base("{{options.EffectivePublisherPrefix}}_EstimateValue") { }
+        public Guid AccountId { get => Get<Guid>(); set => Set(value); }
 
-    public Guid AccountId { get => Get<Guid>(); set => Set(value); }
+        public decimal Discount { get => Get<decimal>(); set => Set(value); }
+    }
 
-    public decimal Discount { get => Get<decimal>(); set => Set(value); }
-}
+    /// <summary>The response of the EstimateValue Custom API.</summary>
+    public sealed class EstimateValueResponse : CustomApiResponse
+    {
+        public EstimateValueResponse() : base("{{options.EffectivePublisherPrefix}}_EstimateValue") { }
 
-public sealed class EstimateValueResponse : CustomApiResponse
-{
-    public EstimateValueResponse() : base("{{options.EffectivePublisherPrefix}}_EstimateValue") { }
-
-    public decimal Value { get => Get<decimal>(); set => Set(value); }
+        public decimal Value { get => Get<decimal>(); set => Set(value); }
+    }
 }
 ```
 
@@ -161,37 +186,58 @@ underscores). `Build()` rejects what Dataverse refuses, such as a function witho
 ## Write a test
 
 ```csharp
-using System;
-using Microsoft.Xrm.Sdk;
-using Vela.Context;
-using Vela.Testing;
-using Xunit;
-using {{prefix}}.Shared.Models.Generated;
-
-[Fact]
-public void Rejects_A_Credit_Limit_That_More_Than_Doubles()
+namespace {{prefix}}.Plugins.Tests.Account.Plugins
 {
-    PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountCreditPlugin>();
-    Guid id = pipeline.Service.Create(new Account { Name = "Zava", CreditLimit = new Money(100m) });
+    using System;
+    using Microsoft.Xrm.Sdk;
+    using Vela.Testing;
+    using Xunit;
+    using {{prefix}}.Plugins.Account.Plugins;
+    using {{prefix}}.Shared.Models.Generated;
 
-    Assert.Throws<InvalidPluginExecutionException>(() =>
-        pipeline.Service.Update(new Account { Id = id, CreditLimit = new Money(500m) }));
-}
+    /// <summary>Tests of <see cref="AccountCreditPlugin"/>.</summary>
+    public sealed class AccountCreditPluginTests
+    {
+        [Fact]
+        public void Rejects_A_Credit_Limit_That_More_Than_Doubles()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountCreditPlugin>();
+            Guid id = pipeline.Service.Create(new Account { Name = "Zava", CreditLimit = new Money(100m) });
 
-[Fact]
-public void Estimates_A_Value()
-{
-    PluginPipeline pipeline = PluginPipeline.Empty().Register<EstimateValueApi>();
-
-    EstimateValueResponse response = pipeline.Service
-        .Execute(new EstimateValueRequest { AccountId = Guid.NewGuid(), Discount = 100m })
-        .ToResponse<EstimateValueResponse>();
-
-    Assert.Equal(900m, response.Value);
+            Assert.Throws<InvalidPluginExecutionException>(() =>
+                pipeline.Service.Update(new Account { Id = id, CreditLimit = new Money(500m) }));
+        }
+    }
 }
 ```
 
-Also add a `using` for the namespace of the plugin and Custom API classes under test.
+```csharp
+namespace {{prefix}}.Plugins.Tests.GlobalCustomApis
+{
+    using System;
+    using Vela.Context;
+    using Vela.Testing;
+    using Xunit;
+    using {{prefix}}.Plugins.GlobalCustomApis;
+
+    /// <summary>Tests of <see cref="EstimateValueApi"/>.</summary>
+    public sealed class EstimateValueApiTests
+    {
+        [Fact]
+        public void Estimates_A_Value()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<EstimateValueApi>();
+
+            EstimateValueResponse response = pipeline.Service
+                .Execute(new EstimateValueRequest { AccountId = Guid.NewGuid(), Discount = 100m })
+                .ToResponse<EstimateValueResponse>();
+
+            Assert.Equal(900m, response.Value);
+        }
+    }
+}
+```
+
 `PluginPipeline` runs every registered step around each request, as Dataverse does (stages, filters, images,
 transactions, async steps after the commit). Read stored rows with `pipeline.GetAll("account")`. For a single
 handler, `PluginContext.For<Account>().WithTarget(...).Execute<AccountCreditPlugin>()` runs one step directly.
