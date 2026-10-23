@@ -119,6 +119,7 @@ namespace {{prefix}}.Shared.Services
     /// <summary>Example shared domain service resolved through the plugin dependency container.</summary>
     public interface IGreetingService
     {
+        /// <summary>Builds a greeting for <paramref name="name"/>, or a generic one when it is empty.</summary>
         string BuildGreeting(string name);
     }
 }
@@ -133,6 +134,7 @@ namespace {{prefix}}.Shared.Services
     /// <inheritdoc />
     public sealed class GreetingService : IGreetingService
     {
+        /// <inheritdoc />
         public string BuildGreeting(string name)
         {
             return string.IsNullOrWhiteSpace(name)
@@ -159,6 +161,7 @@ namespace {{prefix}}.Plugins.Account.Services
     /// </summary>
     public interface IAccountFollowUpService
     {
+        /// <summary>Creates a follow-up task regarding the account and returns its id.</summary>
         Guid CreateFollowUpTask(Guid accountId, string accountName);
     }
 
@@ -170,6 +173,7 @@ namespace {{prefix}}.Plugins.Account.Services
 
         private readonly IOrganizationService _service = service;
 
+        /// <inheritdoc />
         public Guid CreateFollowUpTask(Guid accountId, string accountName)
         {
             Entity task = new("task")
@@ -203,6 +207,7 @@ namespace {{prefix}}.Plugins.Contact.Services
     /// </summary>
     public interface IContactDuplicateService
     {
+        /// <summary>The id of another contact with the same email address, or null when there is none.</summary>
         Guid? FindDuplicateByEmail(string email, Guid excludeContactId);
     }
 
@@ -211,6 +216,7 @@ namespace {{prefix}}.Plugins.Contact.Services
     {
         private readonly IOrganizationService _service = service;
 
+        /// <inheritdoc />
         public Guid? FindDuplicateByEmail(string email, Guid excludeContactId)
         {
             if (string.IsNullOrWhiteSpace(email))
@@ -255,6 +261,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     /// </summary>
     public sealed partial class AccountRelatedContactsPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
+        /// <inheritdoc />
         protected override void RegisterPluginSteps()
         {
             RegisterStep().OnUpdate()
@@ -311,6 +318,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     // partial: the typed image projection is generated as a nested type inside this class (VELA014).
     public sealed partial class AccountPostCreatePlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
+        /// <inheritdoc />
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
             // The default registrations already expose the IOrganizationService that acts as the current user
@@ -319,6 +327,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
             services.AddScoped<IAccountFollowUpService>(r => new AccountFollowUpService(r.GetRequiredService<IOrganizationService>()));
         }
 
+        /// <inheritdoc />
         protected override void RegisterPluginSteps()
         {
             RegisterStep().OnCreate()
@@ -368,6 +377,7 @@ namespace {{prefix}}.Plugins.Account.Plugins
     /// </summary>
     public abstract partial class AccountMessageReference(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
+        /// <inheritdoc />
         protected override void RegisterPluginSteps()
         {
             // Create / Update carry a full entity Target; both require at least one filtering attribute.
@@ -494,11 +504,13 @@ namespace {{prefix}}.Plugins.Contact.Plugins
     // partial: the typed image projections are generated as nested types inside this class (VELA014).
     public sealed partial class ContactRouterPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Contact>(unsecureConfig, secureConfig)
     {
+        /// <inheritdoc />
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
             services.AddScoped<IContactDuplicateService>(r => new ContactDuplicateService(r.GetRequiredService<IOrganizationService>()));
         }
 
+        /// <inheritdoc />
         protected override void RegisterPluginSteps()
         {
             RegisterStep().OnCreate()
@@ -576,6 +588,7 @@ namespace {{prefix}}.Plugins.Account.CustomApis
         /// <summary>The value returned until real valuation logic replaces it.</summary>
         public const decimal PlaceholderEstimate = 1000m;
 
+        /// <inheritdoc />
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi(UniqueName)
@@ -590,6 +603,7 @@ namespace {{prefix}}.Plugins.Account.CustomApis
                 .Response(r => r.Add(x => x.EstimatedValue));
         }
 
+        /// <inheritdoc />
         protected override EstimateValueResponse Execute(ILocalPluginContext ctx, EstimateValueRequest request)
         {
             ctx.Trace("Estimating value for account {0}", request.AccountId);
@@ -602,10 +616,12 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     /// <summary>Request parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
     public sealed class EstimateValueRequest : CustomApiRequest
     {
+        /// <summary>Creates the request.</summary>
         public EstimateValueRequest() : base(AccountEstimateValueCustomApi.UniqueName)
         {
         }
 
+        /// <summary>The bound account's id.</summary>
         public Guid AccountId
         {
             get => Get<Guid>();
@@ -614,6 +630,7 @@ namespace {{prefix}}.Plugins.Account.CustomApis
 
         // Optional request parameter (isoptional = true in Dataverse). Only request
         // parameters can be optional; response properties are always present.
+        /// <summary>The date to value the account against (optional; defaults to today).</summary>
         public DateTime AsOfDate
         {
             get => Get<DateTime>();
@@ -624,10 +641,12 @@ namespace {{prefix}}.Plugins.Account.CustomApis
     /// <summary>Response parameters for <see cref="AccountEstimateValueCustomApi"/>.</summary>
     public sealed class EstimateValueResponse : CustomApiResponse
     {
+        /// <summary>Creates the response.</summary>
         public EstimateValueResponse() : base(AccountEstimateValueCustomApi.UniqueName)
         {
         }
 
+        /// <summary>The estimated value of the account.</summary>
         public decimal EstimatedValue
         {
             get => Get<decimal>();
@@ -659,6 +678,7 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
         /// <summary>The unique name, shared by the registration, the request, the response and the tests.</summary>
         public const string UniqueName = "{{apiPrefix ?? ApiPrefix(prefix)}}_ContactValidate";
 
+        /// <inheritdoc />
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi(UniqueName)
@@ -671,6 +691,7 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
                 .Response(r => r.Add(x => x.IsValid));
         }
 
+        /// <inheritdoc />
         protected override ContactValidateResponse Execute(ILocalPluginContext ctx, ContactValidateRequest request)
         {
             ctx.Trace("Validating contact {0}", request.ContactId);
@@ -683,10 +704,12 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     /// <summary>Request parameters for <see cref="ContactValidateCustomApi"/>.</summary>
     public sealed class ContactValidateRequest : CustomApiRequest
     {
+        /// <summary>Creates the request.</summary>
         public ContactValidateRequest() : base(ContactValidateCustomApi.UniqueName)
         {
         }
 
+        /// <summary>The bound contact's id.</summary>
         public Guid ContactId
         {
             get => Get<Guid>();
@@ -697,10 +720,12 @@ namespace {{prefix}}.Plugins.Contact.CustomApis
     /// <summary>Response parameters for <see cref="ContactValidateCustomApi"/>.</summary>
     public sealed class ContactValidateResponse : CustomApiResponse
     {
+        /// <summary>Creates the response.</summary>
         public ContactValidateResponse() : base(ContactValidateCustomApi.UniqueName)
         {
         }
 
+        /// <summary>Whether the contact's email address is valid.</summary>
         public bool IsValid
         {
             get => Get<bool>();
@@ -726,6 +751,7 @@ namespace {{prefix}}.Plugins.GlobalCustomApis
         /// <summary>The unique name, shared by the registration and the tests.</summary>
         public const string UniqueName = "{{apiPrefix ?? ApiPrefix(prefix)}}_Ping";
 
+        /// <inheritdoc />
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi(UniqueName, Handle)

@@ -7,6 +7,7 @@ follow the same by-table layout as `vela init` (so they drop straight into a sca
 ```powershell
 # run inside the project folder, or pass --project <csproj>
 vela add plugin AccountValidatorPlugin --entity Account --message Update --filtering-attributes Name
+vela add plugin --entity Contact --message Delete           # named ContactPlugin
 vela add service AccountFollowUpService --entity Account  # table-scoped interface + implementation
 vela add service AuditService                             # shared by several tables, under Services/
 vela add customapi RecalculateTotals                  # global (unbound), lightweight Custom API
@@ -25,6 +26,12 @@ vela add --interactive
 
 - `--entity <ModelType>` is the early-bound class name (e.g. `Account`); it sets the `EntityPluginBase<T>`
   type and the `<Table>/` folder. Required for a plugin and a service; omit on a Custom API to generate a global one.
+- **Plugin name** (`add plugin`): `<Name>` is optional and defaults to `<Entity>Plugin` (`--entity Account` writes
+  `Account/Plugins/AccountPlugin.cs`). Every other kind requires its name.
+- **An existing plugin file is never edited by `add plugin`.** When `<Table>/Plugins/<Name>.cs` exists and `--force`
+  is not passed, it writes nothing, exits `2` and prints the `vela add step <Name> --entity <Entity> --message ...`
+  command (with the `--handler`, `--stage`, `--mode`, `--filtering-attributes` and `--project` you passed) that adds
+  the requested step to that class. `--force` overwrites the file with a new one-step plugin instead.
 - **Custom API ergonomics:** `--function`/`--action` choose the operation type (default `Action`), and
   `--bound`/`--global` make the binding explicit instead of inferring it from `--entity` (`--bound` requires
   `--entity`; `--global` is unbound). The generated unique name is `<prefix>_<Name>`, where `<prefix>` must match
@@ -47,9 +54,11 @@ vela add --interactive
   `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`, which registers on `SetStateDynamicEntity`, the message a
   `SetStateRequest` fires; that request is deprecated, and an Update of `statecode` covers both, so for a state change prefer
   `--message Update` with `--filtering-attributes statecode`), otherwise the request [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`)
-  generates, with a note to generate it. Whatever the message, the plugin is `partial` and its handler,
-  `OnExecute`, takes its generated `OnExecuteContext` (see [Typed step context](plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage)),
-  so its signature stays the same when the step later captures an image. `--project <csproj>` (default:
+  generates, with a note to generate it. Whatever the message, the plugin is `partial` and its handler takes its
+  generated `<Handler>Context` (see [Typed step context](plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage)),
+  so its signature stays the same when the step later captures an image. The handler is `Handle<Message>`
+  (`HandleUpdate(HandleUpdateContext ctx)`), the same default as `add step`; `--handler <Method>` names it
+  (a valid C# method name, else the command fails and writes nothing). `--project <csproj>` (default:
   the single `.csproj` in the current directory), `--force` (overwrite an existing file), `--json` (machine-readable
   report).
 - **Each kind takes only its own options.** An option the kind does not use (for example `add service --message`

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Xunit;
 
 namespace Vela.Analyzers.Tests;
@@ -73,8 +74,10 @@ namespace Demo
                     /// </summary>
                     public sealed class OnUpdated_PostImage : global::Vela.Context.IImageProjection
                     {
+                        /// <summary>The captured <c>revenue</c> column.</summary>
                         [global::Microsoft.Xrm.Sdk.AttributeLogicalName("revenue")]
                         public decimal? Revenue { get; set; }
+                        /// <summary>The captured <c>numberofemployees</c> column.</summary>
                         [global::Microsoft.Xrm.Sdk.AttributeLogicalName("numberofemployees")]
                         public int? NumberOfEmployees { get; set; }
 
@@ -98,6 +101,7 @@ namespace Demo
         AssertContainsText("""
                     public sealed class OnUpdated_PreImage_Before : global::Vela.Context.IImageProjection
                     {
+                        /// <summary>The captured <c>name</c> column.</summary>
                         [global::Microsoft.Xrm.Sdk.AttributeLogicalName("name")]
                         public string? Name { get; set; }
 
@@ -119,8 +123,11 @@ namespace Demo
                     /// </summary>
                     public sealed class OnUpdatedContext : global::Vela.Context.UpdatePostContext<global::Demo.Account>
                     {
+                        /// <summary>Wraps the live plugin context of the step.</summary>
                         public OnUpdatedContext(global::Vela.Context.ILocalPluginContext inner) : base(inner) { }
+                        /// <summary>The typed pre-image this step captured (null when absent).</summary>
                         public new OnUpdated_PreImage_Before? PreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<OnUpdated_PreImage_Before>(this, "Before");
+                        /// <summary>The typed post-image this step captured (null when absent).</summary>
                         public new OnUpdated_PostImage? PostImage => global::Vela.Context.ImageProjectionExtensions.PostImageAs<OnUpdated_PostImage>(this);
                     }
                 }
@@ -161,6 +168,7 @@ public sealed partial class GlobalAudit : EntityPluginBase<Account>
                 /// </summary>
                 public sealed class OnDeleted_PreImage : global::Vela.Context.IImageProjection
                 {
+                    /// <summary>The captured <c>name</c> column.</summary>
                     [global::Microsoft.Xrm.Sdk.AttributeLogicalName("name")]
                     public string? Name { get; set; }
 
@@ -191,7 +199,9 @@ public sealed partial class GlobalAudit : EntityPluginBase<Account>
                 /// </summary>
                 public sealed class OnDeletedContext : global::Vela.Context.DeletePostContext<global::Demo.Account>
                 {
+                    /// <summary>Wraps the live plugin context of the step.</summary>
                     public OnDeletedContext(global::Vela.Context.ILocalPluginContext inner) : base(inner) { }
+                    /// <summary>The typed pre-image this step captured (null when absent).</summary>
                     public new OnDeleted_PreImage? PreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<OnDeleted_PreImage>(this);
                 }
             }
@@ -256,7 +266,9 @@ namespace Demo
                                     /// </summary>
                                     public sealed class OnCreatedContext : global::Vela.Context.CreatePostContext<global::Demo.Account>
                                     {
+                                        /// <summary>Wraps the live plugin context of the step.</summary>
                                         public OnCreatedContext(global::Vela.Context.ILocalPluginContext inner) : base(inner) { }
+                                        /// <summary>The typed post-image this step captured (null when absent).</summary>
                                         public new OnCreated_PostImage? PostImage => global::Vela.Context.ImageProjectionExtensions.PostImageAs<OnCreated_PostImage>(this);
                                     }
                                 }
@@ -275,6 +287,7 @@ namespace Demo
                                     /// <summary>
             """, projection);
         AssertContainsText("""
+                                        /// <summary>The captured <c>telephone1</c> column.</summary>
                                         [global::Microsoft.Xrm.Sdk.AttributeLogicalName("telephone1")]
                                         public string? Telephone1 { get; set; }
             """, projection);
@@ -322,6 +335,7 @@ namespace Demo
                     /// </summary>
                     public sealed class OnUpdatingContext : global::Vela.Context.UpdatePreContext<global::Demo.Account>
                     {
+                        /// <summary>Wraps the live plugin context of the step.</summary>
                         public OnUpdatingContext(global::Vela.Context.ILocalPluginContext inner) : base(inner) { }
                     }
                 }
@@ -518,12 +532,16 @@ namespace Demo
 
         Assert.Empty(run.GeneratorDiagnostics);
         AssertContainsText("""
+                        /// <summary>The captured <c>vela_score</c> column.</summary>
                         [global::Microsoft.Xrm.Sdk.AttributeLogicalName("vela_score")]
                         public int? Score { get; set; }
+                        /// <summary>The captured <c>blank</c> column.</summary>
                         [global::Microsoft.Xrm.Sdk.AttributeLogicalName("blank")]
                         public string? Blank { get; set; }
+                        /// <summary>The captured <c>real_col</c> column.</summary>
                         [global::Microsoft.Xrm.Sdk.AttributeLogicalName("real_col")]
                         public string? Described { get; set; }
+                        /// <summary>The captured <c>plain</c> column.</summary>
                         [global::Microsoft.Xrm.Sdk.AttributeLogicalName("plain")]
                         public string? Plain { get; set; }
 
@@ -638,6 +656,51 @@ namespace Demo
 
         Assert.Empty(run.Sources);
         Assert.Empty(run.GeneratorDiagnostics);
+    }
+
+    [Fact]
+    public void Generated_code_documents_every_public_member_so_a_documented_project_gets_no_CS1591()
+    {
+        // `vela init` turns GenerateDocumentationFile on in the plugin projects: CS1591 is reported for generated
+        // code too, so every public member the generator emits carries a <summary>. The generated trees take the
+        // driver's parse options (DocumentationMode.Diagnose, as GenerateDocumentationFile sets it); the harness and
+        // plugin sources keep the default mode, so only the generated code is checked.
+        CSharpCompilation compilation = GeneratorHarness.Compile(@"
+namespace Demo
+{
+    using Vela.Plugin;
+    /// <summary>A documented plugin (CS1591 would otherwise land on its generated partial parts).</summary>
+    public sealed partial class Documented : EntityPluginBase<Account>
+    {
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PostOperation().Sync()
+                .WithPreImage(a => a.Name).WithPostImage(a => a.Revenue, a => a.NumberOfEmployees).Handle(OnUpdated);
+            RegisterStep().OnCreateMultiple().PostOperation().Sync().WithPostImage(a => a.Name).Handle(OnCreatedMany);
+            RegisterStep().OnUpdateMultiple().PreOperation().Sync().WithPreImage(a => a.Name).Handle(OnUpdatingMany);
+            RegisterStep().OnDelete().PostOperation().Sync().Handle(OnDeleted);
+        }
+
+        private void OnUpdated() { }
+        private void OnCreatedMany() { }
+        private void OnUpdatingMany() { }
+        private void OnDeleted() { }
+    }
+}
+");
+        CSharpParseOptions documented = new CSharpParseOptions(documentationMode: DocumentationMode.Diagnose);
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            new ISourceGenerator[] { new ImageProjectionGenerator().AsSourceGenerator() }, parseOptions: documented);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out Compilation updated, out _);
+
+        string[] generated = driver.GetRunResult().Results.SelectMany(r => r.GeneratedSources).Select(s => s.HintName).ToArray();
+        Assert.Contains("Demo_Documented_OnUpdatedContext.Context.g.cs", generated);
+        Assert.Contains("Demo_Documented_OnCreatedManyContext.Context.g.cs", generated);
+        Assert.Contains("Demo_Documented_OnUpdatingManyContext.Context.g.cs", generated);
+        Assert.Contains("Demo_Documented_OnDeletedContext.Context.g.cs", generated);
+        Assert.Empty(updated.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+        string[] missing = updated.GetDiagnostics().Where(d => d.Id == "CS1591").Select(d => d.ToString()).ToArray();
+        Assert.True(missing.Length == 0, string.Join("\n", missing));
     }
 
     // Independent FNV-1a (32-bit) over UTF-16 code units, rendered as 8 lower-case hex digits.

@@ -132,7 +132,24 @@ internal static class AddCommand
             return Fail($"Unknown 'add' kind '{args[0]}'. Expected 'plugin', 'customapi', 'service', 'test', 'step', 'form-script' or 'ribbon-script'.", ExitInvalidArguments, includeUsage: false);
         }
 
+        string? entity = TryReadOption(args, "--entity") ?? TryReadOption(args, "-e");
+        if (entity is not null && !IdentifierPattern.IsMatch(entity))
+        {
+            return Fail($"Invalid entity model type '{entity}'. Use the early-bound class name, e.g. 'Account'.", ExitInvalidArguments, includeUsage: false);
+        }
+
         string? name = FindPositional(args.Skip(1).ToArray(), ValueOptions);
+        if (string.IsNullOrWhiteSpace(name) && kind == "plugin")
+        {
+            // A plugin's name is optional: it defaults to <Entity>Plugin, so --entity (required anyway) names it.
+            if (string.IsNullOrWhiteSpace(entity))
+            {
+                return Fail("A plugin needs an entity. Pass --entity <ModelType> (the early-bound class name, e.g. Account); without a name, the plugin is named <ModelType>Plugin.", ExitInvalidArguments, includeUsage: false);
+            }
+
+            name = DefaultPluginName(entity!);
+        }
+
         if (string.IsNullOrWhiteSpace(name))
         {
             return Fail($"Missing name. Usage: vela add {kind} <Name> [--entity <ModelType>] [--project <csproj>] [--force]", ExitInvalidArguments, includeUsage: false);
@@ -141,12 +158,6 @@ internal static class AddCommand
         if (!IdentifierPattern.IsMatch(name))
         {
             return Fail($"Invalid name '{name}'. Use a valid C# identifier (letters, digits, '_'; not starting with a digit).", ExitInvalidArguments, includeUsage: false);
-        }
-
-        string? entity = TryReadOption(args, "--entity") ?? TryReadOption(args, "-e");
-        if (entity is not null && !IdentifierPattern.IsMatch(entity))
-        {
-            return Fail($"Invalid entity model type '{entity}'. Use the early-bound class name, e.g. 'Account'.", ExitInvalidArguments, includeUsage: false);
         }
 
         bool force = HasFlag(args, "--force");
@@ -431,8 +442,25 @@ internal static class AddCommand
     // One signature for every step, and it stays the same when an image is captured later.
     internal static string HandlerContextType(string handlerName) => handlerName + "Context";
 
-    // The handler `vela add plugin` binds its step to.
-    internal const string PluginHandlerName = "OnExecute";
+    // The handler a step binds to when --handler is not passed, the same for `vela add plugin` and `vela add step`.
+    internal static string DefaultHandlerName(string message) => $"Handle{message}";
+
+    // The class `vela add plugin` writes when no name is passed.
+    internal static string DefaultPluginName(string entity) => $"{entity}Plugin";
+
+    // The --handler of `add plugin` / `add step`, else the default Handle{Message}; null (with the error) when invalid.
+    private static string? ResolveHandler(string[] args, string message, out string error)
+    {
+        error = string.Empty;
+        string handler = (TryReadOption(args, "--handler") ?? DefaultHandlerName(message)).Trim();
+        if (!IdentifierPattern.IsMatch(handler))
+        {
+            error = $"Invalid --handler '{handler}'. Use a valid C# method name.";
+            return null;
+        }
+
+        return handler;
+    }
 
     // The TRequest of an On<TRequest>() registration call.
     internal static bool TryGetRequestType(string registrationCall, out string requestType)
@@ -470,10 +498,10 @@ internal static class AddCommand
         string message = known ?? request;
         string registrationCall = RegistrationCall(known, message);
 
-        string handler = (TryReadOption(args, "--handler") ?? $"Handle{message}").Trim();
-        if (!IdentifierPattern.IsMatch(handler))
+        string? handler = ResolveHandler(args, message, out string handlerError);
+        if (handler is null)
         {
-            return Fail($"Invalid --handler '{handler}'. Use a valid C# method name.", ExitInvalidArguments, includeUsage: false);
+            return Fail(handlerError, ExitInvalidArguments, includeUsage: false);
         }
 
         if (!TryResolveStageMode(args, out string stageCall, out string modeCall, out string stageError))
@@ -852,6 +880,12 @@ internal static class AddCommand
         string message = known ?? request;
         string registrationCall = RegistrationCall(known, message);
 
+        string? handler = ResolveHandler(args, message, out string handlerError);
+        if (handler is null)
+        {
+            return Fail(handlerError, ExitInvalidArguments, includeUsage: false);
+        }
+
         if (!TryResolveStageMode(args, out string stageCall, out string modeCall, out string stageError))
         {
             return Fail(stageError, ExitInvalidArguments, includeUsage: false);
@@ -860,6 +894,7 @@ internal static class AddCommand
         // Create/Update (and their bulk variants) require a FilterOn: the builder (and VELA020) reject such a step
         // without one, so the caller must name the column(s). We do NOT guess one from the model.
         string filteringCall = string.Empty;
+        string[] filterAttributes = [];
         if (!RequiresFilter(message) && SplitList(TryReadOption(args, "--filtering-attributes") ?? TryReadOption(args, "--filter")).Length > 0)
         {
             return Fail(FilterNotSupportedMessage(message), ExitInvalidArguments, includeUsage: false);
@@ -877,6 +912,7 @@ internal static class AddCommand
                     return Fail(filteringError!, ExitInvalidArguments, includeUsage: false);
                 }
 
+                filterAttributes = attributes;
                 string lambdas = string.Join(", ", attributes.Select(a => $"e => e.{a}"));
                 filteringCall = $"\n                .FilterOn({lambdas})";
             }
@@ -888,9 +924,42 @@ internal static class AddCommand
 
         string ns = $"{rootNamespace}.{entity}.Plugins";
         string relativePath = Path.Combine(entity!, "Plugins", $"{name}.cs");
-        string content = AddPluginFile(ns, name, entity!, modelsNamespace, message, registrationCall, stageCall, modeCall, filteringCall, PluginHandlerName);
+        string fullPath = Path.Combine(projectDir, relativePath);
+        if (File.Exists(fullPath) && !force)
+        {
+            // `add plugin` never edits an existing class: `add step` is the one way to add a step to it.
+            string addStep = AddStepCommandFor(args, name, entity!, message, filterAttributes);
+            return Fail($"File already exists: {fullPath}. To add this step to the existing {name}, run:\n  {addStep}\nOr pass --force to overwrite the file.", ExitInvalidArguments, includeUsage: false);
+        }
+
+        string content = AddPluginFile(ns, name, entity!, modelsNamespace, message, registrationCall, stageCall, modeCall, filteringCall, handler);
         return WriteFile(projectDir, relativePath, content, force, $"plugin {name} ({message} {entity})", HasFlag(args, "--json"));
     }
+
+    // The `vela add step` command that adds the step an `add plugin` run asked for to the plugin class that already
+    // exists: the same entity, message, handler, stage, mode, filtering columns and project as given.
+    internal static string AddStepCommandFor(string[] args, string name, string entity, string message, string[] filterAttributes)
+    {
+        List<string> parts = ["vela add step", name, "--entity", entity, "--message", message];
+        void AddOption(string option, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                parts.Add(option);
+                parts.Add(QuoteIfNeeded(value!.Trim()));
+            }
+        }
+
+        AddOption("--handler", TryReadOption(args, "--handler"));
+        AddOption("--stage", TryReadOption(args, "--stage"));
+        AddOption("--mode", TryReadOption(args, "--mode"));
+        AddOption("--filtering-attributes", filterAttributes.Length > 0 ? string.Join(",", filterAttributes) : null);
+        AddOption("--project", TryReadOption(args, "--project") ?? TryReadOption(args, "-p"));
+        return string.Join(" ", parts);
+    }
+
+    private static string QuoteIfNeeded(string value) =>
+        value.IndexOfAny([' ', '\t', '"', '\'']) >= 0 ? $"\"{value.Replace("\"", "\\\"")}\"" : value;
 
     private static int AddService(string name, string? entity, bool force, string projectDir, string rootNamespace, string modelsNamespace, bool json)
     {
@@ -1047,7 +1116,7 @@ internal static class AddCommand
 
     internal static readonly IReadOnlyDictionary<string, HashSet<string>> ApplicableOptions = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
     {
-        ["plugin"] = With("--force", "--entity", "-e", "--message", "--stage", "--mode", "--filtering-attributes", "--filter"),
+        ["plugin"] = With("--force", "--entity", "-e", "--message", "--handler", "--stage", "--mode", "--filtering-attributes", "--filter"),
         ["service"] = With("--force", "--entity", "-e"),
         ["customapi"] = With("--force", "--entity", "-e", "--bound", "--global", "--function", "--action", "--prefix"),
         ["test"] = With("--force", "--entity", "-e", "--kind", "--message", "--prefix"),

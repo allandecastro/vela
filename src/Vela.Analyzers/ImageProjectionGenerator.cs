@@ -937,37 +937,46 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent)}/// </summary>");
             sb.AppendLine($"{Pad(indent)}public sealed class {contextName} : {baseTypeFull}");
             sb.AppendLine($"{Pad(indent)}{{");
+            // Every public member carries a <summary> so a plugin project that generates its documentation file
+            // (GenerateDocumentationFile, as `vela init` scaffolds it) gets no CS1591 for generated code.
+            sb.AppendLine($"{Pad(indent + 1)}/// <summary>Wraps the live plugin context of the step.</summary>");
             sb.AppendLine($"{Pad(indent + 1)}public {contextName}(global::Vela.Context.ILocalPluginContext inner) : base(inner) {{ }}");
             if (bulk)
             {
                 // One entry per target, aligned with ctx.GetTargets(); null when that target has no such image.
                 if (pre is { } bulkPre)
                 {
+                    sb.AppendLine($"{Pad(indent + 1)}/// <summary>The typed pre-image of each target, aligned with the targets (null for a target without one).</summary>");
                     sb.AppendLine($"{Pad(indent + 1)}public global::System.Collections.Generic.IReadOnlyList<{bulkPre.TypeName}?> PreImages => global::Vela.Context.ImageProjectionExtensions.PreImagesAs<{bulkPre.TypeName}>(this{AliasArgument(bulkPre)});");
                 }
 
                 if (post is { } bulkPost)
                 {
+                    sb.AppendLine($"{Pad(indent + 1)}/// <summary>The typed post-image of each target, aligned with the targets (null for a target without one).</summary>");
                     sb.AppendLine($"{Pad(indent + 1)}public global::System.Collections.Generic.IReadOnlyList<{bulkPost.TypeName}?> PostImages => global::Vela.Context.ImageProjectionExtensions.PostImagesAs<{bulkPost.TypeName}>(this{AliasArgument(bulkPost)});");
                 }
             }
             else if (pre is { } preImage)
             {
+                sb.AppendLine($"{Pad(indent + 1)}/// <summary>The typed pre-image this step captured (null when absent).</summary>");
                 sb.AppendLine($"{Pad(indent + 1)}public new {preImage.TypeName}? PreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<{preImage.TypeName}>(this{AliasArgument(preImage)});");
             }
 
             if (!bulk && post is { } postImage)
             {
+                sb.AppendLine($"{Pad(indent + 1)}/// <summary>The typed post-image this step captured (null when absent).</summary>");
                 sb.AppendLine($"{Pad(indent + 1)}public new {postImage.TypeName}? PostImage => global::Vela.Context.ImageProjectionExtensions.PostImageAs<{postImage.TypeName}>(this{AliasArgument(postImage)});");
             }
 
             if (subordinatePre is { } subordinatePreImage)
             {
+                sb.AppendLine($"{Pad(indent + 1)}/// <summary>The typed subordinate pre-image this step captured (null when absent).</summary>");
                 sb.AppendLine($"{Pad(indent + 1)}public new {subordinatePreImage.TypeName}? SubordinatePreImage => global::Vela.Context.ImageProjectionExtensions.PreImageAs<{subordinatePreImage.TypeName}>(this{SubordinateAliasArgument(subordinatePreImage, "SubordinatePreImage")});");
             }
 
             if (subordinatePost is { } subordinatePostImage)
             {
+                sb.AppendLine($"{Pad(indent + 1)}/// <summary>The typed subordinate post-image this step captured (null when absent).</summary>");
                 sb.AppendLine($"{Pad(indent + 1)}public new {subordinatePostImage.TypeName}? SubordinatePostImage => global::Vela.Context.ImageProjectionExtensions.PostImageAs<{subordinatePostImage.TypeName}>(this{SubordinateAliasArgument(subordinatePostImage, "SubordinatePostImage")});");
             }
 
@@ -1031,6 +1040,7 @@ namespace Vela.Analyzers
             sb.AppendLine($"{Pad(indent)}{{");
             foreach (ProjectionColumn column in model.Columns)
             {
+                sb.AppendLine($"{Pad(indent + 1)}/// <summary>The captured <c>{column.LogicalName}</c> column.</summary>");
                 sb.AppendLine($"{Pad(indent + 1)}[global::Microsoft.Xrm.Sdk.AttributeLogicalName(\"{column.LogicalName}\")]");
                 sb.AppendLine($"{Pad(indent + 1)}public {column.TypeName} {column.PropertyName} {{ get; set; }}");
             }
