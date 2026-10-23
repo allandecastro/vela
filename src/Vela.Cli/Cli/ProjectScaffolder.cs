@@ -162,6 +162,9 @@ internal static class ProjectScaffolder
         // Custom APIs live under GlobalCustomApis/. A minimal package has no plugin types, so it registers nothing.
         AddProject(pluginsName, "src");
         Add(Path.Combine("src", pluginsName, $"{pluginsName}.csproj"), PluginCsproj(pluginsName, sharedName, options.CoreVersion, publisherPrefix: recordedPublisherPrefix, packageId: options.PluginsPackageId));
+        // The assembly's service registrar and message catalogue, empty, in both modes (one registrar per assembly).
+        Add(Path.Combine("src", pluginsName, "ProjectServices.cs"), ProjectServicesFile(pluginsName));
+        Add(Path.Combine("src", pluginsName, "Messages.cs"), ProjectMessagesFile(pluginsName));
         if (options.IncludeSamples)
         {
             Add(Path.Combine("src", pluginsName, "Account", "Plugins", "AccountPostCreatePlugin.cs"), AccountPostCreatePlugin(prefix));
@@ -182,6 +185,8 @@ internal static class ProjectScaffolder
         {
             AddProject(integrationsName, "src");
             Add(Path.Combine("src", integrationsName, $"{integrationsName}.csproj"), PluginCsproj(integrationsName, sharedName, options.CoreVersion, withSigningTarget: options.ManagedIdentity, publisherPrefix: recordedPublisherPrefix, packageId: options.IntegrationsPackageId));
+        Add(Path.Combine("src", integrationsName, "ProjectServices.cs"), ProjectServicesFile(integrationsName));
+        Add(Path.Combine("src", integrationsName, "Messages.cs"), ProjectMessagesFile(integrationsName));
         }
 
         if (options.IncludeIntegrations && options.IncludeSamples)

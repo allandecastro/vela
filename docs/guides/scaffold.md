@@ -16,8 +16,10 @@ ZavaSales/
   ZavaSales.sln
   src/
     Zava.Shared/            # early-bound models + shared services (net48;net10.0); empty until `vela models`
-    Zava.Plugins/           # plugin package -> builds a Dataverse plugin-package .nupkg; empty until `vela add`
-    Zava.Integrations/      # opt-in second plugin package, empty (add with --integrations)
+    Zava.Plugins/           # plugin package -> builds a Dataverse plugin-package .nupkg; no plugin until `vela add`
+      ProjectServices.cs    #   the assembly's service registrar, empty
+      Messages.cs           #   the project's message keys and their source, empty
+    Zava.Integrations/      # opt-in second plugin package, same two files (add with --integrations)
     Zava.WebResources/      # opt-in TypeScript form scripts / web resources (add with --web-resources)
   tests/
     Zava.Plugins.Tests/     # xunit + Vela.Testing, no connection (omit with --no-tests); empty until `vela add test`
@@ -28,7 +30,24 @@ ZavaSales/
 ```
 
 The minimal solution builds, tests and plans unedited: the package registers nothing, so `vela plan` reports no
-changes, and no demo step is ever deployed. Fill it in:
+changes, and no demo step is ever deployed.
+
+Each plugin project starts with two assembly-wide files, generated in both modes:
+
+- `ProjectServices.cs` - an empty [`IServiceRegistrar`](dependency-injection.md#share-services-across-the-assembly),
+  declared with `[assembly: Vela.DI.VelaServiceRegistrar(typeof(Zava.Plugins.ProjectServices))]`. The services and
+  message sources it registers apply to every plugin and Custom API of the assembly, before each one's own
+  `ConfigureServices`. It registers nothing until you uncomment or add a line.
+- `Messages.cs` - an empty `ProjectMessages` class for the message key constants and the `DictionaryMessageSource`
+  that holds their texts; register its `Source` in `ProjectServices` once it has a key
+  ([Localized messages](localization.md)).
+
+The plugin projects also generate their XML documentation file (`GenerateDocumentationFile`), so a public type or
+member without a `<summary>` is a CS1591 warning; the generated code and the files `vela add` writes document theirs.
+`Zava.Shared` generates its documentation file too, for the IntelliSense of the models, but silences CS1591: the
+models `vela models` writes there do not document every member. The test projects do not generate one.
+
+Fill it in:
 
 ```powershell
 vela models --entities account --out src/Zava.Shared/Models/Generated --namespace Zava.Shared.Models.Generated

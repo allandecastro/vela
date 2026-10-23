@@ -13,7 +13,8 @@ namespace Vela.Cli;
 /// </summary>
 /// <remarks>
 /// The class is split by concern: this file holds the shared constants and the solution-wide root files;
-/// <c>Scaffold/ScaffoldTemplates.Projects.cs</c> the project files; <c>.Readme.cs</c> the generated READMEs;
+/// <c>Scaffold/ScaffoldTemplates.Projects.cs</c> the project files and the plugin projects'
+/// <c>ProjectServices.cs</c> / <c>Messages.cs</c>; <c>.Readme.cs</c> the generated READMEs;
 /// <c>.Add.cs</c> the single-file <c>vela add</c> templates; <c>.Samples*.cs</c> / <c>.SampleTests.cs</c> the
 /// opt-in <c>vela init --samples</c> demo code; <c>.WebResources.cs</c> the TypeScript web-resources project.
 /// </remarks>

@@ -9,11 +9,16 @@ per message.
 
 Messages belong to the project, not to one plugin, so register their source once for the whole assembly with an
 [`IServiceRegistrar`](dependency-injection.md#share-services-across-the-assembly). Keep the keys and the source
-in one class:
+in one class.
+
+A project created with `vela init` already has both, empty, in each plugin project: `Messages.cs` holds the
+`ProjectMessages` class (add the keys and their texts there) and `ProjectServices.cs` the registrar, with the
+assembly attribute and a commented line that registers `ProjectMessages.Source`; uncomment it once the first key
+exists. Filled in, they look like this:
 
 [!code-csharp[](../samples/Vela.DocSamples/LocalizationSample.cs#messages)]
 
-Point the assembly at the registrar, once, at assembly scope:
+Point the assembly at the registrar, once, at assembly scope (the generated `ProjectServices.cs` already does):
 
 [!code-csharp[](../samples/Vela.DocSamples/LocalizationSample.cs#registrar)]
 

@@ -56,9 +56,11 @@ public class ProjectScaffolderTests
             Assert.False(Directory.Exists(Path.Combine(root, "src", "Zava.ConsoleApp")), "minimal should not emit the ConsoleApp project");
             Assert.False(Directory.Exists(Path.Combine(root, "tests")), "minimal should not emit the tests project");
 
-            // The Plugins project has no source files at all - it is a clean canvas.
+            // The Plugins project holds only the empty assembly-wide registrar and message catalogue - no plugin type.
             string pluginsDir = Path.Combine(root, "src", "Zava.Plugins");
-            Assert.Empty(Directory.GetFiles(pluginsDir, "*.cs", SearchOption.AllDirectories));
+            Assert.Equal(
+                ["Messages.cs", "ProjectServices.cs"],
+                Directory.GetFiles(pluginsDir, "*.cs", SearchOption.AllDirectories).Select(f => Path.GetFileName(f)!).OrderBy(f => f, StringComparer.Ordinal).ToArray());
         });
     }
 
@@ -86,6 +88,8 @@ public class ProjectScaffolderTests
                     "Directory.Packages.props",
                     "README.md",
                     "ZavaSales.sln",
+                    "src/Zava.Plugins/Messages.cs",
+                    "src/Zava.Plugins/ProjectServices.cs",
                     "src/Zava.Plugins/Zava.Plugins.csproj",
                     "src/Zava.Shared/Zava.Shared.csproj",
                     "tests/Zava.Plugins.Tests/Zava.Plugins.Tests.csproj",
@@ -122,7 +126,11 @@ public class ProjectScaffolderTests
                     "Directory.Packages.props",
                     "README.md",
                     "ZavaSales.sln",
+                    "src/Zava.Integrations/Messages.cs",
+                    "src/Zava.Integrations/ProjectServices.cs",
                     "src/Zava.Integrations/Zava.Integrations.csproj",
+                    "src/Zava.Plugins/Messages.cs",
+                    "src/Zava.Plugins/ProjectServices.cs",
                     "src/Zava.Plugins/Zava.Plugins.csproj",
                     "src/Zava.Shared/Zava.Shared.csproj",
                     "tests/Zava.Integrations.Tests/Zava.Integrations.Tests.csproj",
@@ -165,7 +173,9 @@ public class ProjectScaffolderTests
             // The Plugins package takes the same prefix, so plan/apply import it without --solution.
             Assert.Contains("<PackageId>zava_Zava.Plugins</PackageId>", pluginsCsproj);
             Assert.Contains("<AssemblyName>Zava.Plugins</AssemblyName>", pluginsCsproj);
-            Assert.Empty(Directory.GetFiles(integrations, "*.cs", SearchOption.AllDirectories));
+            Assert.Equal(
+                ["Messages.cs", "ProjectServices.cs"],
+                Directory.GetFiles(integrations, "*.cs", SearchOption.AllDirectories).Select(f => Path.GetFileName(f)!).OrderBy(f => f, StringComparer.Ordinal).ToArray());
             Assert.False(Directory.Exists(Path.Combine(root, "tests")));
 
             string readme = File.ReadAllText(Path.Combine(root, "README.md"));
@@ -477,6 +487,111 @@ public class ProjectScaffolderTests
 
             AssertFileExists(root, "src", "Zava.ConsoleApp", "Zava.ConsoleApp.csproj");
             AssertFileExists(root, "src", "Zava.ConsoleApp", "Program.cs");
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Generate_EachPluginProject_DeclaresOneEmptyRegistrar_AndAnEmptyMessageCatalogue(bool samples)
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, integrations: true, demos: samples)));
+            string root = Path.Combine(temp, "ZavaSales");
+
+            using System.Text.Json.JsonDocument manifest = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(root, ProjectScaffolder.ManifestPath)));
+            System.Text.Json.JsonElement tracked = manifest.RootElement.GetProperty("files");
+
+            foreach (string project in new[] { "Zava.Plugins", "Zava.Integrations" })
+            {
+                string dir = Path.Combine(root, "src", project);
+                string services = File.ReadAllText(Path.Combine(dir, "ProjectServices.cs"));
+                string messages = File.ReadAllText(Path.Combine(dir, "Messages.cs"));
+
+                // The registrar is declared at assembly scope, before the namespace, for this project's own type.
+                Assert.StartsWith($"[assembly: Vela.DI.VelaServiceRegistrar(typeof({project}.ProjectServices))]", services);
+                Assert.Contains($"namespace {project}\n{{", services.Replace("\r\n", "\n"));
+                Assert.Contains("public sealed class ProjectServices : IServiceRegistrar", services);
+                Assert.Contains("public void Register(SimpleServiceResolver services, ILocalPluginContext context)", services);
+                Assert.Contains("apply to every\n    /// plugin and Custom API of this assembly, before each one's own <c>ConfigureServices</c>", services.Replace("\r\n", "\n"));
+
+                // Registers nothing by default: the message source line is a comment until Messages.cs has a key.
+                Assert.Contains("// context.GetRequiredService<IMessageService>().AddSource(ProjectMessages.Source);", services);
+                Assert.DoesNotMatch(@"(?m)^\s*context\.", services);
+                Assert.DoesNotMatch(@"(?m)^\s*services\.", services);
+
+                Assert.Contains($"namespace {project}\n{{", messages.Replace("\r\n", "\n"));
+                Assert.Contains("public static class ProjectMessages", messages);
+                Assert.Contains("public static readonly IMessageSource Source = new DictionaryMessageSource();", messages);
+                Assert.DoesNotMatch(@"(?m)^\s*public const string", messages);
+
+                // `using` directives sit inside the namespace block, like every other generated source file.
+                foreach (string source in new[] { services, messages })
+                {
+                    Assert.True(source.IndexOf("using ", StringComparison.Ordinal) > source.IndexOf("namespace ", StringComparison.Ordinal), "usings must be inside the namespace");
+                }
+
+                // Exactly one registrar attribute per assembly, the samples included (the attribute allows one).
+                int declarations = Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories)
+                    .Sum(file => Regex.Matches(File.ReadAllText(file), @"\[assembly:\s*Vela\.DI\.VelaServiceRegistrar").Count);
+                Assert.Equal(1, declarations);
+
+                // Tracked by the manifest, so `vela init --force` regenerates them only while unedited.
+                Assert.True(tracked.TryGetProperty($"src/{project}/ProjectServices.cs", out _));
+                Assert.True(tracked.TryGetProperty($"src/{project}/Messages.cs", out _));
+            }
+        });
+    }
+
+    [Fact]
+    public void Force_KeepsAnEditedRegistrar_AndRestoresADeletedMessageCatalogue()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, demos: false)));
+            string dir = Path.Combine(temp, "ZavaSales", "src", "Zava.Plugins");
+            string services = Path.Combine(dir, "ProjectServices.cs");
+            string edited = File.ReadAllText(services).Replace("// context.GetRequiredService", "context.GetRequiredService");
+            File.WriteAllText(services, edited);
+            File.Delete(Path.Combine(dir, "Messages.cs"));
+
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, demos: false, force: true)));
+
+            Assert.Equal(edited, File.ReadAllText(services));
+            Assert.Equal(ScaffoldTemplates.ProjectMessagesFile("Zava.Plugins").Replace("\r\n", "\n"), File.ReadAllText(Path.Combine(dir, "Messages.cs")).Replace("\r\n", "\n"));
+        });
+    }
+
+    [Fact]
+    public void Generate_DocumentationFile_IsOnInThePluginAndSharedProjects_ButNotInTheTests()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, integrations: true)));
+            string root = Path.Combine(temp, "ZavaSales");
+            string Read(params string[] parts) => File.ReadAllText(Path.Combine([root, .. parts]));
+
+            // The plugin projects check their comments: CS1591 stays a plain warning, neither silenced nor an error.
+            foreach (string plugin in new[] { "Zava.Plugins", "Zava.Integrations" })
+            {
+                string csproj = Read("src", plugin, $"{plugin}.csproj");
+                Assert.Contains("<GenerateDocumentationFile>true</GenerateDocumentationFile>", csproj);
+                Assert.DoesNotMatch(@"<NoWarn>[^<]*1591", csproj);
+                Assert.DoesNotContain("<WarningsAsErrors>", csproj);
+                Assert.DoesNotContain("<TreatWarningsAsErrors>", csproj);
+            }
+
+            // Shared emits its documentation for IntelliSense but silences CS1591: `vela models` writes there, and its
+            // models, messages and roles do not document every member.
+            string shared = Read("src", "Zava.Shared", "Zava.Shared.csproj");
+            Assert.Contains("<GenerateDocumentationFile>true</GenerateDocumentationFile>", shared);
+            Assert.Contains("<NoWarn>$(NoWarn);CS1591</NoWarn>", shared);
+
+            Assert.DoesNotContain("GenerateDocumentationFile", Read("tests", "Zava.Plugins.Tests", "Zava.Plugins.Tests.csproj"));
+            Assert.DoesNotContain("GenerateDocumentationFile", Read("tests", "Zava.Integrations.Tests", "Zava.Integrations.Tests.csproj"));
+            Assert.DoesNotContain("GenerateDocumentationFile", Read("Directory.Build.props"));
+            Assert.DoesNotContain(".vela-runs", Read(".gitignore"));
         });
     }
 
@@ -983,8 +1098,10 @@ public class ProjectScaffolderTests
                     using Vela.Plugin;
                     using Zava.Shared.Models.Generated;
 
+                    /// <summary>A hand-written plugin that predates the typed contexts.</summary>
                     public sealed class AccountLegacy(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
                     {
+                        /// <inheritdoc />
                         protected override void RegisterPluginSteps()
                         {
                             RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnCreated);
@@ -1084,6 +1201,14 @@ public class ProjectScaffolderTests
             .Distinct()
             .ToArray();
         Assert.True(velaWarnings.Length == 0, "Generated code raised Vela analyzer warnings:\n" + string.Join("\n", velaWarnings));
+
+        // The plugin projects generate their documentation file and keep CS1591 a warning: every public member the
+        // scaffold, `vela add` and the typed-context generator write carries a <summary>, so a fresh solution has none.
+        string[] missingDocs = buildOutput.Split('\n')
+            .Where(line => System.Text.RegularExpressions.Regex.IsMatch(line, @"\bCS1591\s*:"))
+            .Distinct()
+            .ToArray();
+        Assert.True(missingDocs.Length == 0, "Generated code is missing XML documentation:\n" + string.Join("\n", missingDocs));
 
         if (runTests)
         {

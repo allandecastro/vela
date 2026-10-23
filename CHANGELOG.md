@@ -21,6 +21,28 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (Framework)
+
+- The typed step contexts and image projections the source generator writes document every public member (the
+  context constructor, `PreImage` / `PostImage` / `PreImages` / `PostImages` and their subordinate forms, each
+  captured column). A plugin project that generates its XML documentation file got a CS1591 warning per member.
+
+### Added (CLI)
+
+- `vela init` generates two files in each plugin project (`Zava.Plugins`, and `Zava.Integrations` when generated),
+  minimal or `--samples`: `ProjectServices.cs`, an empty `IServiceRegistrar` declared with
+  `[assembly: Vela.DI.VelaServiceRegistrar(...)]`, whose services and message sources apply to every plugin and Custom
+  API of the assembly before each one's `ConfigureServices`, and `Messages.cs`, an empty `ProjectMessages` class for
+  the message keys and their `DictionaryMessageSource`. The registrar registers nothing until a line is uncommented.
+  Both are tracked by the scaffold manifest like the other generated files.
+- `vela init` turns on `GenerateDocumentationFile` in the plugin projects, so a public type or member without a
+  `<summary>` is a CS1591 warning (not an error); the generated code and what `vela add` writes document every public
+  member. The Shared project generates its documentation file too but silences CS1591, because the models, messages
+  and roles `vela models` writes there do not document every member. The test projects are unchanged.
+- `vela add plugin` takes `--handler <Method>` to name the handler (validated as for `add step`).
+- `vela add plugin`'s `<Name>` is optional: without it the plugin is named `<Entity>Plugin` (`--entity` stays
+  required). The other kinds still require a name.
+
 ### Changed (CLI, breaking)
 
 - `vela add plugin` names its handler `Handle<Message>` (`HandleUpdate(HandleUpdateContext ctx)`), the default of
@@ -30,12 +52,6 @@ All notable changes to Vela are documented here. The format is based on
 - `vela add plugin` on an existing `<Table>/Plugins/<Name>.cs` (without `--force`) still writes nothing and exits 2,
   and its error now names the `vela add step <Name> --entity <Entity> --message ...` command, with the `--handler`,
   `--stage`, `--mode`, `--filtering-attributes` and `--project` given, that adds the requested step to that class.
-
-### Added (CLI)
-
-- `vela add plugin` takes `--handler <Method>` to name the handler (validated as for `add step`).
-- `vela add plugin`'s `<Name>` is optional: without it the plugin is named `<Entity>Plugin` (`--entity` stays
-  required). The other kinds still require a name.
 
 ## [0.28.0] - 2026-10-22 (Vela.Cli)
 
