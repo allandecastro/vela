@@ -9,7 +9,7 @@ internal static partial class ScaffoldTemplates
     // These differ from the example templates above: they emit ONE file with a user-supplied name into an
     // existing project, following the same by-table conventions vela init uses.
 
-    public static string AddPluginFile(string ns, string className, string entityType, string modelsNamespace, string message, string registrationCall, string stageCall = ".PostOperation()", string modeCall = ".Sync()", string filteringCall = "", string handlerName = AddCommand.PluginHandlerName) =>
+    public static string AddPluginFile(string ns, string className, string entityType, string modelsNamespace, string message, string registrationCall, string stageCall, string modeCall, string filteringCall, string handlerName) =>
 $$"""
 namespace {{ns}}
 {

@@ -108,14 +108,14 @@ public class AddCommandTests
             // generates, and the handler gets its request-typed context.
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountCustom.cs"));
             Assert.Contains("RegisterStep().On<acme_DoThingRequest>()", content);
-            Assert.Contains("private void OnExecute(OnExecuteContext ctx)", content);
+            Assert.Contains("private void Handleacme_DoThing(Handleacme_DoThingContext ctx)", content);
             Assert.DoesNotContain("IMessagePostContext", content);
             Assert.DoesNotContain("OnMessage(", content);
         });
     }
 
     // Every message `add plugin` registers (each typed trigger, an SDK request, a generated request) at every stage
-    // binds the handler to its generated OnExecuteContext in a partial class, never the message interface. The
+    // binds the handler to its generated Handle{Message}Context in a partial class, never the message interface. The
     // build smoke test (ProjectScaffolderTests.Generate_ThenDotnetBuild_Succeeds_Minimal) compiles these forms.
     public static TheoryData<string, string> EveryMessageAndStage()
     {
@@ -142,8 +142,8 @@ public class AddCommandTests
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountStep.cs"));
             Assert.Contains("public sealed partial class AccountStep(", content);
-            Assert.Contains("                .Handle(OnExecute);", content);
-            Assert.Contains("private void OnExecute(OnExecuteContext ctx)", content);
+            Assert.Contains($"                .Handle(Handle{message});", content);
+            Assert.Contains($"private void Handle{message}(Handle{message}Context ctx)", content);
             Assert.DoesNotMatch(@"I\w*(Pre|Post)Context<", content);
         });
     }
@@ -181,7 +181,7 @@ public class AddCommandTests
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountPre.cs"));
             Assert.Contains(".PreOperation()", content);
-            Assert.Contains("private void OnExecute(OnExecuteContext ctx)", content);
+            Assert.Contains("private void HandleDelete(HandleDeleteContext ctx)", content);
         });
     }
 
@@ -418,7 +418,7 @@ public class AddCommandTests
 
             string content = File.ReadAllText(Path.Combine(dir, entity, "Plugins", "AccountStep.cs"));
             Assert.Contains($"RegisterStep().On<{requestType}>()", content);
-            Assert.Contains("private void OnExecute(OnExecuteContext ctx)", content);
+            Assert.Matches(@"private void (Handle\w+)\(\1Context ctx\)", content);
         });
     }
 
@@ -764,7 +764,7 @@ namespace Acme.Plugins.Account.Plugins
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "Plugins", "AccountAssign.cs"));
             Assert.Contains("RegisterStep().OnAssign()", content);
-            Assert.Contains("private void OnExecute(OnExecuteContext ctx)", content);
+            Assert.Contains("private void HandleAssign(HandleAssignContext ctx)", content);
             Assert.DoesNotContain("OnMessage(", content);
         });
     }
@@ -867,14 +867,14 @@ namespace Acme.Plugins.Account.Plugins
             string file = Path.Combine(dir, "Account", "Plugins", "AccountRouter.cs");
             string before = File.ReadAllText(file);
 
-            // Same defaults (Create / PostOperation / Sync) and the same filter column as `add plugin`: refused.
-            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--filtering-attributes", "Name", "--project", project]));
+            // Same defaults (Create / PostOperation / Sync) and the same filter column as `add plugin`, under another handler name than its HandleCreate: refused.
+            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--handler", "OnName", "--filtering-attributes", "Name", "--project", project]));
             Assert.Equal(before, File.ReadAllText(file));
 
             // Same trigger, other filter column: allowed (several steps per trigger, told apart by their filters).
             Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--handler", "OnPhone", "--filtering-attributes", "Telephone1", "--project", project]));
             // A different stage is a different trigger.
-            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--stage", "PreOperation", "--filtering-attributes", "Name", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountRouter", "--entity", "Account", "--stage", "PreOperation", "--handler", "OnPreCreate", "--filtering-attributes", "Name", "--project", project]));
         });
     }
 

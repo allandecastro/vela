@@ -21,6 +21,22 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (CLI, breaking)
+
+- `vela add plugin` names its handler `Handle<Message>` (`HandleUpdate(HandleUpdateContext ctx)`), the default of
+  `vela add step`, instead of the fixed `OnExecute(OnExecuteContext ctx)`. Existing files are not touched. A script
+  that runs `add plugin` then `add step` on the same message without `--handler` now gets the duplicate-member
+  error: pass `--handler` to the step.
+- `vela add plugin` on an existing `<Table>/Plugins/<Name>.cs` (without `--force`) still writes nothing and exits 2,
+  and its error now names the `vela add step <Name> --entity <Entity> --message ...` command, with the `--handler`,
+  `--stage`, `--mode`, `--filtering-attributes` and `--project` given, that adds the requested step to that class.
+
+### Added (CLI)
+
+- `vela add plugin` takes `--handler <Method>` to name the handler (validated as for `add step`).
+- `vela add plugin`'s `<Name>` is optional: without it the plugin is named `<Entity>Plugin` (`--entity` stays
+  required). The other kinds still require a name.
+
 ## [0.28.0] - 2026-10-22 (Vela.Cli)
 
 ### Added
