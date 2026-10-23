@@ -60,7 +60,7 @@ public class ProjectScaffolderTests
             string pluginsDir = Path.Combine(root, "src", "Zava.Plugins");
             Assert.Equal(
                 ["Messages.cs", "ProjectServices.cs"],
-                Directory.GetFiles(pluginsDir, "*.cs", SearchOption.AllDirectories).Select(Path.GetFileName).OrderBy(f => f, StringComparer.Ordinal).ToArray());
+                Directory.GetFiles(pluginsDir, "*.cs", SearchOption.AllDirectories).Select(f => Path.GetFileName(f)!).OrderBy(f => f, StringComparer.Ordinal).ToArray());
         });
     }
 
@@ -175,7 +175,7 @@ public class ProjectScaffolderTests
             Assert.Contains("<AssemblyName>Zava.Plugins</AssemblyName>", pluginsCsproj);
             Assert.Equal(
                 ["Messages.cs", "ProjectServices.cs"],
-                Directory.GetFiles(integrations, "*.cs", SearchOption.AllDirectories).Select(Path.GetFileName).OrderBy(f => f, StringComparer.Ordinal).ToArray());
+                Directory.GetFiles(integrations, "*.cs", SearchOption.AllDirectories).Select(f => Path.GetFileName(f)!).OrderBy(f => f, StringComparer.Ordinal).ToArray());
             Assert.False(Directory.Exists(Path.Combine(root, "tests")));
 
             string readme = File.ReadAllText(Path.Combine(root, "README.md"));
