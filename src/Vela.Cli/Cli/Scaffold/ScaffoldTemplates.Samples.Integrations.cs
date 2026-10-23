@@ -24,11 +24,13 @@ namespace {{prefix}}.Integrations.Contact.Plugins
     // nested types inside this class (VELA014).
     public sealed partial class ContactSyncPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Contact>(unsecureConfig, secureConfig)
     {
+        /// <inheritdoc />
         protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context)
         {
             services.AddScoped<IGreetingService>(_ => new GreetingService());
         }
 
+        /// <inheritdoc />
         protected override void RegisterPluginSteps()
         {
             RegisterStep().OnCreate()
@@ -70,6 +72,7 @@ namespace {{prefix}}.Integrations.Account.Plugins
     // partial: the typed image projections are generated as nested types inside this class (VELA014).
     public sealed partial class AccountSyncRouterPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)
     {
+        /// <inheritdoc />
         protected override void RegisterPluginSteps()
         {
             RegisterStep().OnCreate()
@@ -123,6 +126,7 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
         /// <summary>The unique name, shared by the registration, the request, the response and the tests.</summary>
         public const string UniqueName = "{{apiPrefix ?? ApiPrefix(prefix)}}_ContactExport";
 
+        /// <inheritdoc />
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi(UniqueName)
@@ -135,6 +139,7 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
                 .Response(r => r.Add(x => x.ExternalId));
         }
 
+        /// <inheritdoc />
         protected override ContactExportResponse Execute(ILocalPluginContext ctx, ContactExportRequest request)
         {
             ctx.Trace("Exporting contact {0}", request.ContactId);
@@ -147,10 +152,12 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
     /// <summary>Request parameters for <see cref="ContactExportCustomApi"/>.</summary>
     public sealed class ContactExportRequest : CustomApiRequest
     {
+        /// <summary>Creates the request.</summary>
         public ContactExportRequest() : base(ContactExportCustomApi.UniqueName)
         {
         }
 
+        /// <summary>The bound contact's id.</summary>
         public Guid ContactId
         {
             get => Get<Guid>();
@@ -161,10 +168,12 @@ namespace {{prefix}}.Integrations.Contact.CustomApis
     /// <summary>Response parameters for <see cref="ContactExportCustomApi"/>.</summary>
     public sealed class ContactExportResponse : CustomApiResponse
     {
+        /// <summary>Creates the response.</summary>
         public ContactExportResponse() : base(ContactExportCustomApi.UniqueName)
         {
         }
 
+        /// <summary>The contact's id in the external system.</summary>
         public string ExternalId
         {
             get => Get<string>();
@@ -191,6 +200,7 @@ namespace {{prefix}}.Integrations.Account.CustomApis
         /// <summary>The unique name, shared by the registration, the request, the response and the tests.</summary>
         public const string UniqueName = "{{apiPrefix ?? ApiPrefix(prefix)}}_AccountReconcile";
 
+        /// <inheritdoc />
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi(UniqueName)
@@ -203,6 +213,7 @@ namespace {{prefix}}.Integrations.Account.CustomApis
                 .Response(r => r.Add(x => x.Status));
         }
 
+        /// <inheritdoc />
         protected override AccountReconcileResponse Execute(ILocalPluginContext ctx, AccountReconcileRequest request)
         {
             ctx.Trace("Reconciling account {0}", request.AccountId);
@@ -215,10 +226,12 @@ namespace {{prefix}}.Integrations.Account.CustomApis
     /// <summary>Request parameters for <see cref="AccountReconcileCustomApi"/>.</summary>
     public sealed class AccountReconcileRequest : CustomApiRequest
     {
+        /// <summary>Creates the request.</summary>
         public AccountReconcileRequest() : base(AccountReconcileCustomApi.UniqueName)
         {
         }
 
+        /// <summary>The bound account's id.</summary>
         public Guid AccountId
         {
             get => Get<Guid>();
@@ -229,10 +242,12 @@ namespace {{prefix}}.Integrations.Account.CustomApis
     /// <summary>Response parameters for <see cref="AccountReconcileCustomApi"/>.</summary>
     public sealed class AccountReconcileResponse : CustomApiResponse
     {
+        /// <summary>Creates the response.</summary>
         public AccountReconcileResponse() : base(AccountReconcileCustomApi.UniqueName)
         {
         }
 
+        /// <summary>The outcome of the reconciliation.</summary>
         public string Status
         {
             get => Get<string>();
@@ -255,6 +270,7 @@ namespace {{prefix}}.Integrations.GlobalCustomApis
         /// <summary>The unique name, shared by the registration and the tests.</summary>
         public const string UniqueName = "{{apiPrefix ?? ApiPrefix(prefix)}}_IntegrationHeartbeat";
 
+        /// <inheritdoc />
         protected override void RegisterCustomApi()
         {
             RegisterCustomApi(UniqueName, Handle)

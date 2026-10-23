@@ -15,7 +15,9 @@ ZavaSales/
   ZavaSales.sln
   src/
     Zava.Shared/            # early-bound models + shared services (net48;net10.0); empty until `vela models`
-    Zava.Plugins/           # plugin package -> builds a Dataverse plugin-package .nupkg; empty until `vela add`
+    Zava.Plugins/           # plugin package -> builds a Dataverse plugin-package .nupkg; no plugin until `vela add`
+      ProjectServices.cs    #   assembly-wide services and message sources, empty
+      Messages.cs           #   the project's message keys, empty
   tests/
     Zava.Plugins.Tests/     # xunit tests using Vela.Testing - no connection (omit with --no-tests)
   .vela/scaffold-manifest.json  # lets `vela init --force` regenerate without touching your code
@@ -30,6 +32,8 @@ It builds, tests and plans unedited, and deploys nothing until you add a plugin:
 - `vela add plugin AccountValidator --entity Account --filtering-attributes Name --project src/Zava.Plugins` adds a
   plugin, and `vela add test AccountValidator --entity Account --project tests/Zava.Plugins.Tests` its test. See
   [Add code with vela add](../guides/add.md).
+- `ProjectServices.cs` registers services and message sources for every plugin and Custom API of the assembly, and
+  `Messages.cs` holds the message keys: see [Localized messages](../guides/localization.md).
 - `--publisher-prefix` is your solution publisher's prefix; Custom APIs are named `<publisherprefix>_<Name>`, and the
   plugin package `<publisherprefix>_Zava.Plugins` (`artifacts/zava_Zava.Plugins.1.0.0.nupkg`).
 

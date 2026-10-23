@@ -14,6 +14,11 @@ $$"""
     <TargetFrameworks>net48;net10.0</TargetFrameworks>
     <RootNamespace>{{options.Prefix}}.Shared</RootNamespace>
     <AssemblyName>{{options.Prefix}}.Shared</AssemblyName>
+    <!-- Emit the XML documentation file so the model and service docs show in IntelliSense in the plugin projects.
+         CS1591 (missing XML comment) is silenced in this project only: the early-bound models, messages and roles
+         that `vela models` writes here do not document every member (constructors, constants, choice values). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <!-- net48: the plugin sandbox provides the SDK, so these reference assemblies are PrivateAssets. -->
@@ -80,6 +85,9 @@ $$"""
     <!-- The 1.0.* wildcard is deliberate (see above), so silence CS7035 ("version string not in the recommended
          major.minor.build.revision format") - the compiler's nag about the wildcard form, not a real problem. -->
     <NoWarn>$(NoWarn);CS7035</NoWarn>
+    <!-- Emit the XML documentation file and check the comments: a public type or member without a <summary> is a
+         CS1591 warning (kept a warning, not an error). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- The Power Platform plugin SDK bundles the assembly plus its dependent assemblies into a plugin-package
          .nupkg. That bundling runs on BUILD (it packs the publish output), so `dotnet build -c Release` produces
          the deployable package, NOT `dotnet pack` (run cold it skips the publish and emits an assembly-less
@@ -177,6 +185,68 @@ $$"""
         string.IsNullOrEmpty(publisherPrefix)
             ? string.Empty
             : $"\n    <!-- Dataverse publisher prefix for Custom API unique names (read by `vela add customapi`). -->\n    <VelaPublisherPrefix>{publisherPrefix}</VelaPublisherPrefix>";
+
+    // ---- Plugin project: assembly-wide files ------------------------------
+
+    // The assembly's IServiceRegistrar (docs/guides/dependency-injection.md, docs/guides/localization.md). Generated
+    // empty in every plugin project, minimal or --samples: the attribute may appear once per assembly, so the samples
+    // never declare their own. The message source registration stays commented until Messages.cs holds a key.
+    public static string ProjectServicesFile(string ns) =>
+$$"""
+[assembly: Vela.DI.VelaServiceRegistrar(typeof({{ns}}.ProjectServices))]
+
+namespace {{ns}}
+{
+    using Vela.Context;
+    using Vela.DI;
+
+    /// <summary>
+    /// The services shared by the whole assembly. The services and message sources registered here apply to every
+    /// plugin and Custom API of this assembly, before each one's own <c>ConfigureServices</c> (which can still
+    /// override them). Keep it stateless: the sandbox shares one instance across executions.
+    /// </summary>
+    public sealed class ProjectServices : IServiceRegistrar
+    {
+        /// <inheritdoc />
+        public void Register(SimpleServiceResolver services, ILocalPluginContext context)
+        {
+            // The project's messages (Messages.cs), once it has a key; add `using Vela.Localization;`:
+            // context.GetRequiredService<IMessageService>().AddSource(ProjectMessages.Source);
+
+            // A service every plugin of the assembly resolves with ctx.GetRequiredService<IMyService>():
+            // services.AddScoped<IMyService>(_ => new MyService(context.Service));
+        }
+    }
+}
+""";
+
+    // The project's message keys and their texts, empty until the first message (see ProjectServicesFile).
+    public static string ProjectMessagesFile(string ns) =>
+$$"""
+namespace {{ns}}
+{
+    using Vela.Localization;
+
+    /// <summary>
+    /// The project's message keys, and the one source that holds their texts per language. Once a key exists,
+    /// register <see cref="Source"/> in <see cref="ProjectServices"/> and throw a localized business error with
+    /// <c>throw ctx.BusinessError(ProjectMessages.NameRequired);</c>.
+    /// </summary>
+    public static class ProjectMessages
+    {
+        // An example key:
+        // /// <summary>The account name is required.</summary>
+        // public const string NameRequired = "ERR_NAME_REQUIRED";
+
+        /// <summary>
+        /// The texts of the keys above per language code (LCID), for example
+        /// <c>new DictionaryMessageSource().Add(1033, NameRequired, "The account name is required.")</c>. Built once
+        /// and only read afterwards, so every execution can share it.
+        /// </summary>
+        public static readonly IMessageSource Source = new DictionaryMessageSource();
+    }
+}
+""";
 
     // ---- Tests project ----------------------------------------------------
 
