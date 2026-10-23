@@ -5,7 +5,7 @@ From plugin code to a registered, running step, in a solution scaffolded by [`ve
 **1. Write a plugin** in the plugin-package project (`Zava.Plugins`, which references `Vela.Plugins`):
 
 ```csharp
-namespace Zava.Plugins.Account
+namespace Zava.Plugins.Account.Plugins
 {
     using Vela.Plugin;
     using Zava.Shared.Models.Generated;

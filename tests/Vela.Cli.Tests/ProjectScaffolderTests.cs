@@ -79,6 +79,7 @@ public class ProjectScaffolderTests
             // Exactly the structural files: no sample code, no Integrations/ConsoleApp, an empty test project.
             Assert.Equal(
                 [
+                    ".editorconfig",
                     ".gitignore",
                     ".vela/scaffold-manifest.json",
                     "AGENTS.md",
@@ -115,6 +116,7 @@ public class ProjectScaffolderTests
             // The minimal layout plus the two Integrations project files: no demo plugin, Custom API or test.
             Assert.Equal(
                 [
+                    ".editorconfig",
                     ".gitignore",
                     ".vela/scaffold-manifest.json",
                     "AGENTS.md",
@@ -401,6 +403,51 @@ public class ProjectScaffolderTests
     }
 
     [Fact]
+    public void Generate_WritesAnEditorConfig_ThatKeepsUsingsInsideTheNamespace()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, demos: false)));
+            string root = Path.Combine(temp, "ZavaSales");
+
+            // The folder-named namespaces (Zava.Plugins.Account.Plugins) make a using above the namespace resolve
+            // Account to the namespace (CS0118): the IDE places usings inside, and the build warns on one outside.
+            string editorConfig = File.ReadAllText(Path.Combine(root, ".editorconfig"));
+            Assert.Contains("[*.cs]", editorConfig);
+            Assert.Contains("csharp_using_directive_placement = inside_namespace:warning", editorConfig);
+            Assert.Contains("csharp_style_namespace_declarations = block_scoped:suggestion", editorConfig);
+            Assert.Contains("dotnet_diagnostic.IDE0065.severity = warning", editorConfig);
+            Assert.Contains("Zava.Plugins.Account.Plugins", editorConfig);
+            Assert.DoesNotContain("{{", editorConfig);
+            // Not a root file: settings of an enclosing repository still apply where this one sets nothing.
+            Assert.DoesNotContain("root = true", editorConfig);
+
+            // The .editorconfig severities reach the build only with EnforceCodeStyleInBuild.
+            Assert.Contains("<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>", File.ReadAllText(Path.Combine(root, "Directory.Build.props")));
+
+            // Manifest-tracked like every generated file, so --force regenerates it only while unedited.
+            using System.Text.Json.JsonDocument manifest = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(root, ProjectScaffolder.ManifestPath)));
+            Assert.Equal(ProjectScaffolder.Hash(editorConfig), manifest.RootElement.GetProperty("files").GetProperty(".editorconfig").GetString());
+        });
+    }
+
+    [Fact]
+    public void Force_KeepsAUserEditedEditorConfig()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, demos: false)));
+            string root = Path.Combine(temp, "ZavaSales");
+            string path = Path.Combine(root, ".editorconfig");
+            File.WriteAllText(path, "[*.cs]\nindent_size = 2\n");
+
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, demos: false, force: true)));
+
+            Assert.Equal("[*.cs]\nindent_size = 2\n", File.ReadAllText(path));
+        });
+    }
+
+    [Fact]
     public void Generate_WritesAManifestOfEveryGeneratedFile()
     {
         RunInTempDir(temp =>
@@ -514,9 +561,23 @@ public class ProjectScaffolderTests
             Assert.DoesNotContain("--auto-approve", agents);
             Assert.Contains("asks for confirmation - run only when the user asks", agents);
 
-            // Each C# block carries its usings, so it compiles pasted into a file `vela add` created.
-            Assert.Contains("using Vela.Messages;", agents);
-            Assert.Contains("using Zava.Shared.Models.Generated;", agents);
+            // Each C# block carries its usings, inside the namespace the scaffold gives its folder, so it compiles
+            // pasted into a file `vela add` created: above the namespace, the Account segment would hide the model.
+            string lf = agents.Replace("\r\n", "\n");
+            Assert.Contains("namespace Zava.Plugins.Account.Plugins\n{\n    using Microsoft.Xrm.Sdk;", lf);
+            Assert.Contains("namespace Zava.Plugins.Tests.Account.Plugins\n{", lf);
+            Assert.Contains("    using Vela.Messages;", agents);
+            Assert.Contains("    using Zava.Shared.Models.Generated;", agents);
+            Assert.Contains("    using Zava.Plugins.Account.Plugins;", agents);
+            Assert.DoesNotContain("\nusing ", lf);
+            Assert.Contains("Put the `using` directives inside a block `namespace { }`", agents);
+            Assert.Contains("(error CS0118)", agents);
+
+            // The conventions: behaviour-named handlers, the project-wide registrar, documented public types.
+            Assert.Contains("`--handler <Method>`", agents);
+            Assert.Contains("`ProjectServices.cs`", agents);
+            Assert.Contains("https://allandecastro.github.io/vela/guides/localization.html", agents);
+            Assert.Contains("`/// <summary>`", agents);
         });
     }
 
@@ -534,12 +595,13 @@ public class ProjectScaffolderTests
 
         string guide = ScaffoldTemplates.AgentsGuide(Options("unused"));
         string[][] members = GuideCSharpMembers(guide);
+        string[] code = [.. compiled.Where(line => !IsStructuralLine(line))];
 
         Assert.NotEmpty(members);
         int searchFrom = 0;
         foreach (string[] member in members)
         {
-            int at = IndexOfRun(compiled, member, searchFrom);
+            int at = IndexOfRun(code, member, searchFrom);
             Assert.True(at >= 0, $"This AGENTS.md snippet is not, in order and contiguous, in AgentsGuideSamples.cs:\n{string.Join("\n", member)}");
             searchFrom = at + member.Length;
         }
@@ -550,6 +612,11 @@ public class ProjectScaffolderTests
         string[][] guideUsings = [.. GuideCSharpBlocks(guide).Select(block => UsingsOf(block)
             .Select(u => u.Replace("Zava.Shared.Models.Generated", "Vela.DocSamples.Models")).ToArray())];
         string[][] sampleUsings = [.. SampleNamespaceBlocks(string.Join("\n", compiled)).Select(UsingsOf)];
+
+        // Each guide block is a block namespace named as the scaffold names that folder, the same as the sample's.
+        string[] guideNamespaces = [.. GuideCSharpBlocks(guide).Select(block => block.TrimStart('\n').Split('\n')[0])];
+        Assert.All(guideNamespaces, ns => Assert.StartsWith("namespace Zava.Plugins.", ns, StringComparison.Ordinal));
+        Assert.Equal(compiled.Where(line => line.StartsWith("namespace ", StringComparison.Ordinal)), guideNamespaces);
         Assert.Equal(sampleUsings.Length, guideUsings.Length);
         for (int i = 0; i < guideUsings.Length; i++)
         {
@@ -586,14 +653,22 @@ public class ProjectScaffolderTests
         string[][] reordered = GuideCSharpMembers("```csharp\nclass A\n{\n    .Handle(On);\n    .FilterOn(a => a.X)\n}\n```");
         string[][] same = GuideCSharpMembers("```csharp\nclass A\n{\n    .FilterOn(a => a.X)\n    .Handle(On);\n}\n```");
 
-        Assert.Equal(-1, IndexOfRun(compiled, Assert.Single(reordered), 0));
-        Assert.Equal(0, IndexOfRun(compiled, Assert.Single(same), 0));
+        string[] code = [.. compiled.Where(line => !IsStructuralLine(line))];
+        Assert.Equal(-1, IndexOfRun(code, Assert.Single(reordered), 0));
+        Assert.Equal(0, IndexOfRun(code, Assert.Single(same), 0));
     }
 
     private static string[] NormalizedLines(string text)
         => text.Replace("\r\n", "\n").Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0).ToArray();
 
-    // The guide's ```csharp blocks split into top-level members: a member starts at an unindented line after a blank line.
+    // A namespace declaration, a using directive or a lone brace: compared separately (namespaces, usings) or not at
+    // all (braces), so a sample may close a class after an extra member the guide leaves out.
+    private static bool IsStructuralLine(string trimmed)
+        => trimmed.StartsWith("namespace ", StringComparison.Ordinal)
+            || (trimmed.StartsWith("using ", StringComparison.Ordinal) && trimmed.EndsWith(";", StringComparison.Ordinal))
+            || trimmed is "{" or "}";
+
+    // The guide's ```csharp blocks split into paragraphs (runs of non-blank lines), structural lines left out.
     private static string[][] GuideCSharpMembers(string guide)
     {
         List<string[]> members = [];
@@ -604,13 +679,14 @@ public class ProjectScaffolderTests
             bool previousBlank = true;
             foreach (string line in block.Substring("csharp".Length).Split('\n'))
             {
-                if (line.StartsWith("using ", StringComparison.Ordinal))
+                string trimmed = line.Trim();
+                if (IsStructuralLine(trimmed))
                 {
                     continue;
                 }
 
-                bool blank = line.Trim().Length == 0;
-                if (!blank && previousBlank && !char.IsWhiteSpace(line[0]) && current.Count > 0)
+                bool blank = trimmed.Length == 0;
+                if (!blank && previousBlank && current.Count > 0)
                 {
                     members.Add([.. current]);
                     current = [];

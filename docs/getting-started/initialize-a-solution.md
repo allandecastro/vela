@@ -20,6 +20,7 @@ ZavaSales/
     Zava.Plugins.Tests/     # xunit tests using Vela.Testing - no connection (omit with --no-tests)
   .vela/scaffold-manifest.json  # lets `vela init --force` regenerate without touching your code
   AGENTS.md                    # instructions for AI coding agents: steps, Custom APIs, tests, the CLI loop
+  .editorconfig                # code style: usings inside the namespace
   Directory.Build.props        # shared build settings for src/ and tests/
 ```
 
@@ -30,6 +31,9 @@ It builds, tests and plans unedited, and deploys nothing until you add a plugin:
 - `vela add plugin AccountValidator --entity Account --filtering-attributes Name --project src/Zava.Plugins` adds a
   plugin, and `vela add test AccountValidator --entity Account --project tests/Zava.Plugins.Tests` its test. See
   [Add code with vela add](../guides/add.md).
+- Each file's namespace follows its folder (`Zava.Plugins.Account.Plugins`): keep the `using` directives inside a
+  block namespace, or `Account` resolves to a namespace (CS0118). See
+  [Namespaces and usings](../guides/scaffold.md#namespaces-and-usings).
 - `--publisher-prefix` is your solution publisher's prefix; Custom APIs are named `<publisherprefix>_<Name>`, and the
   plugin package `<publisherprefix>_Zava.Plugins` (`artifacts/zava_Zava.Plugins.1.0.0.nupkg`).
 

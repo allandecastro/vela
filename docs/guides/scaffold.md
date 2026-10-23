@@ -24,6 +24,7 @@ ZavaSales/
     Zava.Integrations.Tests/ # with --integrations (omit with --no-tests); empty until `vela add test`
   .vela/scaffold-manifest.json  # what init wrote, so `--force` never touches your code (commit it)
   AGENTS.md                    # instructions for AI coding agents: steps, Custom APIs, tests, the CLI loop
+  .editorconfig                # code style: usings inside the namespace (see below)
   Directory.Build.props        # shared build settings for src/ and tests/
 ```
 
@@ -63,6 +64,30 @@ write, one read) and `AccountMessageReference`, a cheat-sheet with one step per 
 `abstract` class: it compiles, but neither `vela apply` nor Dataverse registers it, so it is never deployed. `Zava.Plugins.Tests` runs those plugins and Custom APIs
 with [`Vela.Testing`](testing.md), no Dataverse connection: `dotnet test tests/Zava.Plugins.Tests`. Each file's
 namespace matches its folder. Generate a samples solution next to your real one to copy from it.
+
+### Namespaces and usings
+
+A file's namespace follows its folder: `src/Zava.Plugins/Account/Plugins/` is `Zava.Plugins.Account.Plugins`, and its
+test is in `Zava.Plugins.Tests.Account.Plugins`. That puts a namespace named `Account` next to the `Account` model
+type, so keep the `using` directives **inside a block namespace**:
+
+```csharp
+namespace Zava.Plugins.Account.Plugins
+{
+    using Zava.Shared.Models.Generated;
+
+    // Account is the model type here.
+}
+```
+
+C# looks a name up in the enclosing namespaces before the usings placed above them. With the usings above the
+namespace, or with a file-scoped `namespace Zava.Plugins.Account.Plugins;`, `Account` resolves to the
+`Zava.Plugins.Account` namespace and the build fails with `error CS0118: 'Account' is a namespace but is used like a
+type`. In the root namespace `Zava.Plugins` itself, `Account` is always the namespace, so keep table code in its
+table's folder. The generated `.editorconfig` sets `csharp_using_directive_placement = inside_namespace`, so the IDE
+adds usings inside, and `Directory.Build.props` sets `EnforceCodeStyleInBuild`, so `dotnet build` reports a using
+placed outside as warning IDE0065. See
+[Microsoft's IDE0065 reference](https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0065).
 
 ### Flags
 

@@ -164,20 +164,24 @@ binding, in the harness as on Dataverse:
 follows the API's metadata, so an invalid registration does not compile:
 
 ```csharp
-using Vela.Context;
-using Vela.Plugin;
-
-public sealed partial class AfterEstimate(string unsecureConfig, string secureConfig)
-    : EntityPluginBase<Account>(unsecureConfig, secureConfig)   // the API is bound to account
+namespace Zava.Plugins.Account.Plugins
 {
-    protected override void RegisterPluginSteps()
-        => RegisterStep().OnAccountEstimateValue()   // only exists on IStepTrigger<Account>
-            .PostOperation().Async()                  // AsyncOnly API: .Sync() does not compile
-            .Handle(OnEstimated);
+    using Vela.Context;
+    using Vela.Plugin;
+    using Zava.Shared.Models.Generated;
 
-    private void OnEstimated(OnEstimatedContext ctx)
+    public sealed partial class AfterEstimate(string unsecureConfig, string secureConfig)
+        : EntityPluginBase<Account>(unsecureConfig, secureConfig)   // the API is bound to account
     {
-        var request = ctx.Request;   // zava_AccountEstimateValueRequest, typed
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnAccountEstimateValue()   // only exists on IStepTrigger<Account>
+                .PostOperation().Async()                  // AsyncOnly API: .Sync() does not compile
+                .Handle(OnEstimated);
+
+        private void OnEstimated(OnEstimatedContext ctx)
+        {
+            var request = ctx.Request;   // zava_AccountEstimateValueRequest, typed
+        }
     }
 }
 ```

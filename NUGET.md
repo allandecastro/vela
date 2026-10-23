@@ -21,19 +21,23 @@ dotnet tool install --global Vela.Cli           # the vela command
 ## Example
 
 ```csharp
-using Vela.Context;
-using Vela.Plugin;
-
-public sealed partial class AccountPostUpdate(string unsecureConfig, string secureConfig)
-    : EntityPluginBase<Account>(unsecureConfig, secureConfig)
+namespace Zava.Plugins.Account.Plugins
 {
-    protected override void RegisterPluginSteps() =>
-        RegisterStep().OnUpdate().PostOperation().Sync()
-            .FilterOn(a => a.Name)
-            .Handle(OnUpdated);
+    using Vela.Context;
+    using Vela.Plugin;
+    using Zava.Shared.Models.Generated;   // the early-bound Account
 
-    private void OnUpdated(IUpdatePostContext<Account> ctx) =>
-        ctx.Trace("Account renamed to '{0}'", ctx.Request.Target.Name);
+    public sealed partial class AccountPostUpdate(string unsecureConfig, string secureConfig)
+        : EntityPluginBase<Account>(unsecureConfig, secureConfig)
+    {
+        protected override void RegisterPluginSteps() =>
+            RegisterStep().OnUpdate().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .Handle(OnUpdated);
+
+        private void OnUpdated(IUpdatePostContext<Account> ctx) =>
+            ctx.Trace("Account renamed to '{0}'", ctx.Request.Target.Name);
+    }
 }
 ```
 
