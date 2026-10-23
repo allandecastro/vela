@@ -162,7 +162,7 @@ internal static class CliCommands
             Aliases: ["new"],
             Examples: ["vela init --name ZavaSales --prefix Zava --publisher-prefix zava --output .", "vela init --name ZavaDemo --prefix Zava --samples"]),
         new("add", "Add a plugin, service, Custom API, test or step to a project.",
-            ["vela add (plugin|service|customapi|test|step|form-script|ribbon-script) <Name> [options]", "vela add --interactive"],
+            ["vela add (plugin|service|customapi|test|step|form-script|ribbon-script) <Name> [options]", "vela add plugin [<Name>] --entity <ModelType> [options]", "vela add --interactive"],
             [
                 ("Options", [
                     new("--entity", CliOptionKind.Value, "Table model type (plugin/step; optional for service and customapi).", "ModelType", ["-e"]),
@@ -170,7 +170,7 @@ internal static class CliCommands
                     new("--stage", CliOptionKind.Value, "PreValidation | PreOperation | PostOperation.", "stage"),
                     new("--mode", CliOptionKind.Value, "Sync | Async.", "mode"),
                     new("--filtering-attributes", CliOptionKind.Value, "Columns the step filters on (required for Create/Update).", "Col1,Col2", ["--filter"]),
-                    new("--handler", CliOptionKind.Value, "Handler method name (step).", "Method"),
+                    new("--handler", CliOptionKind.Value, "Handler method name (plugin/step; default: Handle<Message>).", "Method"),
                     new("--kind", CliOptionKind.Value, "plugin | customapi (test).", "kind"),
                     new("--bound", CliOptionKind.Flag, "Entity-bound Custom API."),
                     new("--global", CliOptionKind.Flag, "Global (unbound) Custom API."),
@@ -184,7 +184,7 @@ internal static class CliCommands
                     Help]),
             ],
             Notes: [
-                "plugin <Name> --entity <ModelType> [--message] [--stage] [--mode] [--filtering-attributes] (required for Create/Update(+Multiple)).",
+                "plugin [<Name>] --entity <ModelType> [--message] [--handler] [--stage] [--mode] [--filtering-attributes] (required for Create/Update(+Multiple)): <Name> defaults to <ModelType>Plugin. An existing file is never edited: the error names the 'vela add step' command that adds the step to it.",
                 "service <Name> [--entity <ModelType>]: without --entity, a service shared by several tables, under Services/.",
                 "customapi <Name> [--entity <ModelType>] [--bound|--global] [--function|--action] [--prefix <publisherprefix>].",
                 "test <Name> [--kind plugin|customapi] [--entity] [--message] [--prefix]: run inside the test project (RootNamespace ending in .Tests). An existing test class is completed with the tests of the steps it lacks.",
