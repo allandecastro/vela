@@ -103,9 +103,9 @@ internal sealed record ScaffoldOptions(
         && PublisherPrefixPattern.IsMatch(value)
         && !value.StartsWith("mscrm", StringComparison.Ordinal);
 
-    // A Dataverse solution unique name: letters, digits and '_', not starting with a digit (the rule of the Dataverse
-    // solution form), at most 65 characters (the solution.uniquename column).
-    private static readonly Regex SolutionUniqueNamePattern = new("^[A-Za-z_][A-Za-z0-9_]{0,64}$", RegexOptions.Compiled);
+    // A Dataverse solution unique name: letters, digits and '_', the first character a letter or '_', at most 50
+    // characters - the rules Dataverse states when it rejects a solution create (verified on a dev environment).
+    private static readonly Regex SolutionUniqueNamePattern = new("^[A-Za-z_][A-Za-z0-9_]{0,49}$", RegexOptions.Compiled);
 
     /// <summary>True when the value is a valid Dataverse solution unique name.</summary>
     public static bool IsValidSolutionUniqueName(string value) =>
@@ -372,7 +372,7 @@ internal sealed record ScaffoldOptions(
         }
         else if (!IsValidSolutionUniqueName(solutionUniqueName))
         {
-            exitCode = Fail($"Invalid --solution '{solutionUniqueName}'. A Dataverse solution unique name uses letters, digits and '_', does not start with a digit, and has at most 65 characters (e.g. 'ZavaCore').", ExitInvalidArguments, includeUsage: false);
+            exitCode = Fail($"Invalid --solution '{solutionUniqueName}'. A Dataverse solution unique name uses letters, digits and '_', does not start with a digit, and has at most 50 characters (e.g. 'ZavaCore').", ExitInvalidArguments, includeUsage: false);
             return false;
         }
 

@@ -308,10 +308,10 @@ public sealed class ProjectValuesTests
         => Assert.Equal(expected, ScaffoldOptions.IsValidSolutionUniqueName(value));
 
     [Fact]
-    public void IsValidSolutionUniqueName_CapsTheLengthAt65()
+    public void IsValidSolutionUniqueName_CapsTheLengthAt50()
     {
-        Assert.True(ScaffoldOptions.IsValidSolutionUniqueName(new string('a', 65)));
-        Assert.False(ScaffoldOptions.IsValidSolutionUniqueName(new string('a', 66)));
+        Assert.True(ScaffoldOptions.IsValidSolutionUniqueName(new string('a', 50)));
+        Assert.False(ScaffoldOptions.IsValidSolutionUniqueName(new string('a', 51)));
     }
 
     [Fact]
