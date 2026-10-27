@@ -45,6 +45,9 @@ internal static partial class ScaffoldTemplates
         text.Append("Values the Vela commands need. Pass them as flags: `--solution` on plan/apply, `--prefix` on\n");
         text.Append("add customapi. Check a solution's prefix with `vela solution show <solution> --json`. The\n");
         text.Append("environment URL is per user and never lives in the repo.\n");
+        text.Append('\n');
+        text.Append("Vela writes this file once, at `vela init`, and never edits it afterwards. Everything below the\n");
+        text.Append("front matter belongs to the team.\n");
         return text.ToString();
     }
 }

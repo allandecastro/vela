@@ -52,7 +52,8 @@ All notable changes to Vela are documented here. The format is based on
   `publisherPrefix` (`--publisher-prefix`, or the one `--samples` / `--managed-identity` already name the packages
   with) and a `packages` map from every generated plugin package id (Plugins, and
   Integrations when generated) to its solution, then a short "Project" section. A value not given is left empty with
-  a comment. The CLI never reads the file; it is written only at `init` and tracked by the scaffold manifest, so
+  a comment, and a closing line saying that everything below the front matter belongs to the team. The CLI never
+  reads the file; it is written only at `init` and tracked by the scaffold manifest, so
   `init --force` rewrites it only while it is unedited. The generated `AGENTS.md` and `README.md` point to it ("Project
   values live in `PROJECT.md`; pass them as flags, do not ask for them again"), pass `--solution` / `--prefix` in their
   commands, and show two packages deployed to two solutions with one run each.
