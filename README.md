@@ -67,7 +67,7 @@ plug-ins on 4.6.2 through 4.8 and recommends 4.8 (4.8.1 is not supported); `vela
 
 ```bash
 dotnet tool install --global Vela.Cli
-vela init --name ZavaSales --prefix Zava --publisher-prefix zava && cd ZavaSales   # minimal; --samples adds examples
+vela init --name ZavaSales --prefix Zava --publisher-prefix zava --solution ZavaSales && cd ZavaSales   # minimal; --samples adds examples
 vela models --entities account --out src/Zava.Shared/Models/Generated --namespace Zava.Shared.Models.Generated --interactive
 vela add plugin AccountValidator --entity Account --filtering-attributes Name --project src/Zava.Plugins
 dotnet build ZavaSales.sln -c Release                                   # packs the plugin package into artifacts/
@@ -75,8 +75,9 @@ vela plan  --packages-dir artifacts --solution ZavaSales --interactive  # read-o
 vela apply --packages-dir artifacts --solution ZavaSales --interactive  # asks before writing
 ```
 
-`--solution` names an existing Dataverse solution the components are added to. `--publisher-prefix` names the
-package `zava_Zava.Plugins`, as Dataverse requires; without it, `--solution` gives the package that prefix. The
+`--solution` (required by `plan` and `apply`) names an existing Dataverse solution the components are added to.
+`--publisher-prefix` names the package `zava_Zava.Plugins`, as Dataverse requires; without it, `--solution` gives the
+package that prefix. `vela init` records both in the project's `PROJECT.md`, which the CLI never reads. The
 [quickstart](https://allandecastro.github.io/vela/getting-started/quickstart.html) explains each step, and the
 **[documentation](https://allandecastro.github.io/vela/)** covers plugins, Custom APIs, testing with
 `Vela.Testing` and the `plan` / `apply` workflow. AI coding agents: start with [`AGENTS.md`](AGENTS.md) in this

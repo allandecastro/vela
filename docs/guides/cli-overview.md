@@ -103,7 +103,7 @@ from a `.config` file: the `<system.net><defaultProxy>` element of an `app.confi
 
 ```bash
 export HTTPS_PROXY=http://proxy.contoso.com:8080      # PowerShell: $env:HTTPS_PROXY = "http://proxy.contoso.com:8080"
-vela plan --packages-dir ./artifacts --interactive
+vela plan --packages-dir ./artifacts --solution ZavaSales --interactive
 ```
 
 The connection to Dataverse and the sign-in requests go through that proxy. With `--interactive`, the sign-in page
@@ -125,7 +125,7 @@ solution's publisher, so you can align a scaffold with the solution before the f
 ```bash
 vela solution show ZavaSales -i            # prints: zava
 vela solution show ZavaSales -i --json     # {"solution":"ZavaSales","publisherPrefix":"zava"}
-vela init --name ZavaSales --prefix Zava --publisher-prefix "$(vela solution show ZavaSales -i)"
+vela init --name ZavaSales --prefix Zava --publisher-prefix "$(vela solution show ZavaSales -i)" --solution ZavaSales
 ```
 
 It is read-only. `show` is its only subcommand.

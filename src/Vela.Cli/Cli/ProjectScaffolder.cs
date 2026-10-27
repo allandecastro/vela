@@ -107,13 +107,15 @@ internal static class ProjectScaffolder
 
         // `dotnet build -c Release` packages the plugin project(s) into artifacts/ (GeneratePackageOnBuild +
         // PackageOutputPath). `dotnet pack` is intentionally not used: run cold it emits an assembly-less package.
-        Console.WriteLine($"  vela plan --packages-dir artifacts --solution {options.SolutionName} --interactive --verbose   # your solution's unique name");
+        Console.WriteLine(options.SolutionUniqueName is { } solution
+            ? $"  vela plan --packages-dir artifacts --solution {solution} --interactive --verbose   # the solution recorded in PROJECT.md"
+            : $"  vela plan --packages-dir artifacts --solution {options.SolutionName} --interactive --verbose   # your solution's unique name");
         if (options.IncludeWebResources)
         {
             string webResourcesName = $"{prefix}.WebResources";
             Console.WriteLine($"  cd src/{webResourcesName} && npm install && npm run build   # bundle the form web resources");
             Console.WriteLine("  vela add ribbon-script <entity>   # add a typed ribbon command (wire the button in the Command Designer)");
-            Console.WriteLine($"  vela apply --webresources src/{webResourcesName}/{options.WebResourcesFolder} --solution <name> --interactive   # deploy them");
+            Console.WriteLine($"  vela apply --webresources src/{webResourcesName}/{options.WebResourcesFolder} --solution {options.SolutionUniqueName ?? "<name>"} --interactive   # deploy them");
         }
 
         return ExitSuccess;
@@ -126,7 +128,6 @@ internal static class ProjectScaffolder
     {
         string prefix = options.Prefix;
         string apiPrefix = options.EffectivePublisherPrefix;
-        string? recordedPublisherPrefix = options.PublisherPrefix;
 
         string sharedName = $"{prefix}.Shared";
         string pluginsName = $"{prefix}.Plugins";
@@ -161,7 +162,7 @@ internal static class ProjectScaffolder
         // Code is organised by table (Account/, Contact/) with Plugins/ and CustomApis/ subfolders; unbound (global)
         // Custom APIs live under GlobalCustomApis/. A minimal package has no plugin types, so it registers nothing.
         AddProject(pluginsName, "src");
-        Add(Path.Combine("src", pluginsName, $"{pluginsName}.csproj"), PluginCsproj(pluginsName, sharedName, options.CoreVersion, publisherPrefix: recordedPublisherPrefix, packageId: options.PluginsPackageId));
+        Add(Path.Combine("src", pluginsName, $"{pluginsName}.csproj"), PluginCsproj(pluginsName, sharedName, options.CoreVersion, packageId: options.PluginsPackageId));
         // The assembly's service registrar and message catalogue, empty, in both modes (one registrar per assembly).
         Add(Path.Combine("src", pluginsName, "ProjectServices.cs"), ProjectServicesFile(pluginsName));
         Add(Path.Combine("src", pluginsName, "Messages.cs"), ProjectMessagesFile(pluginsName));
@@ -184,7 +185,7 @@ internal static class ProjectScaffolder
         if (options.IncludeIntegrations)
         {
             AddProject(integrationsName, "src");
-            Add(Path.Combine("src", integrationsName, $"{integrationsName}.csproj"), PluginCsproj(integrationsName, sharedName, options.CoreVersion, withSigningTarget: options.ManagedIdentity, publisherPrefix: recordedPublisherPrefix, packageId: options.IntegrationsPackageId));
+            Add(Path.Combine("src", integrationsName, $"{integrationsName}.csproj"), PluginCsproj(integrationsName, sharedName, options.CoreVersion, withSigningTarget: options.ManagedIdentity, packageId: options.IntegrationsPackageId));
         Add(Path.Combine("src", integrationsName, "ProjectServices.cs"), ProjectServicesFile(integrationsName));
         Add(Path.Combine("src", integrationsName, "Messages.cs"), ProjectMessagesFile(integrationsName));
         }
@@ -204,7 +205,7 @@ internal static class ProjectScaffolder
         if (options.IncludeTests)
         {
             AddProject(testsName, "tests");
-            Add(Path.Combine("tests", testsName, $"{testsName}.csproj"), TestsCsproj(testsName, pluginsName, sharedName, options.CoreVersion, recordedPublisherPrefix));
+            Add(Path.Combine("tests", testsName, $"{testsName}.csproj"), TestsCsproj(testsName, pluginsName, sharedName, options.CoreVersion));
             if (options.IncludeSamples)
             {
                 Add(Path.Combine("tests", testsName, "Security", "SecurityExampleTests.cs"), SecurityExampleTests(prefix));
@@ -222,7 +223,7 @@ internal static class ProjectScaffolder
         if (options.IncludeIntegrations && options.IncludeTests)
         {
             AddProject(integrationsTestsName, "tests");
-            Add(Path.Combine("tests", integrationsTestsName, $"{integrationsTestsName}.csproj"), TestsCsproj(integrationsTestsName, integrationsName, sharedName, options.CoreVersion, recordedPublisherPrefix));
+            Add(Path.Combine("tests", integrationsTestsName, $"{integrationsTestsName}.csproj"), TestsCsproj(integrationsTestsName, integrationsName, sharedName, options.CoreVersion));
         }
 
         if (options.IncludeIntegrations && options.IncludeTests && options.IncludeSamples)
@@ -289,6 +290,8 @@ internal static class ProjectScaffolder
         // No nuget.config: Vela.Plugins / Vela.Testing (and the Microsoft SDK packages) all resolve from
         // nuget.org, the default source. Add your own nuget.config only if you use a private feed.
         Add("README.md", RootReadme(options));
+        // The project values (publisher prefix, solution per package) for people and agents; the CLI never reads it.
+        Add("PROJECT.md", ProjectMd(options));
         // Instructions for AI coding agents: the step, Custom API and test patterns and the CLI loop.
         Add("AGENTS.md", AgentsGuide(options));
 

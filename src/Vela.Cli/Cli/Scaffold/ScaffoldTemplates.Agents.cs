@@ -18,9 +18,8 @@ internal static partial class ScaffoldTemplates
             : string.Empty;
         // With --no-tests the solution has no test project and no Vela.Testing reference, so the guide names neither.
         string packages = options.IncludeTests ? "`Vela.Plugins`, `Vela.Testing` and the `vela` CLI" : "`Vela.Plugins` and the `vela` CLI";
-        string solutionRule = options.KnownPublisherPrefix is { } knownPrefix
-            ? $"Always pass `--solution`: it adds the components to that solution. The packages are already named with the\npublisher prefix `{knownPrefix}` (`{options.PluginsPackageId}`), which Dataverse requires to import them."
-            : "Always pass `--solution`: it gives the package its publisher prefix, without which plan and apply fail.";
+        // Two packages to two solutions: the Integrations package when there is one, else a second package to come.
+        string secondPackage = options.IncludeIntegrations ? options.IntegrationsPackageId : "<OtherPackage>";
         string testsNamespace = options.IncludeTests ? $", its tests `{prefix}.Plugins.Tests.Account.Plugins`" : string.Empty;
         string testSection = options.IncludeTests ? "\n" + TestSection.Replace("{{prefix}}", prefix) : string.Empty;
 
@@ -44,14 +43,23 @@ Instructions for AI coding agents in this Dataverse solution, scaffolded by `vel
 dotnet build {{options.SolutionName}}.sln -c Release   # build, analyzers, and the plugin package in artifacts/
 {{testCommand}}vela models --entities account,contact --project src/{{prefix}}.Shared/{{prefix}}.Shared.csproj --interactive
 vela add plugin AccountGuard --entity Account --message Update --stage PreOperation --filtering-attributes Name --project src/{{prefix}}.Plugins/{{prefix}}.Plugins.csproj
-vela add customapi EstimateValue --global --function --project src/{{prefix}}.Plugins/{{prefix}}.Plugins.csproj
-vela plan  --packages-dir artifacts --solution <uniquename> --json   # read-only; JSON with "schemaVersion": 1
-vela apply --packages-dir artifacts --solution <uniquename>          # writes; asks for confirmation - run only when the user asks
-vela help --json                                                     # every command, option and exit code
+vela add customapi EstimateValue --global --function --prefix <publisherPrefix> --project src/{{prefix}}.Plugins/{{prefix}}.Plugins.csproj
+vela plan  --packages-dir artifacts --solution <solution> --json   # read-only; JSON with "schemaVersion": 1
+vela apply --packages-dir artifacts --solution <solution>          # writes; asks for confirmation - run only when the user asks
+vela help --json                                                   # every command, option and exit code
 ```
 
-{{solutionRule}} Run
-`vela plan` and read its result before any `vela apply`, and never apply without being asked to.
+Project values live in `PROJECT.md`; pass them as flags, do not ask for them again: `--solution` on `vela plan`
+and `vela apply` (the solution of each package, under `packages`), `--prefix` on `vela add customapi`
+(`publisherPrefix`). Check a solution's prefix with `vela solution show <solution> --json`. One plan or apply
+targets one solution: packages that target different solutions take one run per solution, each with its `-p`:
+
+```bash
+vela plan -p artifacts/{{options.PluginsPackageId}}.1.0.0.nupkg --solution <solution of {{options.PluginsPackageId}}> --json
+vela plan -p artifacts/{{secondPackage}}.1.0.0.nupkg --solution <solution of {{secondPackage}}> --json
+```
+
+Run `vela plan` and read its result before any `vela apply`, and never apply without being asked to.
 
 ## Code conventions
 

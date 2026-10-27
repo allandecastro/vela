@@ -197,14 +197,23 @@ internal static class CommandLineOptions
         return result.ToArray();
     }
 
+    /// <summary>Parses against the union allowlist of plan/apply/inspect; like <c>inspect</c>, <c>--solution</c> is
+    /// required only with <c>--webresources</c>.</summary>
     public static bool TryParseSharedOptions(string[] args, out SharedOptions options, out int exitCode) =>
-        TryParseSharedOptions(args, SharedValueOptions, SharedFlagOptions, out options, out exitCode);
+        TryParseSharedOptions(args, SharedValueOptions, SharedFlagOptions, requiredSolutionCommand: null, out options, out exitCode);
 
-    /// <summary>Parses the options of one of plan/apply/inspect against that command's own allowlist.</summary>
+    /// <summary>Parses the options of one of plan/apply/inspect against that command's own allowlist. plan and apply
+    /// require <c>--solution</c> (prompted for with <c>--interactive</c>).</summary>
     public static bool TryParseSharedOptions(string command, string[] args, out SharedOptions options, out int exitCode) =>
-        TryParseSharedOptions(args, CliCommands.ValueOptions(command), CliCommands.FlagOptions(command), out options, out exitCode);
+        TryParseSharedOptions(args, CliCommands.ValueOptions(command), CliCommands.FlagOptions(command), RequiresSolution(command) ? command.ToLowerInvariant() : null, out options, out exitCode);
 
-    private static bool TryParseSharedOptions(string[] args, HashSet<string> valueOptions, HashSet<string> flagOptions, out SharedOptions options, out int exitCode)
+    /// <summary>True for the commands whose result depends on the target solution (add-to-solution operations, the
+    /// Custom API prefix check, the importable-package guard): plan and apply.</summary>
+    public static bool RequiresSolution(string command) =>
+        string.Equals(command, "plan", StringComparison.OrdinalIgnoreCase) || string.Equals(command, "apply", StringComparison.OrdinalIgnoreCase);
+
+    // requiredSolutionCommand: the command name ("plan" / "apply") when --solution is required, else null.
+    private static bool TryParseSharedOptions(string[] args, HashSet<string> valueOptions, HashSet<string> flagOptions, string? requiredSolutionCommand, out SharedOptions options, out int exitCode)
     {
         options = default!;
         exitCode = ExitSuccess;
@@ -225,15 +234,6 @@ internal static class CommandLineOptions
             if (!Directory.Exists(webResourcesRoot))
             {
                 exitCode = Fail($"Web resources folder not found: {webResourcesRoot}", ExitFileNotFound, includeUsage: false);
-                return false;
-            }
-
-            // Web resources reconcile against a solution (component type 61): without one the current state can't be
-            // read, so the plan would show every file as added every run and could never reconcile deletions or
-            // validate the publisher prefix. Require the scope explicitly.
-            if (string.IsNullOrWhiteSpace(TryReadOption(args, "--solution") ?? TryReadOption(args, "--solution-unique-name")))
-            {
-                exitCode = Fail("--webresources requires --solution <uniquename> (web resources are reconciled within a solution).", ExitInvalidArguments, includeUsage: false);
                 return false;
             }
         }
@@ -293,6 +293,28 @@ internal static class CommandLineOptions
 
         string[] resolvedPackages = packagePaths.ToArray();
 
+        // plan and apply always target a solution: the plan depends on it (add-to-solution operations, the Custom API
+        // prefix check, the importable-package guard). Web resources need one on every command: they reconcile against
+        // a solution (component type 61), without which their current state can't be read. The CLI never reads
+        // PROJECT.md: the value is a flag, or a prompt with --interactive.
+        string? solution = TryReadOption(args, "--solution") ?? TryReadOption(args, "--solution-unique-name");
+        bool solutionRequired = requiredSolutionCommand is not null || !string.IsNullOrWhiteSpace(webResourcesRoot);
+        if (solutionRequired && string.IsNullOrWhiteSpace(solution) && interactive)
+        {
+            solution = Prompt("Solution unique name (the solution the packages deploy into):");
+        }
+
+        if (solutionRequired && string.IsNullOrWhiteSpace(solution))
+        {
+            exitCode = Fail(
+                requiredSolutionCommand is not null
+                    ? $"vela {requiredSolutionCommand} requires --solution <uniquename>: the solution the packages deploy into (PROJECT.md maps each package to its solution). Packages that target different solutions take one 'vela {requiredSolutionCommand} -p <package> --solution <name>' per solution."
+                    : "--webresources requires --solution <uniquename> (web resources are reconciled within a solution).",
+                ExitInvalidArguments,
+                includeUsage: false);
+            return false;
+        }
+
         if (!TryReadTimeoutMinutes(args, out int? timeoutMinutes, out exitCode))
         {
             return false;
@@ -322,7 +344,7 @@ internal static class CommandLineOptions
             ConnectionString: connectionString,
             OAuthUrl: oauthUrl,
             OAuthToken: oauthToken,
-            SolutionUniqueName: TryReadOption(args, "--solution") ?? TryReadOption(args, "--solution-unique-name"),
+            SolutionUniqueName: string.IsNullOrWhiteSpace(solution) ? null : solution!.Trim(),
             Environment: TryReadOption(args, "--environment") ?? url,
             OutPath: TryReadOption(args, "--out"),
             AutoApprove: args.Any(x => string.Equals(x, "--auto-approve", StringComparison.OrdinalIgnoreCase)

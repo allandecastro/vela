@@ -178,7 +178,7 @@ internal static class AddCommand
             "service" => AddService(name, entity, force, projectDir, rootNamespace, modelsNamespace, HasFlag(args, "--json")),
             "test" => AddTest(args, name, entity, force, projectFile, projectDir, rootNamespace),
             "step" => AddStep(args, name, entity, projectDir),
-            _ => AddCustomApi(args, name, entity, force, projectFile, projectDir, rootNamespace, modelsNamespace, prefix),
+            _ => AddCustomApi(args, name, entity, force, projectFile, projectDir, rootNamespace, modelsNamespace),
         };
     }
 
@@ -658,7 +658,7 @@ internal static class AddCommand
         if (uniqueName is null)
         {
             // Computed some other way: fall back to the name `vela add customapi` would have given it.
-            if (!TryResolvePublisherPrefix(args, projectFile, prefix, out string testApiPrefix, out int prefixExit))
+            if (!TryResolvePublisherPrefix(args, projectFile, $"vela add test {name} --kind customapi (the unique name {api.Name} registers could not be read)", out string testApiPrefix, out int prefixExit))
             {
                 return prefixExit;
             }
@@ -976,7 +976,7 @@ internal static class AddCommand
         return WriteFile(projectDir, relativePath, content, force, shared ? $"service {name} (shared)" : $"service {name} (scoped to {entity})", json, registration);
     }
 
-    private static int AddCustomApi(string[] args, string name, string? entity, bool force, string projectFile, string projectDir, string rootNamespace, string modelsNamespace, string prefix)
+    private static int AddCustomApi(string[] args, string name, string? entity, bool force, string projectFile, string projectDir, string rootNamespace, string modelsNamespace)
     {
         // --function / --action choose the OperationType (default Action). Functions return data and are
         // typically read-only; actions can mutate. Mutually exclusive.
@@ -1021,7 +1021,7 @@ internal static class AddCommand
             generateGlobal = string.IsNullOrWhiteSpace(entity);
         }
 
-        if (!TryResolvePublisherPrefix(args, projectFile, prefix, out string apiPrefix, out int prefixExit))
+        if (!TryResolvePublisherPrefix(args, projectFile, "vela add customapi", out string apiPrefix, out int prefixExit))
         {
             return prefixExit;
         }
@@ -1046,60 +1046,43 @@ internal static class AddCommand
 
     // A Custom API's unique name must carry the publisher customization prefix of the solution it is deployed into
     // (Dataverse rejects it otherwise, and `vela apply --solution` validates this). That publisher prefix is NOT the
-    // .NET project prefix. Resolution: --prefix, else the VelaPublisherPrefix recorded by `vela init --publisher-prefix`
-    // in the target project, else the project prefix (with a note, since it is a guess). A value that is not a valid
-    // publisher prefix (2-8 chars, letter first, alphanumeric) is refused rather than emitted into an unregistrable name.
-    private static bool TryResolvePublisherPrefix(string[] args, string projectFile, string projectPrefix, out string apiPrefix, out int exitCode)
+    // .NET project prefix, and `add` stays offline, so it is the --prefix the caller passes: never guessed from the
+    // project prefix, never read from the project (PROJECT.md records it for people and agents; the CLI never reads
+    // it). A value that is not a valid publisher prefix (2-8 chars, letter first, alphanumeric) is refused rather than
+    // emitted into an unregistrable name. A legacy <VelaPublisherPrefix> left by an earlier `vela init` is quoted in
+    // the error, as the value to pass, but not used.
+    private static bool TryResolvePublisherPrefix(string[] args, string projectFile, string command, out string apiPrefix, out int exitCode)
     {
         exitCode = ExitSuccess;
         string? explicitPrefix = TryReadOption(args, "--prefix");
-        if (!string.IsNullOrWhiteSpace(explicitPrefix))
+        if (string.IsNullOrWhiteSpace(explicitPrefix))
         {
-            apiPrefix = explicitPrefix!.Trim().ToLowerInvariant();
-            if (!ScaffoldOptions.IsValidPublisherPrefix(apiPrefix))
-            {
-                exitCode = Fail($"Invalid --prefix '{explicitPrefix}'. A Dataverse customization prefix is 2-8 characters, starts with a letter, and is alphanumeric (e.g. 'dv', 'acme').", ExitInvalidArguments, includeUsage: false);
-                return false;
-            }
-
-            return true;
-        }
-
-        string? recorded = ReadPublisherPrefix(projectFile);
-        if (recorded is not null)
-        {
-            apiPrefix = recorded;
-            if (!ScaffoldOptions.IsValidPublisherPrefix(apiPrefix))
-            {
-                exitCode = Fail($"The VelaPublisherPrefix '{recorded}' in {projectFile} is not a valid publisher prefix (2-8 characters, letter first, alphanumeric). Fix it or pass --prefix <publisherprefix>.", ExitInvalidArguments, includeUsage: false);
-                return false;
-            }
-
-            return true;
-        }
-
-        apiPrefix = ApiPrefix(projectPrefix);
-        if (!ScaffoldOptions.IsValidPublisherPrefix(apiPrefix))
-        {
-            exitCode = Fail($"The project prefix '{apiPrefix}' is not a valid Dataverse publisher prefix (2-8 characters, letter first, alphanumeric), so it cannot name a Custom API. Pass --prefix <publisherprefix> with your solution publisher's prefix.", ExitInvalidArguments, includeUsage: false);
+            apiPrefix = string.Empty;
+            string legacy = ReadLegacyPublisherPrefix(projectFile) is { } recorded
+                ? $" {Path.GetFileName(projectFile)} still has the legacy <VelaPublisherPrefix>{recorded}</VelaPublisherPrefix>, which Vela no longer reads: pass --prefix {recorded}."
+                : string.Empty;
+            exitCode = Fail($"{command} requires --prefix <publisherprefix>: the publisher prefix of the target solution (PROJECT.md records it; check it with 'vela solution show <solution> --json'), or run 'vela add --interactive'.{legacy}", ExitInvalidArguments, includeUsage: false);
             return false;
         }
 
-        if (!HasFlag(args, "--json"))
+        apiPrefix = explicitPrefix!.Trim().ToLowerInvariant();
+        if (!ScaffoldOptions.IsValidPublisherPrefix(apiPrefix))
         {
-            Console.Error.WriteLine($"Note: unique name uses the project prefix '{apiPrefix}_'. It must match your target solution's publisher prefix or 'vela apply --solution' will reject it. Override with --prefix <publisherprefix>, or record it with 'vela init --force --publisher-prefix <prefix>'.");
+            exitCode = Fail($"Invalid --prefix '{explicitPrefix}'. A Dataverse customization prefix is 2-8 characters, starts with a letter, and is alphanumeric (e.g. 'dv', 'acme').", ExitInvalidArguments, includeUsage: false);
+            return false;
         }
 
         return true;
     }
 
-    // Reads the <VelaPublisherPrefix> recorded in a project file, or null when absent or unreadable.
-    private static string? ReadPublisherPrefix(string projectFile)
+    // The <VelaPublisherPrefix> an earlier `vela init` wrote into a project file, or null when absent or unreadable.
+    // Only quoted in the missing --prefix error; never used as the prefix.
+    private static string? ReadLegacyPublisherPrefix(string projectFile)
     {
         try
         {
             string? value = System.Xml.Linq.XDocument.Load(projectFile).Descendants("VelaPublisherPrefix").FirstOrDefault()?.Value;
-            return string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
         catch (Exception ex) when (ex is IOException or System.Xml.XmlException or UnauthorizedAccessException)
         {

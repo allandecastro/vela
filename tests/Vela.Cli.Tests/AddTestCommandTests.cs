@@ -287,7 +287,7 @@ public class AddTestCommandTests
     {
         RunInSolution((plugins, tests, testsDir) =>
         {
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "ExportContact", "--entity", "Contact", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "ExportContact", "--entity", "Contact", "--prefix", "acme", "--project", plugins]));
             Assert.Equal(ExitSuccess, AddCommand.Run(["test", "ExportContact", "--kind", "customapi", "--project", tests]));
 
             string content = File.ReadAllText(Path.Combine(testsDir, "Contact", "CustomApis", "ExportContactTests.cs"));
@@ -367,7 +367,7 @@ public class AddTestCommandTests
     {
         RunInSolution((plugins, tests, testsDir) =>
         {
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Recalc", "--global", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Recalc", "--global", "--prefix", "acme", "--project", plugins]));
 
             Assert.Equal(ExitInvalidArguments, AddCommand.Run(["test", "Missing", "--kind", "customapi", "--project", tests]));
             Assert.Empty(Directory.GetFiles(testsDir, "*.cs", SearchOption.AllDirectories));

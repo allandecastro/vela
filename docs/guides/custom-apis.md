@@ -224,8 +224,8 @@ you deploy into, then `_`, then the name. Dataverse rejects a Custom API without
 - `apply --solution <name>` reads the prefix from that solution's publisher and checks it up front on the plugin
   package name, every Custom API unique name and every web resource name.
 - It is **not** the .NET project prefix. `vela init --prefix Zava` names the projects and namespaces
-  (`Zava.Plugins`). `vela add customapi` defaults the unique-name prefix to a lower-cased project prefix; pass
-  `--prefix <publisherprefix>` when that does not match your solution's publisher.
+  (`Zava.Plugins`). `vela add customapi` takes the publisher prefix as `--prefix <publisherprefix>` (required) and
+  never derives it from the project prefix; `vela solution show <solution> --json` prints a solution's prefix.
 
 ## See also
 

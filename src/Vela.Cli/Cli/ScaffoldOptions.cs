@@ -32,11 +32,12 @@ namespace Vela.Cli;
 /// <param name="IncludeSamples">When true (<c>--samples</c>), emit the demo models, services, plugins, Custom APIs and the
 /// demo-only ConsoleApp project, plus the Integrations project with its demos. Off by default: <c>vela init</c> scaffolds a minimal solution.</param>
 /// <param name="PublisherPrefix">The Dataverse publisher customization prefix passed with <c>--publisher-prefix</c>, or
-/// null to derive it from <paramref name="Prefix"/>. When set it is written to the generated projects as
-/// <c>VelaPublisherPrefix</c>, which <c>vela add customapi</c> reads.</param>
+/// null to derive it from <paramref name="Prefix"/>. When set it is written to <c>PROJECT.md</c> (which the CLI never reads).</param>
 /// <param name="CoreVersionPinned">True when <c>--core-version</c> was passed (in either form), so the caller does not
 /// replace it with the latest version on nuget.org.</param>
 /// <param name="Verbose">When true (<c>--verbose</c>), a failure prints the full exception.</param>
+/// <param name="SolutionUniqueName">The unique name of the Dataverse solution passed with <c>--solution</c>, or null.
+/// <c>PROJECT.md</c> maps every generated plugin package to it; the CLI never reads it back.</param>
 internal sealed record ScaffoldOptions(
     string SolutionName,
     string Prefix,
@@ -55,7 +56,8 @@ internal sealed record ScaffoldOptions(
     bool IncludeSamples = false,
     string? PublisherPrefix = null,
     bool CoreVersionPinned = false,
-    bool Verbose = false)
+    bool Verbose = false,
+    string? SolutionUniqueName = null)
 {
     /// <summary>
     /// The publisher prefix the generated Custom API unique names use: <see cref="PublisherPrefix"/> when given,
@@ -76,7 +78,7 @@ internal sealed record ScaffoldOptions(
 
     /// <summary>
     /// The package id of the Plugins project: <c>zava_Zava.Plugins</c> when a publisher prefix is known (see
-    /// <see cref="KnownPublisherPrefix"/>), so <c>vela plan</c> / <c>apply</c> import it without <c>--solution</c>;
+    /// <see cref="KnownPublisherPrefix"/>), so <c>vela apply</c> imports it under that name;
     /// <c>Zava.Plugins</c> otherwise.
     /// </summary>
     public string PluginsPackageId => PrefixedPackageId($"{Prefix}.Plugins");
@@ -100,6 +102,14 @@ internal sealed record ScaffoldOptions(
         !string.IsNullOrEmpty(value)
         && PublisherPrefixPattern.IsMatch(value)
         && !value.StartsWith("mscrm", StringComparison.Ordinal);
+
+    // A Dataverse solution unique name: letters, digits and '_', not starting with a digit (the rule of the Dataverse
+    // solution form), at most 65 characters (the solution.uniquename column).
+    private static readonly Regex SolutionUniqueNamePattern = new("^[A-Za-z_][A-Za-z0-9_]{0,64}$", RegexOptions.Compiled);
+
+    /// <summary>True when the value is a valid Dataverse solution unique name.</summary>
+    public static bool IsValidSolutionUniqueName(string value) =>
+        !string.IsNullOrEmpty(value) && SolutionUniqueNamePattern.IsMatch(value);
 
     // Solution name doubles as a folder + file name, so keep it to filename-safe characters. The first character
     // must be alphanumeric so the name can never be a path-traversal segment (".", "..", ".hidden"): the solution
@@ -348,6 +358,24 @@ internal sealed record ScaffoldOptions(
             return false;
         }
 
+        // The Dataverse solution the generated packages deploy into: written to PROJECT.md for people and agents (the
+        // CLI never reads it back; plan/apply take --solution). Optional: without it PROJECT.md leaves it empty.
+        string? solutionUniqueName = TryReadOption(args, "--solution")?.Trim();
+        if (string.IsNullOrEmpty(solutionUniqueName) && interactive)
+        {
+            solutionUniqueName = Prompt("Dataverse solution unique name the packages deploy into (optional, recorded in PROJECT.md):", allowEmpty: true)?.Trim();
+        }
+
+        if (string.IsNullOrEmpty(solutionUniqueName))
+        {
+            solutionUniqueName = null;
+        }
+        else if (!IsValidSolutionUniqueName(solutionUniqueName))
+        {
+            exitCode = Fail($"Invalid --solution '{solutionUniqueName}'. A Dataverse solution unique name uses letters, digits and '_', does not start with a digit, and has at most 65 characters (e.g. 'ZavaCore').", ExitInvalidArguments, includeUsage: false);
+            return false;
+        }
+
         bool force = HasFlag(args, "--force");
 
         // The web-resources (TypeScript) project is opt-in: off unless --web-resources or the interactive prompt.
@@ -420,7 +448,8 @@ internal sealed record ScaffoldOptions(
             IncludeSamples: includeSamples,
             PublisherPrefix: publisherPrefix,
             CoreVersionPinned: pinnedCoreVersion is not null,
-            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"));
+            Verbose: HasFlag(args, "--verbose") || HasFlag(args, "-v"),
+            SolutionUniqueName: solutionUniqueName);
         return true;
     }
 
@@ -471,7 +500,7 @@ internal sealed record ScaffoldOptions(
     // Value options (consume the next token) and boolean flags for `vela init`. Used both to skip value-option
     // values when reading the positional name and as the unknown-option allowlist. Keep in sync with TryParse.
     private static readonly HashSet<string> ValueOptions = new(StringComparer.OrdinalIgnoreCase)
-        { "--name", "--prefix", "--output", "-o", "--core-version", "--publisher-prefix", "--web-resources-namespace", "--web-resources-folder" };
+        { "--name", "--prefix", "--output", "-o", "--core-version", "--publisher-prefix", "--solution", "--web-resources-namespace", "--web-resources-folder" };
 
     private static readonly HashSet<string> FlagOptions = new(StringComparer.OrdinalIgnoreCase)
     {

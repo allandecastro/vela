@@ -121,7 +121,7 @@ the options, so an agent can discover the CLI without parsing help text.
 | Code | Meaning |
 | --- | --- |
 | `0` | Success (for `plan`, also "changes found" unless `--detailed-exitcode`) |
-| `2` | Invalid arguments (unknown option, missing value, option of another command) |
+| `2` | Invalid arguments (unknown option, missing value, option of another command, `plan`/`apply` without `--solution`, `add customapi` without `--prefix`) |
 | `3` | File not found (package, folder, secure-config file) |
 | `4` | Error, including a `--strict` failure and a refused non-interactive `apply` without `--auto-approve` |
 | `5` | Drift detected (`vela models --verify`), or `apply` did not converge (mode `apply-not-converged`) |

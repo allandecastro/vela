@@ -87,6 +87,7 @@ public class ProjectScaffolderTests
                     "AGENTS.md",
                     "Directory.Build.props",
                     "Directory.Packages.props",
+                    "PROJECT.md",
                     "README.md",
                     "ZavaSales.sln",
                     "src/Zava.Plugins/Messages.cs",
@@ -126,6 +127,7 @@ public class ProjectScaffolderTests
                     "AGENTS.md",
                     "Directory.Build.props",
                     "Directory.Packages.props",
+                    "PROJECT.md",
                     "README.md",
                     "ZavaSales.sln",
                     "src/Zava.Integrations/Messages.cs",
@@ -172,7 +174,7 @@ public class ProjectScaffolderTests
             // The signed package is named with the publisher prefix up front; the assembly keeps the project name.
             Assert.Contains("<PackageId>zava_Zava.Integrations</PackageId>", integrationsCsproj);
             Assert.Contains("<AssemblyName>Zava.Integrations</AssemblyName>", integrationsCsproj);
-            // The Plugins package takes the same prefix, so plan/apply import it without --solution.
+            // The Plugins package takes the same prefix.
             Assert.Contains("<PackageId>zava_Zava.Plugins</PackageId>", pluginsCsproj);
             Assert.Contains("<AssemblyName>Zava.Plugins</AssemblyName>", pluginsCsproj);
             Assert.Equal(
@@ -188,7 +190,7 @@ public class ProjectScaffolderTests
     }
 
     [Fact]
-    public void Generate_PublisherPrefix_NamesTheSampleCustomApis_AndIsRecordedInTheProjects()   // A-50
+    public void Generate_PublisherPrefix_NamesTheSampleCustomApis_AndIsRecordedInProjectMdOnly()   // A-50, #575
     {
         RunInTempDir(temp =>
         {
@@ -198,10 +200,11 @@ public class ProjectScaffolderTests
             Assert.Contains("UniqueName = \"zs_AccountEstimateValue\";", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Account", "CustomApis", "AccountEstimateValueCustomApi.cs")));
             Assert.Contains("UniqueName = \"zs_Ping\";", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "GlobalCustomApis", "PingCustomApi.cs")));
             Assert.Contains("UniqueName = \"zs_IntegrationHeartbeat\";", File.ReadAllText(Path.Combine(root, "src", "Zava.Integrations", "GlobalCustomApis", "IntegrationHeartbeatCustomApi.cs")));
-            foreach (string csproj in new[] { Path.Combine("src", "Zava.Plugins", "Zava.Plugins.csproj"), Path.Combine("src", "Zava.Integrations", "Zava.Integrations.csproj"), Path.Combine("tests", "Zava.Plugins.Tests", "Zava.Plugins.Tests.csproj") })
-            {
-                Assert.Contains("<VelaPublisherPrefix>zs</VelaPublisherPrefix>", File.ReadAllText(Path.Combine(root, csproj)));
-            }
+            // The prefix is recorded in PROJECT.md, never in a project file (#575): the CLI takes it as --prefix.
+            Assert.Contains("\npublisherPrefix: zs\n", File.ReadAllText(Path.Combine(root, "PROJECT.md")));
+            string[] csprojs = Directory.GetFiles(root, "*.csproj", SearchOption.AllDirectories);
+            Assert.NotEmpty(csprojs);
+            Assert.All(csprojs, csproj => Assert.DoesNotContain("VelaPublisherPrefix", File.ReadAllText(csproj)));
         });
     }
 
@@ -219,10 +222,9 @@ public class ProjectScaffolderTests
             Assert.Contains("<AssemblyName>Vpmi.Plugins</AssemblyName>", pluginsCsproj);
 
             string readme = File.ReadAllText(Path.Combine(root, "README.md"));
-            Assert.Contains("already named with the publisher prefix `vpmi` (`vpmi_Vpmi.Plugins`)", readme);
-            Assert.DoesNotContain("refuses an unprefixed package", readme);
+            Assert.Contains("vela add customapi MyApi --global --prefix vpmi --project src/Vpmi.Plugins", readme);
             string agents = File.ReadAllText(Path.Combine(root, "AGENTS.md"));
-            Assert.Contains("publisher prefix `vpmi` (`vpmi_Vpmi.Plugins`)", agents);
+            Assert.Contains("vela plan -p artifacts/vpmi_Vpmi.Plugins.1.0.0.nupkg --solution <solution of vpmi_Vpmi.Plugins> --json", agents);
         });
     }
 
@@ -236,8 +238,9 @@ public class ProjectScaffolderTests
 
             string root = Path.Combine(temp, "ZavaSales");
             Assert.Contains("<PackageId>Zava.Plugins</PackageId>", File.ReadAllText(Path.Combine(root, "src", "Zava.Plugins", "Zava.Plugins.csproj")));
-            Assert.Contains("`--solution` gives the package its publisher prefix", File.ReadAllText(Path.Combine(root, "README.md")));
-            Assert.Contains("it gives the package its publisher prefix, without which plan and apply fail", File.ReadAllText(Path.Combine(root, "AGENTS.md")));
+            string readme = File.ReadAllText(Path.Combine(root, "README.md"));
+            Assert.Contains("vela add customapi MyApi --global --prefix <publisherprefix> --project src/Zava.Plugins", readme);
+            Assert.Contains("The project values live in `PROJECT.md`", readme);
         });
     }
 
@@ -667,8 +670,9 @@ public class ProjectScaffolderTests
             // The CLI loop on this solution's own names, always with --solution.
             Assert.Contains("dotnet build ZavaSales.sln -c Release", agents);
             Assert.Contains("dotnet test tests/Zava.Plugins.Tests -c Release", agents);
-            Assert.Contains("vela plan  --packages-dir artifacts --solution <uniquename> --json", agents);
-            Assert.Contains("vela apply --packages-dir artifacts --solution <uniquename>", agents);
+            Assert.Contains("vela plan  --packages-dir artifacts --solution <solution> --json", agents);
+            Assert.Contains("vela apply --packages-dir artifacts --solution <solution>", agents);
+            Assert.Contains("vela add customapi EstimateValue --global --function --prefix <publisherPrefix> --project src/Zava.Plugins/Zava.Plugins.csproj", agents);
             Assert.Contains("--project src/Zava.Plugins/Zava.Plugins.csproj", agents);
             Assert.DoesNotContain("{{", agents);
 
@@ -1123,8 +1127,8 @@ public class ProjectScaffolderTests
                 ["plugin", "AccountImported", "--entity", "Account", "--message", "CreateMultiple", "--filtering-attributes", "name"],
                 ["plugin", "AccountState", "--entity", "Account", "--message", "SetState"],
                 ["service", "AccountScoring", "--entity", "Account"],
-                ["customapi", "Recalculate", "--global"],
-                ["customapi", "Score", "--entity", "Account", "--function"],
+                ["customapi", "Recalculate", "--global", "--prefix", "zava"],
+                ["customapi", "Score", "--entity", "Account", "--function", "--prefix", "zava"],
             ];
             foreach (string[] add in adds)
             {
@@ -1215,7 +1219,7 @@ public class ProjectScaffolderTests
             string integrations = Path.Combine(root, "src", "Zava.Integrations", "Zava.Integrations.csproj");
             string integrationsTests = Path.Combine(root, "tests", "Zava.Integrations.Tests", "Zava.Integrations.Tests.csproj");
             Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountSync", "--entity", "Account", "--filtering-attributes", "Name", "--project", integrations]));
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Export", "--global", "--project", integrations]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Export", "--global", "--prefix", "zava", "--project", integrations]));
             Assert.Equal(ExitSuccess, AddCommand.Run(["service", "AuditService", "--project", integrations]));
             Assert.Equal(ExitSuccess, AddCommand.Run(["test", "Export", "--kind", "customapi", "--project", integrationsTests]));
 

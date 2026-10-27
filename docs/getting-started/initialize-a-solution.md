@@ -3,7 +3,7 @@
 `vela init` generates a build-ready plugin solution in one step:
 
 ```powershell
-vela init --name ZavaSales --prefix Zava --publisher-prefix zava --output .
+vela init --name ZavaSales --prefix Zava --publisher-prefix zava --solution ZavaSales --output .
 # or run the wizard:
 vela init --interactive
 ```
@@ -21,6 +21,7 @@ ZavaSales/
   tests/
     Zava.Plugins.Tests/     # xunit tests using Vela.Testing - no connection (omit with --no-tests)
   .vela/scaffold-manifest.json  # lets `vela init --force` regenerate without touching your code
+  PROJECT.md                   # the publisher prefix and the solution of each package (never read by the CLI)
   AGENTS.md                    # instructions for AI coding agents: steps, Custom APIs, tests, the CLI loop
   .editorconfig                # code style: usings inside the namespace
   Directory.Build.props        # shared build settings for src/ and tests/
@@ -40,6 +41,10 @@ It builds, tests and plans unedited, and deploys nothing until you add a plugin:
   `Messages.cs` holds the message keys: see [Localized messages](../guides/localization.md).
 - `--publisher-prefix` is your solution publisher's prefix; Custom APIs are named `<publisherprefix>_<Name>`, and the
   plugin package `<publisherprefix>_Zava.Plugins` (`artifacts/zava_Zava.Plugins.1.0.0.nupkg`).
+- `--solution` is the unique name of the Dataverse solution the packages deploy into. `vela init` records it and the
+  publisher prefix in `PROJECT.md`, for the people and agents who run the commands; the CLI never reads that file, so
+  pass the values as flags: `vela plan --packages-dir artifacts --solution ZavaSales`, and
+  `vela add customapi <Name> --prefix zava`. See [PROJECT.md](../guides/scaffold.md#projectmd).
 
 > [!TIP]
 > Want worked examples first? Add **`--samples`** for sample models, services, a single-step and a multi-step

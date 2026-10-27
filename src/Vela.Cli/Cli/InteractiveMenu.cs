@@ -95,6 +95,7 @@ internal static class InteractiveMenu
         string? handler = null;
         string? testKind = null;
         string? filteringAttributes = null;
+        string? publisherPrefix = null;
         bool function = false;
 
         switch (kind)
@@ -123,6 +124,7 @@ internal static class InteractiveMenu
                 }
 
                 function = AnsiConsole.Confirm("Function (returns data)? [grey](No = Action)[/]", false);
+                publisherPrefix = PromptPublisherPrefix(optional: false);
                 break;
             case "test":
                 testKind = AnsiConsole.Prompt(
@@ -132,10 +134,15 @@ internal static class InteractiveMenu
                     entity = PromptEntity();
                 }
 
+                if (testKind == "customapi")
+                {
+                    publisherPrefix = PromptPublisherPrefix(optional: true);
+                }
+
                 break;
         }
 
-        return ComposeAddArgs(kind, name, entity, message, handler, testKind, function, filteringAttributes);
+        return ComposeAddArgs(kind, name, entity, message, handler, testKind, function, filteringAttributes, publisherPrefix);
     }
 
     private static string PromptEntity() =>
@@ -144,6 +151,21 @@ internal static class InteractiveMenu
                 .Validate(v => Identifier.IsMatch(v)
                     ? ValidationResult.Success()
                     : ValidationResult.Error("[red]Use the early-bound class name, e.g. Account.[/]")));
+
+    // The Custom API publisher prefix (`add` never reads it from the project). Optional for a Custom API test, which
+    // only needs it when the unique name the API registers cannot be read from its source.
+    private static string? PromptPublisherPrefix(bool optional)
+    {
+        TextPrompt<string> prompt = new TextPrompt<string>(optional
+                ? "Publisher prefix of the solution [grey](optional: used only when the unique name cannot be read)[/]:"
+                : "Publisher prefix of the solution [grey](PROJECT.md records it; or 'vela solution show <solution>')[/]:")
+            .Validate(v => (optional && string.IsNullOrWhiteSpace(v)) || ScaffoldOptions.IsValidPublisherPrefix(v.Trim().ToLowerInvariant())
+                ? ValidationResult.Success()
+                : ValidationResult.Error("[red]Use 2-8 characters: a letter, then letters or digits (e.g. 'zava').[/]"));
+        prompt.AllowEmpty = optional;
+        string value = AnsiConsole.Prompt(prompt).Trim().ToLowerInvariant();
+        return value.Length == 0 ? null : value;
+    }
 
     private static string PromptMessage() =>
         AnsiConsole.Prompt(new TextPrompt<string>("Message:").DefaultValue("Create"));
@@ -155,7 +177,7 @@ internal static class InteractiveMenu
             : null;
 
     /// <summary>Builds the <c>add</c> subcommand argument array (no leading <c>add</c>). Pure, for testability.</summary>
-    public static string[] ComposeAddArgs(string kind, string name, string? entity, string? message, string? handler, string? testKind, bool function, string? filteringAttributes = null)
+    public static string[] ComposeAddArgs(string kind, string name, string? entity, string? message, string? handler, string? testKind, bool function, string? filteringAttributes = null, string? publisherPrefix = null)
     {
         List<string> args = [kind, name];
         if (!string.IsNullOrWhiteSpace(testKind))
@@ -191,6 +213,12 @@ internal static class InteractiveMenu
         if (function)
         {
             args.Add("--function");
+        }
+
+        if (!string.IsNullOrWhiteSpace(publisherPrefix))
+        {
+            args.Add("--prefix");
+            args.Add(publisherPrefix!);
         }
 
         return [.. args];
@@ -232,7 +260,18 @@ internal static class InteractiveMenu
                 .ToLowerInvariant()
             : null;
 
-        return ComposeInitArgs(name, prefix, output, integrations, tests, console, samples, publisherPrefix);
+        // Optional: PROJECT.md maps every generated package to it (left empty otherwise). The CLI never reads it back.
+        string solution = AnsiConsole.Prompt(
+            new TextPrompt<string>("Dataverse solution unique name the packages deploy into [grey](optional, recorded in PROJECT.md)[/]:")
+            {
+                AllowEmpty = true,
+            }
+            .Validate(v => string.IsNullOrWhiteSpace(v) || ScaffoldOptions.IsValidSolutionUniqueName(v.Trim())
+                ? ValidationResult.Success()
+                : ValidationResult.Error("[red]Use letters, digits and '_', not starting with a digit (e.g. 'ZavaCore').[/]")))
+            .Trim();
+
+        return ComposeInitArgs(name, prefix, output, integrations, tests, console, samples, publisherPrefix, solution);
     }
 
     /// <summary>True when the wizard must ask for a publisher prefix: with samples, whose Custom APIs need one, when
@@ -242,13 +281,19 @@ internal static class InteractiveMenu
 
     /// <summary>Builds the <c>init</c> argument array from collected inputs. Pure, for testability. The Integrations
     /// and ConsoleApp choices only apply with <paramref name="samples"/> (they are demo-only projects).</summary>
-    public static string[] ComposeInitArgs(string name, string prefix, string output, bool integrations, bool tests, bool console, bool samples = false, string? publisherPrefix = null)
+    public static string[] ComposeInitArgs(string name, string prefix, string output, bool integrations, bool tests, bool console, bool samples = false, string? publisherPrefix = null, string? solution = null)
     {
         List<string> args = ["init", "--name", name, "--prefix", prefix, "--output", output];
         if (!string.IsNullOrWhiteSpace(publisherPrefix))
         {
             args.Add("--publisher-prefix");
             args.Add(publisherPrefix!);
+        }
+
+        if (!string.IsNullOrWhiteSpace(solution))
+        {
+            args.Add("--solution");
+            args.Add(solution!);
         }
 
         if (samples)

@@ -19,14 +19,26 @@ vela apply --package ./artifacts/Zava.Plugins.1.0.0.nupkg --solution ZavaSales \
   --auto-approve
 ```
 
-Always pass `--solution <uniqueName>` to `plan` and `apply`: Dataverse imports a plugin package only when its name
-carries a publisher prefix (`pfx_Name`), and Vela takes that prefix from the solution (`apply` renames `Zava.Plugins`
-to `zava_Zava.Plugins` in memory). A package already named with a prefix is uploaded as is: `vela init
---publisher-prefix zava` (or `--samples`, `--managed-identity`) names the packages `zava_Zava.Plugins` and
-`zava_Zava.Integrations`. Without `--solution`, `plan` and `apply` both fail on a package whose name has no
-prefix, before anything is written (exit 4). `inspect` is read-only and does not check this.
-`--solution` also places every written component in that solution. See [Authentication](../configuration/authentication.md)
-for the other ways to connect.
+`plan` and `apply` require `--solution <uniqueName>` (alias `--solution-unique-name`). Without it they exit `2`
+before connecting; with `--interactive` they prompt for it instead. The plan depends on the solution: every written
+component is placed in it, a component missing from it is an `add-to-solution` operation, Custom API names are checked
+against its publisher prefix, and a package name takes its prefix from it. Dataverse imports a plugin package only when
+its name carries a publisher prefix (`pfx_Name`), so `apply` renames `Zava.Plugins` to `zava_Zava.Plugins` in memory. A
+package already named with a prefix is uploaded as is: `vela init --publisher-prefix zava` (or `--samples`,
+`--managed-identity`) names the packages `zava_Zava.Plugins` and `zava_Zava.Integrations`. `inspect` is read-only:
+`--solution` is optional there, and required only with `--webresources`. See
+[Authentication](../configuration/authentication.md) for the other ways to connect.
+
+One run targets one solution. Packages that deploy into different solutions take one run per solution, each with its
+`-p`:
+
+```bash
+vela plan -p ./artifacts/zava_Zava.Plugins.1.0.0.nupkg      --solution ZavaCore         --interactive
+vela plan -p ./artifacts/zava_Zava.Integrations.1.0.0.nupkg --solution ZavaIntegrations --interactive
+```
+
+The CLI never reads `PROJECT.md`. `vela init` writes it once, with the solution of each package, for the people and
+agents who type these commands (see [PROJECT.md](scaffold.md#projectmd)).
 
 
 `plan` compares local plugin/custom-api metadata extracted from `.nupkg` against Dataverse and returns a preview of the ordered `create` / `update` / `delete` / `add-to-solution` operations plus a detailed diff. At a terminal this is a colorized human summary; piped, redirected, or with `--json`, it is a versioned JSON document (`schemaVersion`, `hasChanges`, `summary`, `operations`, `diff`, `diagnostics`, `info`, ...) documented in [Machine-readable output](../reference/machine-readable-output.md). Notices and the `--verbose` summary go to stderr, so `--verbose --json` still writes the JSON. With `--detailed-exitcode`, `plan` exits `8` when there are changes to apply and `0` when there is nothing to do.
@@ -35,7 +47,7 @@ for the other ways to connect.
 
 > **One version per package.** `--packages-dir` may hold several builds of the same package (`Zava.Plugins.1.0.0.nupkg` and `Zava.Plugins.1.0.1.nupkg`). Only the highest version of each package id is scanned; the others are named on stderr.
 
-> **Solution membership.** With `--solution`, a component that did not change (deployed earlier without `--solution`, or into another solution) would never be written, so it would never join the solution. `plan` lists each Vela component missing from the solution (package, assembly, steps, Custom APIs and their parameters) as an `add-to-solution` operation, and `apply` adds it with `AddSolutionComponent` (without required components).
+> **Solution membership.** A component that did not change (deployed earlier outside the solution, or into another solution) would never be written, so it would never join the solution. `plan` lists each Vela component missing from the solution (package, assembly, steps, Custom APIs and their parameters) as an `add-to-solution` operation, and `apply` adds it with `AddSolutionComponent` (without required components).
 
 > **Code-only rebuilds show up too.** A rebuild that changes no step or custom-API definition but recompiles the assembly leaves the registration diff empty, yet `apply` still republishes the plugin package. `plan` surfaces this as a `package` operation (`create` when the package is new, `update` when its stored version or content differs) and sets `hasChanges: true`, so a rebuild is never reported as "no changes". The numeric `summary` stays the non-package registration diff (steps and custom APIs, plus web resources on a `--webresources` run), matching the apply JSON where `packageRepublished` is a field separate from the counts; the package operation is listed under `operations`.
 
@@ -47,7 +59,7 @@ for the other ways to connect.
 
 > Upgrading: a step deployed at a rank other than 1 without an explicit step key gets a new automatic key once (the rank used to be part of it); the first `plan` shows it as an `update` (a rename), not a delete and create.
 
-> **Publisher-prefix check with `--solution`.** Dataverse requires a Custom API unique name to carry the target solution's publisher prefix, and `apply` rejects one that does not. Pass `--solution <uniqueName>` to `plan` and it resolves that prefix and emits a warning for every Custom API being created or updated whose unique name lacks it (for example `DoThing` under publisher prefix `acme` warns to rename it `acme_DoThing`), so the mismatch is caught in the preview instead of at `apply`. The warnings appear in the `warnings` block (human) and the `diagnostics` array (JSON); under `--strict` they fail the command, which makes `plan --solution --strict` a useful pre-apply gate in CI.
+> **Publisher-prefix check.** Dataverse requires a Custom API unique name to carry the target solution's publisher prefix, and `apply` rejects one that does not. `plan` resolves the prefix of the `--solution` solution and emits a warning for every Custom API being created or updated whose unique name lacks it (for example `DoThing` under publisher prefix `acme` warns to rename it `acme_DoThing`), so the mismatch is caught in the preview instead of at `apply`. The warnings appear in the `warnings` block (human) and the `diagnostics` array (JSON); under `--strict` they fail the command, which makes `plan --strict` a useful pre-apply gate in CI.
 
 `apply` applies Dataverse create/update/delete operations to converge with local package metadata, then prints the post-apply state diff (human summary at a terminal, JSON when piped or with `--json`). It writes by default: on a terminal it shows the plan and asks you to type `yes`; in a non-interactive session (no stdin TTY) it refuses unless you pass `--auto-approve` (alias `--yes`), so a script never writes unattended by accident. Use `vela plan` to preview without writing.
 
@@ -82,7 +94,7 @@ every environment and each environment has its own record, so the id is an optio
 package as already linked, to link, or to change from the managed identity it is linked to now: a `link` operation of
 kind `package` and a `managedIdentity` block in the JSON, counted in `hasChanges` and `--detailed-exitcode`. `apply`
 writes the link right after the package publish, so a package the same run creates is linked too, through `--solution`
-when given, reads it back to check it converged, and counts it in `executed.linkedToManagedIdentity`. Without the option,
+reads it back to check it converged, and counts it in `executed.linkedToManagedIdentity`. Without the option,
 the link is neither read nor changed. Vela links plugin packages only: it does not deploy standalone plugin assemblies.
 See [Managed identity](managed-identity.md).
 

@@ -30,8 +30,34 @@ All notable changes to Vela are documented here. The format is based on
 - `vela add plugin` on an existing `<Table>/Plugins/<Name>.cs` (without `--force`) still writes nothing and exits 2,
   and its error now names the `vela add step <Name> --entity <Entity> --message ...` command, with the `--handler`,
   `--stage`, `--mode`, `--filtering-attributes` and `--project` given, that adds the requested step to that class.
+- `vela plan` and `vela apply` require `--solution <uniquename>` (alias `--solution-unique-name`), since the plan
+  depends on the solution (add-to-solution operations, the Custom API prefix check, the importable-package guard).
+  Without it they exit 2 before connecting, with a message naming `PROJECT.md`; with `--interactive` they prompt for
+  it. One run targets one solution: packages that deploy into different solutions take one
+  `vela plan/apply -p <package> --solution <name>` each. `vela inspect` is unchanged (`--solution` optional, required
+  with `--webresources`). Migration: add `--solution <uniquename>` to every `plan` / `apply` call.
+- `vela add customapi` requires `--prefix <publisherprefix>`, and so does `vela add test --kind customapi` when the
+  unique name the Custom API registers cannot be read from its source. The CLI no longer reads `<VelaPublisherPrefix>`
+  from the project file and no longer derives the prefix from the project prefix. Without `--prefix` the command
+  exits 2 and writes nothing; when the project still has a `<VelaPublisherPrefix>`, the message quotes its value
+  ("pass --prefix zava") without using it. The wizard (`vela add --interactive`) asks for the prefix. Migration: pass
+  `--prefix` with the value of your `<VelaPublisherPrefix>` (or `vela solution show <solution> --json`), then delete
+  the property from the project files.
+- `vela init` no longer writes `<VelaPublisherPrefix>` into the generated project files; the publisher prefix goes to
+  `PROJECT.md`. The package ids keep the prefix (`zava_Zava.Plugins`), so the build produces the same packages.
 
 ### Added (CLI)
+
+- `vela init` writes a root `PROJECT.md` for people and agents: YAML front matter with `schemaVersion: 1`, the
+  `publisherPrefix` (`--publisher-prefix`, or the one `--samples` / `--managed-identity` already name the packages
+  with) and a `packages` map from every generated plugin package id (Plugins, and
+  Integrations when generated) to its solution, then a short "Project" section. A value not given is left empty with
+  a comment. The CLI never reads the file; it is written only at `init` and tracked by the scaffold manifest, so
+  `init --force` rewrites it only while it is unedited. The generated `AGENTS.md` and `README.md` point to it ("Project
+  values live in `PROJECT.md`; pass them as flags, do not ask for them again"), pass `--solution` / `--prefix` in their
+  commands, and show two packages deployed to two solutions with one run each.
+- `vela init --solution <uniquename>` maps every generated package to that solution in `PROJECT.md` (letters, digits
+  and `_`, not starting with a digit, at most 65 characters). The interactive init prompts for it (optional).
 
 - `vela init` generates two files in each plugin project (`Zava.Plugins`, and `Zava.Integrations` when generated),
   minimal or `--samples`: `ProjectServices.cs`, an empty `IServiceRegistrar` declared with
