@@ -60,7 +60,7 @@ $$"""
 
     // ---- Plugin / Integration project file -------------------------------
 
-    public static string PluginCsproj(string projectName, string sharedProjectName, string coreVersion, bool withSigningTarget = false, string? publisherPrefix = null, string? packageId = null)
+    public static string PluginCsproj(string projectName, string sharedProjectName, string coreVersion, bool withSigningTarget = false, string? packageId = null)
     {
         string signingTarget = withSigningTarget ? SigningBuildTarget() : string.Empty;
         return
@@ -95,7 +95,7 @@ $$"""
          solution's artifacts folder so vela plan can read it from there. -->
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageOutputPath>$(MSBuildProjectDirectory)\..\..\artifacts</PackageOutputPath>
-    <IsWorkflowActivity>false</IsWorkflowActivity>{{PublisherPrefixProperty(publisherPrefix)}}
+    <IsWorkflowActivity>false</IsWorkflowActivity>
   </PropertyGroup>
 
   <ItemGroup>
@@ -179,13 +179,6 @@ $$"""
   </Target>
 """;
 
-    // The publisher customization prefix recorded by `vela init --publisher-prefix`; `vela add customapi` reads it.
-    // Emitted only when the prefix was given explicitly, so a derived guess is never persisted as if it were known.
-    private static string PublisherPrefixProperty(string? publisherPrefix) =>
-        string.IsNullOrEmpty(publisherPrefix)
-            ? string.Empty
-            : $"\n    <!-- Dataverse publisher prefix for Custom API unique names (read by `vela add customapi`). -->\n    <VelaPublisherPrefix>{publisherPrefix}</VelaPublisherPrefix>";
-
     // ---- Plugin project: assembly-wide files ------------------------------
 
     // The assembly's IServiceRegistrar (docs/guides/dependency-injection.md, docs/guides/localization.md). Generated
@@ -250,7 +243,7 @@ namespace {{ns}}
 
     // ---- Tests project ----------------------------------------------------
 
-    public static string TestsCsproj(string testProjectName, string pluginsProjectName, string sharedProjectName, string coreVersion, string? publisherPrefix = null) =>
+    public static string TestsCsproj(string testProjectName, string pluginsProjectName, string sharedProjectName, string coreVersion) =>
 $$"""
 <Project Sdk="Microsoft.NET.Sdk">
 
@@ -259,7 +252,7 @@ $$"""
     <TargetFramework>net48</TargetFramework>
     <RootNamespace>{{testProjectName}}</RootNamespace>
     <AssemblyName>{{testProjectName}}</AssemblyName>
-    <IsPackable>false</IsPackable>{{PublisherPrefixProperty(publisherPrefix)}}
+    <IsPackable>false</IsPackable>
     <!-- In a solution build, a ProjectReference that MSBuild cannot match to the solution configuration (its path
          differs in form, e.g. through a symlink) is otherwise built WITHOUT Configuration/Platform, i.e. a second,
          Debug build of the plugin project running in parallel with the solution's Release one. Both pack into the

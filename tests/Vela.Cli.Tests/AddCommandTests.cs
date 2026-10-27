@@ -493,7 +493,7 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            int exit = AddCommand.Run(["customapi", "RecalculateTotals", "--project", project]);
+            int exit = AddCommand.Run(["customapi", "RecalculateTotals", "--prefix", "acme", "--project", project]);
             Assert.Equal(ExitSuccess, exit);
 
             string file = Path.Combine(dir, "GlobalCustomApis", "RecalculateTotals.cs");
@@ -509,7 +509,7 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            int exit = AddCommand.Run(["customapi", "ExportContact", "--entity", "Contact", "--project", project]);
+            int exit = AddCommand.Run(["customapi", "ExportContact", "--entity", "Contact", "--prefix", "acme", "--project", project]);
             Assert.Equal(ExitSuccess, exit);
 
             string file = Path.Combine(dir, "Contact", "CustomApis", "ExportContact.cs");
@@ -584,7 +584,7 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "GetScore", "--entity", "Account", "--function", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "GetScore", "--entity", "Account", "--function", "--prefix", "acme", "--project", project]));
 
             string content = File.ReadAllText(Path.Combine(dir, "Account", "CustomApis", "GetScore.cs"));
             Assert.Contains(".AsFunction()", content);
@@ -600,9 +600,9 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "GetScore", "--entity", "Account", "--function", "--project", project]));
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Ping", "--global", "--function", "--project", project]));
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "DoThing", "--global", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "GetScore", "--entity", "Account", "--function", "--prefix", "acme", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Ping", "--global", "--function", "--prefix", "acme", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "DoThing", "--global", "--prefix", "acme", "--project", project]));
 
             string bound = File.ReadAllText(Path.Combine(dir, "Account", "CustomApis", "GetScore.cs"));
             Assert.Contains("        public string Result\n        {\n            get => Get<string>();\n            set => Set(value);\n        }", bound.Replace("\r\n", "\n"));
@@ -622,7 +622,7 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "DoThing", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "DoThing", "--prefix", "acme", "--project", project]));
 
             string content = File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "DoThing.cs"));
             Assert.Contains(".AsAction()", content);
@@ -634,7 +634,7 @@ public class AddCommandTests
     {
         RunInProject("Acme.Plugins", (project, dir) =>
         {
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Ping", "--global", "--project", project]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Ping", "--global", "--prefix", "acme", "--project", project]));
             Assert.True(File.Exists(Path.Combine(dir, "GlobalCustomApis", "Ping.cs")));
         });
     }
@@ -818,21 +818,7 @@ namespace Acme.Plugins.Account.Plugins
     }
 
     [Fact]
-    public void Add_CustomApi_UsesThePublisherPrefixRecordedInTheProject()   // A-50
-    {
-        RunInProject("Zava.Sales.Plugins", (project, dir) =>
-        {
-            File.WriteAllText(project,
-                "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><RootNamespace>Zava.Sales.Plugins</RootNamespace><VelaPublisherPrefix>zs</VelaPublisherPrefix></PropertyGroup></Project>");
-
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Recalc", "--global", "--project", project]));
-
-            Assert.Contains("RegisterCustomApi(\"zs_Recalc\", Handle)", File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "Recalc.cs")));
-        });
-    }
-
-    [Fact]
-    public void Add_CustomApi_ExplicitPrefix_WinsOverTheRecordedOne()
+    public void Add_CustomApi_UsesTheExplicitPrefix_NeverALegacyRecordedOne()
     {
         RunInProject("Zava.Plugins", (project, dir) =>
         {
@@ -842,19 +828,6 @@ namespace Acme.Plugins.Account.Plugins
             Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Recalc", "--global", "--prefix", "ACME", "--project", project]));
 
             Assert.Contains("RegisterCustomApi(\"acme_Recalc\", Handle)", File.ReadAllText(Path.Combine(dir, "GlobalCustomApis", "Recalc.cs")));
-        });
-    }
-
-    [Fact]
-    public void Add_CustomApi_RefusesADerivedPrefixThatIsNotAPublisherPrefix()   // A-50
-    {
-        // "ZavaSales" derives "zavasales" (9 characters): not a valid publisher prefix, so no unregistrable name is emitted.
-        RunInProject("ZavaSales.Plugins", (project, dir) =>
-        {
-            Assert.Equal(ExitInvalidArguments, AddCommand.Run(["customapi", "Recalc", "--global", "--project", project]));
-            Assert.False(File.Exists(Path.Combine(dir, "GlobalCustomApis", "Recalc.cs")));
-
-            Assert.Equal(ExitSuccess, AddCommand.Run(["customapi", "Recalc", "--global", "--prefix", "zava", "--project", project]));
         });
     }
 

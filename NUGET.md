@@ -41,8 +41,9 @@ namespace Zava.Plugins.Account.Plugins
 }
 ```
 
-Build the plugin package, then preview and apply it into your solution (`--solution` gives the package the
-publisher prefix Dataverse requires; `apply` asks for confirmation on a terminal):
+Build the plugin package, then preview and apply it into your solution (`--solution` is required: it adds the
+components to that solution and gives the package the publisher prefix Dataverse requires; `apply` asks for
+confirmation on a terminal):
 
 ```bash
 vela plan  --packages-dir artifacts --solution ZavaSales --interactive

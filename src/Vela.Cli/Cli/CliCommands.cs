@@ -73,8 +73,12 @@ internal static class CliCommands
         new("--package-assembly", CliOptionKind.Value, "The primary assembly inside the package(s), when it cannot be inferred.", "name.dll"),
     ];
 
-    private static readonly CliOption Solution = new("--solution", CliOptionKind.Value, "Target solution: writes and components not yet in it are added to it; also resolves the publisher prefix.", "uniquename", ["--solution-unique-name"]);
-    private static readonly CliOption WebResources = new("--webresources", CliOptionKind.Value, "(preview) Mirror a web resources folder; requires --solution.", "folder");
+    private static readonly CliOption Solution = new("--solution", CliOptionKind.Value, "Target solution: scopes the read and resolves the publisher prefix; required with --webresources.", "uniquename", ["--solution-unique-name"]);
+    private static readonly CliOption RequiredSolution = new("--solution", CliOptionKind.Value, "Required (prompted for with --interactive). Target solution: writes and components not yet in it are added to it; also resolves the publisher prefix.", "uniquename", ["--solution-unique-name"]);
+    private static readonly CliOption WebResources = new("--webresources", CliOptionKind.Value, "(preview) Mirror a web resources folder.", "folder");
+
+    // plan and apply target one solution per run (the CLI never reads PROJECT.md, which maps each package to one).
+    private const string SolutionNote = "--solution is required: one solution per run. Packages that target different solutions take one run per solution (-p <package> --solution <name>).";
     private static readonly CliOption Environment = new("--environment", CliOptionKind.Value, "Label shown in the output (defaults to --url).", "label");
     private static readonly CliOption Out = new("--out", CliOptionKind.Value, "Write the JSON document to a file instead of stdout.", "file");
     private static readonly CliOption SecureConfig = new("--secure-config", CliOptionKind.Value, "Value of a step's named secure configuration (repeatable); or VELA_SECURE_CONFIG_<NAME>.", "NAME=VALUE|NAME=@file");
@@ -97,24 +101,24 @@ internal static class CliCommands
     public static IReadOnlyList<CliCommand> All { get; } =
     [
         new("plan", "Preview registration changes; never writes to Dataverse.",
-            ["vela plan (--package <file.nupkg>... | --packages-dir <folder>) [options] [connection options]"],
+            ["vela plan (--package <file.nupkg>... | --packages-dir <folder>) --solution <uniquename> [options] [connection options]"],
             [
-                ("Inputs", [.. PackageInputs, Solution, WebResources, SecureConfig, ManagedIdentity]),
+                ("Inputs", [.. PackageInputs, RequiredSolution, WebResources, SecureConfig, ManagedIdentity]),
                 ("Output", [Environment, Out, Json, Verbose, Strict,
                     new("--detailed-exitcode", CliOptionKind.Flag, "Exit 8 when the plan has changes to apply, 0 when there is nothing to do.")]),
                 ("Connection", ConnectionOptions),
                 ("Other", [Help]),
             ],
-            Notes: ["A terminal gets a colored summary; piped, redirected, --json or --out gets the JSON document.", .. ExitCodeNotes],
+            Notes: [SolutionNote, "A terminal gets a colored summary; piped, redirected, --json or --out gets the JSON document.", .. ExitCodeNotes],
             Examples:
             [
-                "vela plan --packages-dir artifacts --interactive",
-                "vela plan --package artifacts/Zava.Plugins.1.0.0.nupkg --url https://zava.crm.dynamics.com --json --detailed-exitcode",
+                "vela plan --packages-dir artifacts --solution ZavaSales --interactive",
+                "vela plan --package artifacts/zava_Zava.Plugins.1.0.0.nupkg --solution ZavaSales --url https://zava.crm.dynamics.com --json --detailed-exitcode",
             ]),
         new("apply", "Apply the plan (prompts for confirmation on a terminal).",
-            ["vela apply (--package <file.nupkg>... | --packages-dir <folder>) [options] [connection options]"],
+            ["vela apply (--package <file.nupkg>... | --packages-dir <folder>) --solution <uniquename> [options] [connection options]"],
             [
-                ("Inputs", [.. PackageInputs, Solution, WebResources, SecureConfig, ManagedIdentity]),
+                ("Inputs", [.. PackageInputs, RequiredSolution, WebResources, SecureConfig, ManagedIdentity]),
                 ("Execution", [
                     new("--auto-approve", CliOptionKind.Flag, "Apply without the confirmation prompt (required in a non-interactive session).", Aliases: ["--yes"]),
                     new("--batch-size", CliOptionKind.Value, "ExecuteMultiple chunk size (1-1000, default 100).", "n"),
@@ -123,7 +127,7 @@ internal static class CliCommands
                 ("Connection", ConnectionOptions),
                 ("Other", [Help]),
             ],
-            Notes: ["The JSON 'executed' block reports what was done; 'summary' is what remains after the apply.", .. ExitCodeNotes],
+            Notes: [SolutionNote, "The JSON 'executed' block reports what was done; 'summary' is what remains after the apply.", .. ExitCodeNotes],
             Examples: ["vela apply --packages-dir artifacts --solution ZavaSales --auto-approve --url https://zava.crm.dynamics.com"]),
         new("inspect", "Show local and live registrations side by side (read-only).",
             ["vela inspect (--package <file.nupkg>... | --packages-dir <folder>) [options] [connection options]"],
@@ -135,12 +139,13 @@ internal static class CliCommands
             ],
             Notes: ExitCodeNotes),
         new("init", "Scaffold a new solution on disk (minimal by default; --samples for worked examples).",
-            ["vela init --name <SolutionName> [--prefix <Prefix>] [--publisher-prefix <prefix>] [--samples] [options]"],
+            ["vela init --name <SolutionName> [--prefix <Prefix>] [--publisher-prefix <prefix>] [--solution <uniquename>] [--samples] [options]"],
             [
                 ("Options", [
                     new("--name", CliOptionKind.Value, "Solution name (also accepted as the first positional argument).", "SolutionName"),
                     new("--prefix", CliOptionKind.Value, "Namespace / assembly prefix of the projects.", "Prefix"),
-                    new("--publisher-prefix", CliOptionKind.Value, "Dataverse publisher prefix (2-8 chars) naming the Custom APIs; recorded for 'vela add customapi'.", "prefix"),
+                    new("--publisher-prefix", CliOptionKind.Value, "Dataverse publisher prefix (2-8 chars): names the packages and the sample Custom APIs; written to PROJECT.md.", "prefix"),
+                    new("--solution", CliOptionKind.Value, "Unique name of the Dataverse solution every generated package deploys into; written to PROJECT.md (never read by the CLI).", "uniquename"),
                     new("--output", CliOptionKind.Value, "Parent folder: the solution is created in <dir>/<SolutionName> (default: current directory).", "dir", ["-o"]),
                     new("--samples", CliOptionKind.Flag, "Add the demo code and the Integrations/ConsoleApp projects."),
                     new("--minimal", CliOptionKind.Flag, "The default: no demo code (kept as an alias).", Aliases: ["--no-demos"]),
@@ -160,7 +165,8 @@ internal static class CliCommands
                     Help]),
             ],
             Aliases: ["new"],
-            Examples: ["vela init --name ZavaSales --prefix Zava --publisher-prefix zava --output .", "vela init --name ZavaDemo --prefix Zava --samples"]),
+            Notes: ["PROJECT.md (written once, at init) records the publisher prefix and the solution of each package for people and agents. The CLI never reads it: pass the values as flags (--solution on plan/apply, --prefix on add customapi)."],
+            Examples: ["vela init --name ZavaSales --prefix Zava --publisher-prefix zava --solution ZavaCore --output .", "vela init --name ZavaDemo --prefix Zava --samples"]),
         new("add", "Add a plugin, service, Custom API, test or step to a project.",
             ["vela add (plugin|service|customapi|test|step|form-script|ribbon-script) <Name> [options]", "vela add plugin [<Name>] --entity <ModelType> [options]", "vela add --interactive"],
             [
@@ -176,7 +182,7 @@ internal static class CliCommands
                     new("--global", CliOptionKind.Flag, "Global (unbound) Custom API."),
                     new("--function", CliOptionKind.Flag, "Custom API is a function."),
                     new("--action", CliOptionKind.Flag, "Custom API is an action."),
-                    new("--prefix", CliOptionKind.Value, "Custom API publisher prefix (customapi/test; default: the project's VelaPublisherPrefix).", "prefix"),
+                    new("--prefix", CliOptionKind.Value, "Custom API publisher prefix: required for customapi (prompted for by the wizard); test --kind customapi needs it when the unique name cannot be read.", "prefix"),
                     new("--project", CliOptionKind.Value, "Target project (default: the single .csproj in the current folder).", "csproj", ["-p"]),
                     new("--force", CliOptionKind.Flag, "Overwrite an existing file (not step; test completes an existing class without it)."),
                     new("--interactive", CliOptionKind.Flag, "Guided wizard.", Aliases: ["-i"]),
@@ -186,11 +192,11 @@ internal static class CliCommands
             Notes: [
                 "plugin [<Name>] --entity <ModelType> [--message] [--handler] [--stage] [--mode] [--filtering-attributes] (required for Create/Update(+Multiple)): <Name> defaults to <ModelType>Plugin. An existing file is never edited: the error names the 'vela add step' command that adds the step to it.",
                 "service <Name> [--entity <ModelType>]: without --entity, a service shared by several tables, under Services/.",
-                "customapi <Name> [--entity <ModelType>] [--bound|--global] [--function|--action] [--prefix <publisherprefix>].",
+                "customapi <Name> --prefix <publisherprefix> [--entity <ModelType>] [--bound|--global] [--function|--action]: check a solution's prefix with 'vela solution show <solution> --json'.",
                 "test <Name> [--kind plugin|customapi] [--entity] [--message] [--prefix]: run inside the test project (RootNamespace ending in .Tests). An existing test class is completed with the tests of the steps it lacks.",
                 "step <PluginName> --entity <ModelType> [--message] [--handler] [--stage] [--mode] [--filtering-attributes]: edits an existing multi-step plugin.",
                 "form-script|ribbon-script <entity> [--project <web-resources dir>] [--force]: (preview).",
-                "Each kind accepts only its own options. A Custom API is named <publisherprefix>_<Name>: --prefix, else the project's VelaPublisherPrefix, else the project prefix.",
+                "Each kind accepts only its own options. A Custom API is named <publisherprefix>_<Name>, with the --prefix you pass (never read from the project).",
             ]),
         new("models", "Generate early-bound models, typed messages or roles.",
             ["vela models <scope>... [options] [connection options]", "vela models --from-solution <solution.zip> --namespace <ns>   (offline)"],

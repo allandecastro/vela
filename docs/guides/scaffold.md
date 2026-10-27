@@ -3,7 +3,7 @@
 Generate a build-ready plugin solution in one step:
 
 ```powershell
-vela init --name ZavaSales --prefix Zava --publisher-prefix zava --output .
+vela init --name ZavaSales --prefix Zava --publisher-prefix zava --solution ZavaSales --output .
 # or run the wizard:
 vela init --interactive
 ```
@@ -25,6 +25,7 @@ ZavaSales/
     Zava.Plugins.Tests/     # xunit + Vela.Testing, no connection (omit with --no-tests); empty until `vela add test`
     Zava.Integrations.Tests/ # with --integrations (omit with --no-tests); empty until `vela add test`
   .vela/scaffold-manifest.json  # what init wrote, so `--force` never touches your code (commit it)
+  PROJECT.md                   # the publisher prefix and the solution of each package (never read by the CLI)
   AGENTS.md                    # instructions for AI coding agents: steps, Custom APIs, tests, the CLI loop
   .editorconfig                # code style: usings inside the namespace (see below)
   Directory.Build.props        # shared build settings for src/ and tests/
@@ -56,8 +57,41 @@ vela add plugin AccountValidator --entity Account --filtering-attributes Name --
 vela add test AccountValidator --entity Account --project tests/Zava.Plugins.Tests
 dotnet build ZavaSales.sln -c Release
 dotnet test tests/Zava.Plugins.Tests -c Release
-vela plan --packages-dir artifacts --interactive
+vela plan --packages-dir artifacts --solution ZavaSales --interactive
 ```
+
+### PROJECT.md
+
+`PROJECT.md` holds the values the commands take as flags, so the people and agents working in the solution don't have
+to ask for them. Its YAML front matter records the publisher prefix (`--publisher-prefix`) and maps every generated
+plugin package id to the unique name of the solution it deploys into (`--solution`):
+
+```markdown
+---
+schemaVersion: 1
+publisherPrefix: zava
+packages:
+  zava_Zava.Plugins: ZavaSales
+  zava_Zava.Integrations: ZavaSales
+---
+
+# Project
+
+Values the Vela commands need. Pass them as flags: `--solution` on plan/apply, `--prefix` on
+add customapi. Check a solution's prefix with `vela solution show <solution> --json`. The
+environment URL is per user and never lives in the repo.
+```
+
+- `schemaVersion` is the version of the format: a reader that finds another version stops instead of misreading it.
+- `packages` may map packages to different solutions: edit the values, then deploy each solution with its own
+  `vela plan` / `vela apply -p <package> --solution <name>`.
+- A value you did not pass to `vela init` is left empty, with a comment.
+
+**The CLI never reads `PROJECT.md`.** Pass its values as flags: `--solution` on [`vela plan` and
+`vela apply`](plan-apply.md), `--prefix` on [`vela add customapi`](add.md). Vela writes
+it only at `vela init`, and no command adds a package to it; `init --force` rewrites it only while it is unchanged
+from what Vela generated (it is in the scaffold manifest), so everything you add below the front matter is kept. The
+environment URL is per user and never goes in it.
 
 ### Samples (`--samples`)
 
@@ -112,14 +146,17 @@ placed outside as warning IDE0065. See
 
 - `--prefix` (default: derived from the name) - the .NET namespace / assembly prefix.
 - `--publisher-prefix` - the Dataverse publisher prefix of your solution (2-8 characters, letter first,
-  alphanumeric). It names the Custom APIs (`<publisherprefix>_<Name>`) and is recorded in the projects as
-  `VelaPublisherPrefix`, which `vela add customapi` uses. It also prefixes the plugin package ids
-  (`zava_Zava.Plugins`, `zava_Zava.Integrations`), as Dataverse requires to import a package, so `vela plan` and
-  `vela apply` accept them without `--solution`; the assemblies keep the project names (`Zava.Plugins.dll`).
+  alphanumeric). It names the sample Custom APIs (`<publisherprefix>_<Name>`) and is recorded in `PROJECT.md`, as
+  the value to pass to `vela add customapi --prefix`. It also prefixes the plugin package ids
+  (`zava_Zava.Plugins`, `zava_Zava.Integrations`), as Dataverse requires to import a package, so `vela apply`
+  uploads them as they are; the assemblies keep the project names (`Zava.Plugins.dll`).
   Without it, the prefix is derived from `--prefix`; with `--samples` a derived value that is not a valid publisher
   prefix is refused, and a valid one prefixes the package ids the same way. A minimal scaffold without
   `--publisher-prefix` keeps unprefixed package ids (`Zava.Plugins`): `vela apply --solution` adds the solution's
   prefix.
+- `--solution <uniquename>` - the unique name of the Dataverse solution every generated package deploys into
+  (letters, digits and `_`, not starting with a digit). It is recorded in `PROJECT.md` only; `vela plan` and
+  `vela apply` still take `--solution`.
 - `--samples` - add the demo code and the Integrations / ConsoleApp projects (see above). `--minimal` /
   `--no-demos` are accepted aliases of the default.
 - `--integrations` - add the `Zava.Integrations` plugin project (and `Zava.Integrations.Tests` unless `--no-tests`)

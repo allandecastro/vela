@@ -28,13 +28,8 @@ internal static partial class ScaffoldTemplates
             ? $"4. Test it: `vela add test MyPlugin --entity Account --project tests/{prefix}.Plugins.Tests`, then `dotnet test tests/{prefix}.Plugins.Tests -c Release`.\n"
             : string.Empty;
         string deployStep = options.IncludeTests ? "5" : "4";
-        // With a known publisher prefix the packages are already named with it; otherwise --solution supplies it.
-        string solutionNote = options.KnownPublisherPrefix is { } knownPrefix
-            ? $"use your solution's unique name; the packages are already named with the publisher prefix `{knownPrefix}` (`{options.PluginsPackageId}`), which Dataverse requires to import them"
-            : "use your solution's unique name; `--solution` gives the package its publisher prefix, without which `vela plan` refuses an unprefixed package";
-        string publisherNote = options.PublisherPrefix is null
-            ? $"`vela add customapi` names a Custom API `<publisherprefix>_<Name>`. It derives the publisher prefix from the project prefix (`{ApiPrefix(prefix)}`) unless you pass `--prefix <publisherprefix>`; it must match the publisher of the solution you deploy into. Re-run `vela init --force --publisher-prefix <prefix>` to record it in the projects."
-            : $"`vela add customapi` names a Custom API `{options.PublisherPrefix}_<Name>`: the publisher prefix recorded in the projects (`VelaPublisherPrefix`).";
+        string solution = ReadmeSolution(options);
+        string publisherPrefixArg = ReadmePublisherPrefix(options);
 
         return
 $$"""
@@ -49,6 +44,7 @@ another folder to see worked examples of every pattern.
 ## Projects
 
 - `src/{{prefix}}.Shared` - early-bound entity models and shared services, referenced by the plugin project. Empty until you run `vela models`.
+- `PROJECT.md` - the project values: the publisher prefix and the solution each package deploys into. The `vela` CLI never reads it; pass the values as flags.
 - `src/{{prefix}}.Plugins` - your plugin package. Builds a Dataverse plugin-package `.nupkg` (not a bare `.dll`). No plugin until you add one; `ProjectServices.cs` registers the services and message sources every plugin of the assembly shares, and `Messages.cs` holds the message keys, both empty.
 {{integrationsLine}}{{testsLine}}{{integrationsTestsLine}}{{webResourcesLine}}
 > **Restore source:** the projects reference `Vela.Plugins` / `Vela.Testing` from **nuget.org** (the default package source), so a plain `dotnet restore`/`build` works with no extra configuration.
@@ -58,19 +54,30 @@ another folder to see worked examples of every pattern.
 Run these from the solution root:
 
 1. Generate early-bound models from your environment: `vela models --entities account,contact --project src/{{prefix}}.Shared/{{prefix}}.Shared.csproj --interactive` (it writes into the project's `Models/Generated` folder, in the `{{prefix}}.Shared.Models.Generated` namespace).
-2. Add a plugin or Custom API (`--entity` is the early-bound model type): `vela add plugin MyPlugin --entity Account --filtering-attributes Name --project src/{{prefix}}.Plugins` (a Create/Update step needs its filtering columns) or `vela add customapi MyApi --global --project src/{{prefix}}.Plugins`.
+2. Add a plugin or Custom API (`--entity` is the early-bound model type): `vela add plugin MyPlugin --entity Account --filtering-attributes Name --project src/{{prefix}}.Plugins` (a Create/Update step needs its filtering columns) or `vela add customapi MyApi --global --prefix {{publisherPrefixArg}} --project src/{{prefix}}.Plugins`.
 3. Build: `dotnet build {{options.SolutionName}}.sln -c Release`.
-{{testStep}}{{deployStep}}. Preview and deploy into your Dataverse solution: `vela plan --packages-dir artifacts --solution {{options.SolutionName}}`, then `vela apply --packages-dir artifacts --solution {{options.SolutionName}}` ({{solutionNote}}).
+{{testStep}}{{deployStep}}. Preview and deploy into your Dataverse solution: `vela plan --packages-dir artifacts --solution {{solution}}`, then `vela apply --packages-dir artifacts --solution {{solution}}`.
 
-Until you add a plugin, the package registers nothing - `vela plan --packages-dir artifacts --solution {{options.SolutionName}}` simply reports no changes.
+Until you add a plugin, the package registers nothing - `vela plan --packages-dir artifacts --solution {{solution}}` simply reports no changes.
 
-{{publisherNote}}
+{{ProjectValuesNote}}
 {{signingSection}}
 `vela init --force` regenerates the scaffold in place. It only overwrites or removes the files it generated that
 you have not edited since (it records them in `.vela/scaffold-manifest.json`; commit that file); your own files
 and edited ones are kept.
 """;
     }
+
+    // The --solution value the README commands show: the one given to `vela init --solution`, else the solution name.
+    private static string ReadmeSolution(ScaffoldOptions options) => options.SolutionUniqueName ?? options.SolutionName;
+
+    // The --prefix value the README `vela add customapi` commands show: the known publisher prefix (`--publisher-prefix`,
+    // or the one the samples and the signed package already use), else a placeholder (never a guess).
+    private static string ReadmePublisherPrefix(ScaffoldOptions options) => options.KnownPublisherPrefix ?? "<publisherprefix>";
+
+    // Where the README sends the reader for the values the commands take as flags.
+    private const string ProjectValuesNote =
+        "The project values live in `PROJECT.md`: pass the solution of each package as `--solution` to `vela plan` and `vela apply` (one run per solution), and the `publisherPrefix` as `--prefix` to `vela add customapi`. Check a solution's prefix with `vela solution show <solution> --json`. The `vela` CLI never reads `PROJECT.md`.";
 
     public static string RootReadme(ScaffoldOptions options)
     {
@@ -116,6 +123,7 @@ Dataverse plugin solution generated by `vela init --samples`. It builds on
 ## Projects
 
 - `src/{{prefix}}.Shared` - early-bound entity models (`Account`, `Contact`) and shared services, referenced by the plugin projects.
+- `PROJECT.md` - the project values: the publisher prefix and the solution each package deploys into. The `vela` CLI never reads it; pass the values as flags.
 - `src/{{prefix}}.Plugins` - your plugin package. Builds a Dataverse plugin-package `.nupkg` (not a bare `.dll`). `ProjectServices.cs` registers the services and message sources every plugin of the assembly shares, and `Messages.cs` holds the message keys, both empty.
 {{integrationsLine}}{{testsLine}}{{consoleLine}}
 > **Restore source:** the plugin projects reference `Vela.Plugins` from **nuget.org** (the default package
@@ -140,12 +148,14 @@ during the build (from the publish output), so a cold `dotnet pack` emits an ass
 
 ```powershell
 # Preview (read-only)
-vela plan --package artifacts/{{options.PluginsPackageId}}.1.0.0.nupkg --solution {{options.SolutionName}} --interactive --verbose
+vela plan --package artifacts/{{options.PluginsPackageId}}.1.0.0.nupkg --solution {{ReadmeSolution(options)}} --interactive --verbose
 
 # Apply (idempotent create/update/delete). apply writes by default and prompts on a terminal;
 # add --auto-approve to skip the prompt in CI.
-vela apply --package artifacts/{{options.PluginsPackageId}}.1.0.0.nupkg --solution {{options.SolutionName}} --interactive --verbose
+vela apply --package artifacts/{{options.PluginsPackageId}}.1.0.0.nupkg --solution {{ReadmeSolution(options)}} --interactive --verbose
 ```
+
+{{ProjectValuesNote}}
 
 ## What's inside the plugin project
 
@@ -171,8 +181,8 @@ or let the CLI place a new file for you (it infers the namespace from the projec
 
 ```powershell
 vela add plugin AccountValidatorPlugin --entity Account --message Update --filtering-attributes Name
-vela add customapi RecalculateTotals          # global (unbound) Custom API
-vela add customapi ExportContact --entity Contact   # Custom API bound to a table
+vela add customapi RecalculateTotals --prefix {{ReadmePublisherPrefix(options)}}                   # global (unbound) Custom API
+vela add customapi ExportContact --entity Contact --prefix {{ReadmePublisherPrefix(options)}}   # Custom API bound to a table
 ```
 {{integrationsLayout}}
 ## Registering plugin steps

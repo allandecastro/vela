@@ -107,6 +107,24 @@ public class InteractiveMenuTests
     }
 
     [Fact]
+    public void ComposeAddArgs_CustomApi_PassesThePromptedPrefix()   // #575
+    {
+        string[] args = InteractiveMenu.ComposeAddArgs("customapi", "GetScore", null, null, null, null, function: true, publisherPrefix: "zava");
+
+        Assert.Equal(["customapi", "GetScore", "--function", "--prefix", "zava"], args);
+    }
+
+    [Fact]
+    public void ComposeInitArgs_PassesTheSolution_AndRoundTrips()   // #575
+    {
+        string[] args = InteractiveMenu.ComposeInitArgs("ZavaSales", "Zava", "/tmp/out", integrations: false, tests: true, console: false, publisherPrefix: "zava", solution: "ZavaCore");
+
+        Assert.Equal(["init", "--name", "ZavaSales", "--prefix", "Zava", "--output", "/tmp/out", "--publisher-prefix", "zava", "--solution", "ZavaCore"], args);
+        Assert.True(ScaffoldOptions.TryParse(args[1..], out ScaffoldOptions options, out _));
+        Assert.Equal("ZavaCore", options.SolutionUniqueName);
+    }
+
+    [Fact]
     public void ComposeAddArgs_Test_PutsKindFirst()
     {
         string[] args = InteractiveMenu.ComposeAddArgs("test", "ExportContact", "Contact", null, null, "customapi", function: false);

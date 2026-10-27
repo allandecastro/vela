@@ -10,8 +10,8 @@ vela add plugin AccountValidatorPlugin --entity Account --message Update --filte
 vela add plugin --entity Contact --message Delete           # named ContactPlugin
 vela add service AccountFollowUpService --entity Account  # table-scoped interface + implementation
 vela add service AuditService                             # shared by several tables, under Services/
-vela add customapi RecalculateTotals                  # global (unbound), lightweight Custom API
-vela add customapi ExportContact --entity Contact     # typed Custom API bound to a table
+vela add customapi RecalculateTotals --prefix zava                # global (unbound), lightweight Custom API
+vela add customapi ExportContact --entity Contact --prefix zava   # typed Custom API bound to a table
 
 # run inside the test project (RootNamespace ending in .Tests)
 vela add test AccountValidatorPlugin --entity Account            # test for a plugin
@@ -35,11 +35,15 @@ vela add --interactive
 - **Custom API ergonomics:** `--function`/`--action` choose the operation type (default `Action`), and
   `--bound`/`--global` make the binding explicit instead of inferring it from `--entity` (`--bound` requires
   `--entity`; `--global` is unbound). The generated unique name is `<prefix>_<Name>`, where `<prefix>` must match
-  your target solution's **publisher prefix** or `apply --solution` rejects it. It is, in order: `--prefix
-  <publisherprefix>` (for example `--prefix dv` renders `dv_<Name>`); the `VelaPublisherPrefix` that
-  `vela init --publisher-prefix` recorded in the project; or a lower-cased form of the project prefix, with a note.
-  A value that is not a valid publisher prefix (2-8 characters, letter first, alphanumeric) is refused rather than
-  written into a name Dataverse would reject. See [the publisher prefix](custom-apis.md#the-publisher-prefix).
+  your target solution's **publisher prefix** or `apply --solution` rejects it. `--prefix <publisherprefix>` is
+  **required** (for example `--prefix dv` renders `dv_<Name>`): `add` stays offline, so it does not resolve a
+  solution, and it never guesses the prefix from the project prefix or reads it from the project. The value is the
+  `publisherPrefix` of the solution's [`PROJECT.md`](scaffold.md#projectmd); `vela solution show <solution> --json`
+  prints a solution's prefix. Without `--prefix` the command exits `2` and writes nothing; when the project still has
+  the `<VelaPublisherPrefix>` an earlier `vela init` wrote, the message quotes its value (`pass --prefix zava`) but
+  does not use it. The wizard (`vela add --interactive`) asks for it. A value that is not a valid publisher prefix
+  (2-8 characters, letter first, alphanumeric) is refused rather than written into a name Dataverse would reject.
+  See [the publisher prefix](custom-apis.md#the-publisher-prefix).
   `--function` adds a placeholder `Result` response (a function must return a value) and sets it in the handler.
 - `--message <Message>` (plugin, default `Create`): the messages Vela models get a strongly-typed `On...()`
   call - the CRUD/bulk set (`Create`, `Update`, `CreateMultiple`, `UpdateMultiple`, `Delete`, `Retrieve`,
@@ -112,8 +116,8 @@ vela add --interactive
   - A **Custom API** test (`--kind customapi`, `<Class>Tests`) finds the class named `<Name>` or
     `<Name>CustomApi`, or the one registering `<prefix>_<Name>`, and takes its unique name and request type from
     the source. It checks the registered unique name and that every declared output parameter is set, with a
-    `WithInputParameter(...)` example for the inputs. `--prefix` names the Custom API only when the unique name
-    cannot be read from the source. When the test class exists already it has these tests, so there is nothing to
+    `WithInputParameter(...)` example for the inputs. `--prefix` is needed only when the unique name cannot
+    be read from the source: the test then asserts `<prefix>_<Name>`, and without `--prefix` the command exits `2`. When the test class exists already it has these tests, so there is nothing to
     add: the command says so and exits `0` (`2` when the file has no such class).
 - `vela add step <PluginName>` edits an existing **handler-based (multi-step)** plugin in place, appending a
   `RegisterStep().On<Message>()…Handle(Handle<Message>)` registration (where `On<Message>()` is the curated

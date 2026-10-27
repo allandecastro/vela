@@ -7,7 +7,7 @@ From an empty folder to registered, running steps in five commands:
 dotnet tool install --global Vela.Cli
 
 # 2. Scaffold a build-ready solution (minimal; add --samples for worked examples), then add a plugin
-vela init --name ZavaSales --prefix Zava --publisher-prefix zava
+vela init --name ZavaSales --prefix Zava --publisher-prefix zava --solution ZavaSales
 cd ZavaSales
 vela models --entities account --out src/Zava.Shared/Models/Generated --namespace Zava.Shared.Models.Generated --interactive
 vela add plugin AccountValidator --entity Account --filtering-attributes Name --project src/Zava.Plugins
@@ -23,11 +23,12 @@ vela plan  --packages-dir artifacts --solution ZavaSales --interactive
 vela apply --packages-dir artifacts --solution ZavaSales --interactive
 ```
 
-`--solution` names a solution that already exists in the environment; `plan` and `apply` add the components to it.
-Dataverse imports a plugin package only when its name carries the publisher prefix: `--publisher-prefix zava`
-names the package `zava_Zava.Plugins` (built as `artifacts/zava_Zava.Plugins.1.0.0.nupkg`). Without
-`--publisher-prefix`, the package is `Zava.Plugins` and `--solution` gives it the prefix, so `plan` and `apply` fail
-without it.
+`--solution` names a solution that already exists in the environment; `plan` and `apply` require it and add the
+components to it. Dataverse imports a plugin package only when its name carries the publisher prefix:
+`--publisher-prefix zava` names the package `zava_Zava.Plugins` (built as `artifacts/zava_Zava.Plugins.1.0.0.nupkg`).
+Without `--publisher-prefix`, the package is `Zava.Plugins` and `--solution` gives it the prefix. `vela init` records
+both values in `PROJECT.md` for you and your agents; the CLI never reads that file, so the commands take them as
+flags.
 
 What you get from `vela init`: a minimal solution that references `Vela.Plugins` as a NuGet package - empty
 model and plugin projects plus a no-connection test project, and an `AGENTS.md` that tells AI coding agents how to write steps,

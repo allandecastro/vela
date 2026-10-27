@@ -106,7 +106,7 @@ mapping is mechanical:
 | `Execute(CodeActivityContext ctx)` body | `Execute(ILocalPluginContext ctx, TRequest request)` (typed) or `Handle(ILocalPluginContext ctx)` (lightweight) |
 | the workflow's implicit primary entity | an explicit `EntityReference` request parameter |
 
-Scaffold the shell with [`vela add customapi`](add.md): `--entity <Table>` generates a typed
+Scaffold the shell with [`vela add customapi`](add.md) (`--prefix <publisherprefix>` names it): `--entity <Table>` generates a typed
 `CustomApiBase<TRequest, TResponse>` with its request/response classes; `--global` generates a lightweight
 `CustomApiBase` whose `Handle` reads `ctx.GetInputParameter<T>(...)` and writes `ctx.SetOutputParameter(...)`.
 Then port the body. The lightweight global form (what the generic case below uses):
