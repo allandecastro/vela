@@ -218,7 +218,10 @@ public sealed class ProjectValuesTests
                 "\n" +
                 "Values the Vela commands need. Pass them as flags: `--solution` on plan/apply, `--prefix` on\n" +
                 "add customapi. Check a solution's prefix with `vela solution show <solution> --json`. The\n" +
-                "environment URL is per user and never lives in the repo.\n",
+                "environment URL is per user and never lives in the repo.\n" +
+                "\n" +
+                "Vela writes this file once, at `vela init`, and never edits it afterwards. Everything below the\n" +
+                "front matter belongs to the team.\n",
                 File.ReadAllText(Path.Combine(root, "PROJECT.md")));
 
             // No project file records the prefix any more; the package ids keep it.

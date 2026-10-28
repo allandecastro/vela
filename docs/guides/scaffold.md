@@ -80,6 +80,9 @@ packages:
 Values the Vela commands need. Pass them as flags: `--solution` on plan/apply, `--prefix` on
 add customapi. Check a solution's prefix with `vela solution show <solution> --json`. The
 environment URL is per user and never lives in the repo.
+
+Vela writes this file once, at `vela init`, and never edits it afterwards. Everything below the
+front matter belongs to the team.
 ```
 
 - `schemaVersion` is the version of the format: a reader that finds another version stops instead of misreading it.
