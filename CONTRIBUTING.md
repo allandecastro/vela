@@ -13,7 +13,7 @@ Vela.sln
 src/
   Vela.Plugins/     # Plugin runtime (net462): base types, step builder, contexts, DI, caching, Custom APIs
   Vela.Messages/    # Typed request/response base classes (net462 + net10.0), referenced by Vela.Plugins
-  Vela.Analyzers/   # Roslyn analyzers VELA001-VELA027 and the image/step-context source generator (netstandard2.0)
+  Vela.Analyzers/   # Roslyn analyzers VELA001-VELA028 and the image/step-context source generator (netstandard2.0)
   Vela.CodeFixes/   # IDE code fixes, packed inside Vela.Plugins with the analyzers
   Vela.Testing/     # Test harness (net462): in-memory Dataverse, PluginContext, PluginPipeline
   Vela.Cli/         # The vela tool (net10.0): plan/apply, init/add, models, sign, logs

@@ -42,7 +42,7 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 
 - **Fluent base types** - declarative step registration and strongly-typed handlers for plugins and Custom APIs.
 - **Typed context helpers** - strongly-typed target/images, framework tracing, lightweight DI, and a TTL cache.
-- **Analyzers, code fixes and source generators** - bundled Roslyn analyzers (VELA001-VELA027) catch invalid step/column usage and plugin pitfalls at build time, several with an IDE code fix, and a source generator emits typed image projections and typed step contexts (`ctx.PreImage` / `ctx.PostImage`). Shipped inside `Vela.Plugins` - no extra reference or setup.
+- **Analyzers, code fixes and source generators** - bundled Roslyn analyzers (VELA001-VELA028) catch invalid step/column usage and plugin pitfalls at build time, several with an IDE code fix, and a source generator emits typed image projections and typed step contexts (`ctx.PreImage` / `ctx.PostImage`). Shipped inside `Vela.Plugins` - no extra reference or setup.
 - **`vela` CLI** - preview-first `plan` → `apply` of registrations, scaffolding (`vela init` / `vela add`), early-bound generation (`vela models`), and package signing.
 - **Idempotent apply** - safe upsert/delete of steps, Custom APIs, and images against a live environment.
 - **No-connection testing** - run plugins against an in-memory Dataverse with no live connection and no mocking-library dependency, with an **opt-in security model** (roles, privileges, business units, teams, sharing and relationship cascades) when you need it.
@@ -52,7 +52,7 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 
 | Package | Target | What it gives you |
 | --- | --- | --- |
-| `Vela.Plugins` | .NET Framework 4.6.2 | Runtime: fluent plugin/Custom API base types, typed context helpers, lightweight DI and caching. Bundles the Roslyn analyzers (VELA001-VELA027), their code fixes and source generators (typed image projections and step contexts). |
+| `Vela.Plugins` | .NET Framework 4.6.2 | Runtime: fluent plugin/Custom API base types, typed context helpers, lightweight DI and caching. Bundles the Roslyn analyzers (VELA001-VELA028), their code fixes and source generators (typed image projections and step contexts). |
 | `Vela.Messages` | .NET Framework 4.6.2, .NET 10.0 | Typed request/response base classes (`TypedRequest`, `CustomApiRequest`); a dependency of `Vela.Plugins`, usable alone from client code. |
 | `Vela.Cli` (command `vela`) | .NET 10.0 | Plan/apply, scaffolding and package signing for plugins and Custom APIs. |
 | `Vela.Testing` | .NET Framework 4.6.2 | Test harness: fake execution context + in-memory `IOrganizationService`, fluent strongly-typed builder. |

@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added (Framework)
+
+- Analyzer VELA028 (error): a compile-time constant Custom API display name (over 100 characters) or description
+  (over 300), request parameter description (over 300), response property description (over 100) or step description
+  (over 256 with the step-key marker Vela appends) fails the build instead of `vela plan`. It covers `DisplayName(...)`,
+  `Description(...)`, `RequestParameter(...)` / `ResponseParameter(...)`, `Add(x => x.Prop, optional, description)`,
+  `[Description(...)]` on a request or response property and `WithDescription(...)`. The limits are one source shared
+  with the plan check, which still covers values only known at run time.
+
 ### Changed (CLI, breaking)
 
 - `vela add plugin` names its handler `Handle<Message>` (`HandleUpdate(HandleUpdateContext ctx)`), the default of

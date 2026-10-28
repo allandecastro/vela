@@ -40,6 +40,8 @@
     <Compile Include="..\Vela.Plugins\Steps\SdkMessageNames.cs" Link="Shared\SdkMessageNames.cs" />
     <!-- The messages with a typed On{Message}() trigger (generated from the message model). -->
     <Compile Include="..\Vela.Plugins\Steps\TypedTriggers.cs" Link="Shared\TypedTriggers.cs" />
+    <!-- Label lengths Dataverse stores and the step-key marker shape: shared with the runtime and VELA028. -->
+    <Compile Include="..\Vela.Plugins\Constants\DataverseLabelLimits.cs" Link="Shared\DataverseLabelLimits.cs" />
   </ItemGroup>
 
   <ItemGroup>

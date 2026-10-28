@@ -523,8 +523,8 @@ internal static partial class DataverseRegistration
     return DefinitionNormalizer.BuildKeylessStepName(definition.PluginTypeName, definition.Stage, definition.Mode, definition.Message, definition.EntityLogicalName);
 }
 
-    // Dataverse's limit on sdkmessageprocessingstep.description.
-    internal const int StepDescriptionMaxLength = 256;
+    // Dataverse's limit on sdkmessageprocessingstep.description (shared with the VELA028 analyzer).
+    internal const int StepDescriptionMaxLength = Vela.Constants.DataverseLabelLimits.StepDescription;
 
     // The step description: the developer's text (WithDescription), or the step name when none is declared, followed
     // by a stable [vela:stepkey=...] marker on its own line (B4). The marker lets a later read recover the step key
@@ -550,7 +550,7 @@ internal static partial class DataverseRegistration
         return null;
     }
 
-    int markerLength = string.IsNullOrWhiteSpace(definition.StepKey) ? 0 : 1 + DefinitionParser.StepKeyMarker(definition.StepKey).Length;
+    int markerLength = string.IsNullOrWhiteSpace(definition.StepKey) ? 0 : Vela.Constants.DataverseLabelLimits.StepKeyMarkerLength(definition.StepKey.Length);
     return $"step '{BuildStepName(definition)}' has a description of {length - markerLength} characters, but Dataverse stores at most " +
         $"{StepDescriptionMaxLength - markerLength} once Vela appends its {markerLength}-character step-key marker. Shorten WithDescription(...).";
 }

@@ -33,5 +33,6 @@ namespace Vela
         public const string IpAddressCall = "VELA025";
         public const string HttpClientTimeout = "VELA026";
         public const string EmptyCatch = "VELA027";
+        public const string LabelTooLong = "VELA028";
     }
 }

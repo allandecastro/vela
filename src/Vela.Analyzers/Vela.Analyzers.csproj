@@ -24,6 +24,8 @@
     <Compile Include="..\Vela.Plugins\Steps\StepImageRules.cs" Link="Shared\StepImageRules.cs" />
     <!-- Request name -> sdkmessage, shared with the runtime builder so VELA008 keys a type-stated trigger as it deploys. -->
     <Compile Include="..\Vela.Plugins\Steps\SdkMessageNames.cs" Link="Shared\SdkMessageNames.cs" />
+    <!-- Label lengths Dataverse stores, shared with the CLI's plan-time checks so VELA028 and plan agree. -->
+    <Compile Include="..\Vela.Plugins\Constants\DataverseLabelLimits.cs" Link="Shared\DataverseLabelLimits.cs" />
   </ItemGroup>
 
   <ItemGroup>
