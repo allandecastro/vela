@@ -19,7 +19,7 @@ namespace Vela.Steps;
 /// </summary>
 internal static class StepIdentity
 {
-    private const string AutoKeyPrefix = "dv-";
+    private const string AutoKeyPrefix = DataverseLabelLimits.AutoStepKeyPrefix;
 
     // Step id -> step name, for an execution whose OwningExtension carries the id but not the name (an asynchronous
     // step: verified live, its OwningExtension.Name is null). Per process: a step id never changes name in a run.
@@ -212,6 +212,6 @@ internal static class StepIdentity
     {
         using SHA256 sha = SHA256.Create();
         byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(seed));
-        return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant().Substring(0, 12);
+        return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant().Substring(0, DataverseLabelLimits.AutoStepKeyHashLength);
     }
 }

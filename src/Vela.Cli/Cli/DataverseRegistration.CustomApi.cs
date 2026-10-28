@@ -147,11 +147,12 @@ internal static partial class DataverseRegistration
     }
 
     // Dataverse column lengths (Custom API table reference): customapi.displayname 100 / description 300,
-    // customapirequestparameter.description 300, customapiresponseproperty.description 100.
-    internal const int CustomApiDisplayNameMaxLength = 100;
-    internal const int CustomApiDescriptionMaxLength = 300;
-    internal const int CustomApiRequestParameterDescriptionMaxLength = 300;
-    internal const int CustomApiResponsePropertyDescriptionMaxLength = 100;
+    // customapirequestparameter.description 300, customapiresponseproperty.description 100. Shared with the VELA028
+    // analyzer, which reports a constant label over these limits at build time.
+    internal const int CustomApiDisplayNameMaxLength = Vela.Constants.DataverseLabelLimits.CustomApiDisplayName;
+    internal const int CustomApiDescriptionMaxLength = Vela.Constants.DataverseLabelLimits.CustomApiDescription;
+    internal const int CustomApiRequestParameterDescriptionMaxLength = Vela.Constants.DataverseLabelLimits.CustomApiRequestParameterDescription;
+    internal const int CustomApiResponsePropertyDescriptionMaxLength = Vela.Constants.DataverseLabelLimits.CustomApiResponsePropertyDescription;
 
     /// <summary>
     /// The error for a Custom API whose display name or descriptions exceed what Dataverse stores, or null. Checked at

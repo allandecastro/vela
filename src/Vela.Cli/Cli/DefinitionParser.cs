@@ -114,8 +114,8 @@ internal static class DefinitionParser
     // name, the description is not shown/edited in the plugin registration UI's step row, so the key survives an
     // admin renaming the step or the plugin type (B4). Reading keys off this marker keeps the step's identity
     // stable, so apply updates the step in place instead of delete+recreating it (which loses its id/history).
-    internal const string StepKeyMarkerPrefix = "[vela:stepkey=";
-    private const string StepKeyMarkerSuffix = "]";
+    internal const string StepKeyMarkerPrefix = Vela.Constants.DataverseLabelLimits.StepKeyMarkerPrefix;
+    private const string StepKeyMarkerSuffix = Vela.Constants.DataverseLabelLimits.StepKeyMarkerSuffix;
 
     /// <summary>The stable step-key marker to embed in a step's description.</summary>
     internal static string StepKeyMarker(string stepKey) => $"{StepKeyMarkerPrefix}{stepKey}{StepKeyMarkerSuffix}";

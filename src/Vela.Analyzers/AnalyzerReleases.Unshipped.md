@@ -13,6 +13,7 @@ VELA024 | Vela.Reliability | Warning | ParallelExecutionAnalyzer
 VELA025 | Vela.Reliability | Warning | IpAddressCallAnalyzer
 VELA026 | Vela.Reliability | Warning | HttpClientTimeoutAnalyzer
 VELA027 | Vela.Reliability | Warning | EmptyCatchAnalyzer
+VELA028 | Vela.Usage | Error | LabelLengthAnalyzer
 
 ### Removed Rules
 

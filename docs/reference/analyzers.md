@@ -1,6 +1,6 @@
 # Analyzers and generators
 
-Vela ships 26 Roslyn **analyzers** (VELA001 to VELA027; VELA006 was removed), one **source generator** and a set of IDE **code fixes**
+Vela ships 27 Roslyn **analyzers** (VELA001 to VELA028; VELA006 was removed), one **source generator** and a set of IDE **code fixes**
 inside the `Vela.Plugins` package (assemblies `Vela.Analyzers` and `Vela.CodeFixes`). There is nothing else to
 reference: they run in the editor and at build with no configuration. A mistake that would fail at registration
 or silently do nothing is an **error**; advisory rules (VELA011, VELA012, VELA013, VELA018, VELA019,
@@ -34,6 +34,7 @@ VELA021, VELA022, VELA024, VELA025, VELA026 and VELA027) are **warnings**.
 | [VELA025](#vela025) | Vela.Reliability | Warning | A plugin calls an IP address (`new Uri("https://10.0.0.1/...")`) instead of a named host |
 | [VELA026](#vela026) | Vela.Reliability | Warning | A plugin creates an `HttpClient` and never sets its `Timeout` |
 | [VELA027](#vela027) | Vela.Reliability | Warning | A plugin has an empty `catch` block (no statement, no comment) |
+| [VELA028](#vela028) | Vela.Usage | Error | A constant Custom API display name or description, parameter description or step description is longer than Dataverse stores |
 
 Code fixes (editor lightbulb): VELA003, VELA004, VELA005, VELA007, VELA012, VELA014, VELA015, VELA023, VELA026 and VELA027.
 The [typed image projection generator](#typed-image-projection-generator) ships in the same assembly as the analyzers.
@@ -542,3 +543,38 @@ Code outside a plugin type (tests, tools, a nested helper type) is left alone.
 unused exception variable is dropped (`catch (Exception ex) { }` becomes `catch (Exception) { throw; }`) unless the
 clause has a `when` filter. To surface a message to the caller instead, throw an `InvalidPluginExecutionException`
 (see [VELA012](#vela012)).
+
+## VELA028
+
+**Label longer than Dataverse stores.** Vela reports a compile-time constant label (a literal, a `const` field, a
+concatenation of constants or a constant interpolated string) that is longer than `vela plan` accepts. Plan checks the
+same limits, so the error moves the failure from plan to the build:
+
+| Label | Set by | At most |
+| --- | --- | --- |
+| Custom API display name | `.DisplayName(...)` | 100 |
+| Custom API description | `.Description(...)` | 300 |
+| Request parameter description | `RequestParameter(..., description: ...)`, `Request(p => p.Add(x => x.Prop, optional, description))`, `[Description(...)]` on a property of the request type | 300 |
+| Response property description | `ResponseParameter(..., description: ...)`, `Response(p => p.Add(x => x.Prop, optional, description))`, `[Description(...)]` on a property of the response type | 100 |
+| Step description | `.WithDescription(...)` | 256, step-key marker included |
+
+The builder methods are covered on both Custom API builders (`CustomApiBuilder<TRequest, TResponse>` and
+`CustomApiLightBuilder`). A `[Description]` counts as a request parameter description on a type deriving from
+`OrganizationRequest`, and as a response property description on a type deriving from `OrganizationResponse`.
+
+A step description is stored with the step-key marker Vela appends on its own line (`[vela:stepkey=<key>]`), so the
+text itself (trimmed) gets 256 characters minus that marker: 225 with the automatic key, less with a longer
+`.WithStepKey(...)`. The rule reads the key from the same `RegisterStep()` chain.
+
+```csharp
+RegisterCustomApi("zava_RecalculateOrders", Recalculate)
+    .DisplayName("Recalculate the order totals, the taxes and the shipping costs of every line of all the selected orders") // VELA028: 103 characters
+    .Description("Recalculates the order totals.");                                                                           // fine
+```
+
+Not reported: a value only known at run time (a parameter, a resource string, a non-constant field), a step whose key
+is not a constant, and a `RegisterStep()` chain split across a local variable (its key may be set after the split).
+`vela plan` still checks every label, constant or not.
+
+Column lengths: [Custom API tables](https://learn.microsoft.com/power-apps/developer/data-platform/custom-api-tables)
+and [SdkMessageProcessingStep](https://learn.microsoft.com/power-apps/developer/data-platform/reference/entities/sdkmessageprocessingstep).
