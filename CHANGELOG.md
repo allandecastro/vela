@@ -21,16 +21,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Added (Framework)
+## [0.29.0] - 2026-10-28 (Vela.Cli)
 
-- Analyzer VELA028 (error): a compile-time constant Custom API display name (over 100 characters) or description
-  (over 300), request parameter description (over 300), response property description (over 100) or step description
-  (over 256 with the step-key marker Vela appends) fails the build instead of `vela plan`. It covers `DisplayName(...)`,
-  `Description(...)`, `RequestParameter(...)` / `ResponseParameter(...)`, `Add(x => x.Prop, optional, description)`,
-  `[Description(...)]` on a request or response property and `WithDescription(...)`. The limits are one source shared
-  with the plan check, which still covers values only known at run time.
-
-### Changed (CLI, breaking)
+### Changed (breaking)
 
 - `vela add plugin` names its handler `Handle<Message>` (`HandleUpdate(HandleUpdateContext ctx)`), the default of
   `vela add step`, instead of the fixed `OnExecute(OnExecuteContext ctx)`. Existing files are not touched. A script
@@ -55,7 +48,7 @@ All notable changes to Vela are documented here. The format is based on
 - `vela init` no longer writes `<VelaPublisherPrefix>` into the generated project files; the publisher prefix goes to
   `PROJECT.md`. The package ids keep the prefix (`zava_Zava.Plugins`), so the build produces the same packages.
 
-### Added (CLI)
+### Added
 
 - `vela init` writes a root `PROJECT.md` for people and agents: YAML front matter with `schemaVersion: 1`, the
   `publisherPrefix` (`--publisher-prefix`, or the one `--samples` / `--managed-identity` already name the packages
@@ -83,7 +76,7 @@ All notable changes to Vela are documented here. The format is based on
 - `vela add plugin`'s `<Name>` is optional: without it the plugin is named `<Entity>Plugin` (`--entity` stays
   required). The other kinds still require a name.
 
-### Changed (CLI)
+### Changed
 
 - `vela init` writes a solution-root `.editorconfig` (manifest-tracked like the other generated files) that keeps
   `using` directives inside a block namespace: `csharp_using_directive_placement = inside_namespace`, so the IDE adds
@@ -95,7 +88,8 @@ All notable changes to Vela are documented here. The format is based on
 - The scaffolded `AGENTS.md` shows each sample in the namespace the scaffold gives its folder, with the usings inside
   it, and adds the conventions: why usings go inside the namespace, handlers named after the behaviour
   (`--handler`), project-wide services and message sources in `ProjectServices.cs`, a `<summary>` on public types.
-- `vela init` references framework 0.41.2 (Vela.Plugins, Vela.Testing, Vela.Messages).
+
+- `vela init` references framework 0.42.0 (Vela.Plugins, Vela.Testing, Vela.Messages).
 
 ### Docs
 
@@ -103,6 +97,17 @@ All notable changes to Vela are documented here. The format is based on
   namespaces need the usings inside a block namespace (CS0118 otherwise), and what the generated `.editorconfig`
   enforces. The plugin samples of the plugin, end-to-end and Custom API guides and of the NuGet readme use the
   scaffold's namespace (`Zava.Plugins.Account.Plugins`) with the usings inside it.
+
+## [0.42.0] - 2026-10-28 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Added
+
+- Analyzer VELA028 (error): a compile-time constant Custom API display name (over 100 characters) or description
+  (over 300), request parameter description (over 300), response property description (over 100) or step description
+  (over 256 with the step-key marker Vela appends) fails the build instead of `vela plan`. It covers `DisplayName(...)`,
+  `Description(...)`, `RequestParameter(...)` / `ResponseParameter(...)`, `Add(x => x.Prop, optional, description)`,
+  `[Description(...)]` on a request or response property and `WithDescription(...)`. The limits are one source shared
+  with the plan check, which still covers values only known at run time.
 
 ## [0.41.2] - 2026-10-23 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
