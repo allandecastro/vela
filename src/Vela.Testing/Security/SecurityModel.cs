@@ -156,8 +156,9 @@ namespace Vela.Testing.Security
             Role(name, DeterministicGuid.From("role", name), configure);
 
         /// <summary>
-        /// Defines a named role with an explicit <paramref name="id"/> (e.g. a generated <c>Roles.XId</c>), so
-        /// <c>systemuserroles</c>/<c>teamroles</c> queries return that id. Without an id one is derived from the name.
+        /// Defines a named role with an explicit root <paramref name="id"/> (e.g. a generated <c>Roles.XId</c>). The
+        /// materialized <c>role</c> rows carry it as <c>parentrootroleid</c> on every business unit copy, and the root
+        /// business unit's copy keeps it as its <c>roleid</c>. Without an id one is derived from the name.
         /// </summary>
         public SecurityConfiguration Role(string name, Guid id, Action<RoleBuilder> configure)
         {
@@ -508,21 +509,57 @@ namespace Vela.Testing.Security
 
         /// <summary>
         /// The security-membership intersect rows to seed into the store so plugins can query role membership like
-        /// the platform: <c>role</c> (id + name), <c>systemuserroles</c> (a user's direct roles), <c>teamroles</c>
-        /// (a team's roles) and <c>teammembership</c> (a user's teams).
+        /// the platform: <c>role</c> (one copy per business unit), <c>systemuserroles</c> (a user's direct roles),
+        /// <c>teamroles</c> (a team's roles) and <c>teammembership</c> (a user's teams).
         /// </summary>
+        /// <remarks>
+        /// Dataverse keeps one copy of a security role per business unit. The root business unit's copy carries the
+        /// role's root id (<c>roleid == parentrootroleid</c>); every other copy has its own id and points at the root
+        /// through <c>parentrootroleid</c>. <c>systemuserroles.roleid</c> / <c>teamroles.roleid</c> hold the copy of
+        /// the principal's business unit. The declared role id (a generated <c>Roles.XId</c>) is the root id, so the
+        /// root copy keeps it and the other copies get an id derived from (root id, business unit), stable across
+        /// runs. When no single root business unit can be identified (no declared hierarchy and principals spread over
+        /// several unrelated business units), every principal is treated as being in the root and gets the root id.
+        /// Privilege evaluation is unaffected: it reads the declared roles, not these rows.
+        /// </remarks>
         public IEnumerable<Entity> MaterializeMembershipTables()
         {
+            Guid? root = RootBusinessUnit();
+            List<Guid> copies = root.HasValue ? NonRootBusinessUnits(root.Value) : new List<Guid>();
+
             foreach (KeyValuePair<string, Guid> role in _roleIds)
             {
-                yield return new Entity("role", role.Value) { ["roleid"] = role.Value, ["name"] = role.Key };
+                Entity rootCopy = new Entity("role", role.Value)
+                {
+                    ["roleid"] = role.Value,
+                    ["name"] = role.Key,
+                    ["parentrootroleid"] = new EntityReference("role", role.Value),
+                };
+                if (root.HasValue)
+                {
+                    rootCopy["businessunitid"] = new EntityReference("businessunit", root.Value);
+                }
+
+                yield return rootCopy;
+
+                foreach (Guid businessUnit in copies)
+                {
+                    Guid copyId = RoleCopyId(role.Value, businessUnit);
+                    yield return new Entity("role", copyId)
+                    {
+                        ["roleid"] = copyId,
+                        ["name"] = role.Key,
+                        ["parentrootroleid"] = new EntityReference("role", role.Value),
+                        ["businessunitid"] = new EntityReference("businessunit", businessUnit),
+                    };
+                }
             }
 
             foreach (Principal user in _users.Values)
             {
                 foreach (Guid roleId in RoleIds(user.Roles))
                 {
-                    yield return Intersect("systemuserroles", "systemuserid", user.Id, "roleid", roleId);
+                    yield return Intersect("systemuserroles", "systemuserid", user.Id, "roleid", CopyFor(roleId, user.BusinessUnit, root));
                 }
             }
 
@@ -530,7 +567,7 @@ namespace Vela.Testing.Security
             {
                 foreach (Guid roleId in RoleIds(team.Roles))
                 {
-                    yield return Intersect("teamroles", "teamid", team.Id, "roleid", roleId);
+                    yield return Intersect("teamroles", "teamid", team.Id, "roleid", CopyFor(roleId, team.BusinessUnit, root));
                 }
             }
 
@@ -542,6 +579,58 @@ namespace Vela.Testing.Security
                 }
             }
         }
+
+        // The id of a role's copy in a business unit: the root id in the root BU (or when the root is unknown, or the
+        // principal has no BU), otherwise a deterministic id derived from (root id, BU).
+        private static Guid CopyFor(Guid rootRoleId, Guid businessUnit, Guid? root) =>
+            !root.HasValue || businessUnit == Guid.Empty || businessUnit == root.Value
+                ? rootRoleId
+                : RoleCopyId(rootRoleId, businessUnit);
+
+        private static Guid RoleCopyId(Guid rootRoleId, Guid businessUnit) =>
+            DeterministicGuid.From("role", rootRoleId, businessUnit);
+
+        // The root business unit: the single top of the declared BU hierarchy, or, when no BU is declared, the single
+        // business unit the users and teams are in. Null when there is no such single top (ambiguous).
+        private Guid? RootBusinessUnit()
+        {
+            IEnumerable<Guid> candidates = _businessUnitParents.Count > 0
+                ? DeclaredBusinessUnits()
+                : PrincipalBusinessUnits();
+
+            HashSet<Guid> tops = new HashSet<Guid>();
+            foreach (Guid businessUnit in candidates)
+            {
+                tops.Add(TopOf(businessUnit));
+            }
+
+            return tops.Count == 1 ? tops.First() : (Guid?)null;
+        }
+
+        private Guid TopOf(Guid businessUnit)
+        {
+            HashSet<Guid> seen = new HashSet<Guid> { businessUnit };
+            while (_businessUnitParents.TryGetValue(businessUnit, out Guid parent) && parent != Guid.Empty && seen.Add(parent))
+            {
+                businessUnit = parent;
+            }
+
+            return businessUnit;
+        }
+
+        private IEnumerable<Guid> DeclaredBusinessUnits() =>
+            _businessUnitParents.Keys.Concat(_businessUnitParents.Values).Where(id => id != Guid.Empty);
+
+        private IEnumerable<Guid> PrincipalBusinessUnits() =>
+            _users.Values.Concat(_teams.Values).Select(p => p.BusinessUnit).Where(id => id != Guid.Empty);
+
+        // Every known business unit other than the root, in a stable order (each gets its own copy of every role).
+        private List<Guid> NonRootBusinessUnits(Guid root) =>
+            DeclaredBusinessUnits().Concat(PrincipalBusinessUnits())
+                .Where(id => id != root)
+                .Distinct()
+                .OrderBy(id => id)
+                .ToList();
 
         private IEnumerable<Guid> RoleIds(IReadOnlyList<string> roleNames)
         {

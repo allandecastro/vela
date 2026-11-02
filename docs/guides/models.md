@@ -456,8 +456,8 @@ public static class Roles
 }
 ```
 
-Drive the [security model](security-model.md) with it - pass all three so the harness seeds the **real** role
-id into `systemuserroles`/`teamroles`, exactly what plugin logic reads at runtime:
+Drive the [security model](security-model.md) with it - pass all three so the harness seeds the **real** root
+role id and grants:
 
 ```csharp
 var svc = new InMemoryOrganizationService()
@@ -471,8 +471,26 @@ var svc = new InMemoryOrganizationService()
 > [!NOTE]
 > The generated `Roles` is dependency-light (BCL types only, no test dependency), so it lives with the shared
 > runtime models. `Roles.XName` / `Roles.XId` are usable from plugin code at runtime, while the harness reads the
-> grant data in tests via the `Role(name, id, grants)` overload. Its `Id` values are the real role ids, so a
-> plugin that resolves a user's roles at runtime and the test that seeds them line up on the same GUIDs.
+> grant data in tests via the `Role(name, id, grants)` overload.
+
+`Roles.XId` is the **root** role id. The harness keeps one copy of each role per business unit, and
+`systemuserroles.roleid` / `teamroles.roleid` hold the copy of the user's or team's business unit, so they equal
+`Roles.XId` only in the root business unit. Every copy carries the root id in `parentrootroleid`; match on that
+column to check a role in any business unit (see [Role membership](security-model.md)). With `role` and its
+intersect tables generated (`vela models --entities role,team --intersect` adds `SystemUserRoles`, `TeamRoles` and
+`TeamMembership`):
+
+```csharp
+bool isSalesperson = ctx.SystemService.RetrieveMultiple(
+    Query.For<Role>()
+        .Where(r => r.ParentRootRoleId, ConditionOperator.Equal, Roles.SalespersonId)
+        .Link<SystemUserRoles>(r => r.RoleId, ur => ur.RoleId,
+            configure: l => l.Where(ur => ur.SystemUserId, ConditionOperator.Equal, ctx.InitiatingUserId))
+        .Top(1)).Entities.Count > 0;
+```
+
+This query checks direct assignment only; a role held through a team goes through `teamroles` and
+`teammembership` (link `TeamRoles` on `RoleId`, then `TeamMembership` on `TeamId`).
 
 > Out of scope for now (use `pac modelbuilder` if you need it): an `OrganizationServiceContext`/LINQ provider. See
 > [Limitations reference](../reference/limitations.md).

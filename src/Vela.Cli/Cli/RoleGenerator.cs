@@ -58,8 +58,8 @@ public static class RoleGenerator
         sb.AppendLine("    /// [entity, access level, privilege] name triples). Dependency-light (no test-only types), so it lives");
         sb.AppendLine("    /// with the shared models and both runtime plugin code and tests can use it. Configure the harness via");
         sb.AppendLine("    /// <c>WithSecurity(s =&gt; s.Role(Roles.XName, Roles.XId, Roles.X).User(userId, buId, Roles.XName))</c>");
-        sb.AppendLine("    /// — passing <c>Roles.XId</c> makes systemuserroles/teamroles queries return the real role id, which");
-        sb.AppendLine("    /// plugin logic also uses.");
+        sb.AppendLine("    /// — <c>Roles.XId</c> is the root role id: systemuserroles/teamroles hold the copy of the principal's business");
+        sb.AppendLine("    /// unit, so plugin logic matches role membership on role.parentrootroleid == Roles.XId.");
         sb.AppendLine("    /// </summary>");
         sb.AppendLine("    public static class Roles");
         sb.AppendLine("    {");

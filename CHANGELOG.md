@@ -30,6 +30,19 @@ All notable changes to Vela are documented here. The format is based on
   `[Description(...)]` on a request or response property and `WithDescription(...)`. The limits are one source shared
   with the plan check, which still covers values only known at run time.
 
+### Fixed (Framework)
+
+- The security harness materializes a security role the way Dataverse stores it: one `role` row per business unit,
+  each with `parentrootroleid` set to the declared (root) id and its `businessunitid`. The root business unit's
+  copy keeps the declared id (`roleid == parentrootroleid`); the other copies get an id derived from the root id
+  and the business unit, stable across runs. `systemuserroles.roleid` and `teamroles.roleid` now hold the copy of
+  the user's or team's business unit instead of the root id. The root business unit is the single top of the
+  declared `BusinessUnit(...)` hierarchy (or, with none declared, the single business unit the users and teams
+  are in); when there is no single top, every principal keeps the root id as before. Privilege evaluation is
+  unchanged. **Migration:** a test that matched `systemuserroles.roleid` (or `teamroles.roleid`) to a
+  `Roles.XId` for a user or team outside the root business unit now finds nothing, as on Dataverse: join `role`
+  and match `parentrootroleid` to `Roles.XId` instead.
+
 ### Changed (CLI, breaking)
 
 - `vela add plugin` names its handler `Handle<Message>` (`HandleUpdate(HandleUpdateContext ctx)`), the default of
@@ -99,6 +112,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Docs
 
+- The [security model](docs/guides/security-model.md) and [models](docs/guides/models.md) guides explain that
+  `Roles.XId` is the root role id while membership rows hold the business unit's copy, with a typed query that
+  checks a role through `parentrootroleid`. The generated `Roles` class summary says the same.
 - New "Namespaces and usings" section in [Scaffold a solution](docs/guides/scaffold.md): why the folder-named
   namespaces need the usings inside a block namespace (CS0118 otherwise), and what the generated `.editorconfig`
   enforces. The plugin samples of the plugin, end-to-end and Custom API guides and of the NuGet readme use the
