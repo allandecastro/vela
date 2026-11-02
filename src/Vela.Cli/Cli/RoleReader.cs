@@ -15,7 +15,12 @@ namespace Vela.Cli;
 /// </summary>
 internal static class RoleReader
 {
-    internal static IReadOnlyList<RoleModel> ReadRoles(IOrganizationService service, string[] roleNames, string? solution)
+    internal static IReadOnlyList<RoleModel> ReadRoles(IOrganizationService service, string[] roleNames, string? solution) =>
+        ReadRoles(service, roleNames, solution, notFound: null);
+
+    // With <paramref name="notFound"/> (vela models --verify), a requested name the environment lacks is collected
+    // there instead of warned about, and resolving no role at all is not an error: both are drift to report.
+    internal static IReadOnlyList<RoleModel> ReadRoles(IOrganizationService service, string[] roleNames, string? solution, ICollection<string>? notFound)
     {
         // Resolve to unique root roles (id -> name), merging explicit names and the solution's role components so a
         // role listed both ways is generated once.
@@ -37,7 +42,14 @@ internal static class RoleReader
         // Generate whatever resolved rather than aborting the whole run on the first missing role; a typo in one
         // name should not throw away the others. Only a completely empty result (no explicit role resolved and no
         // solution roles) is an error.
-        if (missing.Count > 0)
+        if (notFound is not null)
+        {
+            foreach (string name in missing)
+            {
+                notFound.Add(name);
+            }
+        }
+        else if (missing.Count > 0)
         {
             Console.Error.WriteLine($"Warning: security role(s) not found and skipped: {string.Join(", ", missing)}.");
         }
@@ -48,6 +60,11 @@ internal static class RoleReader
             {
                 roots[role.Id] = role.GetAttributeValue<string>("name") ?? role.Id.ToString();
             }
+        }
+
+        if (roots.Count == 0 && notFound is not null)
+        {
+            return [];
         }
 
         if (roots.Count == 0)

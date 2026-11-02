@@ -26,10 +26,18 @@ internal readonly record struct ModelsScope(
         string.IsNullOrWhiteSpace(Solution) && Entities.Length == 0 && CustomApis.Length == 0 && !AllCustomApis
         && Messages.Length == 0 && !AllMessages && Roles.Length == 0 && !SolutionRoles;
 
-    // True when a Custom-API / message / role scope is present. The TypeScript (--forms/--tables) and --verify paths
-    // read tables only, so they use this to warn that these scopes are ignored.
-    public bool HasCustomApiMessageOrRoleScope =>
-        CustomApis.Length > 0 || AllCustomApis || Messages.Length > 0 || AllMessages || Roles.Length > 0 || SolutionRoles;
+    // True when a Custom-API / message / role scope is present. The TypeScript (--forms/--tables) paths read tables
+    // only, so they use this to warn that these scopes are ignored.
+    public bool HasCustomApiMessageOrRoleScope => HasCustomApiOrMessageScope || HasRoleScope;
+
+    // True when a Custom-API / message scope is present: --verify checks tables and roles, and warns these are ignored.
+    public bool HasCustomApiOrMessageScope => CustomApis.Length > 0 || AllCustomApis || Messages.Length > 0 || AllMessages;
+
+    // True when a table scope is present (--solution also scopes its tables).
+    public bool HasTableScope => !string.IsNullOrWhiteSpace(Solution) || Entities.Length > 0;
+
+    // True when a security role scope is present.
+    public bool HasRoleScope => Roles.Length > 0 || SolutionRoles;
 
     public static ModelsScope Parse(string[] args)
     {

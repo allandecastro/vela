@@ -82,6 +82,11 @@ All notable changes to Vela are documented here. The format is based on
 - `vela add plugin` takes `--handler <Method>` to name the handler (validated as for `add step`).
 - `vela add plugin`'s `<Name>` is optional: without it the plugin is named `<Entity>Plugin` (`--entity` stays
   required). The other kinds still require a name.
+- `vela models --verify` checks the `Roles` class with `--roles` / `--solution-roles` (it ignored them before):
+  against the security roles of the environment it connects to, typically a target before a deploy, each role's
+  root id and each of its (table, privilege, access level) grants. A role not found in the environment, a role the
+  class lacks, a different root id, a grant only one side has and a different access level are drift: it lists
+  them, adds them to `--json` (`roles`, `missingRolesClass`) and exits `5`. `--roles` alone checks the roles only.
 
 ### Changed (CLI)
 
@@ -96,6 +101,13 @@ All notable changes to Vela are documented here. The format is based on
   it, and adds the conventions: why usings go inside the namespace, handlers named after the behaviour
   (`--handler`), project-wide services and message sources in `ProjectServices.cs`, a `<summary>` on public types.
 - `vela init` references framework 0.41.2 (Vela.Plugins, Vela.Testing, Vela.Messages).
+
+### Fixed (CLI)
+
+- `vela add test <Plugin> --message <Message>` tests every step of the plugin on that message, not the first one only.
+  A plugin with a second step on the same message (`vela add step ... --message Create`) had its test class
+  "completed" with nothing, since the first step was tested already; it now gets the tests of the new step
+  (`Fires_On_Create_PreOperation`, or `Fires_On_Create_PostOperation_2` on the same stage).
 
 ### Docs
 
