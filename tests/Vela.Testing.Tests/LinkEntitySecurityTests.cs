@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.ServiceModel;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using Vela.Testing.Security;
@@ -78,7 +79,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void Inner_join_to_a_table_with_no_read_privilege_returns_nothing()
+        public void Inner_join_to_a_table_with_no_read_privilege_fails_the_query()
         {
             Guid account = Guid.NewGuid();
             Guid contact = Guid.NewGuid();
@@ -95,7 +96,9 @@ namespace Vela.Testing.Tests
             QueryExpression query = new QueryExpression("contact");
             query.AddLink("account", "parentcustomerid", "accountid", JoinOperator.Inner);
 
-            Assert.Empty(crm.RetrieveMultiple(query).Entities); // can't read the account table -> the inner join yields nothing
+            // No Read privilege on the account table at any depth: the whole query fails (verified live).
+            FaultException<OrganizationServiceFault> denied = Assert.Throws<FaultException<OrganizationServiceFault>>(() => crm.RetrieveMultiple(query));
+            Assert.Equal(unchecked((int)0x80040220), denied.Detail.ErrorCode);
         }
 
         [Fact]

@@ -5,8 +5,9 @@ By default the in-memory service grants **full access** - most plugin tests don'
 `RetrievePrincipalAccess`, sharing). You declare business units, named roles, users and teams; the service then
 enforces the table privileges (Create/Read/Write/Delete/Assign/Append/AppendTo/Share) at
 **User / BusinessUnit / ParentChild / Organization** depth, over the user and every team they belong to. A denied
-write throws `FaultException<OrganizationServiceFault>` with the `PrincipalPrivilegeDenied` code; `RetrieveMultiple`
-silently filters to the records the user may read.
+write throws `FaultException<OrganizationServiceFault>` with the `PrincipalPrivilegeDenied` code (`0x80040220`). A
+read with no Read privilege on a table it touches throws the same fault; otherwise `RetrieveMultiple` silently
+filters to the records the user may read (see **Reads** below).
 
 ```csharp
 using Vela.Testing.Security;
@@ -26,6 +27,18 @@ var crm = new InMemoryOrganizationService()
 // Alice reads/writes accounts in her business unit; records she cannot see are filtered out of
 // RetrieveMultiple, and a write she lacks the privilege for throws PrincipalPrivilegeDenied.
 ```
+
+- **Reads.** The harness checks the Read privilege first, then whether the record is in reach (see
+  [How access to a record is determined](https://learn.microsoft.com/power-platform/admin/how-record-access-determined)):
+  - **No Read privilege on a table**, at any depth: the whole read throws `PrincipalPrivilegeDenied`
+    (`0x80040220`, "is missing prvRead... privilege"). This applies to the root table of a `Retrieve` or
+    `RetrieveMultiple` (QueryExpression, FetchXML, QueryByAttribute, typed queries) and to the table of every
+    link-entity, inner or outer, with or without columns or filters, at any nesting level.
+  - **Privilege held, record out of reach** (depth, owner, no share): `RetrieveMultiple` leaves the row out, and a
+    `Retrieve` by id throws `0x80048306` ("does not have ReadAccess right(s) for record").
+  - **Link to a record out of reach**: an inner link drops the root row; an outer link keeps it with no linked
+    columns, so a `null` condition on the link alias matches it.
+  - A lookup on a row the user can read keeps its value even when the target record is out of reach.
 
 - **Arrange vs act.** `Seed(...)` writes records straight into the store, bypassing privilege checks (and the
   system-column stamping) - it is your *starting state*, the data that already exists. `Create(...)` instead
@@ -68,7 +81,8 @@ var crm = new InMemoryOrganizationService()
   and [inherited access](https://learn.microsoft.com/troubleshoot/power-platform/dataverse/user-permissions/cleanup-inherited-access).
 - **Access teams.** `WithAccessTeamTemplate(templateId, rights)` registers a template's rights; a plugin then
   grants a user those rights on a record with `AddUserToRecordTeamRequest` (and removes them with
-  `RemoveUserFromRecordTeamRequest`) - unioned with role and shared access.
+  `RemoveUserFromRecordTeamRequest`) - unioned with role and shared access. Reading the record still needs the
+  Read privilege on the table (see **Reads**).
 - **Hierarchy security.** `ManagerHierarchy(depth)` + `Manager(userId, managerId)` let a manager reach a report's
   records up the reporting chain: read/write on a direct report, read-only deeper (within depth), provided they
   already hold at least User-level access for that privilege and are in the report's business unit or its parent.
@@ -81,7 +95,9 @@ var crm = new InMemoryOrganizationService()
   permission - independent of record access.
 - **Role membership.** With security configured, the platform's membership tables (`role`, `systemuserroles`,
   `teamroles`, `teammembership`) are queryable, so a plugin can resolve a user's roles as it does against
-  Dataverse. Generate a `Roles` class with the **real** role privileges + ids from your environment with
+  Dataverse. Through the user's service, `role` follows the **Reads** rules like any table: it needs the Read
+  privilege on `role` (a query that links an intersect table to `role` included), and its rows belong to their
+  business unit. The intersect tables have no read check. `ctx.SystemService` reads all of them. Generate a `Roles` class with the **real** role privileges + ids from your environment with
   [`vela models --roles`](models.md) (dependency-light, generated into the shared models project), then
   `Role(Roles.XName, Roles.XId, Roles.X)`.
 - **Off by default** - a test that never calls `WithSecurity(...)` gets full access. `WithStrictSecurity()` turns

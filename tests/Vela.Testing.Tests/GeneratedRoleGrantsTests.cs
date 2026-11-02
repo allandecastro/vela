@@ -86,7 +86,9 @@ namespace Vela.Testing.Tests
                     ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
                 });
 
-            Assert.Empty(svc.RetrieveMultiple(new QueryExpression("account") { ColumnSet = new ColumnSet(true) }).Entities);
+            FaultException<OrganizationServiceFault> denied = Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.RetrieveMultiple(new QueryExpression("account") { ColumnSet = new ColumnSet(true) }));
+            Assert.Equal(unchecked((int)0x80040220), denied.Detail.ErrorCode); // no Read privilege on account
         }
 
         [Fact]

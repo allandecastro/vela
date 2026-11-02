@@ -30,6 +30,22 @@ All notable changes to Vela are documented here. The format is based on
   `[Description(...)]` on a request or response property and `WithDescription(...)`. The limits are one source shared
   with the plan check, which still covers values only known at run time.
 
+### Fixed (Framework)
+
+- The security harness reads like Dataverse. With no Read privilege on a table, at any depth, a read now throws
+  `PrincipalPrivilegeDenied` (`0x80040220`, "is missing prvRead... privilege") instead of returning nothing: for the
+  root table of a `Retrieve` or `RetrieveMultiple` (QueryExpression, FetchXML, QueryByAttribute, typed queries) and
+  for the table of any link-entity, inner or outer, nested or not. A `Retrieve` by id of a record out of reach while
+  the privilege is held now throws `0x80048306` ("does not have ReadAccess right(s) for record") instead of
+  `0x80040220`. The `role` table is no longer exempt: through the user's service it needs the Read privilege on
+  `role`, and its rows belong to their business unit. A privilege fault message now reads
+  "is missing prv{Privilege}{table} privilege". See [Security model in tests](docs/guides/security-model.md).
+  - Migration: a test that expected an empty result from a query on, or linking to, a table the user has no Read
+    privilege on now gets the fault; grant Read at some depth or assert the fault. A test that reads `role` through
+    the user's service needs a Read grant on `role` (or reads it through `ctx.SystemService`). A test that read a
+    record only through an access team or a share needs Read on the table at some depth (User is enough). A test that
+    matched the old fault message text, or expected `0x80040220` for a record out of reach, needs updating.
+
 ### Changed (CLI, breaking)
 
 - `vela add plugin` names its handler `Handle<Message>` (`HandleUpdate(HandleUpdateContext ctx)`), the default of

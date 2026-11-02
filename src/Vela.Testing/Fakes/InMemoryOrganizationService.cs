@@ -920,10 +920,7 @@ namespace Vela.Testing
                 throw RecordDoesNotExist(entityName, id);
             }
 
-            if (!SecurityInfraTables.Contains(entityName))
-            {
-                DemandAccess(entityName, Privilege.Read, stored);
-            }
+            DemandRecordRead(entityName, stored);
 
             Entity projected = Project(stored, columnSet);
             MaskSecuredColumns(projected);
@@ -1081,6 +1078,24 @@ namespace Vela.Testing
             // everything, so an access-control read test that forgot WithSecurity(...) cannot pass green.
             DemandStrictSecurityConfigured();
 
+            // FetchXML is parsed into the equivalent QueryExpression (aggregates included) and runs through the same
+            // checks and engine path, so the two forms of a query can never diverge.
+            FetchQuery? parsedFetch = query is FetchExpression fetchExpression ? FetchXmlParser.Parse(fetchExpression.Query) : null;
+
+            // No Read privilege on a table the query reads (root or any link-entity) fails the whole query.
+            switch (query)
+            {
+                case QueryExpression qe:
+                    DemandQueryReadPrivileges(qe);
+                    break;
+                case QueryByAttribute qba:
+                    DemandQueryReadPrivileges(new QueryExpression(qba.EntityName));
+                    break;
+                case FetchExpression:
+                    DemandQueryReadPrivileges(parsedFetch!.Query);
+                    break;
+            }
+
             // Field-level security: an aggregate/group-by over a field-secured column the caller can't read would
             // otherwise leak it through the aggregate value, so reject the query up front.
             DemandAggregateColumnReads(query);
@@ -1097,10 +1112,8 @@ namespace Vela.Testing
                 case QueryByAttribute qba:
                     result = engine.ExecuteQueryByAttribute(qba);
                     break;
-                case FetchExpression fetch:
-                    // FetchXML is parsed into the equivalent QueryExpression (aggregates included) and runs through the
-                    // same engine path, so the two forms of a query can never diverge.
-                    result = engine.ExecuteFetch(FetchXmlParser.Parse(fetch.Query));
+                case FetchExpression:
+                    result = engine.ExecuteFetch(parsedFetch!);
                     break;
                 default:
                     throw new NotSupportedException(
@@ -2007,7 +2020,7 @@ namespace Vela.Testing
             // A file download must respect the same access control as Retrieve: a record-level Read demand and
             // field-level security on the File column. Without this a caller with no Read (or no access to a secured
             // File column) could stream content that Retrieve/RetrieveMultiple would have masked - a false green.
-            if (!SecurityInfraTables.Contains(target.LogicalName))
+            if (!MembershipIntersectTables.Contains(target.LogicalName))
             {
                 DemandAccess(target.LogicalName, Privilege.Read, record);
             }

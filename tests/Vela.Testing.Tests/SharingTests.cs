@@ -63,7 +63,7 @@ namespace Vela.Testing.Tests
 
             Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Retrieve("account", record, new ColumnSet(true)));
             Assert.Equal(AccessRights.None, AliceAccess(svc, record));
-            Assert.Empty(svc.RetrieveMultiple(new QueryExpression("account")).Entities);
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.RetrieveMultiple(new QueryExpression("account")));
         }
 
         [Fact]
