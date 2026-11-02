@@ -84,6 +84,24 @@ public sealed class RoleReaderTests
     }
 
     [Fact]
+    public void A_system_roles_template_id_is_read_and_a_custom_role_has_none()
+    {
+        // System Administrator's roletemplateid on a live org (verified 2026-11); its roleid differs per org.
+        Guid template = new("627090ff-40a3-4053-8790-584edc5be201");
+        RoleOrg org = new();
+        Guid solution = org.AddSolution("ZavaCore");
+        Guid admin = org.AddRole("System Administrator", (PrvReadAccount, 8));
+        org.SetTemplate(admin, template);
+        Guid sales = org.AddRole("Sales Rep", (PrvReadContact, 1));
+        org.AddComponent(solution, sales, componentType: 20);
+
+        IReadOnlyList<RoleModel> roles = RoleReader.ReadRoles(org, ["System Administrator"], "ZavaCore");
+
+        Assert.Equal(template, roles.Single(r => r.Id == admin).TemplateId);
+        Assert.Null(roles.Single(r => r.Id == sales).TemplateId);
+    }
+
+    [Fact]
     public void An_unknown_solution_fails_with_its_name()
     {
         InvalidOperationException error = Assert.Throws<InvalidOperationException>(
@@ -131,6 +149,9 @@ public sealed class RoleReaderTests
 
             return role.Id;
         }
+
+        public void SetTemplate(Guid roleId, Guid templateId) =>
+            _rows.Single(r => r.LogicalName == "role" && r.Id == roleId)["roletemplateid"] = new EntityReference("roletemplate", templateId);
 
         public void AddComponent(Guid solution, Guid objectId, int componentType) =>
             _rows.Add(new Entity("solutioncomponent", Guid.NewGuid())

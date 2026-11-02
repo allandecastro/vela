@@ -148,10 +148,26 @@ public class RoleGeneratorTests
     }
 
     [Fact]
+    public void A_template_id_is_emitted_only_for_a_role_that_has_one()
+    {
+        Guid template = new Guid("627090ff-40a3-4053-8790-584edc5be201");
+        string code = Generate(
+            new RoleModel("System Administrator", Guid.NewGuid(), Array.Empty<RoleGrantModel>(), template),
+            Salesperson());
+
+        Assert.Contains($"public static readonly Guid SystemAdministratorTemplateId = new Guid(\"{template:D}\");", code);
+        Assert.DoesNotContain("SalespersonTemplateId", code);
+    }
+
+    [Fact]
     public void Generates_the_exact_expected_source()
     {
         string code = RoleGenerator.Generate(
-            new[] { new RoleModel("Salesperson", SalesId, new[] { new RoleGrantModel("account", "Read", "BusinessUnit") }) },
+            new[]
+            {
+                new RoleModel("Salesperson", SalesId, new[] { new RoleGrantModel("account", "Read", "BusinessUnit") }),
+                new RoleModel("System Administrator", new Guid("22222222-2222-2222-2222-222222222222"), Array.Empty<RoleGrantModel>(), new Guid("627090ff-40a3-4053-8790-584edc5be201")),
+            },
             new RoleGenOptions("Acme.Tests.Roles")).Code;
 
         // Full snapshot (line endings normalized so it holds on both Windows CI and dev machines). Any change to an
@@ -169,14 +185,20 @@ public class RoleGeneratorTests
             "    /// with the shared models and both runtime plugin code and tests can use it. Configure the harness via",
             "    /// <c>WithSecurity(s =&gt; s.Role(Roles.XName, Roles.XId, Roles.X).User(userId, buId, Roles.XName))</c>",
             "    /// — <c>Roles.XId</c> is the root role id: systemuserroles/teamroles hold the copy of the principal's business",
-            "    /// unit, so plugin logic matches role membership on role.parentrootroleid == Roles.XId.",
+            "    /// unit, so plugin logic matches role membership on role.parentrootroleid == Roles.XId. <c>XId</c> is the same",
+            "    /// across environments only when the role ships in a solution (a role created by hand in each org gets a",
+            "    /// different id). For a system role, compare on role.roletemplateid with <c>XTemplateId</c>, which is stable",
+            "    /// across orgs.",
             "    /// </summary>",
             "    public static class Roles",
             "    {",
             "        /// <summary>The \"Salesperson\" security role.</summary>",
             "        public const string SalespersonName = \"Salesperson\";",
             "",
-            "        /// <summary>The root id of the \"Salesperson\" security role.</summary>",
+            "        /// <summary>",
+            "        /// The root role id of the \"Salesperson\" security role. The same across environments only when",
+            "        /// the role ships in a solution; a role created by hand in each org gets a different id.",
+            "        /// </summary>",
             "        public static readonly Guid SalespersonId = new Guid(\"11111111-1111-1111-1111-111111111111\");",
             "",
             "        /// <summary>The privilege grants of the \"Salesperson\" role ([entity, access level, privilege]).</summary>",
@@ -184,6 +206,25 @@ public class RoleGeneratorTests
             "        {",
             "            (\"account\", \"BusinessUnit\", \"Read\"),",
             "        };",
+            "",
+            "        /// <summary>The \"System Administrator\" security role.</summary>",
+            "        public const string SystemAdministratorName = \"System Administrator\";",
+            "",
+            "        /// <summary>",
+            "        /// The root role id of the \"System Administrator\" security role. The same across environments only when",
+            "        /// the role ships in a solution; a role created by hand in each org gets a different id.",
+            "        /// </summary>",
+            "        public static readonly Guid SystemAdministratorId = new Guid(\"22222222-2222-2222-2222-222222222222\");",
+            "",
+            "        /// <summary>",
+            "        /// The role template id (roletemplateid) of the \"System Administrator\" system role, stable across orgs:",
+            "        /// compare role.roletemplateid with it to recognize the system role in any environment.",
+            "        /// </summary>",
+            "        public static readonly Guid SystemAdministratorTemplateId = new Guid(\"627090ff-40a3-4053-8790-584edc5be201\");",
+            "",
+            "        /// <summary>The privilege grants of the \"System Administrator\" role ([entity, access level, privilege]).</summary>",
+            "        public static readonly (string Entity, string Level, string Privilege)[] SystemAdministrator =",
+            "            new (string Entity, string Level, string Privilege)[0];",
             "    }",
             "}",
             "",

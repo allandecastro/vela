@@ -129,6 +129,7 @@ namespace Vela.Testing.Security
         private readonly Dictionary<Guid, Principal> _teams = new Dictionary<Guid, Principal>();
         private readonly Dictionary<Guid, HashSet<Guid>> _memberships = new Dictionary<Guid, HashSet<Guid>>();
         private readonly Dictionary<string, Guid> _roleIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Guid> _roleTemplateIds = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<Guid, Guid> _managers = new Dictionary<Guid, Guid>();
         private readonly Dictionary<Guid, Guid> _positions = new Dictionary<Guid, Guid>();
         private readonly Dictionary<Guid, Guid> _positionParents = new Dictionary<Guid, Guid>();
@@ -176,6 +177,34 @@ namespace Vela.Testing.Security
             configure(builder);
             _roles[name] = builder;
             _roleIds[name] = id;
+            _roleTemplateIds.Remove(name);
+            return this;
+        }
+
+        /// <summary>
+        /// Defines a named system role with an explicit root <paramref name="id"/> and its
+        /// <paramref name="templateId"/> (<c>roletemplateid</c>, e.g. a generated <c>Roles.XTemplateId</c>), written on
+        /// every business unit copy of the materialized <c>role</c> rows. Roles declared without one have no template.
+        /// </summary>
+        public SecurityConfiguration Role(string name, Guid id, Guid templateId, Action<RoleBuilder> configure) =>
+            Role(name, id, configure).RoleTemplate(name, templateId);
+
+        /// <summary>
+        /// Defines a named system role from generated grant data with an explicit root <paramref name="id"/> and its
+        /// <paramref name="templateId"/> (<c>roletemplateid</c>, a generated <c>Roles.XTemplateId</c>), written on
+        /// every business unit copy of the materialized <c>role</c> rows.
+        /// </summary>
+        public SecurityConfiguration Role(string name, Guid id, Guid templateId, params (string Entity, string Level, string Privilege)[] grants) =>
+            Role(name, id, grants).RoleTemplate(name, templateId);
+
+        private SecurityConfiguration RoleTemplate(string name, Guid templateId)
+        {
+            if (templateId == Guid.Empty)
+            {
+                throw new ArgumentException("Role template id is required.", nameof(templateId));
+            }
+
+            _roleTemplateIds[name] = templateId;
             return this;
         }
 
@@ -215,6 +244,7 @@ namespace Vela.Testing.Security
 
             _roles[name] = builder;
             _roleIds[name] = id;
+            _roleTemplateIds.Remove(name);
             return this;
         }
 
@@ -379,7 +409,7 @@ namespace Vela.Testing.Security
                 }
             }
 
-            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, accessTeams, _roleIds, _managers, _positions, _positionParents, _hierarchyDepth, _securedColumns, _fieldRead, _fieldUpdate);
+            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, accessTeams, _roleIds, _roleTemplateIds, _managers, _positions, _positionParents, _hierarchyDepth, _securedColumns, _fieldRead, _fieldUpdate);
         }
     }
 
@@ -425,6 +455,7 @@ namespace Vela.Testing.Security
         private readonly SharingTable _sharing;
         private readonly AccessTeamGrants _accessTeams;
         private readonly Dictionary<string, Guid> _roleIds;
+        private readonly Dictionary<string, Guid> _roleTemplateIds;
         private readonly Dictionary<Guid, Guid> _managers;
         private readonly Dictionary<Guid, Guid> _positions;
         private readonly Dictionary<Guid, Guid> _positionParents;
@@ -449,6 +480,7 @@ namespace Vela.Testing.Security
             SharingTable sharing,
             AccessTeamGrants accessTeams,
             Dictionary<string, Guid> roleIds,
+            Dictionary<string, Guid> roleTemplateIds,
             Dictionary<Guid, Guid> managers,
             Dictionary<Guid, Guid> positions,
             Dictionary<Guid, Guid> positionParents,
@@ -465,6 +497,7 @@ namespace Vela.Testing.Security
             _sharing = sharing;
             _accessTeams = accessTeams;
             _roleIds = roleIds;
+            _roleTemplateIds = roleTemplateIds;
             _managers = managers;
             _positions = positions;
             _positionParents = positionParents;
@@ -518,7 +551,8 @@ namespace Vela.Testing.Security
         /// through <c>parentrootroleid</c>. <c>systemuserroles.roleid</c> / <c>teamroles.roleid</c> hold the copy of
         /// the principal's business unit. The declared role id (a generated <c>Roles.XId</c>) is the root id, so the
         /// root copy keeps it and the other copies get an id derived from (root id, business unit), stable across
-        /// runs. When no single root business unit can be identified (no declared hierarchy and principals spread over
+        /// runs. A system role declared with a template id carries it as <c>roletemplateid</c> on every copy; a custom
+        /// role has none. When no single root business unit can be identified (no declared hierarchy and principals spread over
         /// several unrelated business units), every principal is treated as being in the root and gets the root id.
         /// Privilege evaluation is unaffected: it reads the declared roles, not these rows.
         /// </remarks>
@@ -529,6 +563,9 @@ namespace Vela.Testing.Security
 
             foreach (KeyValuePair<string, Guid> role in _roleIds)
             {
+                EntityReference? template = _roleTemplateIds.TryGetValue(role.Key, out Guid templateId)
+                    ? new EntityReference("roletemplate", templateId)
+                    : null;
                 Entity rootCopy = new Entity("role", role.Value)
                 {
                     ["roleid"] = role.Value,
@@ -540,18 +577,29 @@ namespace Vela.Testing.Security
                     rootCopy["businessunitid"] = new EntityReference("businessunit", root.Value);
                 }
 
+                if (template != null)
+                {
+                    rootCopy["roletemplateid"] = template;
+                }
+
                 yield return rootCopy;
 
                 foreach (Guid businessUnit in copies)
                 {
                     Guid copyId = RoleCopyId(role.Value, businessUnit);
-                    yield return new Entity("role", copyId)
+                    Entity copy = new Entity("role", copyId)
                     {
                         ["roleid"] = copyId,
                         ["name"] = role.Key,
                         ["parentrootroleid"] = new EntityReference("role", role.Value),
                         ["businessunitid"] = new EntityReference("businessunit", businessUnit),
                     };
+                    if (template != null)
+                    {
+                        copy["roletemplateid"] = new EntityReference(template.LogicalName, template.Id);
+                    }
+
+                    yield return copy;
                 }
             }
 

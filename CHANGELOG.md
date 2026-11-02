@@ -42,6 +42,10 @@ All notable changes to Vela are documented here. The format is based on
   unchanged. **Migration:** a test that matched `systemuserroles.roleid` (or `teamroles.roleid`) to a
   `Roles.XId` for a user or team outside the root business unit now finds nothing, as on Dataverse: join `role`
   and match `parentrootroleid` to `Roles.XId` instead.
+- A system role can be declared with its template id, `Role(name, id, templateId, grants)` (or with a
+  `RoleBuilder`), and the harness writes it as `roletemplateid` on every business unit copy, as Dataverse does for
+  a system role (verified live: System Administrator has the same `roletemplateid` in every org while its
+  `roleid` differs). A role declared without one has no `roletemplateid`, like a custom role.
 
 ### Changed (CLI, breaking)
 
@@ -70,6 +74,10 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Added (CLI)
 
+- `vela models --roles` / `--solution-roles` reads each role's `roletemplateid` and, for a system role, generates
+  `XTemplateId` next to `XId`. The generated comments say that `XId` (the root role id) is the same across
+  environments only when the role ships in a solution, and that a system role is matched on `roletemplateid` with
+  `XTemplateId`, which is stable across orgs.
 - `vela init` writes a root `PROJECT.md` for people and agents: YAML front matter with `schemaVersion: 1`, the
   `publisherPrefix` (`--publisher-prefix`, or the one `--samples` / `--managed-identity` already name the packages
   with) and a `packages` map from every generated plugin package id (Plugins, and

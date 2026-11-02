@@ -192,6 +192,59 @@ namespace Vela.Testing.Tests
             Assert.Equal(account, svc.Retrieve("account", account, new ColumnSet(false)).Id);
         }
 
+        // System Administrator's roletemplateid on a live org (verified 2026-11); its roleid differs per org.
+        private static readonly Guid SystemAdministratorTemplate = new Guid("627090ff-40a3-4053-8790-584edc5be201");
+
+        [Fact]
+        public void A_system_role_carries_its_template_id_on_every_business_unit_copy()
+        {
+            Guid adminId = new Guid("50100000-0000-0000-0000-000000000a88");
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithSecurity(s => s
+                    .BusinessUnit(RootBu)
+                    .BusinessUnit(ChildBu, RootBu)
+                    .Role("System Administrator", adminId, SystemAdministratorTemplate, ("account", "Organization", "Read"))
+                    .Role("Salesperson", SalespersonId, r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
+                    .User(ChildUser, ChildBu, "System Administrator"));
+
+            Entity[] admin = Where(svc, "role", "parentrootroleid", adminId).Entities.ToArray();
+            Assert.Equal(2, admin.Length); // root + child BU copies
+            Assert.All(admin, c => Assert.Equal(SystemAdministratorTemplate, c.GetAttributeValue<EntityReference>("roletemplateid").Id));
+
+            // A custom role has no template.
+            Assert.All(Where(svc, "role", "parentrootroleid", SalespersonId).Entities, c => Assert.False(c.Contains("roletemplateid")));
+
+            // The membership is found by template id from any business unit, as a plugin checks a system role.
+            QueryExpression query = new QueryExpression("role") { ColumnSet = new ColumnSet(false) };
+            query.Criteria.AddCondition("roletemplateid", ConditionOperator.Equal, SystemAdministratorTemplate);
+            query.AddLink("systemuserroles", "roleid", "roleid").LinkCriteria.AddCondition("systemuserid", ConditionOperator.Equal, ChildUser);
+            Assert.Single(svc.RetrieveMultiple(query).Entities);
+        }
+
+        [Fact]
+        public void A_template_id_is_declared_with_the_builder_overload_too_and_cleared_by_a_redeclaration()
+        {
+            Guid adminId = new Guid("50100000-0000-0000-0000-000000000a88");
+            InMemoryOrganizationService withTemplate = new InMemoryOrganizationService()
+                .WithSecurity(s => s.Role("System Administrator", adminId, SystemAdministratorTemplate, r => { }));
+            InMemoryOrganizationService redeclared = new InMemoryOrganizationService()
+                .WithSecurity(s => s
+                    .Role("System Administrator", adminId, SystemAdministratorTemplate, r => { })
+                    .Role("System Administrator", adminId, r => { }));
+
+            Assert.Equal(
+                SystemAdministratorTemplate,
+                withTemplate.Retrieve("role", adminId, new ColumnSet(true)).GetAttributeValue<EntityReference>("roletemplateid").Id);
+            Assert.False(redeclared.Retrieve("role", adminId, new ColumnSet(true)).Contains("roletemplateid"));
+        }
+
+        [Fact]
+        public void An_empty_template_id_is_rejected()
+        {
+            Assert.Throws<ArgumentException>(() => new SecurityConfiguration()
+                .Role("System Administrator", Guid.NewGuid(), Guid.Empty, ("account", "Organization", "Read")));
+        }
+
         [Fact]
         public void Without_a_single_root_business_unit_every_principal_holds_the_root_id()
         {
