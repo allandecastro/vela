@@ -450,6 +450,53 @@ public class AddTestCommandTests
         });
     }
 
+    // Regression: with several steps on the --message, the command used to take the first one only, so a second
+    // Create step added later never got its tests (the first was tested already: "nothing to add").
+    [Theory]
+    [InlineData("PreOperation", "Create_PreOperation")]
+    [InlineData("PostOperation", "Create_PostOperation_2")]
+    public void PluginTest_ExistingClass_ForTheMessageGiven_AddsTheTestsOfEveryUntestedStepOnThatMessage(string stage, string newName)
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountTouched", "--entity", "Account", "--filtering-attributes", "Name", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--message", "Create", "--project", tests]));
+            string path = Path.Combine(testsDir, "Account", "Plugins", "AccountTouchedTests.cs");
+            string before = File.ReadAllText(path);
+
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountTouched", "--entity", "Account", "--message", "Create", "--handler", "HandleCreateAgain", "--stage", stage, "--filtering-attributes", "Telephone1", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--message", "Create", "--project", tests]));
+
+            string completed = File.ReadAllText(path);
+            string added = completed.Substring(before.LastIndexOf("    }\n}", StringComparison.Ordinal), completed.Length - before.Length);
+            Assert.Contains($"public void Fires_On_{newName}()", added);
+            Assert.Contains($"public void Does_What_It_Should_On_{newName}()", added);
+            Assert.Contains("Telephone1 = default", added);
+            Assert.Single(Regex.Matches(completed, @"public void Fires_On_Create_PostOperation\(\)"));
+
+            // Both Create steps are tested now: a rerun changes nothing.
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--message", "Create", "--project", tests]));
+            Assert.Equal(completed, File.ReadAllText(path));
+        });
+    }
+
+    [Fact]
+    public void PluginTest_NewClass_ForTheMessageGiven_TestsEveryStepOnThatMessage()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountTouched", "--entity", "Account", "--filtering-attributes", "Name", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountTouched", "--entity", "Account", "--message", "Delete", "--handler", "HandleDelete", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["step", "AccountTouched", "--entity", "Account", "--message", "Create", "--handler", "HandleCreateAgain", "--stage", "PreOperation", "--filtering-attributes", "Telephone1", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountTouched", "--message", "Create", "--project", tests]));
+
+            string content = File.ReadAllText(Path.Combine(testsDir, "Account", "Plugins", "AccountTouchedTests.cs"));
+            Assert.Contains("public void Fires_On_Create_PostOperation()", content);
+            Assert.Contains("public void Fires_On_Create_PreOperation()", content);
+            Assert.DoesNotContain("Fires_On_Delete", content);
+        });
+    }
+
     [Fact]
     public void PluginTest_ExistingClass_RecognisesTheMessageOnlyNameOfEarlierVersions()
     {
