@@ -162,9 +162,34 @@ table it reports:
 - **type changed** - a column whose generated member type differs (for example `int?` to `decimal?`);
 - **added in Dataverse** - a column present live but missing from the local model (regenerate to include it).
 
-`--verify` writes nothing and exits `5` when any table is out of sync (and `0` when the model matches), so it
-drops straight into CI to fail a build on a stale model. Add `--json` for a machine-readable report. It checks
-the C# early-bound entity model only; `--custom-apis` / `--messages` / `--roles` scopes are ignored.
+With `--roles` or `--solution-roles`, `--verify` also checks the `Roles` class (see "Security roles" below)
+on disk against the security roles of the environment you connect to, for example a target environment before
+you deploy to it:
+
+```bash
+# Do the roles the plugin code relies on exist in the target environment, with the same ids and privileges?
+vela models --verify --roles "Salesperson,Sales Manager" --url https://test.crm.dynamics.com
+vela models --verify --solution ZavaSales --solution-roles --url https://test.crm.dynamics.com
+```
+
+It reads the roles of the scope as `vela models` does to generate the class, and compares the whole class, role by
+role (names match whatever their case). It reports:
+
+- a role **not found in the environment**: a requested name it does not have, or a role the local class holds
+  that the scope no longer resolves (with `--solution-roles`, a role no longer in the solution);
+- a role **not in the local `Roles` class** (regenerate to include it), and no `Roles` class on disk at all;
+- a different **root id** (`Roles.XId` no longer names the role there), or a different **template id**
+  (`Roles.XTemplateId` of a system role, including one side having it and the other not);
+- for each table and privilege: one only the local class grants, one only the environment grants, and an
+  **access level** that differs (for example `User` locally, `Organization` live).
+
+A `--solution` also scopes its tables, so `--solution ZavaSales --solution-roles` checks the tables and the roles;
+`--roles` alone checks the roles only.
+
+`--verify` writes nothing and exits `5` when any table or role is out of sync (and `0` when everything matches),
+so it drops straight into CI to fail a build on a stale model. Add `--json` for a machine-readable report: one
+entry per table under `tables`, and with a role scope one per role under `roles` (plus `missingRolesClass`).
+`--custom-apis` / `--messages` scopes are ignored.
 
 ## Offline generation from an exported solution (`--from-solution`)
 

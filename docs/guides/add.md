@@ -97,7 +97,7 @@ vela add --interactive
   project references (else the solution), and fails when it finds none, so the test names the real class,
   namespace, steps and unique name.
   - A **plugin** test (`<Plugin>Tests`) drives the plugin through `PluginPipeline`. For each step it covers (the
-    one `--message` names, else every step the plugin registers; `--entity` defaults to the plugin's
+    steps on the message `--message` names, else every step the plugin registers; `--entity` defaults to the plugin's
     `EntityPluginBase<T>`) it writes two tests named after the step's message and stage:
     `Fires_On_<Message>_<Stage>` asserts from the `ExecutionLog` that the step fired, whatever the handler does, and
     the skipped `Does_What_It_Should_On_<Message>_<Stage>` is the skeleton for asserting what the plugin does. A
@@ -110,7 +110,8 @@ vela add --interactive
     two tests of every covered step that has no `Fires_On_<Message>_<Stage>` method yet (a `Fires_On_<Message>`
     method, the name earlier versions generated, counts for the first step on that message), before the class's
     closing brace, plus any `using` the new tests need. Nothing else in the file changes, so your edits are kept.
-    Add a step with `vela add step`, rerun `vela add test`, and the new step has its tests. When every step is
+    Add a step with `vela add step`, rerun `vela add test` (with or without its `--message`), and the new step has
+    its tests, even when an earlier step is on the same message. When every step is
     tested already, it says so and exits `0`. A file whose class it cannot find (or whose braces do not balance)
     is left alone and the command exits `2`. `--force` still overwrites the file with a fresh class.
   - A **Custom API** test (`--kind customapi`, `<Class>Tests`) finds the class named `<Name>` or

@@ -65,7 +65,7 @@ Package inputs (for `plan`/`apply`/`inspect`): `--package <file.nupkg>` (repeata
 | `--roles "A,B"` | A dependency-light `Roles` class (missing names are skipped with a warning) |
 | `--solution-roles` | Every security role in `--solution` |
 | `--forms` / `--tables` | TypeScript FormModel files / Web API record interfaces (preview) |
-| `--verify` | Do not write: compare the generated entity model on disk against the live schema and report drift (exit `5` on drift) |
+| `--verify` | Do not write: compare the generated entity model (and, with `--roles` / `--solution-roles`, the `Roles` class) on disk against the environment and report drift (exit `5` on drift) |
 | `--lang csharp\|ts` | Output language (C# default; forms/tables are TypeScript) |
 | `--namespace`, `--out`, `--no-annotations`, `--overwrite` | Output shaping |
 

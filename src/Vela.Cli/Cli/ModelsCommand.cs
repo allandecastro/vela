@@ -154,12 +154,12 @@ internal static class ModelsCommand
             return Fail("--intersect cannot be combined with --verify (verify checks the explicitly scoped tables only).", ExitInvalidArguments, includeUsage: false);
         }
 
-        // --verify does not write: it regenerates the scoped entity models from live metadata in memory and
-        // compares them, column by column, against the files already on disk, then reports drift. It verifies the
-        // C# early-bound entity model only (the typed-image blind spot); custom-api/message/role scopes are ignored.
+        // --verify does not write: it regenerates the scoped entity models and Roles class from the live environment
+        // in memory and compares them against the files already on disk, then reports drift. Custom-api/message
+        // scopes are ignored.
         if (HasFlag(args, "--verify"))
         {
-            return RunModelVerify(args, interactive, scope.Solution, scope.Entities, ns!, outDir, dataAnnotations, json, scope.HasCustomApiMessageOrRoleScope);
+            return RunModelVerify(args, interactive, scope, ns!, outDir, dataAnnotations, json);
         }
 
         // Optional plugin package inputs (offline scan): when provided, collect the unique names of the Custom APIs
@@ -388,7 +388,7 @@ internal static class ModelsCommand
                 models.AddRange(SdkMessageGenerator.Generate(sdkMessages, ns!, EntityTypeNames(), logicalNames));
             }
 
-            if (scope.Roles.Length > 0 || scope.SolutionRoles)
+            if (scope.HasRoleScope)
             {
                 IReadOnlyList<RoleModel> roleModels = RoleReader.ReadRoles(service, scope.Roles, scope.SolutionRoles ? scope.Solution : null);
                 if (roleModels.Count > 0)
@@ -436,11 +436,12 @@ internal static class ModelsCommand
             : contract with { SdkRequestType = sdkType };
     }
 
-    private static int RunModelVerify(string[] args, bool interactive, string? solution, string[] entities, string ns, string outDir, bool dataAnnotations, bool json, bool ignoredScopes)
+    private static int RunModelVerify(string[] args, bool interactive, ModelsScope scope, string ns, string outDir, bool dataAnnotations, bool json)
     {
-        if (ignoredScopes)
+        string? solution = scope.Solution;
+        if (scope.HasCustomApiOrMessageScope)
         {
-            Console.Error.WriteLine("Warning: --verify checks the C# early-bound entity model only; --custom-apis / --messages / --roles / --solution-roles are ignored.");
+            Console.Error.WriteLine("Warning: --verify checks the C# early-bound entity model and the Roles class only; --custom-apis / --messages are ignored.");
         }
 
         if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
@@ -473,30 +474,46 @@ internal static class ModelsCommand
             using ServiceClient client = DataverseRegistration.CreateDataverseClient(options);
             IOrganizationService service = client;
 
-            List<string> logicalNames = EntityMetadataReader.ResolveLogicalNames(service, solution, entities);
-            if (logicalNames.Count == 0)
-            {
-                return Fail("No tables resolved from the given scope.", ExitInvalidArguments, includeUsage: false);
-            }
-
-            EntityMetadata[] metadata = logicalNames.Select(name => EntityMetadataReader.ReadEntity(service, name)).ToArray();
-            IReadOnlyList<GeneratedModel> live = ModelGenerator.Generate(metadata, new ModelGenOptions(ns, dataAnnotations));
-
-            List<string> liveSources = live.Select(m => m.Code).ToList();
             List<string> localSources = ReadLocalModelSources(outDir);
 
-            ModelDriftChecker.ModelDriftReport report = ModelDriftChecker.Compare(liveSources, localSources);
+            // Tables when the scope names any (--solution scopes its tables, as when generating), roles likewise.
+            ModelDriftChecker.ModelDriftReport? report = null;
+            if (scope.HasTableScope)
+            {
+                List<string> logicalNames = EntityMetadataReader.ResolveLogicalNames(service, solution, scope.Entities);
+                if (logicalNames.Count == 0)
+                {
+                    return Fail("No tables resolved from the given scope.", ExitInvalidArguments, includeUsage: false);
+                }
+
+                EntityMetadata[] metadata = logicalNames.Select(name => EntityMetadataReader.ReadEntity(service, name)).ToArray();
+                IReadOnlyList<GeneratedModel> live = ModelGenerator.Generate(metadata, new ModelGenOptions(ns, dataAnnotations));
+                report = ModelDriftChecker.Compare(live.Select(m => m.Code).ToList(), localSources);
+            }
+
+            RoleDriftChecker.RoleDriftReport? roles = scope.HasRoleScope
+                ? VerifyRoles(service, scope.Roles, scope.SolutionRoles ? solution : null, ns, localSources)
+                : null;
 
             if (json)
             {
-                Console.WriteLine(JsonSerializer.Serialize(BuildDriftReport(url, ns, report), new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+                Console.WriteLine(JsonSerializer.Serialize(BuildDriftReport(url, ns, report, roles), new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
             }
             else
             {
-                WriteDriftReport(url, ns, report);
+                Console.WriteLine(ConsoleTheme.Heading($"verify {url} (namespace {ns})", ConsoleTheme.StdoutColor));
+                if (report is not null)
+                {
+                    WriteDriftReport(report);
+                }
+
+                if (roles is not null)
+                {
+                    WriteRoleDriftReport(roles);
+                }
             }
 
-            return report.HasDrift ? ExitDriftDetected : ExitSuccess;
+            return report?.HasDrift == true || roles?.HasDrift == true ? ExitDriftDetected : ExitSuccess;
         }
         catch (Exception ex) when (DataverseConnectionException.IsConnectionFailure(ex))
         {
@@ -538,15 +555,28 @@ internal static class ModelsCommand
         return sources;
     }
 
-    // The --verify --json report: one entry per scoped table with its drift, plus a top-level hasDrift flag.
-    internal static object BuildDriftReport(string? environment, string ns, ModelDriftChecker.ModelDriftReport report) =>
-        new
+    // The roles side of --verify: the Roles class the live roles of the scope generate, compared with the one on
+    // disk. A requested role the environment lacks is drift, not a failure: verifying a target org before deploying
+    // is the point.
+    internal static RoleDriftChecker.RoleDriftReport VerifyRoles(IOrganizationService service, string[] roleNames, string? solution, string ns, IEnumerable<string> localSources)
+    {
+        List<string> notFound = [];
+        IReadOnlyList<RoleModel> live = RoleReader.ReadRoles(service, roleNames, solution, notFound);
+        string? liveSource = live.Count > 0 ? RoleGenerator.Generate(live, new RoleGenOptions(ns)).Code : null;
+        return RoleDriftChecker.Compare(liveSource, localSources, notFound);
+    }
+
+    // The --verify --json report: one entry per scoped table with its drift (tables), one per role (roles, with a
+    // role scope only), plus a top-level hasDrift flag.
+    internal static object BuildDriftReport(string? environment, string ns, ModelDriftChecker.ModelDriftReport? report, RoleDriftChecker.RoleDriftReport? roles = null)
+    {
+        Dictionary<string, object?> dto = new()
         {
-            mode = "verify",
-            environment,
-            @namespace = ns,
-            hasDrift = report.HasDrift,
-            tables = report.Entities.Select(e => new
+            ["mode"] = "verify",
+            ["environment"] = environment,
+            ["namespace"] = ns,
+            ["hasDrift"] = report?.HasDrift == true || roles?.HasDrift == true,
+            ["tables"] = (report?.Entities ?? []).Select(e => new
             {
                 entity = e.EntityLogicalName,
                 inSync = !e.HasDrift,
@@ -557,11 +587,117 @@ internal static class ModelsCommand
             }).ToArray(),
         };
 
-    // The default human --verify report: one line per table, with the drifted columns indented under it.
-    private static void WriteDriftReport(string? environment, string ns, ModelDriftChecker.ModelDriftReport report)
+        if (roles is not null)
+        {
+            dto["missingRolesClass"] = roles.MissingLocalClass;
+            dto["roles"] = roles.Roles.Select(r => new
+            {
+                name = r.Name,
+                inSync = !r.HasDrift,
+                missingInDataverse = r.MissingInDataverse,
+                missingLocally = r.MissingLocally,
+                localId = r.LocalId,
+                liveId = r.LiveId,
+                idChanged = r.IdChanged,
+                localTemplateId = r.LocalTemplateId,
+                liveTemplateId = r.LiveTemplateId,
+                templateIdChanged = r.TemplateIdChanged,
+                removedInDataverse = r.RemovedInDataverse.Select(g => new { g.Entity, g.Privilege, g.AccessLevel }).ToArray(),
+                levelChanged = r.LevelChanged.Select(c => new { c.Entity, c.Privilege, c.LocalLevel, c.LiveLevel }).ToArray(),
+                addedInDataverse = r.AddedInDataverse.Select(g => new { g.Entity, g.Privilege, g.AccessLevel }).ToArray(),
+            }).ToArray();
+        }
+
+        return dto;
+    }
+
+    // The human --verify report of the roles: one line per role, with what differs indented under it.
+    private static void WriteRoleDriftReport(RoleDriftChecker.RoleDriftReport report)
     {
         bool color = ConsoleTheme.StdoutColor;
-        Console.WriteLine(ConsoleTheme.Heading($"verify {environment} (namespace {ns})", color));
+        if (report.MissingLocalClass)
+        {
+            Console.WriteLine($"  {ConsoleTheme.Changed("Roles: no generated Roles class on disk (run vela models with the same role scope to generate it)", color)}");
+        }
+
+        foreach (RoleDriftChecker.RoleDrift drift in report.Roles)
+        {
+            string label = $"role {drift.Name}";
+            if (!drift.HasDrift)
+            {
+                Console.WriteLine($"  {label}: {ConsoleTheme.Added("in sync", color)}");
+                continue;
+            }
+
+            if (drift.MissingInDataverse)
+            {
+                string where = drift.MissingLocally ? string.Empty : " (the local Roles class has it)";
+                Console.WriteLine($"  {ConsoleTheme.Removed($"{label}: not found in the environment{where}", color)}");
+                continue;
+            }
+
+            if (drift.MissingLocally)
+            {
+                Console.WriteLine($"  {ConsoleTheme.Changed($"{label}: not in the local Roles class (regenerate to include it)", color)}");
+                continue;
+            }
+
+            Console.WriteLine($"  {ConsoleTheme.Changed(label + ": drift", color)}");
+            if (drift.IdChanged)
+            {
+                Console.WriteLine(ConsoleTheme.Changed($"    root id: local {drift.LocalId:D} {ConsoleTheme.Arrow} live {drift.LiveId:D}", color));
+            }
+
+            if (drift.TemplateIdChanged)
+            {
+                Console.WriteLine(ConsoleTheme.Changed($"    template id: local {TemplateLabel(drift.LocalTemplateId)} {ConsoleTheme.Arrow} live {TemplateLabel(drift.LiveTemplateId)}", color));
+            }
+
+            if (drift.RemovedInDataverse.Count > 0)
+            {
+                Console.WriteLine(ConsoleTheme.Removed("    privileges the environment does not grant:", color));
+                foreach (RoleDriftChecker.Grant grant in drift.RemovedInDataverse)
+                {
+                    Console.WriteLine(ConsoleTheme.Removed($"      - {grant.Entity} {grant.Privilege} ({grant.AccessLevel})", color));
+                }
+            }
+
+            if (drift.LevelChanged.Count > 0)
+            {
+                Console.WriteLine(ConsoleTheme.Changed("    access level changed:", color));
+                foreach (RoleDriftChecker.LevelChange change in drift.LevelChanged)
+                {
+                    Console.WriteLine(ConsoleTheme.Changed($"      - {change.Entity} {change.Privilege}: local {change.LocalLevel} {ConsoleTheme.Arrow} live {change.LiveLevel}", color));
+                }
+            }
+
+            if (drift.AddedInDataverse.Count > 0)
+            {
+                Console.WriteLine(ConsoleTheme.Added("    privileges only the environment grants:", color));
+                foreach (RoleDriftChecker.Grant grant in drift.AddedInDataverse)
+                {
+                    Console.WriteLine(ConsoleTheme.Added($"      + {grant.Entity} {grant.Privilege} ({grant.AccessLevel})", color));
+                }
+            }
+        }
+
+        int driftCount = report.Roles.Count(r => r.HasDrift);
+        if (!report.HasDrift)
+        {
+            ConsoleTheme.WriteSuccessLine($"All {report.Roles.Count} role(s) match the environment.");
+        }
+        else
+        {
+            Console.WriteLine(ConsoleTheme.Changed($"Drift detected in {driftCount} of {report.Roles.Count} role(s). Regenerate the Roles class, or fix the roles of the environment.", color));
+        }
+    }
+
+    private static string TemplateLabel(Guid? templateId) => templateId is { } id ? id.ToString("D") : "none";
+
+    // The default human --verify report: one line per table, with the drifted columns indented under it.
+    private static void WriteDriftReport(ModelDriftChecker.ModelDriftReport report)
+    {
+        bool color = ConsoleTheme.StdoutColor;
 
         foreach (ModelDriftChecker.EntityDrift drift in report.Entities)
         {

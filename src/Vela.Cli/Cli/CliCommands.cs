@@ -221,7 +221,7 @@ internal static class CliCommands
                     new("--out", CliOptionKind.Value, "Output directory (default: current directory).", "dir"),
                     new("--no-annotations", CliOptionKind.Flag, "Omit DataAnnotations ([StringLength]/[Range])."),
                     new("--overwrite", CliOptionKind.Flag, "Overwrite existing files."),
-                    new("--verify", CliOptionKind.Flag, "Do not write: report drift of the model on disk (exit 5 on drift)."),
+                    new("--verify", CliOptionKind.Flag, "Do not write: report drift of the model on disk, and of the Roles class with --roles/--solution-roles (exit 5 on drift)."),
                     Json,
                     Verbose]),
                 ("Connection", ConnectionOptions),

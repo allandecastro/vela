@@ -780,7 +780,7 @@ internal static class AddCommand
     }
 
     // The steps a plugin test covers, each with the name its tests carry (ScaffoldTemplates.PluginTestNames over all the
-    // plugin's steps, so a step keeps its name whichever run writes its tests): the --message one when given, else every
+    // plugin's steps, so a step keeps its name whichever run writes its tests): every step on the --message when given, else every
     // step the plugin registers. Their FilterOn members are set by the test so the step fires; the request type serves a
     // message the test cannot drive through a dedicated service call.
     private static bool TryChoosePluginTestSteps(string[] args, string pluginName, string entity, List<AddTestSources.SourceClass> declarations, out List<(PluginTestStep Step, string Name)> chosenSteps, out string error)
@@ -819,15 +819,17 @@ internal static class AddCommand
             return false;
         }
 
-        int index = steps.FindIndex(s => string.Equals(s.Message, request, StringComparison.OrdinalIgnoreCase));
-        if (index < 0)
+        // Every step on that message, not the first: a plugin with two Create steps gets both tested, and an existing
+        // class is completed with the one it lacks (the step just added by `vela add step`).
+        List<int> indexes = MatchingSteps(steps, request);
+        if (indexes.Count == 0)
         {
-            index = steps.FindIndex(s => string.Equals(s.Message, rawMessage, StringComparison.OrdinalIgnoreCase));
+            indexes = MatchingSteps(steps, rawMessage);
         }
 
-        if (index >= 0)
+        if (indexes.Count > 0)
         {
-            chosenSteps = [(testSteps[index], names[index])];
+            chosenSteps = indexes.Select(i => (testSteps[i], names[i])).ToList();
             return true;
         }
 
@@ -840,6 +842,9 @@ internal static class AddCommand
         chosenSteps = [(guessed, PluginTestNames([guessed])[0])];
         return true;
     }
+
+    private static List<int> MatchingSteps(List<AddTestSources.PluginStep> steps, string message) =>
+        Enumerable.Range(0, steps.Count).Where(i => string.Equals(steps[i].Message, message, StringComparison.OrdinalIgnoreCase)).ToList();
 
     // A typed trigger's message is a request name; any other is the request type the trigger names (fully qualified
     // when the plugin's usings would not reach the test), or the SDK's, or the generated one.
