@@ -21,8 +21,8 @@ internal static class RoleDriftChecker
     /// <summary>A grant the generated class records: the table, the privilege verb and the access level.</summary>
     public sealed record Grant(string Entity, string Privilege, string AccessLevel);
 
-    /// <summary>A role read from a generated <c>Roles</c> class.</summary>
-    public sealed record ExtractedRole(string Name, Guid Id, IReadOnlyList<Grant> Grants);
+    /// <summary>A role read from a generated <c>Roles</c> class; <see cref="TemplateId"/> is set for a system role only.</summary>
+    public sealed record ExtractedRole(string Name, Guid Id, IReadOnlyList<Grant> Grants, Guid? TemplateId = null);
 
     /// <summary>A (table, privilege) both sides grant at a different access level.</summary>
     public sealed record LevelChange(string Entity, string Privilege, string LocalLevel, string LiveLevel);
@@ -36,14 +36,19 @@ internal static class RoleDriftChecker
         Guid? LiveId,
         IReadOnlyList<Grant> RemovedInDataverse,
         IReadOnlyList<LevelChange> LevelChanged,
-        IReadOnlyList<Grant> AddedInDataverse)
+        IReadOnlyList<Grant> AddedInDataverse,
+        Guid? LocalTemplateId = null,
+        Guid? LiveTemplateId = null)
     {
         /// <summary>True when both sides have the role under different root ids.</summary>
         public bool IdChanged => LocalId is { } local && LiveId is { } live && local != live;
 
+        /// <summary>True when both sides have the role and their template ids (roletemplateid, system roles only) differ.</summary>
+        public bool TemplateIdChanged => !MissingInDataverse && !MissingLocally && LocalTemplateId != LiveTemplateId;
+
         /// <summary>True when this role is out of sync in any way.</summary>
         public bool HasDrift =>
-            MissingInDataverse || MissingLocally || IdChanged
+            MissingInDataverse || MissingLocally || IdChanged || TemplateIdChanged
             || RemovedInDataverse.Count > 0 || LevelChanged.Count > 0 || AddedInDataverse.Count > 0;
     }
 
@@ -56,7 +61,9 @@ internal static class RoleDriftChecker
 
     /// <summary>
     /// The roles of a generated <c>Roles</c> class, or <c>null</c> when <paramref name="source"/> declares none (any
-    /// other model file). Reads the <c>XName</c> constant, the <c>XId</c> Guid and the <c>X</c> grant triples of each role.
+    /// other model file). Reads the <c>XName</c> constant, the <c>XId</c> Guid, the <c>XTemplateId</c> Guid of a system
+    /// role and the <c>X</c> grant triples of each role. A member belongs to the role whose <c>XName</c> precedes it,
+    /// matched on its exact identifier, so <c>XTemplateId</c> is never read as the id of a role named "X Template".
     /// </summary>
     public static IReadOnlyList<ExtractedRole>? Extract(string source)
     {
@@ -65,10 +72,11 @@ internal static class RoleDriftChecker
             return null;
         }
 
-        Dictionary<string, string> names = new(StringComparer.Ordinal);
+        List<(string Identifier, string Name)> order = [];
         Dictionary<string, Guid> ids = new(StringComparer.Ordinal);
+        Dictionary<string, Guid> templateIds = new(StringComparer.Ordinal);
         Dictionary<string, List<Grant>> grants = new(StringComparer.Ordinal);
-        List<string> order = [];
+        string? role = null;
         List<Grant>? current = null;
 
         foreach (string raw in source.Replace("\r\n", "\n").Split('\n'))
@@ -78,23 +86,32 @@ internal static class RoleDriftChecker
                 && identifier.EndsWith("Name", StringComparison.Ordinal)
                 && ReadLiterals(rest) is [string name])
             {
-                string role = identifier.Substring(0, identifier.Length - "Name".Length);
-                names[role] = name;
-                order.Add(role);
+                role = identifier.Substring(0, identifier.Length - "Name".Length);
+                order.Add((role, name));
                 current = null;
             }
-            else if (TryReadMember(line, "public static readonly Guid ", out identifier, out rest)
-                && identifier.EndsWith("Id", StringComparison.Ordinal)
-                && ReadLiterals(rest) is [string id]
-                && Guid.TryParse(id, out Guid guid))
+            else if (role is not null
+                && TryReadMember(line, "public static readonly Guid ", out identifier, out rest)
+                && ReadLiterals(rest) is [string value]
+                && Guid.TryParse(value, out Guid guid))
             {
-                ids[identifier.Substring(0, identifier.Length - "Id".Length)] = guid;
+                if (identifier == role + "Id")
+                {
+                    ids[role] = guid;
+                }
+                else if (identifier == role + "TemplateId")
+                {
+                    templateIds[role] = guid;
+                }
+
                 current = null;
             }
-            else if (TryReadMember(line, "public static readonly (string Entity, string Level, string Privilege)[] ", out identifier, out _))
+            else if (role is not null
+                && TryReadMember(line, "public static readonly (string Entity, string Level, string Privilege)[] ", out identifier, out _)
+                && identifier == role)
             {
                 current = [];
-                grants[identifier] = current;
+                grants[role] = current;
             }
             else if (current is not null && line.StartsWith("(\"", StringComparison.Ordinal)
                 && ReadLiterals(line) is [string entity, string level, string privilege])
@@ -108,10 +125,11 @@ internal static class RoleDriftChecker
         }
 
         return order
-            .Select(role => new ExtractedRole(
-                names[role],
-                ids.TryGetValue(role, out Guid id) ? id : Guid.Empty,
-                grants.TryGetValue(role, out List<Grant>? list) ? list : []))
+            .Select(r => new ExtractedRole(
+                r.Name,
+                ids.TryGetValue(r.Identifier, out Guid id) ? id : Guid.Empty,
+                grants.TryGetValue(r.Identifier, out List<Grant>? list) ? list : [],
+                templateIds.TryGetValue(r.Identifier, out Guid template) ? template : null))
             .ToList();
     }
 
@@ -179,7 +197,7 @@ internal static class RoleDriftChecker
         }
 
         List<Grant> added = Sorted(liveGrants.Values.Where(g => !localGrants.ContainsKey((g.Entity, g.Privilege)))).ToList();
-        return new RoleDrift(live.Name, MissingInDataverse: false, MissingLocally: false, local.Id, live.Id, removed, changed, added);
+        return new RoleDrift(live.Name, MissingInDataverse: false, MissingLocally: false, local.Id, live.Id, removed, changed, added, local.TemplateId, live.TemplateId);
     }
 
     // RolePrivilegeMapper keeps one grant per (table, privilege); a hand-edited duplicate keeps its first entry.

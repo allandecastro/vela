@@ -30,6 +30,23 @@ All notable changes to Vela are documented here. The format is based on
   `[Description(...)]` on a request or response property and `WithDescription(...)`. The limits are one source shared
   with the plan check, which still covers values only known at run time.
 
+### Fixed (Framework)
+
+- The security harness materializes a security role the way Dataverse stores it: one `role` row per business unit,
+  each with `parentrootroleid` set to the declared (root) id and its `businessunitid`. The root business unit's
+  copy keeps the declared id (`roleid == parentrootroleid`); the other copies get an id derived from the root id
+  and the business unit, stable across runs. `systemuserroles.roleid` and `teamroles.roleid` now hold the copy of
+  the user's or team's business unit instead of the root id. The root business unit is the single top of the
+  declared `BusinessUnit(...)` hierarchy (or, with none declared, the single business unit the users and teams
+  are in); when there is no single top, every principal keeps the root id as before. Privilege evaluation is
+  unchanged. **Migration:** a test that matched `systemuserroles.roleid` (or `teamroles.roleid`) to a
+  `Roles.XId` for a user or team outside the root business unit now finds nothing, as on Dataverse: join `role`
+  and match `parentrootroleid` to `Roles.XId` instead.
+- A system role can be declared with its template id, `Role(name, id, templateId, grants)` (or with a
+  `RoleBuilder`), and the harness writes it as `roletemplateid` on every business unit copy, as Dataverse does for
+  a system role (verified live: System Administrator has the same `roletemplateid` in every org while its
+  `roleid` differs). A role declared without one has no `roletemplateid`, like a custom role.
+
 ### Changed (CLI, breaking)
 
 - `vela add plugin` names its handler `Handle<Message>` (`HandleUpdate(HandleUpdateContext ctx)`), the default of
@@ -57,6 +74,10 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Added (CLI)
 
+- `vela models --roles` / `--solution-roles` reads each role's `roletemplateid` and, for a system role, generates
+  `XTemplateId` next to `XId`. The generated comments say that `XId` (the root role id) is the same across
+  environments only when the role ships in a solution, and that a system role is matched on `roletemplateid` with
+  `XTemplateId`, which is stable across orgs.
 - `vela init` writes a root `PROJECT.md` for people and agents: YAML front matter with `schemaVersion: 1`, the
   `publisherPrefix` (`--publisher-prefix`, or the one `--samples` / `--managed-identity` already name the packages
   with) and a `packages` map from every generated plugin package id (Plugins, and
@@ -84,8 +105,9 @@ All notable changes to Vela are documented here. The format is based on
   required). The other kinds still require a name.
 - `vela models --verify` checks the `Roles` class with `--roles` / `--solution-roles` (it ignored them before):
   against the security roles of the environment it connects to, typically a target before a deploy, each role's
-  root id and each of its (table, privilege, access level) grants. A role not found in the environment, a role the
-  class lacks, a different root id, a grant only one side has and a different access level are drift: it lists
+  root id, template id (system roles) and each of its (table, privilege, access level) grants. A role not found in the
+  environment, a role the class lacks, a different root or template id, a grant only one side has and a different
+  access level are drift: it lists
   them, adds them to `--json` (`roles`, `missingRolesClass`) and exits `5`. `--roles` alone checks the roles only.
 
 ### Changed (CLI)
@@ -111,6 +133,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Docs
 
+- The [security model](docs/guides/security-model.md) and [models](docs/guides/models.md) guides explain that
+  `Roles.XId` is the root role id while membership rows hold the business unit's copy, with a typed query that
+  checks a role through `parentrootroleid`. The generated `Roles` class summary says the same.
 - New "Namespaces and usings" section in [Scaffold a solution](docs/guides/scaffold.md): why the folder-named
   namespaces need the usings inside a block namespace (CS0118 otherwise), and what the generated `.editorconfig`
   enforces. The plugin samples of the plugin, end-to-end and Custom API guides and of the NuGet readme use the

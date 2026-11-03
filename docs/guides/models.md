@@ -178,7 +178,8 @@ role (names match whatever their case). It reports:
 - a role **not found in the environment**: a requested name it does not have, or a role the local class holds
   that the scope no longer resolves (with `--solution-roles`, a role no longer in the solution);
 - a role **not in the local `Roles` class** (regenerate to include it), and no `Roles` class on disk at all;
-- a different **root id** (`Roles.XId` no longer names the role there);
+- a different **root id** (`Roles.XId` no longer names the role there), or a different **template id**
+  (`Roles.XTemplateId` of a system role, including one side having it and the other not);
 - for each table and privilege: one only the local class grants, one only the environment grants, and an
   **access level** that differs (for example `User` locally, `Organization` live).
 
@@ -463,8 +464,8 @@ vela models --forms --tables --entities account,contact --out src/generated --ov
 
 `--roles "Salesperson,Sales Manager"` (explicit names) or `--solution-roles` (every role in a `--solution`)
 generates a `Roles` class into the **shared models project**, alongside the table models. Each role becomes
-three members, keyed off its **root** role id (the stable id, identical across business units) and its real
-privileges read from the environment. A `--roles` name that is not found in the environment is warned about and
+three members: its name, its **root** role id and its real privileges read from the environment. A system role
+(one with a `roletemplateid`) gets a fourth, `XTemplateId`. A `--roles` name that is not found in the environment is warned about and
 skipped, and the roles that did resolve are still generated; the command only fails when none of the requested
 roles exist.
 
@@ -477,11 +478,21 @@ public static class Roles
     {
         ("account", "BusinessUnit", "Read"),
     };
+
+    public const string SystemAdministratorName = "System Administrator";
+    public static readonly Guid SystemAdministratorId = new Guid("2222...");
+    public static readonly Guid SystemAdministratorTemplateId = new Guid("6270..."); // its roletemplateid
+    // ... its privileges
 }
 ```
 
-Drive the [security model](security-model.md) with it - pass all three so the harness seeds the **real** role
-id into `systemuserroles`/`teamroles`, exactly what plugin logic reads at runtime:
+`XId` is the same across environments only when the role ships in a solution: a role created by hand in each
+org gets a different id there. A system role's `roletemplateid` is the same in every org, so to recognize a system
+role (for example System Administrator) in any environment, compare `role.roletemplateid` with `XTemplateId`. A
+custom role has no template id and no `XTemplateId`.
+
+Drive the [security model](security-model.md) with it - pass all three so the harness seeds the **real** root
+role id and grants:
 
 ```csharp
 var svc = new InMemoryOrganizationService()
@@ -492,11 +503,33 @@ var svc = new InMemoryOrganizationService()
         .User(alice, salesBu, Roles.SalespersonName));
 ```
 
+For a system role, pass the template id after the id -
+`Role(Roles.SystemAdministratorName, Roles.SystemAdministratorId, Roles.SystemAdministratorTemplateId, Roles.SystemAdministrator)` -
+and the harness writes it as `roletemplateid` on every business unit copy of the role.
+
 > [!NOTE]
 > The generated `Roles` is dependency-light (BCL types only, no test dependency), so it lives with the shared
 > runtime models. `Roles.XName` / `Roles.XId` are usable from plugin code at runtime, while the harness reads the
-> grant data in tests via the `Role(name, id, grants)` overload. Its `Id` values are the real role ids, so a
-> plugin that resolves a user's roles at runtime and the test that seeds them line up on the same GUIDs.
+> grant data in tests via the `Role(name, id, grants)` overload.
+
+`Roles.XId` is the **root** role id. The harness keeps one copy of each role per business unit, and
+`systemuserroles.roleid` / `teamroles.roleid` hold the copy of the user's or team's business unit, so they equal
+`Roles.XId` only in the root business unit. Every copy carries the root id in `parentrootroleid`; match on that
+column to check a role in any business unit (see [Role membership](security-model.md)). With `role` and its
+intersect tables generated (`vela models --entities role,team --intersect` adds `SystemUserRoles`, `TeamRoles` and
+`TeamMembership`):
+
+```csharp
+bool isSalesperson = ctx.SystemService.RetrieveMultiple(
+    Query.For<Role>()
+        .Where(r => r.ParentRootRoleId, ConditionOperator.Equal, Roles.SalespersonId)
+        .Link<SystemUserRoles>(r => r.RoleId, ur => ur.RoleId,
+            configure: l => l.Where(ur => ur.SystemUserId, ConditionOperator.Equal, ctx.InitiatingUserId))
+        .Top(1)).Entities.Count > 0;
+```
+
+This query checks direct assignment only; a role held through a team goes through `teamroles` and
+`teammembership` (link `TeamRoles` on `RoleId`, then `TeamMembership` on `TeamId`).
 
 > Out of scope for now (use `pac modelbuilder` if you need it): an `OrganizationServiceContext`/LINQ provider. See
 > [Limitations reference](../reference/limitations.md).

@@ -46,6 +46,9 @@ internal sealed class RoleOrg : IOrganizationService
         return role.Id;
     }
 
+    public void SetTemplate(Guid roleId, Guid templateId) =>
+        _rows.Single(r => r.LogicalName == "role" && r.Id == roleId)["roletemplateid"] = new EntityReference("roletemplate", templateId);
+
     public void AddComponent(Guid solution, Guid objectId, int componentType) =>
         _rows.Add(new Entity("solutioncomponent", Guid.NewGuid())
         {

@@ -599,6 +599,9 @@ internal static class ModelsCommand
                 localId = r.LocalId,
                 liveId = r.LiveId,
                 idChanged = r.IdChanged,
+                localTemplateId = r.LocalTemplateId,
+                liveTemplateId = r.LiveTemplateId,
+                templateIdChanged = r.TemplateIdChanged,
                 removedInDataverse = r.RemovedInDataverse.Select(g => new { g.Entity, g.Privilege, g.AccessLevel }).ToArray(),
                 levelChanged = r.LevelChanged.Select(c => new { c.Entity, c.Privilege, c.LocalLevel, c.LiveLevel }).ToArray(),
                 addedInDataverse = r.AddedInDataverse.Select(g => new { g.Entity, g.Privilege, g.AccessLevel }).ToArray(),
@@ -645,6 +648,11 @@ internal static class ModelsCommand
                 Console.WriteLine(ConsoleTheme.Changed($"    root id: local {drift.LocalId:D} {ConsoleTheme.Arrow} live {drift.LiveId:D}", color));
             }
 
+            if (drift.TemplateIdChanged)
+            {
+                Console.WriteLine(ConsoleTheme.Changed($"    template id: local {TemplateLabel(drift.LocalTemplateId)} {ConsoleTheme.Arrow} live {TemplateLabel(drift.LiveTemplateId)}", color));
+            }
+
             if (drift.RemovedInDataverse.Count > 0)
             {
                 Console.WriteLine(ConsoleTheme.Removed("    privileges the environment does not grant:", color));
@@ -683,6 +691,8 @@ internal static class ModelsCommand
             Console.WriteLine(ConsoleTheme.Changed($"Drift detected in {driftCount} of {report.Roles.Count} role(s). Regenerate the Roles class, or fix the roles of the environment.", color));
         }
     }
+
+    private static string TemplateLabel(Guid? templateId) => templateId is { } id ? id.ToString("D") : "none";
 
     // The default human --verify report: one line per table, with the drifted columns indented under it.
     private static void WriteDriftReport(ModelDriftChecker.ModelDriftReport report)

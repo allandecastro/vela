@@ -161,6 +161,76 @@ public sealed class RoleVerifyTests
     }
 
     [Fact]
+    public void Extract_reads_a_system_roles_template_id_without_taking_it_for_another_roles_id()
+    {
+        Guid adminId = Guid.NewGuid();
+        Guid template = Guid.NewGuid();
+        Guid adminTemplateRoleId = Guid.NewGuid();
+        // "System Administrator Template" is a role whose Id member (SystemAdministratorTemplateId) is spelled like the
+        // template id member of "System Administrator"; the generator orders them so each follows its own Name.
+        string source = RolesClass(
+        [
+            new RoleModel("System Administrator", adminId, [new RoleGrantModel("account", "Read", "Organization")], template),
+            new RoleModel("Sales Rep", Guid.NewGuid(), []),
+        ]);
+
+        IReadOnlyList<RoleDriftChecker.ExtractedRole> roles = RoleDriftChecker.Extract(source)!;
+
+        Assert.Contains($"public static readonly Guid SystemAdministratorTemplateId = new Guid(\"{template:D}\");", source);
+        RoleDriftChecker.ExtractedRole admin = roles.Single(r => r.Name == "System Administrator");
+        Assert.Equal(adminId, admin.Id);
+        Assert.Equal(template, admin.TemplateId);
+        Assert.Equal("account", Assert.Single(admin.Grants).Entity);
+        Assert.Null(roles.Single(r => r.Name == "Sales Rep").TemplateId);
+
+        string lookalike = RolesClass([new RoleModel("System Administrator Template", adminTemplateRoleId, [])]);
+        RoleDriftChecker.ExtractedRole role = Assert.Single(RoleDriftChecker.Extract(lookalike)!);
+        Assert.Equal(adminTemplateRoleId, role.Id);
+        Assert.Null(role.TemplateId);
+    }
+
+    [Fact]
+    public void A_system_role_in_sync_keeps_its_template_id()
+    {
+        RoleOrg org = new();
+        Guid admin = org.AddRole("System Administrator", (RoleOrg.PrvReadAccount, 8));
+        org.SetTemplate(admin, Guid.NewGuid());
+        string local = RolesClass(RoleReader.ReadRoles(org, ["System Administrator"], null));
+
+        Assert.Contains("SystemAdministratorTemplateId", local);
+        Assert.False(ModelsCommand.VerifyRoles(org, ["System Administrator"], null, Ns, [local]).HasDrift);
+    }
+
+    [Theory]
+    [InlineData(true, true)]   // a different template id
+    [InlineData(true, false)]  // the class has one, the environment's role has none
+    [InlineData(false, true)]  // the environment's role is a system role, the class has no template id
+    public void A_differing_template_id_is_drift(bool localHasTemplate, bool liveHasTemplate)
+    {
+        RoleOrg org = new();
+        Guid admin = org.AddRole("System Administrator", (RoleOrg.PrvReadAccount, 8));
+        Guid liveTemplate = Guid.NewGuid();
+        if (liveHasTemplate)
+        {
+            org.SetTemplate(admin, liveTemplate);
+        }
+
+        Guid? localTemplate = localHasTemplate ? Guid.NewGuid() : null;
+        RoleModel live = Assert.Single(RoleReader.ReadRoles(org, ["System Administrator"], null));
+        string source = RolesClass([live with { TemplateId = localTemplate }]);
+
+        RoleDriftChecker.RoleDrift drift = Assert.Single(ModelsCommand.VerifyRoles(org, ["System Administrator"], null, Ns, [source]).Roles);
+
+        Assert.True(drift.HasDrift);
+        Assert.True(drift.TemplateIdChanged);
+        Assert.False(drift.IdChanged);
+        Assert.Equal(localTemplate, drift.LocalTemplateId);
+        Assert.Equal(liveHasTemplate ? liveTemplate : null, drift.LiveTemplateId);
+        Assert.Empty(drift.RemovedInDataverse);
+        Assert.Empty(drift.AddedInDataverse);
+    }
+
+    [Fact]
     public void Extract_ignores_a_file_without_a_roles_class()
     {
         Assert.Null(RoleDriftChecker.Extract("namespace N { public sealed class Account { public const string EntityLogicalNameValue = \"account\"; } }"));
@@ -188,7 +258,9 @@ public sealed class RoleVerifyTests
             new RoleDriftChecker.RoleDrift("Sales Rep", MissingInDataverse: false, MissingLocally: false, local, live,
                 [new RoleDriftChecker.Grant("opportunity", "Read", "User")],
                 [new RoleDriftChecker.LevelChange("contact", "Read", "User", "Organization")],
-                [new RoleDriftChecker.Grant("contact", "Write", "User")]),
+                [new RoleDriftChecker.Grant("contact", "Write", "User")],
+                LocalTemplateId: null,
+                LiveTemplateId: live),
             new RoleDriftChecker.RoleDrift("Support", false, false, live, live, [], [], []),
         ]);
 
@@ -203,6 +275,9 @@ public sealed class RoleVerifyTests
         Assert.True(sales.GetProperty("idChanged").GetBoolean());
         Assert.Equal(local, sales.GetProperty("localId").GetGuid());
         Assert.Equal(live, sales.GetProperty("liveId").GetGuid());
+        Assert.True(sales.GetProperty("templateIdChanged").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, sales.GetProperty("localTemplateId").ValueKind);
+        Assert.Equal(live, sales.GetProperty("liveTemplateId").GetGuid());
         Assert.Equal("opportunity", sales.GetProperty("removedInDataverse")[0].GetProperty("entity").GetString());
         JsonElement change = sales.GetProperty("levelChanged")[0];
         Assert.Equal("User", change.GetProperty("localLevel").GetString());

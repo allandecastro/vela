@@ -15,6 +15,8 @@ namespace Vela.Cli;
 /// </summary>
 internal static class RoleReader
 {
+    private const string RoleTemplateId = "roletemplateid";
+
     internal static IReadOnlyList<RoleModel> ReadRoles(IOrganizationService service, string[] roleNames, string? solution) =>
         ReadRoles(service, roleNames, solution, notFound: null);
 
@@ -22,9 +24,9 @@ internal static class RoleReader
     // there instead of warned about, and resolving no role at all is not an error: both are drift to report.
     internal static IReadOnlyList<RoleModel> ReadRoles(IOrganizationService service, string[] roleNames, string? solution, ICollection<string>? notFound)
     {
-        // Resolve to unique root roles (id -> name), merging explicit names and the solution's role components so a
+        // Resolve to unique root roles (id -> row), merging explicit names and the solution's role components so a
         // role listed both ways is generated once.
-        Dictionary<Guid, string> roots = new Dictionary<Guid, string>();
+        Dictionary<Guid, Entity> roots = new Dictionary<Guid, Entity>();
 
         List<string> missing = new List<string>();
         foreach (string name in roleNames)
@@ -36,7 +38,8 @@ internal static class RoleReader
                 continue;
             }
 
-            roots[root.Id] = root.GetAttributeValue<string>("name") ?? name;
+            root["name"] = root.GetAttributeValue<string>("name") ?? name;
+            roots[root.Id] = root;
         }
 
         // Generate whatever resolved rather than aborting the whole run on the first missing role; a typo in one
@@ -58,7 +61,8 @@ internal static class RoleReader
         {
             foreach (Entity role in RolesInSolution(service, solution!))
             {
-                roots[role.Id] = role.GetAttributeValue<string>("name") ?? role.Id.ToString();
+                role["name"] = role.GetAttributeValue<string>("name") ?? role.Id.ToString();
+                roots[role.Id] = role;
             }
         }
 
@@ -74,10 +78,21 @@ internal static class RoleReader
         }
 
         IReadOnlyDictionary<Guid, IReadOnlyList<(string Entity, PrivilegeType Type)>> privileges = BuildPrivilegeMap(service);
-        return roots
-            .OrderBy(r => r.Value, StringComparer.Ordinal)
-            .Select(r => new RoleModel(r.Value, r.Key, RolePrivilegeMapper.ToGrants(ReadRolePrivileges(service, r.Key), privileges)))
+        return roots.Values
+            .OrderBy(r => r.GetAttributeValue<string>("name"), StringComparer.Ordinal)
+            .Select(r => new RoleModel(
+                r.GetAttributeValue<string>("name"),
+                r.Id,
+                RolePrivilegeMapper.ToGrants(ReadRolePrivileges(service, r.Id), privileges),
+                TemplateId(r)))
             .ToList();
+    }
+
+    // A system role's template id (roletemplateid), the same in every org; null for a custom role.
+    private static Guid? TemplateId(Entity role)
+    {
+        Guid? id = role.GetAttributeValue<EntityReference>(RoleTemplateId)?.Id;
+        return id == Guid.Empty ? null : id;
     }
 
     // Every security role in a solution (solutioncomponent componenttype 20). Solution components reference the
@@ -99,7 +114,7 @@ internal static class RoleReader
 
         foreach (Guid roleId in roleIds)
         {
-            yield return service.Retrieve("role", roleId, new ColumnSet("roleid", "name", "parentrootroleid"));
+            yield return service.Retrieve("role", roleId, new ColumnSet("roleid", "name", "parentrootroleid", RoleTemplateId));
         }
     }
 
@@ -107,7 +122,7 @@ internal static class RoleReader
     // parentrootroleid points at itself, and its id is the stable id plugin logic uses.
     internal static Entity? ReadRootRole(IOrganizationService service, string name)
     {
-        QueryExpression query = new QueryExpression("role") { ColumnSet = new ColumnSet("roleid", "name", "parentrootroleid") };
+        QueryExpression query = new QueryExpression("role") { ColumnSet = new ColumnSet("roleid", "name", "parentrootroleid", RoleTemplateId) };
         query.Criteria.AddCondition("name", ConditionOperator.Equal, name);
         List<Entity> matches = service.RetrieveAll(query).ToList();
 
