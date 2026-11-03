@@ -96,10 +96,20 @@ var crm = new InMemoryOrganizationService()
 - **Role membership.** With security configured, the platform's membership tables (`role`, `systemuserroles`,
   `teamroles`, `teammembership`) are queryable, so a plugin can resolve a user's roles as it does against
   Dataverse. Through the user's service, `role` follows the **Reads** rules like any table: it needs the Read
-  privilege on `role` (a query that links an intersect table to `role` included), and its rows belong to their
-  business unit. The intersect tables have no read check. `ctx.SystemService` reads all of them. Generate a `Roles` class with the **real** role privileges + ids from your environment with
+  privilege on `role` (a query that links an intersect table to `role` included), and each copy belongs to its
+  `businessunitid` (a copy without one, when there is no single root business unit, is reached at Organization
+  depth only). The intersect tables have no read check. `ctx.SystemService` reads all of them. Generate a `Roles`
+  class with the **real** role privileges + ids from your environment with
   [`vela models --roles`](models.md) (dependency-light, generated into the shared models project), then
-  `Role(Roles.XName, Roles.XId, Roles.X)`.
+  `Role(Roles.XName, Roles.XId, Roles.X)`. The harness seeds one `role` row per business unit: the root business
+  unit's copy keeps the declared id (`roleid == parentrootroleid`), every other copy gets its own stable id and
+  points at the root through `parentrootroleid`. `systemuserroles.roleid` / `teamroles.roleid` hold the copy of the
+  user's or team's business unit, so `Roles.XId` (the root id) matches them only for the root business unit: match
+  `role.parentrootroleid` to `Roles.XId` instead (see the `--roles` section of [Models](models.md)).
+  The root business unit is the single top of the declared `BusinessUnit(...)` hierarchy, or, with none declared,
+  the single business unit the users and teams are in; when there is no single top, every principal holds the root
+  id. Privilege checks read the declared roles, not these rows. For the platform's `role` columns, see the
+  [Security Role table reference](https://learn.microsoft.com/power-apps/developer/data-platform/reference/entities/role).
 - **Off by default** - a test that never calls `WithSecurity(...)` gets full access. `WithStrictSecurity()` turns
   that into a failure: a security-relevant operation (Create, Retrieve, RetrieveMultiple, Update, Delete, ...) run
   without a configured security model throws, so an access test that forgot `WithSecurity(...)` cannot pass green.

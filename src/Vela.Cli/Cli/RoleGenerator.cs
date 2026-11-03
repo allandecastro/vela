@@ -11,9 +11,10 @@ public sealed record RoleGrantModel(string Entity, string Privilege, string Acce
 
 /// <summary>
 /// A security role resolved from Dataverse — its name, the root role id (roles are duplicated per business unit;
-/// this is the root/template role id) and its table-privilege grants.
+/// this is the root business unit's copy), its table-privilege grants and, for a system role, its
+/// <c>roletemplateid</c> (null for a custom role).
 /// </summary>
-public sealed record RoleModel(string Name, Guid Id, IReadOnlyList<RoleGrantModel> Grants);
+public sealed record RoleModel(string Name, Guid Id, IReadOnlyList<RoleGrantModel> Grants, Guid? TemplateId = null);
 
 /// <summary>Options for <see cref="RoleGenerator"/>.</summary>
 public sealed record RoleGenOptions(string Namespace);
@@ -58,8 +59,11 @@ public static class RoleGenerator
         sb.AppendLine("    /// [entity, access level, privilege] name triples). Dependency-light (no test-only types), so it lives");
         sb.AppendLine("    /// with the shared models and both runtime plugin code and tests can use it. Configure the harness via");
         sb.AppendLine("    /// <c>WithSecurity(s =&gt; s.Role(Roles.XName, Roles.XId, Roles.X).User(userId, buId, Roles.XName))</c>");
-        sb.AppendLine("    /// — passing <c>Roles.XId</c> makes systemuserroles/teamroles queries return the real role id, which");
-        sb.AppendLine("    /// plugin logic also uses.");
+        sb.AppendLine("    /// — <c>Roles.XId</c> is the root role id: systemuserroles/teamroles hold the copy of the principal's business");
+        sb.AppendLine("    /// unit, so plugin logic matches role membership on role.parentrootroleid == Roles.XId. <c>XId</c> is the same");
+        sb.AppendLine("    /// across environments only when the role ships in a solution (a role created by hand in each org gets a");
+        sb.AppendLine("    /// different id). For a system role, compare on role.roletemplateid with <c>XTemplateId</c>, which is stable");
+        sb.AppendLine("    /// across orgs.");
         sb.AppendLine("    /// </summary>");
         sb.AppendLine("    public static class Roles");
         sb.AppendLine("    {");
@@ -82,9 +86,22 @@ public static class RoleGenerator
         sb.AppendLine($"        /// <summary>The \"{XmlEscape(role.Name)}\" security role.</summary>");
         sb.AppendLine($"        public const string {identifier}Name = \"{Escape(role.Name)}\";");
         sb.AppendLine();
-        sb.AppendLine($"        /// <summary>The root id of the \"{XmlEscape(role.Name)}\" security role.</summary>");
+        sb.AppendLine("        /// <summary>");
+        sb.AppendLine($"        /// The root role id of the \"{XmlEscape(role.Name)}\" security role. The same across environments only when");
+        sb.AppendLine("        /// the role ships in a solution; a role created by hand in each org gets a different id.");
+        sb.AppendLine("        /// </summary>");
         sb.AppendLine($"        public static readonly Guid {identifier}Id = new Guid(\"{role.Id:D}\");");
         sb.AppendLine();
+        if (role.TemplateId is Guid templateId && templateId != Guid.Empty)
+        {
+            sb.AppendLine("        /// <summary>");
+            sb.AppendLine($"        /// The role template id (roletemplateid) of the \"{XmlEscape(role.Name)}\" system role, stable across orgs:");
+            sb.AppendLine("        /// compare role.roletemplateid with it to recognize the system role in any environment.");
+            sb.AppendLine("        /// </summary>");
+            sb.AppendLine($"        public static readonly Guid {identifier}TemplateId = new Guid(\"{templateId:D}\");");
+            sb.AppendLine();
+        }
+
         sb.AppendLine($"        /// <summary>The privilege grants of the \"{XmlEscape(role.Name)}\" role ([entity, access level, privilege]).</summary>");
 
         List<RoleGrantModel> grants = (role.Grants ?? Array.Empty<RoleGrantModel>())

@@ -52,19 +52,14 @@ namespace Vela.Testing
             }
         }
 
-        // A role is owned by its business unit, so a Business Unit or Parent: Child read depth reaches it. The row's
-        // businessunitid when it has one, else the root business unit (when one is declared).
-        private void StampRoleBusinessUnit(Entity role)
+        // A role copy is owned by its business unit (businessunitid), so a Business Unit or Parent: Child read depth
+        // reaches it. A copy with no businessunitid (no single root business unit) is reached at Organization depth only.
+        private static void StampRoleBusinessUnit(Entity role)
         {
-            if (role.Contains(SystemFieldApplier.OwningBusinessUnit))
+            if (!role.Contains(SystemFieldApplier.OwningBusinessUnit) &&
+                role.GetAttributeValue<EntityReference>("businessunitid") is EntityReference businessUnit)
             {
-                return;
-            }
-
-            Guid businessUnit = role.GetAttributeValue<EntityReference>("businessunitid")?.Id ?? _security!.RootBusinessUnit;
-            if (businessUnit != Guid.Empty)
-            {
-                role[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", businessUnit);
+                role[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", businessUnit.Id);
             }
         }
 
