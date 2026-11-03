@@ -444,6 +444,10 @@ namespace Vela.Testing.Security
         // Real plugins (and Vela's own RetryPolicy) branch on this exact ErrorCode.
         private const int PrincipalPrivilegeDenied = unchecked((int)0x80040220);
 
+        // 0x80048306 — the platform's fault code when the caller holds the privilege on the table but the record is
+        // out of its reach (depth, owner, no share). Verified live for a Retrieve by id.
+        private const int RecordAccessDenied = unchecked((int)0x80048306);
+
         private const string SystemUser = "systemuser";
         private const string Team = "team";
 
@@ -739,17 +743,33 @@ namespace Vela.Testing.Security
         }
 
         /// <summary>Builds the PrincipalPrivilegeDenied fault, so callers that add extra access checks can throw it.</summary>
-        public FaultException<OrganizationServiceFault> PrivilegeDenied(Guid userId, Privilege privilege, string entity)
+        public FaultException<OrganizationServiceFault> PrivilegeDenied(Guid userId, Privilege privilege, string entity) =>
+            Fault(PrincipalPrivilegeDenied, $"Principal user (Id={userId}) is missing prv{privilege}{entity} privilege on entity '{entity}'.");
+
+        /// <summary>
+        /// Builds the fault for a record out of the caller's reach although it holds the privilege on the table
+        /// (0x80048306), as a Retrieve by id raises.
+        /// </summary>
+        public FaultException<OrganizationServiceFault> RecordDenied(Guid userId, Privilege privilege, string entity, Guid recordId) =>
+            Fault(RecordAccessDenied, $"Principal user (Id={userId}) does not have {ToAccessRight(privilege)} right(s) for record with Id = {recordId} of entity {entity}.");
+
+        private static FaultException<OrganizationServiceFault> Fault(int errorCode, string message)
         {
-            string message = $"Principal user ({userId}) is missing the {privilege} privilege on '{entity}'.";
             OrganizationServiceFault fault = new OrganizationServiceFault
             {
-                ErrorCode = PrincipalPrivilegeDenied,
+                ErrorCode = errorCode,
                 Message = message,
             };
 
             return new FaultException<OrganizationServiceFault>(fault, new FaultReason(message));
         }
+
+        /// <summary>
+        /// Whether <paramref name="userId"/> holds <paramref name="privilege"/> on <paramref name="entity"/> at any
+        /// depth, through its own roles or a team's, whatever the record.
+        /// </summary>
+        public bool HoldsPrivilege(Guid userId, string entity, Privilege privilege) =>
+            GrantedLevels(userId, entity.ToLowerInvariant(), privilege).Any();
 
         /// <summary>
         /// Whether <paramref name="userId"/> holds <paramref name="privilege"/> on <paramref name="entity"/> that

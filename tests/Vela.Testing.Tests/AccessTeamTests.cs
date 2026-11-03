@@ -38,7 +38,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(template, AccessRights.ReadAccess | AccessRights.WriteAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo)).User(Alice, SalesBu, "appender")) // Alice holds no role
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo).Grant("account", AccessLevel.User, Privilege.Read)).User(Alice, SalesBu, "appender")) // Read on her own accounts only: Bob's is out of reach
                 .Seed(AccountOwnedBy(record, Bob));
 
             Assert.Throws<FaultException<OrganizationServiceFault>>(
@@ -58,7 +58,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(template, AccessRights.ReadAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo)).User(Alice, SalesBu, "appender"))
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo).Grant("account", AccessLevel.User, Privilege.Read)).User(Alice, SalesBu, "appender"))
                 .Seed(AccountOwnedBy(record, Bob));
             AddToTeam(svc, record, Alice, template);
             Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));

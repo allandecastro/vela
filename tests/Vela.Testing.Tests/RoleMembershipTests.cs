@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.ServiceModel;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using Vela.Testing.Security;
@@ -8,8 +9,8 @@ using Xunit;
 namespace Vela.Testing.Tests
 {
     // Role membership is materialized into the platform's tables (role / systemuserroles / teamroles /
-    // teammembership) so a plugin can resolve a user's roles the way it does against Dataverse. These tables are
-    // always readable (global read on them is the platform default).
+    // teammembership) so a plugin can resolve a user's roles the way it does against Dataverse. role is read under the
+    // same rules as any table (prvReadRole); the intersect tables have no read check.
     public sealed class RoleMembershipTests
     {
         private static readonly Guid Alice = new Guid("a11ce000-0000-0000-0000-000000000701");
@@ -43,15 +44,18 @@ namespace Vela.Testing.Tests
         public void The_role_table_exposes_the_id_and_name()
         {
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
                 .WithSecurity(s => s
-                    .Role("Salesperson", SalesRoleId, r => r.Grant("account", AccessLevel.Organization, Privilege.Read)));
+                    .BusinessUnit(SalesBu)
+                    .Role("Salesperson", SalesRoleId, r => r.Grant("role", AccessLevel.BusinessUnit, Privilege.Read))
+                    .User(Alice, SalesBu, "Salesperson"));
 
             Entity role = Assert.Single(Query(svc, "role", "roleid", SalesRoleId).Entities);
             Assert.Equal("Salesperson", role.GetAttributeValue<string>("name"));
         }
 
         [Fact]
-        public void Membership_tables_are_readable_even_without_any_privilege()
+        public void Intersect_tables_are_readable_even_without_any_privilege()
         {
             Guid account = Guid.NewGuid();
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
@@ -63,7 +67,7 @@ namespace Vela.Testing.Tests
                 .Seed(new Entity("account", account) { ["ownerid"] = new EntityReference("systemuser", Bob), ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu) });
 
             // Alice can't read the account (no privilege), but can still read her role membership.
-            Assert.Empty(svc.RetrieveMultiple(new QueryExpression("account") { ColumnSet = new ColumnSet(true) }).Entities);
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.RetrieveMultiple(new QueryExpression("account") { ColumnSet = new ColumnSet(true) }));
             Assert.Single(Query(svc, "systemuserroles", "systemuserid", Alice).Entities);
         }
 
@@ -89,7 +93,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithSecurity(s => s
                     .BusinessUnit(SalesBu)
-                    .Role("Salesperson", SalesRoleId, r => r.Grant("account", AccessLevel.Organization, Privilege.Read))
+                    .Role("Salesperson", SalesRoleId, r => r.Grant("role", AccessLevel.BusinessUnit, Privilege.Read))
                     .User(Alice, SalesBu, "Salesperson"));
 
             QueryExpression query = new QueryExpression("systemuserroles")

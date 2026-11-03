@@ -16,18 +16,22 @@ namespace Vela.Testing
     // Split into its own partial so mutation testing can target the enforcement surface in isolation.
     public sealed partial class InMemoryOrganizationService
     {
-        // The platform's security-membership tables plugins query to resolve roles. Seeded from the security model
-        // (below) and always readable (global read on these is the platform default) — see ReadFilter / Retrieve.
-        private static readonly HashSet<string> SecurityInfraTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        // The platform's security-membership tables plugins query to resolve roles, seeded from the security model
+        // (below). role is read under the same rules as any table (prvReadRole, business-unit owned). The intersect
+        // tables keep no read check: which privilege gates them on the platform has not been verified.
+        private const string RoleTable = "role";
+
+        private static readonly HashSet<string> MembershipIntersectTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "role", "systemuserroles", "teamroles", "teammembership",
+            "systemuserroles", "teamroles", "teammembership",
         };
 
         // Rebuild the role/systemuserroles/teamroles/teammembership rows from the security model, so a plugin can
         // query role membership like the platform (e.g. RetrieveMultiple over systemuserroles, or a join to role).
         private void MaterializeSecurityTables()
         {
-            foreach (string table in SecurityInfraTables)
+            _store.Remove(RoleTable);
+            foreach (string table in MembershipIntersectTables)
             {
                 _store.Remove(table);
             }
@@ -39,7 +43,106 @@ namespace Vela.Testing
 
             foreach (Entity row in _security.MaterializeMembershipTables())
             {
+                if (string.Equals(row.LogicalName, RoleTable, StringComparison.OrdinalIgnoreCase))
+                {
+                    StampRoleBusinessUnit(row);
+                }
+
                 Table(row.LogicalName)[row.Id] = row;
+            }
+        }
+
+        // A role copy is owned by its business unit (businessunitid), so a Business Unit or Parent: Child read depth
+        // reaches it. A copy with no businessunitid (no single root business unit) is reached at Organization depth only.
+        private static void StampRoleBusinessUnit(Entity role)
+        {
+            if (!role.Contains(SystemFieldApplier.OwningBusinessUnit) &&
+                role.GetAttributeValue<EntityReference>("businessunitid") is EntityReference businessUnit)
+            {
+                role[SystemFieldApplier.OwningBusinessUnit] = new EntityReference("businessunit", businessUnit.Id);
+            }
+        }
+
+        // Read demand for a Retrieve by id: no Read privilege on the table at any depth fails with the privilege fault
+        // (0x80040220); a privilege that does not reach this record fails with the record fault (0x80048306).
+        private void DemandRecordRead(string entityName, Entity stored)
+        {
+            if (MembershipIntersectTables.Contains(entityName))
+            {
+                return;
+            }
+
+            if (Enforcing == null)
+            {
+                DemandStrictSecurityConfigured();
+                return;
+            }
+
+            if (!_security!.HoldsPrivilege(_currentUserId, entityName, Privilege.Read))
+            {
+                throw _security.PrivilegeDenied(_currentUserId, Privilege.Read, entityName);
+            }
+
+            if (!CanAccess(entityName, Privilege.Read, stored))
+            {
+                throw _security.RecordDenied(_currentUserId, Privilege.Read, entityName, stored.Id);
+            }
+        }
+
+        // A query fails as a whole when the caller holds no Read privilege on a table it reads: the root table and
+        // the table of every link-entity, at any nesting level, whatever its join, columns or filters (verified live).
+        // Rows the privilege does not reach are filtered by the engine instead.
+        private void DemandQueryReadPrivileges(QueryExpression query)
+        {
+            if (Enforcing == null)
+            {
+                return;
+            }
+
+            DemandTableRead(query.EntityName);
+            DemandLinkReads(query.Criteria);
+            foreach (LinkEntity link in query.LinkEntities)
+            {
+                DemandLinkReads(link);
+            }
+        }
+
+        private void DemandLinkReads(LinkEntity link)
+        {
+            DemandTableRead(link.LinkToEntityName);
+            DemandLinkReads(link.LinkCriteria);
+            foreach (LinkEntity child in link.LinkEntities)
+            {
+                DemandLinkReads(child);
+            }
+        }
+
+        // A filter can carry a link-entity of its own (an any/all related-record filter).
+        private void DemandLinkReads(FilterExpression? filter)
+        {
+            if (filter == null)
+            {
+                return;
+            }
+
+            if (filter.AnyAllFilterLinkEntity != null)
+            {
+                DemandLinkReads(filter.AnyAllFilterLinkEntity);
+            }
+
+            foreach (FilterExpression child in filter.Filters)
+            {
+                DemandLinkReads(child);
+            }
+        }
+
+        private void DemandTableRead(string entityName)
+        {
+            if (!string.IsNullOrEmpty(entityName) &&
+                !MembershipIntersectTables.Contains(entityName) &&
+                !_security!.HoldsPrivilege(_currentUserId, entityName, Privilege.Read))
+            {
+                throw _security.PrivilegeDenied(_currentUserId, Privilege.Read, entityName);
             }
         }
         // owningbusinessunit tracks the record's owner: after the owner is stamped (on create, or on an ownership
@@ -806,6 +909,6 @@ namespace Vela.Testing
         // Includes the record's inherited grants, and reads the stored record's own owner columns so
         // filtering is correct regardless of the query's ColumnSet.
         private Func<Entity, bool>? ReadFilter() =>
-            Enforcing == null ? null : row => SecurityInfraTables.Contains(row.LogicalName) || CanAccess(row.LogicalName, Privilege.Read, row);
+            Enforcing == null ? null : row => MembershipIntersectTables.Contains(row.LogicalName) || CanAccess(row.LogicalName, Privilege.Read, row);
     }
 }

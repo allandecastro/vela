@@ -92,7 +92,7 @@ namespace Vela.Testing.Tests
             // The plugin base rethrows the denial (PrincipalPrivilegeDenied) unchanged, so the caller keeps its code.
             FaultException<OrganizationServiceFault> denied = Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => user.Service.Create(new FakeAccount { Name = "Zava" }));
-            Assert.Contains("missing the Create privilege on 'task'", denied.Detail.Message);
+            Assert.Contains("is missing prvCreatetask privilege", denied.Detail.Message);
             Assert.Empty(user.GetAll("task"));
             Assert.Empty(user.GetAll("account")); // the denied plugin write rolled the whole operation back
         }

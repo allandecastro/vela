@@ -62,8 +62,13 @@ namespace Vela.Testing.Tests
                 .Team(ChildTeam, GrandchildBu, "Salesperson")
                 .Member(TeamMember, ChildTeam));
 
+        // These tests check the stored rows, so they read as SYSTEM (ctx.SystemService): through the user's service
+        // the role table needs the Read privilege on role, like any table.
+        private static IOrganizationService System(InMemoryOrganizationService store) =>
+            new PluginContextBuilder<Entity>().WithOrganizationService(store).Factory.CreateOrganizationService(null);
+
         private static EntityCollection Where(InMemoryOrganizationService svc, string table, string column, Guid value) =>
-            svc.RetrieveMultiple(new QueryExpression(table)
+            System(svc).RetrieveMultiple(new QueryExpression(table)
             {
                 ColumnSet = new ColumnSet(true),
                 Criteria = { Conditions = { new ConditionExpression(column, ConditionOperator.Equal, value) } },
@@ -106,7 +111,7 @@ namespace Vela.Testing.Tests
             Guid held = UserRoleId(svc, ChildUser);
 
             Assert.NotEqual(SalespersonId, held);
-            Entity copy = svc.Retrieve("role", held, new ColumnSet(true));
+            Entity copy = System(svc).Retrieve("role", held, new ColumnSet(true));
             Assert.Equal(ChildBu, copy.GetAttributeValue<EntityReference>("businessunitid").Id);
             Assert.Equal(SalespersonId, copy.GetAttributeValue<EntityReference>("parentrootroleid").Id);
         }
@@ -118,7 +123,7 @@ namespace Vela.Testing.Tests
 
             Guid held = Assert.Single(Where(svc, "teamroles", "teamid", ChildTeam).Entities).GetAttributeValue<Guid>("roleid");
 
-            Entity copy = svc.Retrieve("role", held, new ColumnSet(true));
+            Entity copy = System(svc).Retrieve("role", held, new ColumnSet(true));
             Assert.Equal(GrandchildBu, copy.GetAttributeValue<EntityReference>("businessunitid").Id);
             Assert.Equal(SalespersonId, copy.GetAttributeValue<EntityReference>("parentrootroleid").Id);
         }
@@ -136,7 +141,7 @@ namespace Vela.Testing.Tests
         {
             Guid userId = new Guid(user);
 
-            EntityCollection result = Build().RetrieveMultiple(
+            EntityCollection result = System(Build()).RetrieveMultiple(
                 Query.For<BuRole>()
                     .Where(r => r.ParentRootRoleId, ConditionOperator.Equal, SalespersonId)
                     .Link<BuSystemUserRoles>(r => r.RoleId, ur => ur.RoleId,
@@ -158,7 +163,7 @@ namespace Vela.Testing.Tests
             LinkEntity membership = teamRoles.AddLink("teammembership", "teamid", "teamid");
             membership.LinkCriteria.AddCondition("systemuserid", ConditionOperator.Equal, TeamMember);
 
-            Assert.Single(Build().RetrieveMultiple(query).Entities);
+            Assert.Single(System(Build()).RetrieveMultiple(query).Entities);
         }
 
         [Fact]
@@ -218,7 +223,7 @@ namespace Vela.Testing.Tests
             QueryExpression query = new QueryExpression("role") { ColumnSet = new ColumnSet(false) };
             query.Criteria.AddCondition("roletemplateid", ConditionOperator.Equal, SystemAdministratorTemplate);
             query.AddLink("systemuserroles", "roleid", "roleid").LinkCriteria.AddCondition("systemuserid", ConditionOperator.Equal, ChildUser);
-            Assert.Single(svc.RetrieveMultiple(query).Entities);
+            Assert.Single(System(svc).RetrieveMultiple(query).Entities);
         }
 
         [Fact]
@@ -234,8 +239,8 @@ namespace Vela.Testing.Tests
 
             Assert.Equal(
                 SystemAdministratorTemplate,
-                withTemplate.Retrieve("role", adminId, new ColumnSet(true)).GetAttributeValue<EntityReference>("roletemplateid").Id);
-            Assert.False(redeclared.Retrieve("role", adminId, new ColumnSet(true)).Contains("roletemplateid"));
+                System(withTemplate).Retrieve("role", adminId, new ColumnSet(true)).GetAttributeValue<EntityReference>("roletemplateid").Id);
+            Assert.False(System(redeclared).Retrieve("role", adminId, new ColumnSet(true)).Contains("roletemplateid"));
         }
 
         [Fact]
