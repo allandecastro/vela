@@ -21,6 +21,14 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (CLI)
+
+- `vela add test` no longer generates `new ColumnSet(true)`: the Retrieve and RetrieveMultiple tests read only the
+  step's filtering columns, or else the primary key, through the typed `Query.For<T>().Select(x => x.Id)`, and the
+  commented read-back example in the behaviour test selects only the column it asserts. The `Account` and `Contact`
+  sample models that `vela init --samples` writes now carry the `Id` override that `vela models` generates, so
+  `x => x.Id` selects their primary key.
+
 ## [0.30.0] - 2026-11-15 (Vela.Cli)
 
 ### Changed

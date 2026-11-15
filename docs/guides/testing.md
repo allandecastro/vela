@@ -354,7 +354,7 @@ var crm = new InMemoryOrganizationService()
 
 var id = crm.Create(new Entity("account") { ["name"] = "Zava" });
 crm.Update(new Entity("account") { Id = id, ["name"] = "Renamed" });
-Entity stored = crm.Retrieve("account", id, new ColumnSet(true));
+Entity stored = crm.Retrieve("account", id, new ColumnSet("name"));
 ```
 
 To run a plugin against a stateful store, pass the service on the builder and assert on the resulting CRM

@@ -165,6 +165,12 @@ namespace {{ns}}
             $"{I}Guid id = Guid.NewGuid();\n{I}Guid relatedId = Guid.NewGuid();\n" +
             $"{I}pipeline.Seed(new {entityType} {{ Id = id }}, new {entityType} {{ Id = relatedId }});\n" +
             $"{I}EntityReferenceCollection related = new EntityReferenceCollection {{ new EntityReference({logical}, relatedId) }};\n";
+        // A read names its columns rather than new ColumnSet(true), which VELA013 flags in plugin code: the step's
+        // filtering columns, else the primary key (a => a.Id, whose column `vela models` names on the Id override).
+        // Typed and fully qualified, so an appended test needs no new using.
+        string selected = step.Filters.Length > 0 ? string.Join(", ", step.Filters.Select(f => $"x => x.{f}")) : "x => x.Id";
+        string typedQuery = $"Vela.Querying.Query.For<{entityType}>().Select({selected})";
+        string columnsNote = $"{I}// Read only the columns the test needs ({(step.Filters.Length > 0 ? "the step's filtering columns" : "the primary key")}), not every column.\n";
 
         bool typed = true;
         string act = step.Message switch
@@ -178,8 +184,8 @@ namespace {{ns}}
                 $"{I}pipeline.Service.Execute(new Microsoft.Xrm.Sdk.Messages.UpdateMultipleRequest\n{I}{{\n" +
                 $"{I}    Targets = new EntityCollection(new Entity[] {{ new {entityType} {{ Id = id{filters} }} }}) {{ EntityName = {logical} }},\n{I}}});\n",
             "Delete" => seed + $"{I}pipeline.Service.Delete({logical}, id);\n",
-            "Retrieve" => seed + $"{I}pipeline.Service.Retrieve({logical}, id, new Microsoft.Xrm.Sdk.Query.ColumnSet(true));\n",
-            "RetrieveMultiple" => seed + $"{I}pipeline.Service.RetrieveMultiple(new Microsoft.Xrm.Sdk.Query.QueryExpression({logical}) {{ ColumnSet = new Microsoft.Xrm.Sdk.Query.ColumnSet(true) }});\n",
+            "Retrieve" => seed + columnsNote + $"{I}pipeline.Service.Retrieve({logical}, id, {typedQuery}.Expression.ColumnSet);\n",
+            "RetrieveMultiple" => seed + columnsNote + $"{I}pipeline.Service.RetrieveMultiple({typedQuery});\n",
             "Assign" => seed +
                 $"{I}Guid ownerId = Guid.NewGuid();\n{I}pipeline.Seed(new Entity(\"systemuser\", ownerId));\n" +
                 $"{I}pipeline.Service.Execute(new Microsoft.Crm.Sdk.Messages.AssignRequest\n{I}{{\n" +
@@ -241,7 +247,7 @@ $$"""
             // Act: send the {{step.Message}} through pipeline.Service, as in {{firesMethod}}.
 
             // Assert: read back what the plugin wrote and check it, e.g.
-            //   {{entityType}} saved = pipeline.Service.Retrieve({{logical}}, id, new Microsoft.Xrm.Sdk.Query.ColumnSet(true)).ToEntity<{{entityType}}>();
+            //   {{entityType}} saved = pipeline.Service.Retrieve({{logical}}, id, Vela.Querying.Query.For<{{entityType}}>().Select(x => x.SomeColumn).Expression.ColumnSet).ToEntity<{{entityType}}>();
             //   Assert.Equal(expected, saved.SomeColumn);
         }
 

@@ -136,8 +136,24 @@ public class AddTestCommandTests
             Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountSearch", "--project", tests]));
 
             string content = File.ReadAllText(Path.Combine(testsDir, "Account", "Plugins", "AccountSearchTests.cs"));
-            Assert.Contains("pipeline.Service.RetrieveMultiple(new Microsoft.Xrm.Sdk.Query.QueryExpression(Account.EntityLogicalNameValue)", content);
+            Assert.Contains("pipeline.Service.RetrieveMultiple(Vela.Querying.Query.For<Account>().Select(x => x.Id));", content);
             Assert.DoesNotContain("Targets", content);
+            Assert.DoesNotContain("ColumnSet(true)", content);
+        });
+    }
+
+    [Fact]
+    public void PluginTest_Retrieve_ReadsThePrimaryKeyOnly()
+    {
+        RunInSolution((plugins, tests, testsDir) =>
+        {
+            Assert.Equal(ExitSuccess, AddCommand.Run(["plugin", "AccountRead", "--entity", "Account", "--message", "Retrieve", "--project", plugins]));
+            Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountRead", "--project", tests]));
+
+            string content = File.ReadAllText(Path.Combine(testsDir, "Account", "Plugins", "AccountReadTests.cs"));
+            Assert.Contains("pipeline.Service.Retrieve(Account.EntityLogicalNameValue, id, Vela.Querying.Query.For<Account>().Select(x => x.Id).Expression.ColumnSet);", content);
+            Assert.Contains("Vela.Querying.Query.For<Account>().Select(x => x.SomeColumn).Expression.ColumnSet).ToEntity<Account>();", content);
+            Assert.DoesNotContain("ColumnSet(true)", content);
         });
     }
 
