@@ -11,6 +11,23 @@ updates:
     # Stryker is pinned on purpose: the mutation scores move with it, so it is bumped by hand.
     ignore:
       - dependency-name: dotnet-stryker
+      # Dependency floor of the shipped framework packages, kept equal to ScaffoldTemplates.CrmCoreAssembliesVersion.
+      - dependency-name: Microsoft.CrmSdk.CoreAssemblies
+      # Vela.Messages (net10.0) ships it as a floor; above ScaffoldTemplates.DataverseClientVersion, scaffolded
+      # solutions fail restore with NU1605. Bumped by hand, with the scaffold constant.
+      - dependency-name: Microsoft.PowerPlatform.Dataverse.Client
+      # The analyzers compile against the oldest Roslyn they support; a newer one stops them loading in older SDKs/IDEs.
+      - dependency-name: Microsoft.CodeAnalysis.CSharp
+      - dependency-name: Microsoft.CodeAnalysis.CSharp.Workspaces
+      # Vela.Plugins ships Microsoft.Extensions.DependencyInjection.Abstractions 8.x into the plugin sandbox; a new
+      # major is a framework decision. Microsoft.Extensions.DependencyInjection must stay on the same major.
+      - dependency-name: Microsoft.Extensions.DependencyInjection.Abstractions
+        update-types: [version-update:semver-major]
+      - dependency-name: Microsoft.Extensions.DependencyInjection
+        update-types: [version-update:semver-major]
+      # From 1.18.0, Azure.Core pulls Microsoft.Extensions.* 10.x, which conflicts with the 8.x pin above (NU1109).
+      - dependency-name: Azure.Identity
+        versions: [">= 1.18.0"]
     groups:
       nuget-minor-patch:
         update-types: [minor, patch]
