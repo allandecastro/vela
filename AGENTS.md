@@ -62,14 +62,15 @@ A new typed message touches more files: [docs/contributing/extending-plugins.md]
 
 ## CI gates
 
-- `ci.yml` (self-hosted Windows runner): build, the codegen `--check`, the build smoke test, then each test project
-  once, with its branch-coverage gate on that same run: diff engine 90, harness 87, runtime 83 (merged from
-  `Vela.Tests` and `Vela.Testing.Tests`), analyzers 80, code fixes 82. A guard fails the job when a project
-  referencing `Microsoft.NET.Test.Sdk` (including `docs/samples/Vela.DocSamples`) is not run.
-- `mutation.yml` (self-hosted runner, Stryker pinned in `.config/dotnet-tools.json`): one area per correctness core,
-  configured in `tests/stryker/<area>.yml` and listed in `tests/stryker/areas.json`. Weekly on every file; on a pull
-  request that touches `src/`, only the changed files of the affected areas (`--since:main`, break-at 80). Scores
-  and break-at values: [docs/advanced/mutation-testing.md](docs/advanced/mutation-testing.md).
+- `ci.yml` (GitHub-hosted `windows-latest`, fork pull requests included): build, the codegen `--check`, the build
+  smoke test, then each test project once, with its branch-coverage gate on that same run: diff engine 90, harness
+  87, runtime 83 (merged from `Vela.Tests` and `Vela.Testing.Tests`), analyzers 80, code fixes 82. A guard fails the
+  job when a project referencing `Microsoft.NET.Test.Sdk` (including `docs/samples/Vela.DocSamples`) is not run.
+- `mutation.yml` (GitHub-hosted `windows-latest`, one job per area, Stryker pinned in `.config/dotnet-tools.json`):
+  one area per correctness core, configured in `tests/stryker/<area>.yml` and listed in `tests/stryker/areas.json`.
+  Weekly on every file; on a pull request that touches `src/`, only the changed files of the affected areas
+  (`--since:main`, break-at 80). Scores and break-at values:
+  [docs/advanced/mutation-testing.md](docs/advanced/mutation-testing.md).
 - The CLI/framework contract: `tests/ContractPluginFixture` (a real Vela.Plugins plugin) is checked on both sides
   against `tests/contracts/plugin-contract.golden.json`; a change to what a step or Custom API deploys updates the
   fixture and the golden file together.

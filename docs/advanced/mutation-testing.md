@@ -81,12 +81,13 @@ dotnet tool run dotnet-stryker --config-file ../stryker/diff-engine.yml --since:
 To add an area, add its `tests/stryker/<area>.yml` and its row in
 `tests/stryker/areas.json`, then measure it before choosing its `break`.
 
-All jobs run on the self-hosted Windows runner (like `ci.yml`, to avoid GitHub Actions billing), so the areas run one after another.
+In CI every job runs on a GitHub-hosted Windows runner (`windows-latest`, like `ci.yml`), one job per area, so the
+areas run in parallel.
 
 ## Gated cores and scores
 
-Scores from the full run on the self-hosted Windows runner on 2026-10-11 (Stryker 4.15, every area on all of its
-files), unless noted.
+Scores from the full run on the former self-hosted Windows runner on 2026-10-11 (Stryker 4.15, every area on all
+of its files), unless noted.
 
 | Area | Core | Score | `break` |
 | --- | --- | --- | --- |
@@ -122,5 +123,6 @@ Notes on the scores:
   Windows run before their mutation tests landed; the full run above has them at 89.9-95.2%. The **plugin runtime**
   areas used to carry estimates from a throwaway net10 build; `plugins-context`, `plugins-services` and
   `plugins-runtime` now have their Windows scores. `plugins-steps` still needs one (its 2026-10-11 job lost the
-  runner), and so does `analyzers`, whose timeout went from 45 to 90 minutes, then to 180 after it ran out at 90 twice on the
-  self-hosted runner (`diff-engine`, done in 28 of its 30 minutes, went to 60).
+  runner), and so does `analyzers`, whose timeout went from 45 to 90 minutes, then to 180 after it ran out at 90
+  twice on the former self-hosted runner (`diff-engine`, done in 28 of its 30 minutes, went to 60). The timeouts
+  are unchanged on the GitHub-hosted runner until a full run there measures the areas again.

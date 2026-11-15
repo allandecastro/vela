@@ -12,6 +12,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: the job only reads the repository. A pull request from a fork runs with a read-only token and no
+# secrets (the `pull_request` event, never `pull_request_target`).
+permissions:
+  contents: read
+
 # Windows PowerShell 5.1 is always present on the Windows runner; use it as the default shell for run steps.
 defaults:
   run:
@@ -19,16 +24,10 @@ defaults:
 
 jobs:
   build-test-pack:
-    # Self-hosted Windows runner: net462 (the harness) only builds on Windows, so CI must run on Windows; moved
-    # off GitHub-hosted runners to avoid GitHub Actions billing. The runner must be online for checks to report.
-    # Only same-repo branches (head repo == base repo) and pushes to main run CI; fork PRs are skipped.
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, Windows]
+    # GitHub-hosted Windows runner: net462 (the harness) only builds on Windows, so CI must run on Windows. Pull
+    # requests from forks run too: the hosted runner is ephemeral and the token is read-only.
+    runs-on: windows-latest
     timeout-minutes: 20 # build+test is fast; cap a hung run
-    env:
-      # The service account can't write to the default install root 'C:\Program Files\dotnet', so setup-dotnet
-      # installs into the workspace instead (it adds this to PATH for the run steps).
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -48,7 +47,8 @@ jobs:
       # The only check that compiles what `vela init` generates: scaffold a solution, pack the repo's
       # Vela.Plugins / Vela.Testing / Vela.Messages into a local feed, then restore + build it. Opt-in locally
       # (skipped without VELA_BUILD_SMOKE=1), always on in CI. The packs are version 1.0.0, and a 1.0.0 left in the
-      # runner's persistent global NuGet cache would shadow the fresh local feed, so evict it first.
+      # global NuGet cache would shadow the fresh local feed, so evict it first (a no-op on a fresh hosted runner,
+      # kept so the step matches the local recipe in CONTRIBUTING.md).
       - name: Scaffold build smoke
         env:
           VELA_BUILD_SMOKE: '1'

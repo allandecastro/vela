@@ -34,6 +34,10 @@ All notable changes to Vela are documented here. The format is based on
   `PluginContext` is for edge cases. The pipeline section and its example now come before `PluginContext`. Several
   steps of one plugin on the same trigger, differing only by filter or step key, are tested with the pipeline. The
   plugins guide and `llms.txt` say the same.
+- The repository gets a security policy (`SECURITY.md`, private vulnerability reporting), a code of conduct
+  (Contributor Covenant 2.1), a pull request template and a Dependabot configuration. CI, docs, mutation and release
+  workflows run on GitHub-hosted Windows runners, pull requests from forks included; `RELEASING.md`, `AGENTS.md`,
+  `CONTRIBUTING.md` and the mutation testing page are updated accordingly.
 
 ## [0.29.0] - 2026-11-15 (Vela.Cli)
 

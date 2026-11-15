@@ -6,6 +6,13 @@ not need to clone this repository.
 
 Looking for something to work on? See the [open issues](https://github.com/allandecastro/vela/issues) for planned and candidate work.
 
+Taking part in this project means following the [Code of Conduct](CODE_OF_CONDUCT.md). Found a security
+vulnerability? Do not open an issue: report it privately as described in [SECURITY.md](SECURITY.md).
+
+A pull request runs `ci.yml` (and `docs.yml` / `mutation.yml` when it touches their paths) on GitHub-hosted Windows
+runners, forks included; the [pull request template](.github/pull_request_template.md) lists what a change needs
+before review.
+
 ## Solution layout
 
 ```text
