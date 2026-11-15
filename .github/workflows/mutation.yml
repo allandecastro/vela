@@ -96,7 +96,7 @@ jobs:
       - name: Make the base branch available as main
         if: github.event_name == 'pull_request'
         run: git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/heads/main"
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - name: Install Stryker (pinned in .config/dotnet-tools.json)
