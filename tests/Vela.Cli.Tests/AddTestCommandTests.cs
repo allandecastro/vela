@@ -136,7 +136,7 @@ public class AddTestCommandTests
             Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountSearch", "--project", tests]));
 
             string content = File.ReadAllText(Path.Combine(testsDir, "Account", "Plugins", "AccountSearchTests.cs"));
-            Assert.Contains("pipeline.Service.RetrieveMultiple(Vela.Querying.Query.For<Account>().Select(x => x.Id));", content);
+            Assert.Contains("pipeline.Service.RetrieveMultiple(Query.For<Account>().Select(x => x.Id));", content);
             Assert.DoesNotContain("Targets", content);
             Assert.DoesNotContain("ColumnSet(true)", content);
         });
@@ -151,8 +151,9 @@ public class AddTestCommandTests
             Assert.Equal(ExitSuccess, AddCommand.Run(["test", "AccountRead", "--project", tests]));
 
             string content = File.ReadAllText(Path.Combine(testsDir, "Account", "Plugins", "AccountReadTests.cs"));
-            Assert.Contains("pipeline.Service.Retrieve(Account.EntityLogicalNameValue, id, Vela.Querying.Query.For<Account>().Select(x => x.Id).Expression.ColumnSet);", content);
-            Assert.Contains("Vela.Querying.Query.For<Account>().Select(x => x.SomeColumn).Expression.ColumnSet).ToEntity<Account>();", content);
+            Assert.Contains("    using Vela.Querying;\n", content);
+            Assert.Contains("pipeline.Service.Retrieve(Account.EntityLogicalNameValue, id, Query.For<Account>().Select(x => x.Id).Expression.ColumnSet);", content);
+            Assert.Contains("//   Account saved = Query.For<Account>().Where(x => x.Id, Microsoft.Xrm.Sdk.Query.ConditionOperator.Equal, id).Select(x => x.SomeColumn).FirstOrDefault(pipeline.Service);", content);
             Assert.DoesNotContain("ColumnSet(true)", content);
         });
     }
@@ -538,7 +539,7 @@ public class AddTestCommandTests
             Assert.DoesNotContain("\r\r", completed);
             Assert.Equal(completed.Split('\n').Length - 1, completed.Split("\r\n").Length - 1);
             Assert.StartsWith(
-                "using Xunit;\r\nusing System;\r\nusing Microsoft.Xrm.Sdk;\r\nusing Vela.Testing;\r\nusing Acme.Plugins.Account.Plugins;\r\nusing Acme.Shared.Models.Generated;\r\n\r\nnamespace",
+                "using Xunit;\r\nusing System;\r\nusing Microsoft.Xrm.Sdk;\r\nusing Vela.Querying;\r\nusing Vela.Testing;\r\nusing Acme.Plugins.Account.Plugins;\r\nusing Acme.Shared.Models.Generated;\r\n\r\nnamespace",
                 completed,
                 StringComparison.Ordinal);
             Assert.EndsWith("    }\r\n}\r\n", completed, StringComparison.Ordinal);
@@ -590,7 +591,7 @@ public class AddTestCommandTests
     public void PluginTest_ExistingClass_KeepsABehaviourTestWhoseDispatchTestWasRemoved()
     {
         CompleteTouched(
-            "namespace Acme.Plugins.Tests.Account.Plugins\n{\n    using System;\n    using Microsoft.Xrm.Sdk;\n    using Vela.Testing;\n    using Xunit;\n" +
+            "namespace Acme.Plugins.Tests.Account.Plugins\n{\n    using System;\n    using Microsoft.Xrm.Sdk;\n    using Vela.Querying;\n    using Vela.Testing;\n    using Xunit;\n" +
             "    using Acme.Plugins.Account.Plugins;\n    using Acme.Shared.Models.Generated;\n\n    public sealed class AccountTouchedTests\n    {\n" +
             "        [Fact]\n        public void Fires_On_Create_PostOperation() { }\n\n" +
             "        [Fact]\n        public void Does_What_It_Should_On_Delete_PostOperation() { Assert.True(true); }\n    }\n}\n",
@@ -604,7 +605,7 @@ public class AddTestCommandTests
     [Fact]
     public void PluginTest_ExistingClass_KeepsTheFilesEncodingAndByteOrderMark()
     {
-        string text = "namespace Acme.Plugins.Tests.Account.Plugins\n{\n    using System;\n    using Microsoft.Xrm.Sdk;\n    using Vela.Testing;\n    using Xunit;\n" +
+        string text = "namespace Acme.Plugins.Tests.Account.Plugins\n{\n    using System;\n    using Microsoft.Xrm.Sdk;\n    using Vela.Querying;\n    using Vela.Testing;\n    using Xunit;\n" +
             "    using Acme.Plugins.Account.Plugins;\n    using Acme.Shared.Models.Generated;\n\n    // café\n    public sealed class AccountTouchedTests\n    {\n" +
             "        [Fact]\n        public void Fires_On_Create_PostOperation() { }\n    }\n}\n";
         foreach (System.Text.Encoding encoding in new System.Text.Encoding[] { new System.Text.UTF8Encoding(true), System.Text.Encoding.Unicode })
@@ -632,7 +633,7 @@ public class AddTestCommandTests
             "using Xunit; namespace Acme.Plugins.Tests.Account.Plugins { public sealed class AccountTouchedTests { [Fact] public void Fires_On_Create_PostOperation() { } } }\n",
             completed =>
             {
-                Assert.StartsWith("using Xunit;\nusing System;\nusing Microsoft.Xrm.Sdk;\nusing Vela.Testing;\nusing Acme.Plugins.Account.Plugins;\nusing Acme.Shared.Models.Generated; namespace", completed, StringComparison.Ordinal);
+                Assert.StartsWith("using Xunit;\nusing System;\nusing Microsoft.Xrm.Sdk;\nusing Vela.Querying;\nusing Vela.Testing;\nusing Acme.Plugins.Account.Plugins;\nusing Acme.Shared.Models.Generated; namespace", completed, StringComparison.Ordinal);
                 Assert.Contains("public void Fires_On_Delete_PostOperation()", completed);
             });
     }
@@ -645,7 +646,7 @@ public class AddTestCommandTests
             "        [Xunit.Fact]\n        public void Fires_On_Create_PostOperation() { }\n    }\n}\n",
             completed =>
             {
-                Assert.StartsWith("using System;\nusing Microsoft.Xrm.Sdk;\nusing Vela.Testing;\nusing Xunit;\n", completed, StringComparison.Ordinal);
+                Assert.StartsWith("using System;\nusing Microsoft.Xrm.Sdk;\nusing Vela.Querying;\nusing Vela.Testing;\nusing Xunit;\n", completed, StringComparison.Ordinal);
                 Assert.Contains("namespace Other\n{\n    using Xunit;\n}\n", completed);
             });
     }
@@ -654,7 +655,7 @@ public class AddTestCommandTests
     public void PluginTest_ExistingClass_ACallOrANestedMethodIsNotTheStepsTest()
     {
         CompleteTouched(
-            "namespace Acme.Plugins.Tests.Account.Plugins\n{\n    using System;\n    using Microsoft.Xrm.Sdk;\n    using Vela.Testing;\n    using Xunit;\n" +
+            "namespace Acme.Plugins.Tests.Account.Plugins\n{\n    using System;\n    using Microsoft.Xrm.Sdk;\n    using Vela.Querying;\n    using Vela.Testing;\n    using Xunit;\n" +
             "    using Acme.Plugins.Account.Plugins;\n    using Acme.Shared.Models.Generated;\n\n    public sealed class AccountTouchedTests\n    {\n" +
             "        [Fact]\n        public void Fires_On_Create_PostOperation() { new Helper().Fires_On_Delete_PostOperation(); }\n\n" +
             "        private void Run() => Fires_On_Delete_PostOperation();\n\n" +
