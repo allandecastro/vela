@@ -26,7 +26,7 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 
 ## Test
 
-- [Testing](https://allandecastro.github.io/vela/guides/testing.md): PluginContext for one plugin, PluginPipeline for the whole in-memory pipeline
+- [Testing](https://allandecastro.github.io/vela/guides/testing.md): PluginPipeline (the default) runs the whole in-memory pipeline; PluginContext runs one plugin, for edge cases
 - [Security model in tests](https://allandecastro.github.io/vela/guides/security-model.md): roles, privileges, business units, teams, sharing
 
 ## CLI and deployment

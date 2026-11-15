@@ -15,10 +15,9 @@ on:
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
+# Least privilege: read-only by default; only the deployment job gets the Pages permissions.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Only one Pages deployment at a time; a newer push cancels an in-flight build. A pull request has its own group,
 # so it never cancels a deployment.
@@ -28,12 +27,10 @@ concurrency:
 
 jobs:
   check:
-    # Same-repo pull requests only, as in ci.yml (the runner is self-hosted).
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, Windows]
+    # Every pull request, forks included (GitHub-hosted runner, read-only token, no secrets).
+    if: github.event_name == 'pull_request'
+    runs-on: windows-latest
     timeout-minutes: 15
-    env:
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -46,12 +43,14 @@ jobs:
 
   build-deploy:
     if: github.event_name != 'pull_request'
-    runs-on: [self-hosted, Windows]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      pages: write # deploy-pages publishes the site
+      id-token: write # deploy-pages authenticates with an OIDC token
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    env:
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -61,10 +60,10 @@ jobs:
         run: dotnet tool update -g docfx
       - name: Build the docs site
         run: docfx docs/docfx.json --warningsAsErrors
-      # llms.txt (copied as a resource) indexes the pages by their Markdown URL on this site: the repository is
-      # private, so raw.githubusercontent.com links 404. Each listed page is published next to its .html, and
-      # llms-full.txt is every page it lists, concatenated in that order, for tools that read the whole
-      # documentation in one request.
+      # llms.txt (copied as a resource) indexes the pages by their Markdown URL on this site rather than on
+      # raw.githubusercontent.com (which returned 404 while the repository was private). Each listed page is
+      # published next to its .html, and llms-full.txt is every page it lists, concatenated in that order, for
+      # tools that read the whole documentation in one request.
       - name: Publish the llms.txt pages and write llms-full.txt
         shell: powershell
         run: |
