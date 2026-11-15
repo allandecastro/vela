@@ -9,9 +9,10 @@
      context also needs the plugin class to be `partial` ([VELA014](../reference/analyzers.md#vela014)).
 3. **A Create/Update step does not build**
    - It needs `FilterOn(...)` ([VELA020](../reference/analyzers.md#vela020)).
-4. **`plan` or `apply` fails with "Plugin package '...' has no solution publisher prefix"** (exit 4)
-   - Pass `--solution <uniqueName>`: Dataverse imports a package only when its name carries the solution
-     publisher's prefix, and Vela takes the prefix from that solution. See [Plan and apply](plan-apply.md).
+4. **`plan` or `apply` fails with "vela plan requires --solution <uniquename>"** (exit 2)
+   - Pass `--solution <uniqueName>`, the existing solution the packages deploy into (`--interactive` prompts for
+     it). The CLI never reads `PROJECT.md`, which records it. Dataverse imports a package only when its name carries
+     the solution publisher's prefix, and Vela takes the prefix from that solution. See [Plan and apply](plan-apply.md).
 5. **No changes in `plan`**
    - Check the `.nupkg` path or `--packages-dir`, its version, and the environment you connect to.
 6. **`apply` does nothing after a code change**

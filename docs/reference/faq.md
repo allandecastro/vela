@@ -46,10 +46,10 @@ and [limitations](limitations.md).
 
 ### Does `apply` manage solutions, security roles, or environment variables?
 
-No. `plan`/`apply` manage plugin packages/assemblies, steps, step images, Custom APIs, and web resources
-(with `--webresources --solution`), including each step's enabled/disabled state and unsecure configuration (and
-its secure configuration when you supply the value with `--secure-config`). Solutions must already exist
-(`--solution` only adds components), and SDK message filters, security roles / field security, and environment
+No. `plan`/`apply` manage plugin packages/assemblies, steps, step images and Custom APIs, including each step's
+enabled/disabled state and unsecure configuration (and its secure configuration when you supply the value with
+`--secure-config`). Solutions must already exist (the required `--solution` only adds components to one), and SDK
+message filters, security roles / field security, and environment
 variables are not managed. Assemblies are upserted, never deleted. See [limitations](limitations.md).
 
 ### Can I register a plugin from a bare `.dll`?
@@ -113,7 +113,8 @@ or a base64 `.pfx`, and delegates to `dotnet nuget sign`. Key Vault / HSM signin
 Yes. `Vela.Plugins`, `Vela.Testing` and `Vela.Messages` (the framework line) and `Vela.Cli` (the CLI) are
 published on nuget.org. Reference the framework packages with `dotnet add package Vela.Plugins` / `Vela.Testing`, and
 install the CLI with `dotnet tool install --global Vela.Cli`. It is still **pre-1.0**, so APIs may change
-between minor versions - see [limitations](limitations.md).
+between minor versions; the [changelog](https://github.com/allandecastro/vela/blob/main/CHANGELOG.md) calls out
+each breaking change.
 
 ### Can the plugin cache do async I/O?
 

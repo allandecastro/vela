@@ -3,11 +3,13 @@
 **Build Dataverse with confidence.** Vela is a framework, a CLI and a test harness for Microsoft Dataverse plugins
 and Custom APIs, with a preview-first `plan` → `apply` workflow.
 
+Vela is pre-1.0: until 1.0, a minor version (`0.y`) may contain breaking changes, which the changelog calls out.
+
 | Package | What it is |
 | --- | --- |
 | `Vela.Plugins` | The plugin runtime (.NET Framework 4.6.2): fluent step and Custom API registration, typed handler contexts, DI, caching. Bundles the Roslyn analyzers (VELA001-VELA028, several with a code fix) and the source generator for typed images and step contexts. |
 | `Vela.Messages` | Typed request/response base classes (`TypedRequest`, `CustomApiRequest`, ...), a dependency of `Vela.Plugins` that client code can use alone. |
-| `Vela.Testing` | The no-connection test harness: an in-memory Dataverse and the plugin pipeline. |
+| `Vela.Testing` | The no-connection test harness: an in-memory Dataverse and plugin pipeline, and a fake execution context for single-plugin edge cases. |
 | `Vela.Cli` | The `vela` .NET tool: `plan` / `apply` registrations, `init` / `add` scaffolding, `models` generation, `sign`. |
 
 ## Install
@@ -41,9 +43,9 @@ namespace Zava.Plugins.Account.Plugins
 }
 ```
 
-Build the plugin package, then preview and apply it into your solution (`--solution` is required: it adds the
-components to that solution and gives the package the publisher prefix Dataverse requires; `apply` asks for
-confirmation on a terminal):
+Build the plugin package, then preview and apply it into your solution (`--solution` is required: it names the
+existing solution the components are added to, and gives a package without a publisher prefix the solution's, which
+Dataverse requires; `apply` asks for confirmation on a terminal):
 
 ```bash
 vela plan  --packages-dir artifacts --solution ZavaSales --interactive

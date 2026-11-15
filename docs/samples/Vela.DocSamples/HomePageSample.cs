@@ -1,6 +1,7 @@
 // The sample of the docs home page (docs/index.md) and the quickstart. Edit the regions, not the pages.
 namespace Vela.DocSamples
 {
+    using System;
     using Microsoft.Xrm.Sdk;
     using Vela.DocSamples.Models;
     using Vela.Plugin;
@@ -30,10 +31,11 @@ namespace Vela.DocSamples
         [Fact]
         public void Rejects_An_Empty_Name()
         {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountValidator>();
+            Guid id = pipeline.Service.Create(new Account { Name = "Zava" });
+
             Assert.Throws<InvalidPluginExecutionException>(() =>
-                PluginContext.For<Account>()
-                    .WithTarget(new Account { Name = "" })
-                    .Execute<AccountValidator>());
+                pipeline.Service.Update(new Account { Id = id, Name = "" }));
         }
         #endregion
     }

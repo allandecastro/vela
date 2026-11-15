@@ -30,13 +30,17 @@ Vela is a framework (`Vela.Plugins`), a CLI (`Vela.Cli`, command `vela`) and a n
 (`Vela.Testing`) for building Microsoft Dataverse plugins and Custom APIs, with a safe, preview-first
 `plan` → `apply` workflow.
 
+> **Status** - Pre-1.0, published on NuGet.org and actively developed. Until 1.0, a minor version (`0.y`) may contain
+> breaking changes; [`CHANGELOG.md`](CHANGELOG.md) calls them out with the migration. The framework packages
+> (`Vela.Messages`, `Vela.Plugins`, `Vela.Testing`) are versioned together, the CLI (`Vela.Cli`) on its own.
+
 ## 📖 Documentation
 
 Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://allandecastro.github.io/vela/)**:
 
 - [Getting started](https://allandecastro.github.io/vela/getting-started/install.html) - install, quickstart, initialize a solution
 - [Guides](https://allandecastro.github.io/vela/guides/) - plugins, Custom APIs, DI, caching, testing, plan/apply, models, signing
-- [Reference](https://allandecastro.github.io/vela/reference/limitations.html) - limitations and FAQ
+- [Reference](https://allandecastro.github.io/vela/reference/) - CLI cheat sheet, JSON output, analyzers, limitations, FAQ
 
 ## Features
 
@@ -46,7 +50,6 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 - **`vela` CLI** - preview-first `plan` → `apply` of registrations, scaffolding (`vela init` / `vela add`), early-bound generation (`vela models`), and package signing.
 - **Idempotent apply** - safe upsert/delete of steps, Custom APIs, and images against a live environment.
 - **No-connection testing** - run plugins against an in-memory Dataverse with no live connection and no mocking-library dependency, with an **opt-in security model** (roles, privileges, business units, teams, sharing and relationship cascades) when you need it.
-- **Client-side (preview, work in progress)** - TypeScript FormModel generation (`vela models --forms --lang ts`), the opt-in web resources project scaffold (`vela init --web-resources`) and web resource deploy (`vela plan`/`apply --webresources`) for the `vela-client` runtime (a separate library). These are new and may change.
 
 ## Packages
 
@@ -54,34 +57,45 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 | --- | --- | --- |
 | `Vela.Plugins` | .NET Framework 4.6.2 | Runtime: fluent plugin/Custom API base types, typed context helpers, lightweight DI and caching. Bundles the Roslyn analyzers (VELA001-VELA028), their code fixes and source generators (typed image projections and step contexts). |
 | `Vela.Messages` | .NET Framework 4.6.2, .NET 10.0 | Typed request/response base classes (`TypedRequest`, `CustomApiRequest`); a dependency of `Vela.Plugins`, usable alone from client code. |
-| `Vela.Cli` (command `vela`) | .NET 10.0 | Plan/apply, scaffolding and package signing for plugins and Custom APIs. |
-| `Vela.Testing` | .NET Framework 4.6.2 | Test harness: fake execution context + in-memory `IOrganizationService`, fluent strongly-typed builder. |
+| `Vela.Cli` (command `vela`) | .NET 10.0 | Plan/apply, scaffolding, early-bound model generation and package signing for plugins and Custom APIs. |
+| `Vela.Testing` | .NET Framework 4.6.2 | Test harness: an in-memory Dataverse and plugin pipeline (`PluginPipeline`), plus a fluent fake execution context (`PluginContext`) for single-plugin edge cases. |
 
-The libraries target .NET Framework 4.6.2 so any supported plug-in project can reference them. Microsoft supports
-plug-ins on 4.6.2 through 4.8 and recommends 4.8 (4.8.1 is not supported); `vela init` scaffolds plugin projects on
-`net48`. See [Target framework](docs/guides/migrating.md#before-you-start) for the plugin-package caveat.
+The libraries target .NET Framework 4.6.2 so any supported plug-in project can reference them (see
+[Support for .NET Framework versions](https://learn.microsoft.com/power-apps/developer/data-platform/supported-customizations#support-for-net-framework-versions)
+on Microsoft Learn); `vela init` scaffolds plugin projects on `net48`. See [Target framework](docs/guides/migrating.md#before-you-start) for the plugin-package caveat.
 
-> **Status** - Pre-1.0 and actively developed, published on NuGet.org. Reference `Vela.Plugins` (and `Vela.Testing` in your test project) with `dotnet add package`, and install the CLI with `dotnet tool install --global Vela.Cli`. Releases run over two lines: a `framework-vX.Y.Z` tag publishes `Vela.Messages` + `Vela.Plugins` + `Vela.Testing`, and `cli-vX.Y.Z` publishes `Vela.Cli`. See [`CHANGELOG.md`](CHANGELOG.md) for what's shipped and the versioning policy.
+## Install
+
+Requires the .NET 10 SDK.
+
+```bash
+dotnet tool install --global Vela.Cli   # the vela command
+dotnet add package Vela.Plugins         # in a plugin project
+dotnet add package Vela.Testing         # in its test project
+```
 
 ## Quickstart
 
+With a Dataverse environment and an existing solution (here `ZavaSales`, publisher prefix `zava`):
+
 ```bash
-dotnet tool install --global Vela.Cli
 vela init --name ZavaSales --prefix Zava --publisher-prefix zava --solution ZavaSales && cd ZavaSales   # minimal; --samples adds examples
 vela models --entities account --out src/Zava.Shared/Models/Generated --namespace Zava.Shared.Models.Generated --interactive
 vela add plugin AccountValidator --entity Account --filtering-attributes Name --project src/Zava.Plugins
+vela add test AccountValidator --entity Account --project tests/Zava.Plugins.Tests
 dotnet build ZavaSales.sln -c Release                                   # packs the plugin package into artifacts/
 vela plan  --packages-dir artifacts --solution ZavaSales --interactive  # read-only preview
 vela apply --packages-dir artifacts --solution ZavaSales --interactive  # asks before writing
 ```
 
-`--solution` (required by `plan` and `apply`) names an existing Dataverse solution the components are added to.
-`--publisher-prefix` names the package `zava_Zava.Plugins`, as Dataverse requires; without it, `--solution` gives the
-package that prefix. `vela init` records both in the project's `PROJECT.md`, which the CLI never reads. The
+`--solution` (required by `plan` and `apply`) names the existing Dataverse solution the components are added to.
+`--publisher-prefix` names the package `zava_Zava.Plugins`, as Dataverse requires; without it, `plan` and `apply` add
+the solution's publisher prefix. `vela init` records both values in the project's `PROJECT.md` for people and
+agents; the CLI never reads it, so the commands take them as flags. The
 [quickstart](https://allandecastro.github.io/vela/getting-started/quickstart.html) explains each step, and the
 **[documentation](https://allandecastro.github.io/vela/)** covers plugins, Custom APIs, testing with
-`Vela.Testing` and the `plan` / `apply` workflow. AI coding agents: start with [`AGENTS.md`](AGENTS.md) in this
-repository, or [`docs/llms.txt`](docs/llms.txt).
+`Vela.Testing` and the `plan` / `apply` workflow. AI coding agents: a solution from `vela init` carries its own
+`AGENTS.md`, and [`docs/llms.txt`](docs/llms.txt) indexes the documentation.
 
 ## Limitations
 
@@ -93,7 +107,7 @@ faithful-but-partial test double). What is intentionally out of scope is collect
 
 Want to build or contribute to the Vela framework itself (not just use it)? See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the repository layout, architecture rules, and how to build and
-test from source.
+test from source ([`AGENTS.md`](AGENTS.md) for AI coding agents working on this repository).
 
 ## Acknowledgments
 
