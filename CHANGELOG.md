@@ -21,6 +21,10 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (Framework)
+
+- `Vela.Plugins` depends on `Newtonsoft.Json` 13.0.4 or later (was 13.0.3). The assembly version is still 13.0.0.0.
+
 ### Changed (CLI)
 
 - `vela add test` no longer generates `new ColumnSet(true)`: the Retrieve and RetrieveMultiple tests read only the

@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 30 # cap a hung restore/build/publish
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
@@ -64,7 +64,7 @@ jobs:
         run: dotnet pack .\src\Vela.Cli\Vela.Cli.csproj -c Release -o .\artifacts --no-build -p:Version=${{ env.VERSION }}
 
       - name: Publish artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vela-${{ env.LINE }}-${{ env.VERSION }}
           path: artifacts\**
@@ -85,7 +85,7 @@ jobs:
 
       - name: Create GitHub Release with packages
         # Use the action for a declarative, pinned release step (uploads the packed artifacts to the release).
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}

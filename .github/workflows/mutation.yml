@@ -96,7 +96,7 @@ jobs:
       - name: Make the base branch available as main
         if: github.event_name == 'pull_request'
         run: git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/heads/main"
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - name: Install Stryker (pinned in .config/dotnet-tools.json)
@@ -141,7 +141,7 @@ jobs:
       - name: Upload HTML report
         if: always()
         continue-on-error: true # artifact storage quota must not fail the mutation gate; the report is also in the summary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mutation-report-${{ matrix.area }}
           path: ${{ matrix.tests }}/StrykerOutput/**/reports/mutation-report.html
