@@ -12,9 +12,9 @@ VELA021, VELA022, VELA024, VELA025, VELA026 and VELA027) are **warnings**.
 | [VELA002](#vela002) | Vela.Usage | Error | A `RegisterStep()` chain never ends with `.Handle(...)` |
 | [VELA003](#vela003) | Vela.Usage | Error | A single-value step modifier is set more than once |
 | [VELA004](#vela004) | Vela.Usage | Error | A step handler is a `static` method instead of an instance method |
-| [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn` / `WithPreImage` / `WithPostImage` |
+| [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn`, image capture or typed-query `Select` |
 | [VELA007](#vela007) | Vela.Usage | Error | An image the message can never provide (pre-image on Create/CreateMultiple, post-image on Delete, any image on RouteTo) |
-| [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share a trigger and nothing tells them apart (same filters and images, no step key) |
+| [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share a trigger and nothing tells them apart, or reuse a step key |
 | [VELA009](#vela009) | Vela.Usage | Error | `HasChanged`/`HasAnyChanged` in a handler whose step registers no pre-image |
 | [VELA010](#vela010) | Vela.Usage | Error | A generated relationship navigation property used in a column selector |
 | [VELA011](#vela011) | Vela.Reliability | Warning | Mutable state on a plugin type: a writable field or auto-property, a `readonly` mutable collection, a captured primary-constructor parameter |
@@ -23,7 +23,7 @@ VELA021, VELA022, VELA024, VELA025, VELA026 and VELA027) are **warnings**.
 | [VELA014](#vela014) | Vela.Usage | Error | A plugin with a generated context or typed image must be declared `partial` |
 | [VELA015](#vela015) | Vela.Usage | Error | A step handler's context does not match the step's message/stage |
 | [VELA016](#vela016) | Vela.Usage | Error | A typed-context handler is bound on more than one image-capturing step |
-| [VELA017](#vela017) | Vela.Usage | Error | A handler reads `ctx.PreImage`/`ctx.PostImage` its step did not capture |
+| [VELA017](#vela017) | Vela.Usage | Error | A handler reads an image (`ctx.PreImage`, `ctx.PostImage`, ...) its step did not capture |
 | [VELA018](#vela018) | Vela.Reliability | Warning | An asynchronous step's handler writes to the Target (the change is lost) |
 | [VELA019](#vela019) | Vela.Reliability | Warning | A plugin accesses the filesystem (`System.IO.File` / `FileStream` / ...), which the sandbox denies |
 | [VELA020](#vela020) | Vela.Usage | Error | A Create/Update (or bulk) step reaches `Handle(...)` without `FilterOn(...)` |
@@ -38,6 +38,7 @@ VELA021, VELA022, VELA024, VELA025, VELA026 and VELA027) are **warnings**.
 
 Code fixes (editor lightbulb): VELA003, VELA004, VELA005, VELA007, VELA012, VELA014, VELA015, VELA023, VELA026 and VELA027.
 The [typed image projection generator](#typed-image-projection-generator) ships in the same assembly as the analyzers.
+Rule ids are never reused: [VELA006](#vela006) is retired.
 
 ## VELA001
 
@@ -53,7 +54,7 @@ column itself, `a => a.PrimaryContactId`). The runtime rejects both too, instead
 
 ## VELA002
 
-**A `RegisterStep()` chain must end with `.Handle(...)`.** The redesigned builder puts `Handle` last (it returns
+**A `RegisterStep()` chain must end with `.Handle(...)`.** The builder puts `Handle` last (it returns
 `void`), so a step that stops earlier never binds a handler and would have nothing to run. Any discarded
 `RegisterStep()....;` statement, or expression body of a void member (`RegisterPluginSteps() => RegisterStep()...;`),
 whose value is still a fluent builder is flagged.
@@ -84,13 +85,14 @@ framework's instance-bound handler dispatch, so `.Handle(SomeStaticMethod)` is f
 
 ## VELA005
 
-**Do not list the same column twice in one selector list.** `FilterOn(...)`, `WithPreImage(...)`, and
-`WithPostImage(...)` take a list of column selectors; repeating a column (for example
+**Do not list the same column twice in one selector list.** `FilterOn(...)`, `WithPreImage(...)`,
+`WithPostImage(...)`, `WithSubordinatePreImage(...)`, `WithSubordinatePostImage(...)` and the typed query's
+`Select(...)` (`Query.For<T>().Select(...)`) take a list of column selectors; repeating a column (for example
 `FilterOn(a => a.Name, a => a.Name)`) has no effect and is almost always a copy/paste slip. Only lambda column
 selectors are compared, so a leading image alias string is ignored, and the same column in two different calls
 (one in `FilterOn`, one in `WithPreImage`) is fine.
 
-**Fix:** list each column once.
+**Fix:** list each column once. The code fix removes the duplicate.
 
 ## VELA006
 
@@ -249,9 +251,8 @@ explicit image generates nothing and does not require `partial`.
 **Step handler context must match the step.** A handler bound with `.Handle(...)` must take the step's message
 context (for example `IUpdatePostContext<T>`), its generated typed step context (a subclass of it), or the plain
 `ILocalPluginContext`. The `Handle(Delegate)` overload (which lets a method group bind the generated context via its
-natural type) is permissive at compile time, so this restores the guarantee the specific
-`Handle(Action<IXxxContext>)` overload gave: a context for a different message or stage (or an unrelated type) is
-reported. Scoped to the guided `Create` / `Update` / `Delete` path. On every path, a handler that does not take
+natural type) is permissive at compile time, so this rule reports what it cannot catch: a context for a different
+message or stage (or an unrelated type). Scoped to the guided `Create` / `Update` / `Delete` path. On every path, a handler that does not take
 exactly one parameter or does not return `void` is reported too: `Handle(Delegate)` compiles it, and the step builder
 rejects it at registration.
 
@@ -266,13 +267,18 @@ name. Use a distinct handler per image-capturing step (or read images via `ctx.P
 context if you must share a handler). Only a class's own steps are compared: two nested plugins in one container
 class may each have a handler with the same name.
 
+**Fix:** give each image-capturing step its own handler.
+
 ## VELA017
 
 **Image read but not captured by the step.** A post-operation context exposes both `PreImage` and `PostImage`
-(a pre context exposes `PreImage`), so reading an image the step did not capture compiles but returns `null` at
-runtime - a silent footgun. The rule fires only in the unambiguous case: the handler is an instance method bound
-by exactly one `RegisterStep()` chain in the same class, and that chain has no matching `WithPreImage(...)` /
-`WithPostImage(...)`. Add the capture to the step, or read the image it does capture.
+(a pre context exposes `PreImage`, and a Merge context also `SubordinatePreImage` / `SubordinatePostImage`), so
+reading an image the step did not capture compiles but returns `null` at runtime. The rule fires only in the
+unambiguous case: the handler is an instance method bound by exactly one `RegisterStep()` chain in the same class,
+and that chain has no matching `WithPreImage(...)` / `WithPostImage(...)` / `WithSubordinatePreImage(...)` /
+`WithSubordinatePostImage(...)`.
+
+**Fix:** add the capture to the step, or read the image it does capture.
 
 ## VELA018
 
@@ -337,20 +343,23 @@ out of the sandbox. See [Respect the sandbox](../guides/plugins.md#respect-the-s
 
 ## VELA020
 
-A `Create`, `Update`, `CreateMultiple` or `UpdateMultiple` step must declare at least one filtering attribute, or
+**Create/Update step is missing `FilterOn(...)`.** A `Create`, `Update`, `CreateMultiple` or `UpdateMultiple` step must declare at least one filtering attribute, or
 building the step fails at runtime (the step would otherwise fire on every create/update). VELA020 reports a
 `RegisterStep()` chain that reaches `.Handle(...)` without `.FilterOn(...)`, so the mistake fails in the editor and
-at build instead. Add `.FilterOn(e => e.Column)` before `.Handle(...)`. It also reports a request or marker type naming one of the four
+at build instead. It also reports a request or marker type naming one of the four
 messages (`OnMessage<UpdateMarker>()`) reaching `.Handle(...)`: the type-stated paths offer no `FilterOn`, so use the
 typed `OnCreate()` / `OnUpdate()` / ... trigger instead. A chain split across a local variable is not analyzed (it may
 have been filtered before the split).
 
+**Fix:** add `.FilterOn(e => e.Column)` before `.Handle(...)`.
+
 ## VELA021
 
 **Typed image projection not generated.** Reported by the generator (a warning, on the `WithPreImage` /
-`WithPostImage` call) when a capture lists columns but no projection can be emitted for it: the image alias is not a
-compile-time constant, a selector does not read a column property of the entity (`a => a.GetHashCode()`), or the
-trigger of a chain that starts at `RegisterStep()` is not constant (`OnMessage(variable)`). Without it the only symptom
+`WithPostImage` call) when a capture lists columns but no projection can be emitted for it: a column argument is
+not an inline selector lambda, the image alias is not a compile-time constant, a selector does not read a column
+property of the entity (`a => a.GetHashCode()`), or the message or stage of a chain that starts at `RegisterStep()`
+cannot be read from the chain. Without it the only symptom
 is a `CS0246` on the missing `{Handler}_{Pre|Post}Image` type. Nested paths, `Entity` members and relationships are
 already errors of VELA001 / VELA010 and are not reported again; a chain split across locals is not reported.
 
@@ -362,8 +371,8 @@ already errors of VELA001 / VELA010 and are not reported again; a chain split ac
 **A step on `SetState` never fires.** Reported on `On<T>()` / `OnMessage<T>()` when `T` pins the message with
 `[SdkMessage("SetState")]`; `On<SetStateRequest>()` and a `[CustomMessage("SetState")]` marker register on
 `SetStateDynamicEntity` and are not reported. Dataverse accepts a `SetState` registration, but never runs the step: a `SetStateRequest` fires the `SetStateDynamicEntity`
-steps, and an Update of `statecode` fires the Update steps plus nested `SetStateDynamicEntity` steps (verified live
-on every stage). The step's logic would silently never execute.
+steps, and an Update of `statecode` fires the Update steps plus nested `SetStateDynamicEntity` steps. The step's logic
+would silently never execute.
 
 **Fix:** register on `OnUpdate().FilterOn(x => x.StateCode)` (fires for both a SetState and an Update of the state;
 `SetStateRequest` is [deprecated](https://learn.microsoft.com/dotnet/api/microsoft.crm.sdk.messages.setstaterequest)
@@ -379,53 +388,6 @@ request whose message has one (`On<UpdateRequest>()`, `On<AssignRequest>()`, `On
 
 **Fix:** use the typed trigger; the code fix rewrites `On<UpdateRequest>()` to `OnUpdate()`. Then give the handler the
 trigger's context (`IUpdatePostContext<Account>` instead of `IMessagePostContext<UpdateRequest>`).
-
-## Typed image projection generator
-
-The same bundled `Vela.Analyzers` assembly also contains an incremental **source generator**
-(`ImageProjectionGenerator`) - so, like the analyzers, it ships with `Vela.Plugins` and needs no separate package
-or project. For every step that captures explicit columns in `WithPreImage(a => a.X, ...)` /
-`WithPostImage(...)`, it emits a per-step projection type holding **only** those columns, which you read with
-`ctx.PreImageAs<T>()` / `ctx.PostImageAs<T>()`. Reading a column the step did not capture is then a compile
-error instead of a silent `null`. See [Typed images](../guides/plugins.md#typed-images-compile-safe-projections)
-in the plugin guide for the full usage.
-
-Key points:
-
-- **Compile-time, regenerated every build.** The projections are produced in memory from the capture lambdas
-  against your current early-bound model (they are not files in your source tree; `F12` opens them). If a
-  captured column is removed or renamed in the early-bound model (for example after re-running `vela models`),
-  the `WithPreImage`/`WithPostImage` selector and the handler that reads the projection stop compiling - the
-  drift surfaces as a build error, never a stale value.
-- **Naming and nesting.** A projection is emitted as a **nested type inside the plugin's own `partial` class**,
-  named `{Handler}_{Pre|Post}Image` (plus the alias when one is given). Because it is scoped to the plugin class it
-  needs no plugin-name prefix and no `using`: the handler reads it unqualified
-  (`ctx.PostImageAs<OnUpdated_PostImage>()`). This is why a plugin that captures a typed image must be declared
-  `partial` ([VELA014](#vela014)). A lambda handler (no name) falls back to `{Message}{Stage}_{Pre|Post}Image`,
-  where the message comes from the trigger: the guided `OnCreate()`..., the typed `On<TRequest>()`, or the
-  permissive `OnMessage<TMarker>()` (the request or marker type name, minus a `Request` suffix).
-- **Opt-in and additive.** A capture with no explicit columns (`WithPreImage()`) keeps the full early-bound
-  entity and generates nothing; if the column list is not a literal set of selectors, the generator skips it, you
-  keep the untyped image, and [VELA021](#vela021) says why. A column property without `[AttributeLogicalName]` is
-  projected under its lower-cased name, as the runtime resolves it.
-- **Any containing type.** The generated part repeats each containing type's kind and type parameters, so a generic
-  plugin or a plugin nested in a `struct` / `record` works (each must be `partial`).
-- **Explicit widening to the entity.** Each projection also carries an **explicit** cast to its entity
-  (`(Account)ctx.PreImage`) for the case where a service needs the whole image. It is lossless (the projection
-  retains the source image, so `Id`, logical name and every attribute survive) and equivalent to
-  `ctx.GetPreImage<Account>()` / `ctx.GetPostImage<Account>()` (both go through `Entity.ToEntity`); an absent image
-  casts to `null`. It is deliberately not an implicit conversion: leaving the captured-columns view is a visible
-  step, so the compile-safety does not disappear silently. See
-  [Need the whole entity](../guides/plugins.md#need-the-whole-entity-for-a-service).
-- **Typed step context.** For every named handler (`.Handle(OnX)`) on a modelled, entity-bound message, the
-  generator also emits a `{Handler}Context` (a subclass of the step's message context). When the step captures an
-  image, the context exposes `ctx.PreImage` / `ctx.PostImage` typed to the captured columns (plus
-  `ctx.SubordinatePreImage` / `ctx.SubordinatePostImage` on Merge, and per-target `ctx.PreImages` / `ctx.PostImages`
-  on CreateMultiple / UpdateMultiple), so the handler reads them as members instead of `ctx.PreImageAs<T>()`. An
-  imageless handler gets a bare subclass, so adding a capture later does not change its signature. `OnMessage(...)`
-  and Custom API handlers get none. See
-  [Typed step context](../guides/plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage) and the
-  VELA015 / VELA016 guard rails.
 
 ## VELA024
 
@@ -578,3 +540,50 @@ is not a constant, and a `RegisterStep()` chain split across a local variable (i
 
 Column lengths: [Custom API tables](https://learn.microsoft.com/power-apps/developer/data-platform/custom-api-tables)
 and [SdkMessageProcessingStep](https://learn.microsoft.com/power-apps/developer/data-platform/reference/entities/sdkmessageprocessingstep).
+
+## Typed image projection generator
+
+The same bundled `Vela.Analyzers` assembly also contains an incremental **source generator**
+(`ImageProjectionGenerator`) - so, like the analyzers, it ships with `Vela.Plugins` and needs no separate package
+or project. For every step that captures explicit columns in `WithPreImage(a => a.X, ...)` /
+`WithPostImage(...)`, it emits a per-step projection type holding **only** those columns, which you read with
+`ctx.PreImageAs<T>()` / `ctx.PostImageAs<T>()`. Reading a column the step did not capture is then a compile
+error instead of a silent `null`. See [Typed images](../guides/plugins.md#typed-images-compile-safe-projections)
+in the plugin guide for the full usage.
+
+Key points:
+
+- **Compile-time, regenerated every build.** The projections are produced in memory from the capture lambdas
+  against your current early-bound model (they are not files in your source tree; `F12` opens them). If a
+  captured column is removed or renamed in the early-bound model (for example after re-running `vela models`),
+  the `WithPreImage`/`WithPostImage` selector and the handler that reads the projection stop compiling - the
+  drift surfaces as a build error, never a stale value.
+- **Naming and nesting.** A projection is emitted as a **nested type inside the plugin's own `partial` class**,
+  named `{Handler}_{Pre|Post}Image` (plus the alias when one is given). Because it is scoped to the plugin class it
+  needs no plugin-name prefix and no `using`: the handler reads it unqualified
+  (`ctx.PostImageAs<OnUpdated_PostImage>()`). This is why a plugin that captures a typed image must be declared
+  `partial` ([VELA014](#vela014)). A lambda handler (no name) falls back to `{Message}{Stage}_{Pre|Post}Image`,
+  where the message comes from the trigger: the guided `OnCreate()`..., the typed `On<TRequest>()`, or the
+  permissive `OnMessage<TMarker>()` (the request or marker type name, minus a `Request` suffix).
+- **Opt-in and additive.** A capture with no explicit columns (`WithPreImage()`) keeps the full early-bound
+  entity and generates nothing; if the column list is not a literal set of selectors, the generator skips it, you
+  keep the untyped image, and [VELA021](#vela021) says why. A column property without `[AttributeLogicalName]` is
+  projected under its lower-cased name, as the runtime resolves it.
+- **Any containing type.** The generated part repeats each containing type's kind and type parameters, so a generic
+  plugin or a plugin nested in a `struct` / `record` works (each must be `partial`).
+- **Explicit widening to the entity.** Each projection also carries an **explicit** cast to its entity
+  (`(Account)ctx.PreImage`) for the case where a service needs the whole image. It is lossless (the projection
+  retains the source image, so `Id`, logical name and every attribute survive) and equivalent to
+  `ctx.GetPreImage<Account>()` / `ctx.GetPostImage<Account>()` (both go through `Entity.ToEntity`); an absent image
+  casts to `null`. It is deliberately not an implicit conversion: leaving the captured-columns view is a visible
+  step, so the compile-safety does not disappear silently. See
+  [Need the whole entity](../guides/plugins.md#need-the-whole-entity-for-a-service).
+- **Typed step context.** For every named handler (`.Handle(OnX)`) on a modelled, entity-bound message, the
+  generator also emits a `{Handler}Context` (a subclass of the step's message context). When the step captures an
+  image, the context exposes `ctx.PreImage` / `ctx.PostImage` typed to the captured columns (plus
+  `ctx.SubordinatePreImage` / `ctx.SubordinatePostImage` on Merge, and per-target `ctx.PreImages` / `ctx.PostImages`
+  on CreateMultiple / UpdateMultiple), so the handler reads them as members instead of `ctx.PreImageAs<T>()`. An
+  imageless handler gets a bare subclass, so adding a capture later does not change its signature.
+  `OnMessage<TMarker>()` and Custom API handlers get none. See
+  [Typed step context](../guides/plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage) and the
+  VELA015 / VELA016 guard rails.
