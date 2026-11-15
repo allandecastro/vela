@@ -84,10 +84,11 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(readTemplate, AccessRights.ReadAccess)
                 .WithAccessTeamTemplate(writeTemplate, AccessRights.WriteAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo)).User(Alice, SalesBu, "appender"))
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo).Grant("account", AccessLevel.User, Privilege.Read)).User(Alice, SalesBu, "appender")) // Read on her own accounts only: Bob's is reached through the read team alone
                 .Seed(AccountOwnedBy(record, Bob));
             AddToTeam(svc, record, Alice, readTemplate);
             AddToTeam(svc, record, Alice, writeTemplate);
+            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true))); // the read team grants Read
 
             // Drop the read team only.
             svc.Execute(new RemoveUserFromRecordTeamRequest

@@ -43,6 +43,25 @@ public sealed class ModelsLangOptionalTests
         Assert.DoesNotContain("requires a value", err);
     }
 
+    // --verify checks tables and roles only: a scope of messages / Custom APIs alone would verify nothing and exit 0,
+    // so it is refused before connecting (the error names the scopes to use, not the missing connection).
+    [Theory]
+    [InlineData("--messages", "SendEmail")]
+    [InlineData("--custom-apis", "zava_Approve")]
+    [InlineData("--messages", null)]
+    public void Verify_without_a_table_or_role_scope_is_refused_before_connecting(string option, string? value)
+    {
+        string[] args = value is null
+            ? ["--verify", option, "--namespace", "Zava.Models"]
+            : ["--verify", option, value, "--namespace", "Zava.Models"];
+
+        string stderr = RunCapturingStderr(args, out int exitCode);
+
+        Assert.Equal(ExitInvalidArguments, exitCode);
+        Assert.Contains("--verify needs a table or role scope", stderr);
+        Assert.DoesNotContain("Missing Dataverse auth", stderr);
+    }
+
     [Theory]
     [InlineData("--forms")]
     [InlineData("--tables")]

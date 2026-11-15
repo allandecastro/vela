@@ -466,6 +466,12 @@ namespace Vela.Testing
                     stored.Id = _idSequence();
                 }
 
+                // A seeded role copy is owned by its business unit, like the materialized ones.
+                if (string.Equals(stored.LogicalName, RoleTable, StringComparison.OrdinalIgnoreCase))
+                {
+                    StampRoleBusinessUnit(stored);
+                }
+
                 Table(stored.LogicalName)[stored.Id] = stored;
                 _seededRows[stored.Id] = stored.LogicalName;
             }

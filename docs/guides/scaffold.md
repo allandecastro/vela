@@ -20,15 +20,18 @@ ZavaSales/
       ProjectServices.cs    #   the assembly's service registrar, empty
       Messages.cs           #   the project's message keys and their source, empty
     Zava.Integrations/      # opt-in second plugin package, same two files (add with --integrations)
-    Zava.WebResources/      # opt-in TypeScript form scripts / web resources (add with --web-resources)
+    Zava.WebResources/      # opt-in TypeScript web resources, preview (add with --web-resources)
   tests/
     Zava.Plugins.Tests/     # xunit + Vela.Testing, no connection (omit with --no-tests); empty until `vela add test`
     Zava.Integrations.Tests/ # with --integrations (omit with --no-tests); empty until `vela add test`
   .vela/scaffold-manifest.json  # what init wrote, so `--force` never touches your code (commit it)
   PROJECT.md                   # the publisher prefix and the solution of each package (never read by the CLI)
   AGENTS.md                    # instructions for AI coding agents: steps, Custom APIs, tests, the CLI loop
+  README.md                    # the build, test and deploy loop of the generated solution
   .editorconfig                # code style: usings inside the namespace (see below)
+  .gitignore
   Directory.Build.props        # shared build settings for src/ and tests/
+  Directory.Packages.props     # opts the solution out of a parent Central Package Management setup
 ```
 
 The minimal solution builds, tests and plans unedited: the package registers nothing, so `vela plan` reports no
@@ -114,8 +117,8 @@ Pass **`--samples`** to see every pattern working instead. It adds, to the same 
     Zava.Integrations.Tests/ # xunit tests for the Integrations package
 ```
 
-`Zava.Plugins` then ships working examples: a single-step plugin (schedules a follow-up task), a multi-step router
-plugin, table-**bound** and **global** Custom APIs, a cross-table shared service, two **table-scoped** services (one
+`Zava.Plugins` then ships working examples: two single-step plugins (one schedules a follow-up task, one counts an
+account's contacts with a typed aggregate query), a multi-step router plugin, table-**bound** and **global** Custom APIs, a cross-table shared service, two **table-scoped** services (one
 write, one read) and `AccountMessageReference`, a cheat-sheet with one step per typed message. The cheat-sheet is an
 `abstract` class: it compiles, but neither `vela apply` nor Dataverse registers it, so it is never deployed. `Zava.Plugins.Tests` runs those plugins and Custom APIs
 with [`Vela.Testing`](testing.md), no Dataverse connection: `dotnet test tests/Zava.Plugins.Tests`. Each file's

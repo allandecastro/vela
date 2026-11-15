@@ -80,6 +80,7 @@ internal static class RoleReader
         IReadOnlyDictionary<Guid, IReadOnlyList<(string Entity, PrivilegeType Type)>> privileges = BuildPrivilegeMap(service);
         return roots.Values
             .OrderBy(r => r.GetAttributeValue<string>("name"), StringComparer.Ordinal)
+            .ThenBy(r => r.Id)
             .Select(r => new RoleModel(
                 r.GetAttributeValue<string>("name"),
                 r.Id,

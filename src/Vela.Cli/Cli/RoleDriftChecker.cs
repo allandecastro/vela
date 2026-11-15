@@ -113,7 +113,7 @@ internal static class RoleDriftChecker
                 current = [];
                 grants[role] = current;
             }
-            else if (current is not null && line.StartsWith("(\"", StringComparison.Ordinal)
+            else if (current is not null && IsTupleStart(line)
                 && ReadLiterals(line) is [string entity, string level, string privilege])
             {
                 current.Add(new Grant(entity, privilege, level));
@@ -142,40 +142,62 @@ internal static class RoleDriftChecker
     {
         IReadOnlyList<ExtractedRole> live = (liveSource is null ? null : Extract(liveSource)) ?? [];
         IReadOnlyList<ExtractedRole>? local = localSources.Select(Extract).FirstOrDefault(r => r is not null);
-        Dictionary<string, ExtractedRole> localByName = (local ?? [])
-            .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        ILookup<string, ExtractedRole> localByName = (local ?? []).ToLookup(r => r.Name, StringComparer.OrdinalIgnoreCase);
         HashSet<string> liveNames = new(live.Select(r => r.Name), StringComparer.OrdinalIgnoreCase);
 
+        // Several root roles can share a name (the generator suffixes their identifiers), so each name keeps all its
+        // roles on both sides and they are paired by root id first.
         List<RoleDrift> drifts = [];
-        foreach (ExtractedRole liveRole in live)
+        foreach (IGrouping<string, ExtractedRole> liveGroup in live.GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase))
         {
-            if (!localByName.TryGetValue(liveRole.Name, out ExtractedRole? localRole))
+            List<ExtractedRole> localLeft = localByName[liveGroup.Key].ToList();
+            List<ExtractedRole> liveLeft = [];
+            foreach (ExtractedRole liveRole in liveGroup)
             {
-                drifts.Add(new RoleDrift(liveRole.Name, MissingInDataverse: false, MissingLocally: true, null, liveRole.Id, [], [], []));
+                int match = localLeft.FindIndex(r => r.Id == liveRole.Id);
+                if (match < 0)
+                {
+                    liveLeft.Add(liveRole);
+                    continue;
+                }
+
+                drifts.Add(CompareGrants(localLeft[match], liveRole));
+                localLeft.RemoveAt(match);
+            }
+
+            // One role left on each side is the same role under another root id. More than one cannot be paired
+            // reliably, so each is reported on its own: missing locally or missing in the environment.
+            if (liveLeft.Count == 1 && localLeft.Count == 1)
+            {
+                drifts.Add(CompareGrants(localLeft[0], liveLeft[0]));
                 continue;
             }
 
-            drifts.Add(CompareGrants(localRole, liveRole));
+            drifts.AddRange(liveLeft.Select(MissingLocally));
+            drifts.AddRange(localLeft.Select(MissingInDataverse));
         }
 
-        // A role the class has but the environment does not (a requested name, or one the solution no longer holds).
-        IEnumerable<string> localOnly = localByName.Keys.Where(n => !liveNames.Contains(n));
-        foreach (string name in localOnly.Concat(notFoundInDataverse).Distinct(StringComparer.OrdinalIgnoreCase))
+        // A role the class has but the environment does not (one the solution no longer holds), then a requested
+        // name neither side has.
+        drifts.AddRange((local ?? []).Where(r => !liveNames.Contains(r.Name)).Select(MissingInDataverse));
+        foreach (string name in notFoundInDataverse.Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            if (liveNames.Contains(name))
+            if (!liveNames.Contains(name) && !localByName.Contains(name))
             {
-                continue;
+                drifts.Add(new RoleDrift(name, MissingInDataverse: true, MissingLocally: true, null, null, [], [], []));
             }
-
-            Guid? localId = localByName.TryGetValue(name, out ExtractedRole? localRole) ? localRole.Id : null;
-            drifts.Add(new RoleDrift(localRole?.Name ?? name, MissingInDataverse: true, MissingLocally: localRole is null, localId, null, [], [], []));
         }
 
         return new RoleDriftReport(
             MissingLocalClass: local is null,
-            drifts.OrderBy(d => d.Name, StringComparer.Ordinal).ToList());
+            drifts.OrderBy(d => d.Name, StringComparer.Ordinal).ThenBy(d => d.LiveId ?? d.LocalId).ToList());
     }
+
+    private static RoleDrift MissingLocally(ExtractedRole live) =>
+        new(live.Name, MissingInDataverse: false, MissingLocally: true, null, live.Id, [], [], []);
+
+    private static RoleDrift MissingInDataverse(ExtractedRole local) =>
+        new(local.Name, MissingInDataverse: true, MissingLocally: false, local.Id, null, [], [], []);
 
     private static RoleDrift CompareGrants(ExtractedRole local, ExtractedRole live)
     {
@@ -214,6 +236,23 @@ internal static class RoleDriftChecker
 
     private static IEnumerable<Grant> Sorted(IEnumerable<Grant> grants) =>
         grants.OrderBy(g => g.Entity, StringComparer.Ordinal).ThenBy(g => g.Privilege, StringComparer.Ordinal);
+
+    // A grant tuple line: "(", optional whitespace, then the first string literal ("( \"account\", ..." included).
+    private static bool IsTupleStart(string line)
+    {
+        if (!line.StartsWith("(", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        int i = 1;
+        while (i < line.Length && char.IsWhiteSpace(line[i]))
+        {
+            i++;
+        }
+
+        return i < line.Length && line[i] == '"';
+    }
 
     // "public const string SalesRepName = ..." -> ("SalesRep", "= ...").
     private static bool TryReadMember(string line, string prefix, out string identifier, out string rest)

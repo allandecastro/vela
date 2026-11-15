@@ -59,5 +59,6 @@ waits for the plugin type, then registers the step and its image. A second run w
 run fails partway, the resume report on stderr lists what completed; fix the cause and re-run. See
 [Plan and apply](plan-apply.md) for authentication and options.
 
-**5. Verify** in Dataverse: rename an account and look for the trace line in the plug-in trace log (the
-environment's Plugin Trace Log setting must not be `Off`).
+**5. Verify** in Dataverse: rename an account, then read the trace line with
+[`vela logs`](cli-overview.md#reading-execution-logs-vela-logs) (`vela logs --since 1h -i`) or in the plug-in trace
+log. Trace logging must be [enabled on the environment](https://learn.microsoft.com/power-apps/developer/data-platform/logging-tracing#enable-trace-logging).
