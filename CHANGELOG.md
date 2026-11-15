@@ -41,9 +41,6 @@ All notable changes to Vela are documented here. The format is based on
 ### Fixed (CLI)
 
 - The `--pfx-credential` help of `vela sign` names the Windows Credential Manager, the only store it reads.
-
-### Fixed (CLI)
-
 - `vela models --verify` with only `--messages` / `--custom-apis` (no table or role scope) checked nothing and exited
   `0`. It is now refused before connecting, with the invalid-arguments exit code.
 - `vela models --verify --solution X --solution-roles` on a solution that holds roles but no table failed with "No
