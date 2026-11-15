@@ -11,7 +11,8 @@ vela sign --package artifacts/zava_Zava.Integrations.1.0.0.nupkg --pfx-base64-en
 ```
 
 Certificate sources (exactly one): `--fingerprint` (cert in `CurrentUser\My` - recommended, no secret on
-disk), `--pfx <file>` with a password or `--pfx-credential` (a Windows Credential Manager entry), or the base64
+disk), `--pfx <file>` with a password (`--pfx-password-env`) or `--pfx-credential` (a Windows Credential Manager entry,
+Windows only), or the base64
 `.pfx` content (a CI secret, decoded to an owner-only temp file and deleted after). Optional `--timestamp`
 (default `http://timestamp.digicert.com`).
 

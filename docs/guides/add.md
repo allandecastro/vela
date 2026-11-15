@@ -5,7 +5,7 @@ step to an existing plugin) without writing the boilerplate by hand. Namespaces 
 follow the same by-table layout as `vela init` (so they drop straight into a scaffolded solution):
 
 ```powershell
-# run inside the project folder, or pass --project <csproj>
+# run inside the project folder, or pass --project <csproj or its folder>
 vela add plugin AccountValidatorPlugin --entity Account --message Update --filtering-attributes Name
 vela add plugin --entity Contact --message Delete           # named ContactPlugin
 vela add service AccountFollowUpService --entity Account  # table-scoped interface + implementation
@@ -25,7 +25,8 @@ vela add --interactive
 ```
 
 - `--entity <ModelType>` is the early-bound class name (e.g. `Account`); it sets the `EntityPluginBase<T>`
-  type and the `<Table>/` folder. Required for a plugin and a service; omit on a Custom API to generate a global one.
+  type and the `<Table>/` folder. Required for a plugin and a step; optional for a service (without it, a service
+  shared by several tables) and a Custom API (without it, a global one).
 - **Plugin name** (`add plugin`): `<Name>` is optional and defaults to `<Entity>Plugin` (`--entity Account` writes
   `Account/Plugins/AccountPlugin.cs`). Every other kind requires its name.
 - **An existing plugin file is never edited by `add plugin`.** When `<Table>/Plugins/<Name>.cs` exists and `--force`
@@ -38,10 +39,10 @@ vela add --interactive
   your target solution's **publisher prefix** or `apply --solution` rejects it. `--prefix <publisherprefix>` is
   **required** (for example `--prefix dv` renders `dv_<Name>`): `add` stays offline, so it does not resolve a
   solution, and it never guesses the prefix from the project prefix or reads it from the project. The value is the
-  `publisherPrefix` of the solution's [`PROJECT.md`](scaffold.md#projectmd); `vela solution show <solution> --json`
+  `publisherPrefix` recorded in [`PROJECT.md`](scaffold.md#projectmd); `vela solution show <solution> --json`
   prints a solution's prefix. Without `--prefix` the command exits `2` and writes nothing; when the project still has
-  the `<VelaPublisherPrefix>` an earlier `vela init` wrote, the message quotes its value (`pass --prefix zava`) but
-  does not use it. The wizard (`vela add --interactive`) asks for it. A value that is not a valid publisher prefix
+  the `<VelaPublisherPrefix>` property an older `vela init` wrote, the message quotes its value (`pass --prefix zava`)
+  but does not use it. The wizard (`vela add --interactive`) asks for it. A value that is not a valid publisher prefix
   (2-8 characters, letter first, alphanumeric) is refused rather than written into a name Dataverse would reject.
   See [the publisher prefix](custom-apis.md#the-publisher-prefix).
   `--function` adds a placeholder `Result` response (a function must return a value) and sets it in the handler.
@@ -57,12 +58,12 @@ vela add --interactive
   `On<XxxRequest>()`: the SDK class, fully qualified, when one ships (`--message SetState` renders
   `On<Microsoft.Crm.Sdk.Messages.SetStateRequest>()`, which registers on `SetStateDynamicEntity`, the message a
   `SetStateRequest` fires; that request is deprecated, and an Update of `statecode` covers both, so for a state change prefer
-  `--message Update` with `--filtering-attributes statecode`), otherwise the request [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`)
+  `--message Update` with `--filtering-attributes StateCode`), otherwise the request [`vela models --messages <name>`](models.md) (or `--custom-apis <name>`)
   generates, with a note to generate it. Whatever the message, the plugin is `partial` and its handler takes its
   generated `<Handler>Context` (see [Typed step context](plugins.md#typed-step-context-read-images-as-ctxpreimage--ctxpostimage)),
   so its signature stays the same when the step later captures an image. The handler is `Handle<Message>`
   (`HandleUpdate(HandleUpdateContext ctx)`), the same default as `add step`; `--handler <Method>` names it
-  (a valid C# method name, else the command fails and writes nothing). `--project <csproj>` (default:
+  (a valid C# method name, else the command fails and writes nothing). `--project <csproj or its folder>` (default:
   the single `.csproj` in the current directory), `--force` (overwrite an existing file), `--json` (machine-readable
   report).
 - **Each kind takes only its own options.** An option the kind does not use (for example `add service --message`
@@ -136,7 +137,8 @@ vela add --interactive
   `WithStepKey` or `ForRelationship`. `add step` refuses only an exact duplicate - an existing step on the same
   trigger with the same filtering columns and nothing else to tell them apart (the add-step defaults `Create`,
   `PostOperation`, `Sync` are what `add plugin` emits). A step that shares a trigger but filters on other columns
-  is added, with a note suggesting `.WithStepKey("...")` to name both. The handler body's TODO
+  is added, with a note suggesting `.WithStepKey("...")` to name both. The handler name must be new in the file:
+  a second step on a message whose `Handle<Message>` already exists needs `--handler <Method>`. The handler body's TODO
   points at the typed access for the message (`ctx.Request.Target`, or `ctx.Request.Targets` for a `*Multiple`
   step).
 - `vela add form-script <entity>` (preview) scaffolds a client-side form script (`src/<entity>/Forms/main.ts` +

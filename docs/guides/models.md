@@ -1,7 +1,7 @@
 # Early-bound generation (`vela models`)
 
 Generate early-bound model classes over the **same Dataverse connection** as `plan`/`apply` (no separate
-`pac auth`). Scope the **table list** by **solution** (which `pac modelbuilder` can't) and/or an explicit list.
+`pac auth`). Scope the **table list** by **solution** and/or an explicit list.
 `--solution` chooses *which tables* to generate (its Entity components), **not which columns**: each table is
 generated with **all** its columns (full metadata, like `pac modelbuilder`). A column's solution membership is
 orthogonal to wanting it in the model (standard columns are never in a solution; a column may be added only for
@@ -22,7 +22,7 @@ vela models --custom-apis zava_Recalculate --interactive
 vela models --custom-apis --interactive
 
 # ...every Custom API except the typed ones you authored in code (pass your built package)
-vela models --custom-apis --package bin/Release/Zava.Plugins.nupkg --interactive
+vela models --custom-apis --package artifacts/zava_Zava.Plugins.1.0.0.nupkg --interactive
 
 # typed Request/Response classes for specific SDK messages (into Messages/)
 vela models --messages AddToQueue,RouteTo --interactive
@@ -214,7 +214,7 @@ rather than fail:
 - a lookup keeps no typed `[LookupTargets]` (the export stores numeric type codes, not logical names) - it stays a
   plain `EntityReference`;
 - a global option set not present in the file falls back to a raw `OptionSetValue`;
-- relationship navigation properties are not emitted in this first version.
+- relationship navigation properties are not emitted.
 
 Offline output is C# only (`--forms` / `--tables` and `--verify` need live metadata). When the org is reachable,
 prefer the connected path - it carries the full metadata (typed lookup targets, relationships).
@@ -225,8 +225,8 @@ prefer the connected path - it carries the full metadata (typed lookup targets, 
 (`Messages/<Name>.cs`), compiled by the Shared project, and its `On<Message>()` step extension
 (`Messages/<Name>.Steps.cs`, an `internal` class), compiled by each plugin project. The extension extends the
 `Vela.Plugins` step builder, which the Shared project does not reference, so a scaffold made by `vela init` excludes
-`*.Steps.cs` from Shared and links it into the plugin projects. A project scaffolded before this change needs the
-two lines by hand:
+`*.Steps.cs` from Shared and links it into the plugin projects. A project that does not have these two item groups
+(for example one scaffolded by an older `vela init`) needs them by hand:
 
 ```xml
 <!-- Shared .csproj -->
@@ -519,17 +519,10 @@ column to check a role in any business unit (see [Role membership](security-mode
 intersect tables generated (`vela models --entities role,team --intersect` adds `SystemUserRoles`, `TeamRoles` and
 `TeamMembership`):
 
-```csharp
-bool isSalesperson = ctx.SystemService.RetrieveMultiple(
-    Query.For<Role>()
-        .Where(r => r.ParentRootRoleId, ConditionOperator.Equal, Roles.SalespersonId)
-        .Link<SystemUserRoles>(r => r.RoleId, ur => ur.RoleId,
-            configure: l => l.Where(ur => ur.SystemUserId, ConditionOperator.Equal, ctx.InitiatingUserId))
-        .Top(1)).Entities.Count > 0;
-```
+[!code-csharp[](../samples/Vela.DocSamples/RoleMembershipSample.cs#role-membership)]
 
 This query checks direct assignment only; a role held through a team goes through `teamroles` and
 `teammembership` (link `TeamRoles` on `RoleId`, then `TeamMembership` on `TeamId`).
 
-> Out of scope for now (use `pac modelbuilder` if you need it): an `OrganizationServiceContext`/LINQ provider. See
+> Not generated (use `pac modelbuilder` if you need it): an `OrganizationServiceContext`/LINQ provider. See
 > [Limitations reference](../reference/limitations.md).

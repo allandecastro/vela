@@ -7,16 +7,16 @@ exit codes. For the full narrative, see [The vela CLI](../guides/cli-overview.md
 
 | Command | Purpose | Key options |
 | --- | --- | --- |
-| `vela init` (alias `new`) | Scaffold a build-ready solution (minimal by default) | `--name`, `--prefix`, `--publisher-prefix`, `--solution` (both recorded in `PROJECT.md`, which the CLI never reads), `--samples` (demo code + Integrations/ConsoleApp), `--output`, `--no-tests`, `--integrations` (empty Integrations project), `--managed-identity` (implies `--integrations`), with `--samples`: `--no-console`/`--no-integrations`, `--web-resources`, `--core-version`, `--force` (keeps your and edited files), `--verbose`, `--json` |
+| `vela init` (alias `new`) | Scaffold a build-ready solution (minimal by default) | `--name`, `--prefix`, `--publisher-prefix`, `--solution` (both recorded in `PROJECT.md`, which the CLI never reads), `--samples` (demo code + Integrations/ConsoleApp; with it, `--no-console`/`--no-integrations`), `--output`, `--no-tests`, `--integrations` (empty Integrations project), `--managed-identity` (implies `--integrations`), `--core-version`, `--force` (keeps your and edited files), `--interactive`, `--verbose`, `--json` |
 | `vela add <kind> <Name>` | Generate one file into a project | kinds: `plugin`/`service`/`customapi`/`test`/`step`/`form-script`/`ribbon-script`; a `plugin`'s `<Name>` is optional (default `<Entity>Plugin`); `--entity` (optional for `service`: without it, a service shared by several tables), `--message`, `--stage`, `--mode`, `--filtering-attributes` (required for Create/Update steps), `--handler` (plugin/step; default `Handle<Message>`), `--function`/`--action`, `--bound`/`--global`, `--prefix` (publisher prefix: required for `customapi`, and for `test --kind customapi` when the unique name cannot be read), `--project`, `--force` (not step), `--json`; an option a kind does not use is rejected |
 | `vela models <scope>` | Generate early-bound / typed models | see [scopes](#models-scopes) + connection flags |
-| `vela plan` | Preview registrations (read-only) | package inputs + connection flags, `--solution` (required; one solution per run), `--secure-config NAME=VALUE\|NAME=@file`, `--managed-identity <managedidentityid>`, `--strict`, `--detailed-exitcode`, `--verbose`, `--json`, `--out` |
-| `vela apply` | Apply registrations (writes) | package inputs + connection flags, `--solution` (required; one solution per run), `--secure-config`, `--managed-identity <managedidentityid>`, `--auto-approve` (alias `--yes`), `--batch-size`, `--strict`, `--webresources`, `--json`, `--out` |
-| `vela inspect` | Compare local packages with the live environment | package inputs + connection flags, `--solution` (optional), `--secure-config`, `--json`, `--out` |
+| `vela plan` | Preview registrations (read-only) | package inputs + connection flags, `--solution` (required; one solution per run), `--secure-config NAME=VALUE\|NAME=@file`, `--managed-identity <managedidentityid>`, `--strict`, `--detailed-exitcode`, `--environment`, `--verbose`, `--json`, `--out` |
+| `vela apply` | Apply registrations (writes) | package inputs + connection flags, `--solution` (required; one solution per run), `--secure-config`, `--managed-identity <managedidentityid>`, `--auto-approve` (alias `--yes`), `--batch-size`, `--strict`, `--environment`, `--verbose`, `--json`, `--out` |
+| `vela inspect` | Compare local packages with the live environment (read-only) | package inputs + connection flags, `--solution` (optional), `--secure-config`, `--environment`, `--verbose`, `--json`, `--out` |
 | `vela solution show <uniquename>` | Print a solution's publisher prefix | connection flags, `--json` |
 | `vela logs` (alias `trace`) | Read the plug-in trace log, or failed system jobs (read-only) | `--jobs` (`--all-statuses`), `--errors`, `--top`, `--since`, `--type`, `--message`, `--entity`, `--correlation`, `--full`, `--json` + connection flags |
 | `vela help [<command>]` | Help for one command; `vela help --json` for the whole command table | |
-| `vela sign` | Sign a plugin package | `--package`, `--fingerprint` \| (`--pfx`/`--pfx-base64-env <VAR>` + `--pfx-password-env <VAR>`/`--pfx-credential`; literal `--pfx-base64`/`--pfx-password` warn), `--timestamp` |
+| `vela sign` | Sign a plugin package | `--package`, `--fingerprint` \| (`--pfx`/`--pfx-base64-env <VAR>` + `--pfx-password-env <VAR>`/`--pfx-credential`; literal `--pfx-base64`/`--pfx-password` warn), `--timestamp`, `--json` |
 | `vela logout` | Clear the cached interactive token and remembered URL | |
 | `vela update` | Update the global tool (`dotnet tool update --global Vela.Cli`) | `--version <x.y.z>` (Windows: run from a fresh shell, the running exe is locked) |
 | `vela menu` (or bare `vela`) | Interactive menu | |
@@ -26,19 +26,18 @@ Package inputs (for `plan`/`apply`/`inspect`): `--package <file.nupkg>` (repeata
 (the newest version of each package id), `--package-assembly <name>`. Each command accepts only its own options
 (`vela <command> --help` lists them), so `plan --auto-approve` is an error.
 
-## Connection & auth (shared by `plan` / `apply` / `inspect` / `models`)
+## Connection & auth (shared by `plan` / `apply` / `inspect` / `models` / `logs` / `solution show`)
 
 | Option | Notes |
 | --- | --- |
-| `--url <https://org.crm.dynamics.com>` | Environment URL |
+| `--url <https://org.crm.dynamics.com>` | Environment URL; alone, uses your ambient Azure credential (`az login`, managed identity) |
 | `--tenant-id` / `--client-id` / `--client-secret` | Client-secret auth |
 | `--client-secret-stdin` / `DATAVERSE_CLIENT_SECRET` | Preferred over `--client-secret` (which leaks to shell history) |
 | `--connection-string "<...>"` | Full Dataverse connection string |
-| `--interactive` | Browser (MSAL) login; token cached under `~/.vela`. Safe under redirected stdin (never blocks on a prompt) |
+| `--interactive` / `-i` | Browser (MSAL) login; token cached under `~/.vela`. Safe under redirected stdin (never blocks on a prompt) |
 | `--fresh-login` | Force a new interactive prompt |
 | `--auth-client-id` / `--authority` | Override the MSAL client / authority (sovereign clouds) |
-| `--timeout <minutes>` | Dataverse request timeout (default 10, range 1 to 60); raise for a large org or slow cold start |
-| `--environment <label>` | Display label for the run (falls back to `--url`) |
+| `--timeout <minutes>` | Dataverse connection timeout (default 10, range 1 to 60); raise for a large org or slow cold start |
 
 ## Environment variables
 
@@ -64,10 +63,13 @@ Package inputs (for `plan`/`apply`/`inspect`): `--package <file.nupkg>` (repeata
 | `--messages [a,b,c]` | Typed request/response classes for SDK requests, by request name (e.g. `SendEmail`; no value = every request of the consumable messages) |
 | `--roles "A,B"` | A dependency-light `Roles` class (missing names are skipped with a warning) |
 | `--solution-roles` | Every security role in `--solution` |
+| `--intersect` | Also the N:N intersect tables of the scoped tables |
+| `--from-solution <zip>` | Offline: entity models and option sets from an exported solution zip |
 | `--forms` / `--tables` | TypeScript FormModel files / Web API record interfaces (preview) |
 | `--verify` | Do not write: compare the generated entity model (and, with `--roles` / `--solution-roles`, the `Roles` class) on disk against the environment and report drift (exit `5` on drift) |
 | `--lang csharp\|ts` | Output language (C# default; forms/tables are TypeScript) |
-| `--namespace`, `--out`, `--no-annotations`, `--overwrite` | Output shaping |
+| `--namespace`, `--project`, `--out`, `--no-annotations`, `--overwrite`, `--json` | Output shaping |
+| `--package` / `--packages-dir` / `--package-assembly` | With a bare `--custom-apis`: exclude the typed Custom APIs your package already defines |
 
 ## Output & exit codes
 

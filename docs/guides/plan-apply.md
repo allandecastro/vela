@@ -11,10 +11,10 @@ vela apply --packages-dir ./artifacts --solution ZavaSales --interactive
 
 # CI: app registration, secret from the environment (never on the command line)
 export DATAVERSE_CLIENT_SECRET=...   # set by the pipeline's secret store
-vela plan --package ./artifacts/Zava.Plugins.1.0.0.nupkg --solution ZavaSales \
+vela plan --package ./artifacts/zava_Zava.Plugins.1.0.0.nupkg --solution ZavaSales \
   --url https://zava.crm.dynamics.com --tenant-id <tenant-id> --client-id <app-id> \
   --strict --detailed-exitcode
-vela apply --package ./artifacts/Zava.Plugins.1.0.0.nupkg --solution ZavaSales \
+vela apply --package ./artifacts/zava_Zava.Plugins.1.0.0.nupkg --solution ZavaSales \
   --url https://zava.crm.dynamics.com --tenant-id <tenant-id> --client-id <app-id> \
   --auto-approve
 ```
@@ -114,8 +114,9 @@ By default the plugin assembly is inferred from the package: the assembly named 
 The registered plugin assembly is keyed by its **.NET assembly name** (the csproj `<AssemblyName>`, e.g. `Zava.Plugins`), which is **unique per org**. `vela init --prefix <prefix>` scaffolds the plugins project as `<prefix>.Plugins`, so two solutions initialized with the same prefix build the same assembly name and **collide**: applying the second rewrites the first's assembly content in that org. When `apply` is run with `--solution` and the target assembly already exists but is **not part of that solution**, it warns before overwriting:
 
 ```
-Warning: plugin assembly 'Zava.Plugins' already exists in this org and is not part of solution 'Sales'.
-         Applying overwrites its content, modifying an assembly owned by another solution.
+Warning: plugin assembly 'Zava.Plugins' already exists in this org and is not part of solution 'Sales'. Applying
+overwrites its content, modifying an assembly owned by another solution. Set a unique <AssemblyName> in the plugins
+project (for example prefix it with the solution name) to avoid the collision.
 ```
 
 To avoid it, give each project a distinct `<AssemblyName>` (for example prefix it with the solution name). The registered name follows the csproj, so renaming the assembly is the override.
@@ -178,4 +179,5 @@ var manifest = FrameworkManifestScanner.Scan(
     new FrameworkManifestScanOptions { Strict = true });
 ```
 
-Typed custom SDK messages can use `OnMessage<TMessage>()` with `[CustomMessage("...")]` to keep intellisense without string literals.
+A message with no typed trigger registers through `On<TRequest>()`, or through a marker type with
+`OnMessage<TMarker>()` and `[CustomMessage("...")]`; see [Other messages](plugins.md#other-messages).
