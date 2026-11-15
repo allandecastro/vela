@@ -17,13 +17,9 @@ permissions:
 
 jobs:
   pack-and-publish:
-    # Self-hosted Windows runner (as ci.yml): net462 (the harness) only builds on Windows, so packing must run there.
-    runs-on: [self-hosted, Windows]
+    # GitHub-hosted Windows runner (as ci.yml): net462 (the harness) only builds on Windows, so packing must run there.
+    runs-on: windows-latest
     timeout-minutes: 30 # cap a hung restore/build/publish
-    env:
-      # The service account can't write to the default install root 'C:\Program Files\dotnet', so setup-dotnet
-      # installs into the workspace instead (it adds this to PATH for the run steps). Same as ci.yml.
-      DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

@@ -498,6 +498,10 @@ What the samples show:
   privileges (a denied Retrieve throws) and trims `RetrieveMultiple` to the caller's readable records. Off by
   default, so the other tests keep full access.
 {{integrationsTests}}
+Test with `PluginPipeline` by default; use `PluginContext` only for edge cases the pipeline does not easily produce
+(a `Depth` of 2 or more, a crafted `ParentContext`, shared variables set by another plugin, an invalid Custom API
+input, one error branch of a handler). The samples use both.
+
 A plugin with a `(unsecureConfig, secureConfig)` constructor is run with `.Execute(new MyPlugin("", ""))`;
 the trigger is auto-derived from a single-step plugin's own registration, while a multi-step router needs the
 step stated explicitly (`OnCreate().Stage(...).Mode(...)`) to select the handler under test. `.Execute(...)`
