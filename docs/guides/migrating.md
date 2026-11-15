@@ -150,9 +150,10 @@ names as one delimited `string` rather than a `string[]`.
 ### Consolidate the layout
 
 Follow the scaffold layout: a folder per table with `Plugins/`, `Services/`, and `CustomApis/`
-subfolders, and `GlobalCustomApis/` for unbound Custom APIs. Keep the namespace flat (for example
-`Zava.Plugins`) rather than following the folder path, because a namespace segment named after a table
-collides with the generated entity type of the same name.
+subfolders, and `GlobalCustomApis/` for unbound Custom APIs. Namespaces follow the folders
+(`Zava.Plugins.Account.Plugins`), so a namespace segment is named after a table: keep the `using` directives inside
+a block namespace, or the segment hides the generated entity type of the same name (see
+[Namespaces and usings](scaffold.md#namespaces-and-usings)).
 
 ## Best practices learned from real conversions
 
@@ -175,8 +176,9 @@ collides with the generated entity type of the same name.
 
 ## Known limits and escape hatches
 
-- **N:N intersect traversal** is not expressible in the typed query today. Keep it as FetchXML through the
-  [escape hatch](escape-hatches.md). (Aggregates are: see [Typed queries](queries.md).)
+- **N:N traversal** in a typed query links through the intersect table, which needs its model
+  (`vela models --intersect`, see [Intersect tables](models.md#intersect-nn-join-tables---intersect)); without it,
+  keep the FetchXML through the [escape hatch](escape-hatches.md).
 - **Several steps on one trigger** (same message, stage, mode and table) can live in one plugin class when their
   filtering attributes, images or relationship scope tell them apart; otherwise give each a `WithStepKey(...)`
   (VELA008 flags the ones that collide). See [Write a plugin](plugins.md).

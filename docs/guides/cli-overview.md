@@ -17,7 +17,7 @@ Core commands:
 | Command | What it does |
 | --- | --- |
 | `vela init` / `vela new` | [Scaffold](scaffold.md) a complete, build-ready plugin solution. |
-| `vela add` | [Generate a single file](add.md) (plugin / service / customapi / test) into an existing project, or add a step to one. |
+| `vela add` | [Generate a single file](add.md) (plugin / service / customapi / test) into an existing project, or add a step to an existing plugin. |
 | `vela models` | [Generate early-bound classes](models.md) for a solution or table list over your connection. |
 | `vela plan` | Preview the create/update/delete operations needed to converge Dataverse with your package (read-only). |
 | `vela apply` | Apply those operations (idempotent upsert/delete); writes by default, prompting on a terminal or `--auto-approve` for CI. See [CLI automation](plan-apply.md). |
@@ -45,26 +45,23 @@ Every command returns a stable exit code, so scripts and coding agents can branc
 | `0` | Success. |
 | `2` | Invalid arguments (unknown option, missing/insufficient scope). |
 | `3` | A required file was not found (for example a package path). |
-| `4` | Parse/read or other error (a malformed package, definition or response, or an unexpected failure). |
+| `4` | Error: a malformed package, definition or response, a `--strict` failure, a refused non-interactive `apply` without `--auto-approve`, or an unexpected failure. |
 | `5` | Drift detected (`vela models --verify` found the local model out of sync with the live schema, or `apply` wrote every change but the environment still differs afterwards). |
 | `6` | Dataverse connection failure: auth, endpoint, or a network error (DNS, socket, HTTP, timeout) on any call, including while reading the live state. |
 | `7` | Partial apply (a mid-run `apply` failure; Dataverse may be partially updated, so re-run `apply` to reconcile). |
 | `8` | Changes pending (`vela plan --detailed-exitcode` only). |
 
 > [!NOTE]
-> **Client-side (preview / work in progress).** For the **vela-client** (separate) runtime,
-> `vela models --forms` generates [TypeScript FormModel files](models.md) and
-> `vela models --tables` [TypeScript Web API record interfaces](models.md),
-> `vela init --web-resources` [scaffolds a web resources project](scaffold.md), and `vela plan` /
-> `apply --webresources` [deploy web resources](plan-apply.md). These are new and may change. Most commands also
-> take `--json` for machine-readable output.
+> **Client-side options (preview).** `vela models --forms` / `--tables`, `vela init --web-resources` and
+> `vela plan` / `apply --webresources` belong to a client-side preview that may change.
 
 > [!NOTE]
 > **Output: human on a terminal, JSON when piped.** `plan`, `apply`, and `inspect` print a colorized,
 > human-readable summary when stdout is a terminal, and machine-readable JSON when the output is piped,
 > redirected, or written with `--out <file>`. Pass `--json` to force JSON even on a terminal. Color is
 > disabled automatically for non-terminal output and can be turned off with the `NO_COLOR` or `VELA_NO_COLOR`
-> environment variables. Scripts and coding agents that consume the JSON are unaffected.
+> environment variables. Scripts and coding agents that consume the JSON are unaffected. `init`, `add`, `models`,
+> `logs`, `solution show` and `sign` also take `--json`.
 
 > [!TIP]
 > **Secrets:** prefer the `DATAVERSE_CLIENT_SECRET` environment variable or `--client-secret-stdin`
@@ -136,9 +133,8 @@ It is read-only. `show` is its only subcommand.
 you - or a coding agent - can see why a plugin failed without opening the UI. It reads two sources:
 
 - **Plug-in Trace Log** (default): the trace output of plugins (what `ctx.Trace(...)` and the automatic
-  handler-entry line emit). Only populated when plug-in tracing is enabled on the org (System Settings >
-  Customization > *Enable logging to plug-in trace log*: `All` or `Exception`). On an empty result, `vela logs`
-  says so and points at that setting.
+  handler-entry line emit). Only populated when plug-in trace logging is enabled on the environment
+  ([Enable trace logging](https://learn.microsoft.com/power-apps/developer/data-platform/logging-tracing#enable-trace-logging)). On an empty result, `vela logs` says so and points at that setting.
 - **Failed system jobs** with `--jobs`: the `asyncoperation` rows, where an **asynchronous** step's failure is
   recorded (with its error message) **even when trace logging is off**. Defaults to failed jobs; `--all-statuses`
   shows every status.
