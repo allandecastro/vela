@@ -112,7 +112,8 @@ All notable changes to Vela are documented here. The format is based on
 - The scaffolded `AGENTS.md` shows each sample in the namespace the scaffold gives its folder, with the usings inside
   it, and adds the conventions: why usings go inside the namespace, handlers named after the behaviour
   (`--handler`), project-wide services and message sources in `ProjectServices.cs`, a `<summary>` on public types.
-- `vela init` references framework 0.42.0 (Vela.Plugins, Vela.Testing, Vela.Messages).
+- `vela init` falls back to framework 0.42.0 (Vela.Plugins, Vela.Testing, Vela.Messages) when it cannot resolve the
+  latest published version from NuGet; without `--core-version` it still references the latest published framework.
 
 ### Fixed
 
@@ -133,16 +134,7 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [0.42.0] - 2026-11-15 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
-### Added
-
-- Analyzer VELA028 (error): a compile-time constant Custom API display name (over 100 characters) or description
-  (over 300), request parameter description (over 300), response property description (over 100) or step description
-  (over 256 with the step-key marker Vela appends) fails the build instead of `vela plan`. It covers `DisplayName(...)`,
-  `Description(...)`, `RequestParameter(...)` / `ResponseParameter(...)`, `Add(x => x.Prop, optional, description)`,
-  `[Description(...)]` on a request or response property and `WithDescription(...)`. The limits are one source shared
-  with the plan check, which still covers values only known at run time.
-
-### Fixed
+### Changed (breaking)
 
 - The security harness materializes a security role the way Dataverse stores it: one `role` row per business unit,
   each with `parentrootroleid` set to the declared (root) id and its `businessunitid`. The root business unit's
@@ -154,10 +146,6 @@ All notable changes to Vela are documented here. The format is based on
   unchanged. **Migration:** a test that matched `systemuserroles.roleid` (or `teamroles.roleid`) to a
   `Roles.XId` for a user or team outside the root business unit now finds nothing, as on Dataverse: join `role`
   and match `parentrootroleid` to `Roles.XId` instead.
-- A system role can be declared with its template id, `Role(name, id, templateId, grants)` (or with a
-  `RoleBuilder`), and the harness writes it as `roletemplateid` on every business unit copy, as Dataverse does for
-  a system role (verified live: System Administrator has the same `roletemplateid` in every org while its
-  `roleid` differs). A role declared without one has no `roletemplateid`, like a custom role.
 - The security harness reads like Dataverse. With no Read privilege on a table, at any depth, a read now throws
   `PrincipalPrivilegeDenied` (`0x80040220`, "is missing prvRead... privilege") instead of returning nothing: for the
   root table of a `Retrieve` or `RetrieveMultiple` (QueryExpression, FetchXML, QueryByAttribute, typed queries) and
@@ -171,6 +159,19 @@ All notable changes to Vela are documented here. The format is based on
     the user's service needs a Read grant on `role` (or reads it through `ctx.SystemService`). A test that read a
     record only through an access team or a share needs Read on the table at some depth (User is enough). A test that
     matched the old fault message text, or expected `0x80040220` for a record out of reach, needs updating.
+
+### Added
+
+- Analyzer VELA028 (error): a compile-time constant Custom API display name (over 100 characters) or description
+  (over 300), request parameter description (over 300), response property description (over 100) or step description
+  (over 256 with the step-key marker Vela appends) fails the build instead of `vela plan`. It covers `DisplayName(...)`,
+  `Description(...)`, `RequestParameter(...)` / `ResponseParameter(...)`, `Add(x => x.Prop, optional, description)`,
+  `[Description(...)]` on a request or response property and `WithDescription(...)`. The limits are one source shared
+  with the plan check, which still covers values only known at run time.
+- A system role can be declared with its template id, `Role(name, id, templateId, grants)` (or with a
+  `RoleBuilder`), and the harness writes it as `roletemplateid` on every business unit copy, as Dataverse does for
+  a system role (verified live: System Administrator has the same `roletemplateid` in every org while its
+  `roleid` differs). A role declared without one has no `roletemplateid`, like a custom role.
 
 ## [0.41.2] - 2026-10-23 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
