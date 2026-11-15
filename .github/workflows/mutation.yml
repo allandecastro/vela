@@ -141,7 +141,7 @@ jobs:
       - name: Upload HTML report
         if: always()
         continue-on-error: true # artifact storage quota must not fail the mutation gate; the report is also in the summary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mutation-report-${{ matrix.area }}
           path: ${{ matrix.tests }}/StrykerOutput/**/reports/mutation-report.html
