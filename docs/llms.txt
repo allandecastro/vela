@@ -21,8 +21,8 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 - [Localized messages](https://allandecastro.github.io/vela/guides/localization.md): resolve messages in the user's or the organization's language
 - [Managed identity](https://allandecastro.github.io/vela/guides/managed-identity.md): call external APIs with a managed-identity token
 - [Telemetry](https://allandecastro.github.io/vela/guides/telemetry.md): trace log and Application Insights through the platform logger
-- [Escape hatches](https://allandecastro.github.io/vela/guides/escape-hatches.md): drop to the raw Dataverse SDK
-- [Early-bound models](https://allandecastro.github.io/vela/guides/models.md): vela models: entities, Custom API and SDK messages, roles
+- [Escape hatches](https://allandecastro.github.io/vela/guides/escape-hatches.md): drop to the raw Dataverse SDK, read or create a record with its related records
+- [Early-bound models](https://allandecastro.github.io/vela/guides/models.md): vela models: entities, Custom API and SDK messages, security roles, drift checks, TypeScript form and table types (preview)
 
 ## Test
 
@@ -31,14 +31,14 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 
 ## CLI and deployment
 
-- [The vela CLI](https://allandecastro.github.io/vela/guides/cli-overview.md): commands, generated help, exit codes
+- [The vela CLI](https://allandecastro.github.io/vela/guides/cli-overview.md): commands, generated help, exit codes, proxy, solution prefix, execution logs (vela logs)
 - [Plan and apply](https://allandecastro.github.io/vela/guides/plan-apply.md): preview then apply registrations; --solution, secure config, CI usage
 - [vela add](https://allandecastro.github.io/vela/guides/add.md): generate a plugin, service, Custom API, test or step
 - [vela init](https://allandecastro.github.io/vela/guides/scaffold.md): scaffold a solution
 - [Signing](https://allandecastro.github.io/vela/guides/signing.md): sign a plugin package for managed identity
-- [Client-side (preview)](https://allandecastro.github.io/vela/guides/client-side.md): TypeScript form scripts and web resources, work in progress
+- [Client-side (preview)](https://allandecastro.github.io/vela/guides/client-side.md): TypeScript form scripts and web resources (preview, work in progress)
 - [Authentication](https://allandecastro.github.io/vela/configuration/authentication.md): interactive, ambient Azure credential, client secret, connection string
-- [Environments and CI](https://allandecastro.github.io/vela/configuration/environments-secrets.md): environment URLs, secrets and pipelines
+- [Environments and CI](https://allandecastro.github.io/vela/configuration/environments-secrets.md): run the CLI unattended: passing secrets, strict mode, output in pipelines
 
 ## Reference
 
@@ -57,6 +57,7 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 
 ## Contributing
 
+- [Contributing](https://allandecastro.github.io/vela/contributing/index.md): build and test the Vela framework itself
 - [Architecture](https://allandecastro.github.io/vela/advanced/architecture.md): solution layout and how a step goes from registration to execution
 - [Add a typed plugin message](https://allandecastro.github.io/vela/contributing/extending-plugins.md): the files a new modelled message touches
 - [Mutation testing](https://allandecastro.github.io/vela/advanced/mutation-testing.md): the mutation gates

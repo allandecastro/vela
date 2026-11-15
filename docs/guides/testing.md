@@ -20,8 +20,8 @@ dotnet add package Vela.Testing
 Test with `PluginPipeline` by default. It runs what Dataverse runs for a request: every registered step with its
 filtering attributes and images, in stage and execution order across plugins, the cascade of the plugins' own writes,
 the rollback of a synchronous failure, and the asynchronous steps after the commit. Several steps of one plugin on the
-same trigger, differing only by their filter or step key, are tested this way: `PluginContext` does not choose between
-them.
+same trigger, told apart by their filter, images or step key, are tested this way: `PluginContext` does not choose
+between them.
 
 Use `PluginContext` for the edge cases the pipeline does not easily produce, as a unit test of one handler:
 
@@ -65,7 +65,8 @@ Assert.False(entry.HandlerInvoked);   // invoked, but outside its ForRelationshi
 Assert.Contains("ForRelationship", entry.SkipReason);
 ```
 
-- **Transactions follow the platform's stage model** (checked against a live environment). The PreValidation stage
+- **Transactions follow the platform's
+  [stage model](https://learn.microsoft.com/power-apps/developer/data-platform/event-framework#event-execution-pipeline).** The PreValidation stage
   of the initial operation runs **before** the database transaction (`IsInTransaction` is `false`), so a write a
   PreValidation plugin makes commits on its own even if the operation fails later. The transaction opens before
   PreOperation; any operation a plugin triggers from inside it (including that operation's own PreValidation stage,
@@ -111,8 +112,8 @@ Assert.Contains("ForRelationship", entry.SkipReason);
   has the operation's own stage-30 (MainOperation) context as `ParentContext`, as on the platform; the context of the
   plugin whose write triggered the operation is one level further up (`ParentContext.ParentContext`), and a PreValidation
   step's `ParentContext` is that calling plugin's context directly. Shared variables set by a PreValidation step are
-  **not** in the later steps' own `SharedVariables`: they are visible only through `ParentContext.SharedVariables`
-  (verified live). A cascaded operation inherits the shared variables of the plugin that issued it. To avoid
+  **not** in the later steps' own `SharedVariables`: they are visible only through `ParentContext.SharedVariables`.
+  A cascaded operation inherits the shared variables of the plugin that issued it. To avoid
   re-entrancy, see [Preventing recursion](plugins.md#preventing-recursion).
 - **Not-found faults.** Retrieving or updating a record that does not exist throws
   `FaultException<OrganizationServiceFault>` with the platform `ObjectDoesNotExist` code (`-2147220969`), like a
@@ -135,8 +136,7 @@ Assert.Contains("ForRelationship", entry.SkipReason);
   `PreBusinessEntity` / `PostBusinessEntity`, as on Dataverse: read images by alias). The merge
   runs both ways, so a bulk step also fires for a plain `Create`/`Update` (a one-row batch). The whole batch is
   one transaction: a synchronous failure rolls every row back.
-- **Owner, state, `Assign` and `SetState`** follow what the platform does (verified live), which differs from
-  Microsoft Learn on several points:
+- **Owner, state, `Assign` and `SetState`** follow what the platform does:
   - An `Update` is **one** execution, even when it mixes `ownerid` or `statecode`/`statuscode` with other fields.
     An `ownerid` Update never fires the `Assign` steps.
   - An `Update` that sets `statecode` also fires the `SetStateDynamicEntity` steps, nested at depth + 1 between the
@@ -250,8 +250,8 @@ on a global message such as `Associate`. `WithPrimaryEntity(name, id)` sets it e
 `.Execute<AccountPostUpdate>()` constructs the plugin for you (parameterless constructor, or the
 `(string unsecureConfig, string secureConfig)` constructor with empty configuration) and returns it.
 
-**Several steps on one trigger.** When two steps of a plugin share the message, stage and mode and differ only by
-their filter or step key, test them with [`PluginPipeline`](#simulate-the-pipeline-cascade). The runtime picks the
+**Several steps on one trigger.** When two steps of a plugin share the message, stage and mode and are told apart
+by their filter, images or step key, test them with [`PluginPipeline`](#simulate-the-pipeline-cascade). The runtime picks the
 handler from the executing step (`OwningExtension`), whose name ends with the step key; the pipeline fires the steps
 whose filter the write matches and stamps each one's `OwningExtension`. `PluginContext` does not choose between them.
 
@@ -554,7 +554,7 @@ CompareColumns), conditions on linked entities (records-not-in-a-set), link-enti
 ordering (incl. linked columns), TopCount, paging, Distinct, total record count, column aliases, and
 aggregates (count/countcolumn/sum/avg/min/max + group-by, also on linked columns and over joins).
 
-Null and paging follow what Dataverse does (verified live): `ne`, `not-in`, `not-like`, `not-begin-with` and
+Null and paging follow what Dataverse does: `ne`, `not-in`, `not-like`, `not-begin-with` and
 `not-end-with` match a row whose column is null, while the comparisons, `not-between`, `like` (even `'%'`) and
 `ne-userid` do not. Distinct compares text case-insensitively. A query with no page size returns a page of at most
 5,000 rows with `MoreRecords`, and no page is larger. The engine pages by page number: the paging cookie is not read,
@@ -598,7 +598,8 @@ Like the platform, it fires the steps of the sdkmessage the request runs as (`Se
 the table the message runs on (queueitem for `AddToQueue`, whatever its `Target`), with an empty
 `ctx.PrimaryEntityId`, so a step registered on the wrong message or table does not fire in a test either.
 The faults the harness raises itself carry the platform `ErrorCode`: not found (`0x80040217`), duplicate key
-(`0x80040237`), missing privilege (`0x80040220`), aggregate limit (`0x8004E023`), the transaction faults above and
+(`0x80040237`), missing privilege (`0x80040220`, also for a query on a table the caller cannot read, at the root or in
+a link-entity), a record out of the caller's reach on `Retrieve` (`0x80048306`), aggregate limit (`0x8004E023`), the transaction faults above and
 the Custom API input checks. An `ExecuteMultiple` child fault keeps its inner fault's code; any other exception
 surfaces as an `OrganizationServiceFault` with no `ErrorCode`. There is no formula/rollup/calculated-column, business-rule, or
 duplicate-detection simulation.
