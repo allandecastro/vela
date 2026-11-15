@@ -45,6 +45,6 @@ vela apply --packages-dir ./artifacts --solution ZavaSales --interactive   # ups
 
 <div class="vela-cards">
   <a class="vela-card" href="getting-started/install.md"><span class="t">Install</span><span class="d">Get the vela CLI as a .NET global tool.</span></a>
-  <a class="vela-card" href="getting-started/quickstart.md"><span class="t">Quickstart</span><span class="d">From an empty folder to registered, running steps in five commands.</span></a>
+  <a class="vela-card" href="getting-started/quickstart.md"><span class="t">Quickstart</span><span class="d">From an empty folder to a registered, tested plugin in five steps.</span></a>
   <a class="vela-card" href="getting-started/initialize-a-solution.md"><span class="t">Initialize a solution</span><span class="d">What vela init scaffolds and where to go next.</span></a>
 </div>

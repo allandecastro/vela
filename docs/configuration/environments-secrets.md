@@ -47,8 +47,8 @@ vela plan --packages-dir ./artifacts --solution ZavaSales \
   --strict --detailed-exitcode
 ```
 
-The same strictness is available at the scanner level. `FrameworkManifestScanner`
-takes a `Strict = true` option so scanner diagnostics fail the build:
+The same strictness is available at the scanner level. `FrameworkManifestScanner` (namespace `Vela.Manifest`)
+takes a `Strict = true` option that makes the scan throw when it reports any diagnostic:
 
 ```csharp
 var manifest = FrameworkManifestScanner.Scan(

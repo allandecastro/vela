@@ -1,6 +1,7 @@
 # Install
 
-`Vela.Cli` packs as a .NET global tool that exposes the **`vela`** command.
+`Vela.Cli` is a .NET global tool that exposes the **`vela`** command. The libraries (`Vela.Plugins`,
+`Vela.Testing`) are NuGet packages that `vela init` references for you.
 
 ## Prerequisites
 
@@ -12,8 +13,8 @@
   `mono ~/.nuget/packages/xunit.runner.console/<version>/tools/net462/xunit.console.exe <tests>.dll`
   (add the `xunit.runner.console` package to the test project to get it). Building needs no Mono.
 - **A Dataverse solution and its publisher.** `vela apply --solution <uniqueName>` deploys into an existing
-  solution and takes the package's required publisher prefix from it; create the solution first (in
-  the maker portal or with `pac solution`). `vela solution show <uniqueName>` prints its prefix.
+  solution and takes the package's required publisher prefix from it; create the solution first (see
+  [Create a solution](https://learn.microsoft.com/power-apps/maker/data-platform/create-solution) on Microsoft Learn). `vela solution show <uniqueName>` prints its prefix.
 
 ## From nuget.org
 
@@ -21,10 +22,17 @@
 dotnet tool install --global Vela.Cli
 ```
 
+To add the libraries to an existing plugin project and its test project instead:
+
+```bash
+dotnet add package Vela.Plugins
+dotnet add package Vela.Testing
+```
+
 Behind a corporate proxy, see [Behind a proxy](../guides/cli-overview.md#behind-a-proxy): `vela` reads
 `HTTPS_PROXY` / `NO_PROXY` (or the system settings), not a `.config` file.
 
-## From a locally built package
+## From a locally built package (contributors)
 
 ```bash
 dotnet pack ./src/Vela.Cli -c Release -o ./artifacts/cli
@@ -41,6 +49,6 @@ For the command reference and secret handling, see [The vela CLI](../guides/cli-
 
 ## Next steps
 
-- **[Quickstart](quickstart.md)** - from an empty folder to registered, running steps in five commands.
+- **[Quickstart](quickstart.md)** - from an empty folder to a registered, tested plugin in five steps.
 - **[The vela CLI](../guides/cli-overview.md)** - commands, exit codes and the [CLI cheat sheet](../reference/cli-cheatsheet.md).
 

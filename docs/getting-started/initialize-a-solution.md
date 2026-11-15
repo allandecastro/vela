@@ -23,8 +23,11 @@ ZavaSales/
   .vela/scaffold-manifest.json  # lets `vela init --force` regenerate without touching your code
   PROJECT.md                   # the publisher prefix and the solution of each package (never read by the CLI)
   AGENTS.md                    # instructions for AI coding agents: steps, Custom APIs, tests, the CLI loop
+  README.md                    # the next steps for this solution
   .editorconfig                # code style: usings inside the namespace
+  .gitignore
   Directory.Build.props        # shared build settings for src/ and tests/
+  Directory.Packages.props
 ```
 
 It builds, tests and plans unedited, and deploys nothing until you add a plugin:
@@ -32,8 +35,9 @@ It builds, tests and plans unedited, and deploys nothing until you add a plugin:
 - `vela models --entities account --out src/Zava.Shared/Models/Generated --namespace Zava.Shared.Models.Generated`
   generates the early-bound models.
 - `vela add plugin AccountValidator --entity Account --filtering-attributes Name --project src/Zava.Plugins` adds a
-  plugin, and `vela add test AccountValidator --entity Account --project tests/Zava.Plugins.Tests` its test. See
-  [Add code with vela add](../guides/add.md).
+  plugin (a Create PostOperation step with a `HandleCreate` handler by default; the name defaults to
+  `<Entity>Plugin`), and `vela add test AccountValidator --entity Account --project tests/Zava.Plugins.Tests` its
+  `PluginPipeline` test. See [Add code with vela add](../guides/add.md).
 - Each file's namespace follows its folder (`Zava.Plugins.Account.Plugins`): keep the `using` directives inside a
   block namespace, or `Account` resolves to a namespace (CS0118). See
   [Namespaces and usings](../guides/scaffold.md#namespaces-and-usings).
@@ -42,7 +46,8 @@ It builds, tests and plans unedited, and deploys nothing until you add a plugin:
 - `--publisher-prefix` is your solution publisher's prefix; Custom APIs are named `<publisherprefix>_<Name>`, and the
   plugin package `<publisherprefix>_Zava.Plugins` (`artifacts/zava_Zava.Plugins.1.0.0.nupkg`).
 - `--solution` is the unique name of the Dataverse solution the packages deploy into. `vela init` records it and the
-  publisher prefix in `PROJECT.md`, for the people and agents who run the commands; the CLI never reads that file, so
+  publisher prefix in the YAML front matter of `PROJECT.md` (`schemaVersion`, `publisherPrefix`, `packages`), for the
+  people and agents who run the commands; the CLI never reads that file, so
   pass the values as flags: `vela plan --packages-dir artifacts --solution ZavaSales`, and
   `vela add customapi <Name> --prefix zava`. See [PROJECT.md](../guides/scaffold.md#projectmd).
 

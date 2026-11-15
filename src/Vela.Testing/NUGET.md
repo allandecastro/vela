@@ -3,8 +3,8 @@
 **Unit-test Dataverse plugins with confidence** - no Dataverse connection, no mocking library required.
 
 `Vela.Testing` runs plugins and Custom APIs written with
-[`Vela.Plugins`](https://www.nuget.org/packages/Vela.Plugins) against a fake execution context and a stateful
-in-memory Dataverse. It has no dependency on a mocking framework; you can still inject your own
+[`Vela.Plugins`](https://www.nuget.org/packages/Vela.Plugins) through a simulated Dataverse pipeline over a stateful
+in-memory Dataverse, or one plugin at a time against a fake execution context. It has no dependency on a mocking framework; you can still inject your own
 `IOrganizationService` when you need behaviour the built-in fakes don't cover.
 
 ## Install
@@ -24,7 +24,17 @@ public class AccountPostCreateTests
     [Fact]
     public void Creates_A_Follow_Up_Task()
     {
-        // One plugin against a fake context: the trigger comes from the plugin's registration.
+        // The default: the Dataverse pipeline in memory. The write fires every registered step and cascades.
+        var pipeline = PluginPipeline.FromAssemblyOf<AccountPostCreate>();
+        pipeline.Service.Create(new Account { Name = "Zava" });
+
+        Assert.Single(pipeline.GetAll("task"));
+    }
+
+    [Fact]
+    public void Creates_A_Follow_Up_Task_From_A_Fake_Context()
+    {
+        // For an edge case: one plugin against a fake context; the trigger comes from the plugin's registration.
         var crm = new InMemoryOrganizationService();
         PluginContext.For<Account>()
             .WithTarget(new Account { Name = "Zava" })
@@ -33,25 +43,18 @@ public class AccountPostCreateTests
 
         Assert.Single(crm.GetAll("task"));
     }
-
-    [Fact]
-    public void Runs_The_Pipeline()
-    {
-        // The Dataverse pipeline in memory: the write fires every registered step and cascades.
-        var pipeline = PluginPipeline.FromAssemblyOf<AccountPostCreate>();
-        pipeline.Service.Create(new Account { Name = "Zava" });
-
-        Assert.Single(pipeline.GetAll("task"));
-    }
 }
 ```
 
-Custom APIs and message-only plugins use `PluginContext.ForRequest(new DoThingRequest { ... })` (message and inputs
-from the typed request; `PluginContext.ForMessage("vela_DoThing")` for a message with no request type), or
-`pipeline.Service.Execute(new DoThingRequest { ... })` for the full pipeline.
+Custom APIs and message-only plugins run through the pipeline with `pipeline.Service.Execute(new DoThingRequest { ... })`,
+or against a fake context with `PluginContext.ForRequest(new DoThingRequest { ... })` (message and inputs from the
+typed request; `PluginContext.ForMessage("zava_DoThing")` for a message with no request type).
 
 ## What you get
 
+- **Pipeline simulation** - `PluginPipeline` discovers your plugins and runs the Dataverse pipeline in memory:
+  stages, rank, filtering attributes, images, cascade, the platform's transaction scope, async steps after the
+  outermost commit, reads and Custom APIs through their steps. Inspect `pipeline.ExecutionLog` to see what fired.
 - **Fluent context builder** - `PluginContext.For<T>()` / `ForRequest(...)` / `ForMessage(...)` with `OnCreate/OnUpdate/OnDelete/OnMessage`,
   `Stage(...)`, `Sync()`/`Async()`, `Depth(...)`, `WithTarget`, `WithPreImage`/`WithPostImage`, `WithTargets` (bulk),
   `WithRequest`, `WithInputParameter`, `WithSharedVariable`, and `TraceCapture` / `LogCapture` for asserting traces and logs.
@@ -59,13 +62,10 @@ from the typed request; `PluginContext.ForMessage("vela_DoThing")` for a message
 - **Test doubles** - `FakePluginExecutionContext` (the full `IPluginExecutionContext2..7` chain),
   `HookOrganizationService` / `HookOrganizationServiceFactory` (delegate hooks `OnCreate`/`OnRetrieve`/...; an unset
   hook throws), `RecordingTracingService` and `RecordingLogger`.
-- **Stateful in-memory CRM** - `InMemoryOrganizationService`: CRUD round-trips, `RetrieveMultiple` (QueryExpression,
+- **Stateful in-memory Dataverse** - `InMemoryOrganizationService`: CRUD round-trips, `RetrieveMultiple` (QueryExpression,
   QueryByAttribute, FetchXML with joins and aggregates), `Upsert`, `Assign`/`SetState`/`Merge`, N:N associations,
   bulk and batch requests, file blocks, metadata reads, system columns, alternate keys, auto-numbers and an
   opt-in security model.
-- **Pipeline simulation** - `PluginPipeline` discovers your plugins and runs the Dataverse pipeline in memory:
-  stages, rank, filtering attributes, images, cascade, the platform's transaction scope, async steps after the
-  outermost commit, reads and Custom APIs through their steps. Inspect `pipeline.ExecutionLog` to see what fired.
 
 ## Documentation
 
