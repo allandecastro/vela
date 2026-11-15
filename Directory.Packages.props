@@ -11,19 +11,19 @@
 
   <ItemGroup>
     <!-- Runtime / CLI -->
-    <PackageVersion Include="Microsoft.CrmSdk.CoreAssemblies" Version="9.0.2.59" />
+    <PackageVersion Include="Microsoft.CrmSdk.CoreAssemblies" Version="9.0.2.60" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
-    <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageVersion Include="System.ComponentModel.Annotations" Version="5.0.0" />
-    <PackageVersion Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.2.10" />
+    <PackageVersion Include="Microsoft.PowerPlatform.Dataverse.Client" Version="1.2.27" />
     <!-- Transparent, headless auth: acquire a Dataverse token from the ambient credential (az login locally,
          managed identity / workload identity in CI) via DefaultAzureCredential, no browser and no flag. -->
-    <PackageVersion Include="Azure.Identity" Version="1.13.2" />
+    <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <!-- Cross-platform MSAL token cache for the interactive browser login (persists the token on macOS/Linux, not
          just Windows DPAPI). Pinned to the version already resolved transitively via the Dataverse client. -->
-    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.67.2" />
-    <PackageVersion Include="Spectre.Console" Version="0.49.1" />
+    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.92.0" />
+    <PackageVersion Include="Spectre.Console" Version="0.57.2" />
     <!-- Pin the patched System.Security.Cryptography.Xml and .Pkcs over the vulnerable versions the Dataverse client
          pulls transitively (NU1902/NU1903). Earlier 8.x patches later picked up advisories, so track the latest 8.x
          servicing patch. The vela init scaffold pins the same versions (ScaffoldTemplates.CryptographyXmlVersion /
@@ -32,17 +32,17 @@
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
 
     <!-- Test stack (shared by every *.Tests project) -->
-    <PackageVersion Include="Moq" Version="4.20.72" />
+    <PackageVersion Include="Moq" Version="4.21.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="2.5.7" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
-    <PackageVersion Include="coverlet.collector" Version="6.0.2" />
-    <PackageVersion Include="coverlet.msbuild" Version="6.0.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.2" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="coverlet.msbuild" Version="6.0.4" />
     <!-- Roslyn analyzer (Vela.Analyzers) + its test harness. 4.8.0 is broadly compatible with the SDKs/IDEs that
          build Vela consumer projects. -->
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit" Version="1.1.2" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.CodeFix.Testing.XUnit" Version="1.1.2" />
   </ItemGroup>
