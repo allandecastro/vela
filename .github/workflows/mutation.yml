@@ -54,7 +54,7 @@ jobs:
     outputs:
       areas: ${{ steps.select.outputs.areas }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
       - name: Select areas
@@ -89,7 +89,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.areas) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # --since:main diffs against main, so a pull request run needs the history back to it.
           fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
