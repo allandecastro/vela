@@ -24,6 +24,14 @@ namespace {{prefix}}.Shared.Models.Generated
         {
         }
 
+        // As `vela models` writes it: the Id override names the primary key column, so a => a.Id selects it.
+        [AttributeLogicalName("accountid")]
+        public override Guid Id
+        {
+            get => base.Id;
+            set { base.Id = value; SetAttributeValue("accountid", value); }
+        }
+
         [AttributeLogicalName("accountid")]
         public Guid? AccountId
         {
@@ -72,6 +80,14 @@ namespace {{prefix}}.Shared.Models.Generated
         public Contact()
             : base(EntityLogicalNameValue)
         {
+        }
+
+        // As `vela models` writes it: the Id override names the primary key column, so a => a.Id selects it.
+        [AttributeLogicalName("contactid")]
+        public override Guid Id
+        {
+            get => base.Id;
+            set { base.Id = value; SetAttributeValue("contactid", value); }
         }
 
         [AttributeLogicalName("contactid")]
