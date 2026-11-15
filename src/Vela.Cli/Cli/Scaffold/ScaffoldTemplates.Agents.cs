@@ -34,8 +34,7 @@ Instructions for AI coding agents in this Dataverse solution, scaffolded by `vel
 
 - `src/{{prefix}}.Shared`: early-bound models (`Models/Generated`, regenerate with `vela models`) and shared services.
 - `src/{{prefix}}.Plugins`: plugins and Custom APIs. Targets .NET Framework 4.8, the version Microsoft supports
-  (never net481). Plugin packages above net471 register only on Dataverse 9.2.26092 or later; on an older
-  environment, drop to net471. The Release build packs a plugin package into `artifacts/`.
+  (never net481). The Release build packs a plugin package into `artifacts/`.
 {{testsLine}}
 ## Commands
 

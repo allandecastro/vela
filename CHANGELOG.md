@@ -34,9 +34,13 @@ All notable changes to Vela are documented here. The format is based on
   and with `PluginContext` only for edge cases the pipeline does not easily produce (a `Depth` of 2 or more, a crafted
   `ParentContext`, shared variables set by another plugin, an invalid Custom API input, one error branch of a
   handler).
+- When a plugin package ships several .NET Framework builds, the scanner picks the highest supported one (up to
+  `net48`; `net481` is still ranked below it). `vela apply` and the projects `vela init` scaffolds no longer mention
+  a `net471` cap for plugin packages, and `vela apply` explains a rejected package only when it targets above `net48`.
 
 ### Fixed (CLI)
 
+- The `--pfx-credential` help of `vela sign` names the Windows Credential Manager, the only store it reads.
 - `vela models --verify` with only `--messages` / `--custom-apis` (no table or role scope) checked nothing and exited
   `0`. It is now refused before connecting, with the invalid-arguments exit code.
 - `vela models --verify --solution X --solution-roles` on a solution that holds roles but no table failed with "No

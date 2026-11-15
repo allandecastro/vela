@@ -272,7 +272,7 @@ internal static class CliCommands
                     new("--pfx-base64", CliOptionKind.Value, "The PFX as base64 on the command line (warns: visible to other users; prefer --pfx-base64-env).", "content"),
                     new("--pfx-password-env", CliOptionKind.Value, "Environment variable holding the PFX password.", "VAR"),
                     new("--pfx-password", CliOptionKind.Value, "The PFX password on the command line (warns: visible to other users; prefer --pfx-password-env).", "pw"),
-                    new("--pfx-credential", CliOptionKind.Value, "Read the PFX password from the OS credential store.", "target"),
+                    new("--pfx-credential", CliOptionKind.Value, "Read the PFX password from the Windows Credential Manager.", "target"),
                     new("--timestamp", CliOptionKind.Value, "RFC 3161 timestamp server.", "url"),
                     Json,
                     Help]),

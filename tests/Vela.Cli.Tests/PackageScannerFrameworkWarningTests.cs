@@ -71,7 +71,7 @@ public sealed class PackageScannerFrameworkWarningTests : IDisposable
 
     [Theory]
     [InlineData("lib/net462/Zava.Plugins.dll")]
-    [InlineData("lib/net48/Zava.Plugins.dll")] // above the legacy package cap: apply explains it only if Dataverse rejects it
+    [InlineData("lib/net48/Zava.Plugins.dll")] // the supported maximum
     public void A_supported_framework_does_not_warn(string entry)
     {
         Assert.Equal(string.Empty, ExtractCapturingStderr(Nupkg(entry)));

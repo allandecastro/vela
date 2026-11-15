@@ -26,12 +26,17 @@ local-dev default.
 
 1. Move the relevant entries from `## [Unreleased]` to a new `## [X.Y.Z] - YYYY-MM-DD` section in
    [`CHANGELOG.md`](CHANGELOG.md) (open a PR, merge to `main`).
-2. Tag and push:
+2. For a framework release, in the same PR: move the rules listed in
+   [`src/Vela.Analyzers/AnalyzerReleases.Unshipped.md`](src/Vela.Analyzers/AnalyzerReleases.Unshipped.md) (its
+   `### New Rules`, `### Removed Rules` and `### Changed Rules` tables) to a new `## Release X.Y.Z` section at the
+   end of [`AnalyzerReleases.Shipped.md`](src/Vela.Analyzers/AnalyzerReleases.Shipped.md), in the same table
+   format, and leave only the header comment in `AnalyzerReleases.Unshipped.md`.
+3. Tag and push:
    ```bash
    git tag framework-v0.1.0 && git push origin framework-v0.1.0   # Vela.Messages + Vela.Plugins + Vela.Testing
    git tag cli-v0.1.0       && git push origin cli-v0.1.0         # Vela.Cli
    ```
-3. Watch the run under the repo's Actions tab. On success the packages are live on NuGet.org and a GitHub
+4. Watch the run under the repo's Actions tab. On success the packages are live on NuGet.org and a GitHub
    Release is created. `--skip-duplicate` keeps re-running the same tag safe.
 
 ## Framework version in scaffolded projects

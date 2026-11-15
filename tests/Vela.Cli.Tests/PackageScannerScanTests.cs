@@ -99,10 +99,9 @@ public sealed class PackageScannerScanTests : IDisposable
     [Theory]
     [InlineData(new[] { "net462" }, "net462")]
     [InlineData(new[] { "netstandard2.0", "net462" }, "net462")]      // .NET Framework preferred over netstandard
-    [InlineData(new[] { "net462", "net471" }, "net471")]              // higher net4x version wins
-    [InlineData(new[] { "net462", "net472" }, "net462")]              // ...but not above the net471 package cap
-    [InlineData(new[] { "net471", "net48" }, "net471")]
-    [InlineData(new[] { "net48", "netstandard2.0" }, "net48")]       // an over-cap net4x still beats netstandard
+    [InlineData(new[] { "net462", "net472" }, "net472")]              // higher net4x version wins
+    [InlineData(new[] { "net472", "net48" }, "net48")]                // ...up to net48, the supported maximum
+    [InlineData(new[] { "net48", "netstandard2.0" }, "net48")]
     [InlineData(new[] { "net48", "net481" }, "net48")]               // a supported net4x beats an unsupported one
     [InlineData(new[] { "net481", "netstandard2.0" }, "net481")]     // ...and an unsupported one still beats netstandard
     [InlineData(new[] { "net8.0", "netstandard2.0" }, "netstandard2.0")] // netstandard over a non-loadable net8
@@ -114,21 +113,19 @@ public sealed class PackageScannerScanTests : IDisposable
     }
 
     [Theory]
-    [InlineData("net462", false, false)]
-    [InlineData("net47", false, false)]
-    [InlineData("net471", false, false)]
-    [InlineData("net472", true, false)]
-    [InlineData("net48", true, false)]
-    [InlineData("net481", true, true)]
-    [InlineData("netstandard2.0", false, false)]
-    [InlineData("net8.0", false, false)]
-    [InlineData("", false, false)]
-    [InlineData("net4", false, false)]      // no version digits
-    [InlineData("net4721", false, false)]   // more than three digits: not a net4x moniker
-    [InlineData("net4x8", false, false)]    // not all digits (would not parse)
-    public void Framework_caps_compare_net4x_versions(string tfm, bool aboveLegacyPackageCap, bool aboveSupported)
+    [InlineData("net462", false)]
+    [InlineData("net47", false)]
+    [InlineData("net472", false)]
+    [InlineData("net48", false)]
+    [InlineData("net481", true)]
+    [InlineData("netstandard2.0", false)]
+    [InlineData("net8.0", false)]
+    [InlineData("", false)]
+    [InlineData("net4", false)]      // no version digits
+    [InlineData("net4821", false)]   // more than three digits: not a net4x moniker
+    [InlineData("net4x8", false)]    // not all digits (would not parse)
+    public void Framework_cap_compares_net4x_versions(string tfm, bool aboveSupported)
     {
-        Assert.Equal(aboveLegacyPackageCap, PackageScanner.ExceedsLegacyPluginPackageCap(tfm));
         Assert.Equal(aboveSupported, PackageScanner.ExceedsSupportedFramework(tfm));
     }
 
