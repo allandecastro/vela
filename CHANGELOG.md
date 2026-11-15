@@ -21,46 +21,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Added (Framework)
+## [0.29.0] - 2026-11-15 (Vela.Cli)
 
-- Analyzer VELA028 (error): a compile-time constant Custom API display name (over 100 characters) or description
-  (over 300), request parameter description (over 300), response property description (over 100) or step description
-  (over 256 with the step-key marker Vela appends) fails the build instead of `vela plan`. It covers `DisplayName(...)`,
-  `Description(...)`, `RequestParameter(...)` / `ResponseParameter(...)`, `Add(x => x.Prop, optional, description)`,
-  `[Description(...)]` on a request or response property and `WithDescription(...)`. The limits are one source shared
-  with the plan check, which still covers values only known at run time.
-
-### Fixed (Framework)
-
-- The security harness materializes a security role the way Dataverse stores it: one `role` row per business unit,
-  each with `parentrootroleid` set to the declared (root) id and its `businessunitid`. The root business unit's
-  copy keeps the declared id (`roleid == parentrootroleid`); the other copies get an id derived from the root id
-  and the business unit, stable across runs. `systemuserroles.roleid` and `teamroles.roleid` now hold the copy of
-  the user's or team's business unit instead of the root id. The root business unit is the single top of the
-  declared `BusinessUnit(...)` hierarchy (or, with none declared, the single business unit the users and teams
-  are in); when there is no single top, every principal keeps the root id as before. Privilege evaluation is
-  unchanged. **Migration:** a test that matched `systemuserroles.roleid` (or `teamroles.roleid`) to a
-  `Roles.XId` for a user or team outside the root business unit now finds nothing, as on Dataverse: join `role`
-  and match `parentrootroleid` to `Roles.XId` instead.
-- A system role can be declared with its template id, `Role(name, id, templateId, grants)` (or with a
-  `RoleBuilder`), and the harness writes it as `roletemplateid` on every business unit copy, as Dataverse does for
-  a system role (verified live: System Administrator has the same `roletemplateid` in every org while its
-  `roleid` differs). A role declared without one has no `roletemplateid`, like a custom role.
-- The security harness reads like Dataverse. With no Read privilege on a table, at any depth, a read now throws
-  `PrincipalPrivilegeDenied` (`0x80040220`, "is missing prvRead... privilege") instead of returning nothing: for the
-  root table of a `Retrieve` or `RetrieveMultiple` (QueryExpression, FetchXML, QueryByAttribute, typed queries) and
-  for the table of any link-entity, inner or outer, nested or not. A `Retrieve` by id of a record out of reach while
-  the privilege is held now throws `0x80048306` ("does not have ReadAccess right(s) for record") instead of
-  `0x80040220`. The `role` table is no longer exempt: through the user's service it needs the Read privilege on
-  `role`, and its rows belong to their business unit. A privilege fault message now reads
-  "is missing prv{Privilege}{table} privilege". See [Security model in tests](docs/guides/security-model.md).
-  - Migration: a test that expected an empty result from a query on, or linking to, a table the user has no Read
-    privilege on now gets the fault; grant Read at some depth or assert the fault. A test that reads `role` through
-    the user's service needs a Read grant on `role` (or reads it through `ctx.SystemService`). A test that read a
-    record only through an access team or a share needs Read on the table at some depth (User is enough). A test that
-    matched the old fault message text, or expected `0x80040220` for a record out of reach, needs updating.
-
-### Changed (CLI, breaking)
+### Changed (breaking)
 
 - `vela add plugin` names its handler `Handle<Message>` (`HandleUpdate(HandleUpdateContext ctx)`), the default of
   `vela add step`, instead of the fixed `OnExecute(OnExecuteContext ctx)`. Existing files are not touched. A script
@@ -85,7 +48,7 @@ All notable changes to Vela are documented here. The format is based on
 - `vela init` no longer writes `<VelaPublisherPrefix>` into the generated project files; the publisher prefix goes to
   `PROJECT.md`. The package ids keep the prefix (`zava_Zava.Plugins`), so the build produces the same packages.
 
-### Added (CLI)
+### Added
 
 - `vela models --roles` / `--solution-roles` reads each role's `roletemplateid` and, for a system role, generates
   `XTemplateId` next to `XId`. The generated comments say that `XId` (the root role id) is the same across
@@ -123,7 +86,7 @@ All notable changes to Vela are documented here. The format is based on
   access level are drift: it lists
   them, adds them to `--json` (`roles`, `missingRolesClass`) and exits `5`. `--roles` alone checks the roles only.
 
-### Changed (CLI)
+### Changed
 
 - `vela init` writes a solution-root `.editorconfig` (manifest-tracked like the other generated files) that keeps
   `using` directives inside a block namespace: `csharp_using_directive_placement = inside_namespace`, so the IDE adds
@@ -135,9 +98,9 @@ All notable changes to Vela are documented here. The format is based on
 - The scaffolded `AGENTS.md` shows each sample in the namespace the scaffold gives its folder, with the usings inside
   it, and adds the conventions: why usings go inside the namespace, handlers named after the behaviour
   (`--handler`), project-wide services and message sources in `ProjectServices.cs`, a `<summary>` on public types.
-- `vela init` references framework 0.41.2 (Vela.Plugins, Vela.Testing, Vela.Messages).
+- `vela init` references framework 0.42.0 (Vela.Plugins, Vela.Testing, Vela.Messages).
 
-### Fixed (CLI)
+### Fixed
 
 - `vela add test <Plugin> --message <Message>` tests every step of the plugin on that message, not the first one only.
   A plugin with a second step on the same message (`vela add step ... --message Create`) had its test class
@@ -153,6 +116,47 @@ All notable changes to Vela are documented here. The format is based on
   namespaces need the usings inside a block namespace (CS0118 otherwise), and what the generated `.editorconfig`
   enforces. The plugin samples of the plugin, end-to-end and Custom API guides and of the NuGet readme use the
   scaffold's namespace (`Zava.Plugins.Account.Plugins`) with the usings inside it.
+
+## [0.42.0] - 2026-11-15 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Added
+
+- Analyzer VELA028 (error): a compile-time constant Custom API display name (over 100 characters) or description
+  (over 300), request parameter description (over 300), response property description (over 100) or step description
+  (over 256 with the step-key marker Vela appends) fails the build instead of `vela plan`. It covers `DisplayName(...)`,
+  `Description(...)`, `RequestParameter(...)` / `ResponseParameter(...)`, `Add(x => x.Prop, optional, description)`,
+  `[Description(...)]` on a request or response property and `WithDescription(...)`. The limits are one source shared
+  with the plan check, which still covers values only known at run time.
+
+### Fixed
+
+- The security harness materializes a security role the way Dataverse stores it: one `role` row per business unit,
+  each with `parentrootroleid` set to the declared (root) id and its `businessunitid`. The root business unit's
+  copy keeps the declared id (`roleid == parentrootroleid`); the other copies get an id derived from the root id
+  and the business unit, stable across runs. `systemuserroles.roleid` and `teamroles.roleid` now hold the copy of
+  the user's or team's business unit instead of the root id. The root business unit is the single top of the
+  declared `BusinessUnit(...)` hierarchy (or, with none declared, the single business unit the users and teams
+  are in); when there is no single top, every principal keeps the root id as before. Privilege evaluation is
+  unchanged. **Migration:** a test that matched `systemuserroles.roleid` (or `teamroles.roleid`) to a
+  `Roles.XId` for a user or team outside the root business unit now finds nothing, as on Dataverse: join `role`
+  and match `parentrootroleid` to `Roles.XId` instead.
+- A system role can be declared with its template id, `Role(name, id, templateId, grants)` (or with a
+  `RoleBuilder`), and the harness writes it as `roletemplateid` on every business unit copy, as Dataverse does for
+  a system role (verified live: System Administrator has the same `roletemplateid` in every org while its
+  `roleid` differs). A role declared without one has no `roletemplateid`, like a custom role.
+- The security harness reads like Dataverse. With no Read privilege on a table, at any depth, a read now throws
+  `PrincipalPrivilegeDenied` (`0x80040220`, "is missing prvRead... privilege") instead of returning nothing: for the
+  root table of a `Retrieve` or `RetrieveMultiple` (QueryExpression, FetchXML, QueryByAttribute, typed queries) and
+  for the table of any link-entity, inner or outer, nested or not. A `Retrieve` by id of a record out of reach while
+  the privilege is held now throws `0x80048306` ("does not have ReadAccess right(s) for record") instead of
+  `0x80040220`. The `role` table is no longer exempt: through the user's service it needs the Read privilege on
+  `role`, and its rows belong to their business unit. A privilege fault message now reads
+  "is missing prv{Privilege}{table} privilege". See [Security model in tests](docs/guides/security-model.md).
+  - Migration: a test that expected an empty result from a query on, or linking to, a table the user has no Read
+    privilege on now gets the fault; grant Read at some depth or assert the fault. A test that reads `role` through
+    the user's service needs a Read grant on `role` (or reads it through `ctx.SystemService`). A test that read a
+    record only through an access team or a share needs Read on the table at some depth (User is enough). A test that
+    matched the old fault message text, or expected `0x80040220` for a record out of reach, needs updating.
 
 ## [0.41.2] - 2026-10-23 (Vela.Messages + Vela.Plugins + Vela.Testing)
 
