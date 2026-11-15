@@ -54,6 +54,7 @@ namespace Vela.Testing
 
         // A role copy is owned by its business unit (businessunitid), so a Business Unit or Parent: Child read depth
         // reaches it. A copy with no businessunitid (no single root business unit) is reached at Organization depth only.
+        // Applied to the materialized copies and to role rows given to Seed.
         private static void StampRoleBusinessUnit(Entity role)
         {
             if (!role.Contains(SystemFieldApplier.OwningBusinessUnit) &&

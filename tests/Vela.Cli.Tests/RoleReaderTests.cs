@@ -20,6 +20,8 @@ public sealed class RoleReaderTests
         Guid sales = org.AddRole("Sales Rep", (RoleOrg.PrvReadAccount, 8), (RoleOrg.PrvReadContact, 1));
         Guid other = org.AddRole("Not In Solution", (RoleOrg.PrvReadContact, 8));
         org.AddComponent(solution, sales, componentType: 20);
+        // A role of another solution: only the solutionid condition keeps it out.
+        org.AddComponent(org.AddSolution("OtherSolution"), other, componentType: 20);
         org.AddComponent(solution, Guid.NewGuid(), componentType: 1); // a table component, not a role
 
         IReadOnlyList<RoleModel> roles = RoleReader.ReadRoles(org, [], "ZavaCore");
@@ -52,11 +54,12 @@ public sealed class RoleReaderTests
     {
         RoleOrg org = new();
         Guid solution = org.AddSolution("ZavaCore");
-        Guid zed = org.AddRole("Zed", (RoleOrg.PrvReadContact, 1));
-        org.AddRole("Alpha", (RoleOrg.PrvReadAccount, 1));
-        org.AddComponent(solution, zed, componentType: 20);
+        // The explicit role resolves first, so insertion order (Zed, Alpha) differs from the sorted one.
+        org.AddRole("Zed", (RoleOrg.PrvReadContact, 1));
+        Guid alpha = org.AddRole("Alpha", (RoleOrg.PrvReadAccount, 1));
+        org.AddComponent(solution, alpha, componentType: 20);
 
-        IReadOnlyList<RoleModel> roles = RoleReader.ReadRoles(org, ["Alpha"], "ZavaCore");
+        IReadOnlyList<RoleModel> roles = RoleReader.ReadRoles(org, ["Zed"], "ZavaCore");
 
         Assert.Equal(new[] { "Alpha", "Zed" }, roles.Select(r => r.Name).ToArray());
     }

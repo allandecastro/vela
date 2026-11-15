@@ -183,13 +183,18 @@ role (names match whatever their case). It reports:
 - for each table and privilege: one only the local class grants, one only the environment grants, and an
   **access level** that differs (for example `User` locally, `Organization` live).
 
-A `--solution` also scopes its tables, so `--solution ZavaSales --solution-roles` checks the tables and the roles;
-`--roles` alone checks the roles only.
+Two root roles with the same name are both generated (`Roles.X` and `Roles.X_2`, in root id order) and each is
+matched on its root id. When more than one role of a name differs on both sides they cannot be paired, so each is
+reported as not found on the other side; regenerating clears it.
+
+A `--solution` also scopes its tables, so `--solution ZavaSales --solution-roles` checks the tables and the roles
+(the roles only when the solution holds no table); `--roles` alone checks the roles only.
 
 `--verify` writes nothing and exits `5` when any table or role is out of sync (and `0` when everything matches),
 so it drops straight into CI to fail a build on a stale model. Add `--json` for a machine-readable report: one
 entry per table under `tables`, and with a role scope one per role under `roles` (plus `missingRolesClass`).
-`--custom-apis` / `--messages` scopes are ignored.
+`--custom-apis` / `--messages` scopes are ignored, and a `--verify` with only those (no table or role scope) is
+refused as invalid arguments.
 
 ## Offline generation from an exported solution (`--from-solution`)
 

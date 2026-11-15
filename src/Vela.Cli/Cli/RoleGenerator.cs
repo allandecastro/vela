@@ -40,10 +40,12 @@ public static class RoleGenerator
             throw new ArgumentException("A target namespace is required.", nameof(options));
         }
 
-        // Deterministic order, and unique C# identifiers even when two role names sanitize to the same base.
+        // Deterministic order, and unique C# identifiers even when two role names sanitize to the same base. Two root
+        // roles can share a name: ordered by root id, the first gets X and the next X_2 whatever order they came in.
         List<RoleModel> ordered = roles
             .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Name))
             .OrderBy(r => r.Name, StringComparer.Ordinal)
+            .ThenBy(r => r.Id)
             .ToList();
 
         HashSet<string> usedIdentifiers = new HashSet<string>(StringComparer.Ordinal);

@@ -21,6 +21,26 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (Framework)
+
+- A `role` row given to `InMemoryOrganizationService.Seed(...)` with `businessunitid` and no `owningbusinessunit` is
+  now owned by that business unit, like the role copies the security model materializes. A Business Unit or Parent:
+  Child Read on `role` reaches it; it was treated as having no business unit, so queries dropped it and a Retrieve
+  failed with 0x80048306.
+
+### Fixed (CLI)
+
+- `vela models --verify` with only `--messages` / `--custom-apis` (no table or role scope) checked nothing and exited
+  `0`. It is now refused before connecting, with the invalid-arguments exit code.
+- `vela models --verify --solution X --solution-roles` on a solution that holds roles but no table failed with "No
+  tables resolved". It now verifies the roles (exit `0` or `5`), as generation writes the `Roles` class alone.
+- `vela models --verify` reads a grant tuple of the `Roles` class with whitespace after the parenthesis
+  (`( "account", "User", "Read")`); it was ignored, reporting false drift or a false all-clear.
+- `vela models --verify` keeps every root role sharing a name and matches them on their root id; it kept only the
+  first local one, reporting a root id change that regenerating could not clear. Same-name roles that cannot be
+  paired are each reported missing on the other side. The generated identifiers of same-name roles (`X`, `X_2`)
+  now follow the root id order, so they no longer depend on the order Dataverse returns the roles in.
+
 ## [0.29.0] - 2026-11-15 (Vela.Cli)
 
 ### Changed (breaking)
