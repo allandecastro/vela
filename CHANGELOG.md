@@ -21,6 +21,20 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (CLI)
+
+- The `AGENTS.md` that `vela init` scaffolds (and the samples README) says to test with `PluginPipeline` by default,
+  and with `PluginContext` only for edge cases the pipeline does not easily produce (a `Depth` of 2 or more, a crafted
+  `ParentContext`, shared variables set by another plugin, an invalid Custom API input, one error branch of a
+  handler).
+
+### Docs
+
+- [Testing](docs/guides/testing.md) opens with a "Which one to use" section: `PluginPipeline` is the default, and
+  `PluginContext` is for edge cases. The pipeline section and its example now come before `PluginContext`. Several
+  steps of one plugin on the same trigger, differing only by filter or step key, are tested with the pipeline. The
+  plugins guide and `llms.txt` say the same.
+
 ## [0.29.0] - 2026-11-15 (Vela.Cli)
 
 ### Changed (breaking)
