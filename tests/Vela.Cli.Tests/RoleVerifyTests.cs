@@ -231,6 +231,106 @@ public sealed class RoleVerifyTests
     }
 
     [Fact]
+    public void Extract_reads_a_grant_tuple_with_whitespace_after_the_parenthesis()
+    {
+        RoleOrg org = new();
+        org.AddRole("Sales Rep", (RoleOrg.PrvReadContact, 1));
+        string generated = RolesClass(RoleReader.ReadRoles(org, ["Sales Rep"], null));
+        // Hand-formatted: a space (and a tab) between the parenthesis and the first literal.
+        string spaced = generated.Replace("(\"contact\",", "( \t\"contact\",");
+        Assert.NotEqual(generated, spaced);
+
+        RoleDriftChecker.ExtractedRole role = Assert.Single(RoleDriftChecker.Extract(spaced)!);
+
+        Assert.Equal(new RoleDriftChecker.Grant("contact", "Read", "User"), Assert.Single(role.Grants));
+        Assert.False(ModelsCommand.VerifyRoles(org, ["Sales Rep"], null, Ns, [spaced]).HasDrift);
+    }
+
+    [Fact]
+    public void Two_root_roles_sharing_a_name_are_each_matched_on_their_root_id()
+    {
+        RoleOrg org = new();
+        Guid solution = org.AddSolution("ZavaCore");
+        org.AddComponent(solution, org.AddRole("Sales Rep", (RoleOrg.PrvReadContact, 1)), componentType: 20);
+        org.AddComponent(solution, org.AddRole("Sales Rep", (RoleOrg.PrvReadAccount, 8)), componentType: 20);
+        string local = RolesClass(RoleReader.ReadRoles(org, [], "ZavaCore"));
+
+        RoleDriftChecker.RoleDriftReport report = ModelsCommand.VerifyRoles(org, [], "ZavaCore", Ns, [local]);
+
+        Assert.Equal(2, RoleDriftChecker.Extract(local)!.Count);
+        Assert.False(report.HasDrift);
+        Assert.Equal(2, report.Roles.Count);
+        Assert.All(report.Roles, r => Assert.Equal(r.LocalId, r.LiveId));
+    }
+
+    [Fact]
+    public void Same_name_roles_that_cannot_be_paired_by_root_id_are_each_reported_missing()
+    {
+        RoleOrg org = new();
+        Guid solution = org.AddSolution("ZavaCore");
+        Guid liveA = org.AddRole("Sales Rep", (RoleOrg.PrvReadContact, 1));
+        Guid liveB = org.AddRole("Sales Rep", (RoleOrg.PrvReadAccount, 8));
+        org.AddComponent(solution, liveA, componentType: 20);
+        org.AddComponent(solution, liveB, componentType: 20);
+        Guid localA = Guid.NewGuid();
+        Guid localB = Guid.NewGuid();
+        string source = RolesClass([new RoleModel("Sales Rep", localA, []), new RoleModel("Sales Rep", localB, [])]);
+
+        RoleDriftChecker.RoleDriftReport report = ModelsCommand.VerifyRoles(org, [], "ZavaCore", Ns, [source]);
+
+        Assert.True(report.HasDrift);
+        Assert.Equal(4, report.Roles.Count);
+        Assert.DoesNotContain(report.Roles, r => r.IdChanged);
+        Assert.Equal(
+            new[] { liveA, liveB }.OrderBy(id => id).ToArray(),
+            report.Roles.Where(r => r.MissingLocally).Select(r => r.LiveId!.Value).OrderBy(id => id).ToArray());
+        Assert.Equal(
+            new[] { localA, localB }.OrderBy(id => id).ToArray(),
+            report.Roles.Where(r => r.MissingInDataverse).Select(r => r.LocalId!.Value).OrderBy(id => id).ToArray());
+    }
+
+    [Fact]
+    public void Same_name_roles_get_the_same_identifiers_whatever_order_they_resolve_in()
+    {
+        RoleModel first = new("Sales Rep", new Guid("00000000-0000-0000-0000-000000000001"), []);
+        RoleModel second = new("Sales Rep", new Guid("00000000-0000-0000-0000-000000000002"), []);
+
+        Assert.Equal(RolesClass([first, second]), RolesClass([second, first]));
+    }
+
+    [Fact]
+    public void Solution_roles_of_a_solution_without_tables_are_verified()
+    {
+        RoleOrg org = new();
+        Guid solution = org.AddSolution("ZavaCore");
+        org.AddComponent(solution, org.AddRole("Sales Rep", (RoleOrg.PrvReadContact, 1)), componentType: 20);
+        ModelsScope scope = ModelsScope.Parse(["--solution", "ZavaCore", "--solution-roles"]);
+        string local = RolesClass(RoleReader.ReadRoles(org, [], "ZavaCore"));
+
+        ModelsCommand.VerifyResult inSync = ModelsCommand.VerifyScope(org, scope, Ns, dataAnnotations: false, [local]);
+        ModelsCommand.VerifyResult drifted = ModelsCommand.VerifyScope(org, scope, Ns, dataAnnotations: false, [local.Replace("\"User\"", "\"Organization\"")]);
+
+        Assert.Null(inSync.Error);
+        Assert.Null(inSync.Tables);
+        Assert.False(inSync.Roles!.HasDrift);
+        Assert.Equal(CliExitCodes.ExitSuccess, inSync.ExitCode);
+        Assert.True(drifted.Roles!.HasDrift);
+        Assert.Equal(CliExitCodes.ExitDriftDetected, drifted.ExitCode);
+    }
+
+    [Fact]
+    public void A_solution_without_tables_and_no_role_scope_is_still_an_error()
+    {
+        RoleOrg org = new();
+        org.AddSolution("ZavaCore");
+
+        ModelsCommand.VerifyResult result = ModelsCommand.VerifyScope(org, ModelsScope.Parse(["--solution", "ZavaCore"]), Ns, dataAnnotations: false, []);
+
+        Assert.Equal("No tables resolved from the given scope.", result.Error);
+        Assert.Equal(CliExitCodes.ExitInvalidArguments, result.ExitCode);
+    }
+
+    [Fact]
     public void Extract_ignores_a_file_without_a_roles_class()
     {
         Assert.Null(RoleDriftChecker.Extract("namespace N { public sealed class Account { public const string EntityLogicalNameValue = \"account\"; } }"));

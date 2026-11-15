@@ -156,9 +156,14 @@ internal static class ModelsCommand
 
         // --verify does not write: it regenerates the scoped entity models and Roles class from the live environment
         // in memory and compares them against the files already on disk, then reports drift. Custom-api/message
-        // scopes are ignored.
+        // scopes are ignored, so a scope of only those would check nothing and pass: refuse it before connecting.
         if (HasFlag(args, "--verify"))
         {
+            if (!scope.HasTableScope && !scope.HasRoleScope)
+            {
+                return Fail("--verify needs a table or role scope (--solution, --entities, --roles or --solution-roles); --custom-apis / --messages are not verified.", ExitInvalidArguments, includeUsage: false);
+            }
+
             return RunModelVerify(args, interactive, scope, ns!, outDir, dataAnnotations, json);
         }
 
@@ -474,26 +479,18 @@ internal static class ModelsCommand
             using ServiceClient client = DataverseRegistration.CreateDataverseClient(options);
             IOrganizationService service = client;
 
-            List<string> localSources = ReadLocalModelSources(outDir);
-
-            // Tables when the scope names any (--solution scopes its tables, as when generating), roles likewise.
-            ModelDriftChecker.ModelDriftReport? report = null;
-            if (scope.HasTableScope)
+            VerifyResult result = VerifyScope(service, scope, ns, dataAnnotations, ReadLocalModelSources(outDir));
+            if (result.Error is not null)
             {
-                List<string> logicalNames = EntityMetadataReader.ResolveLogicalNames(service, solution, scope.Entities);
-                if (logicalNames.Count == 0)
-                {
-                    return Fail("No tables resolved from the given scope.", ExitInvalidArguments, includeUsage: false);
-                }
-
-                EntityMetadata[] metadata = logicalNames.Select(name => EntityMetadataReader.ReadEntity(service, name)).ToArray();
-                IReadOnlyList<GeneratedModel> live = ModelGenerator.Generate(metadata, new ModelGenOptions(ns, dataAnnotations));
-                report = ModelDriftChecker.Compare(live.Select(m => m.Code).ToList(), localSources);
+                return Fail(result.Error, ExitInvalidArguments, includeUsage: false);
             }
 
-            RoleDriftChecker.RoleDriftReport? roles = scope.HasRoleScope
-                ? VerifyRoles(service, scope.Roles, scope.SolutionRoles ? solution : null, ns, localSources)
-                : null;
+            ModelDriftChecker.ModelDriftReport? report = result.Tables;
+            RoleDriftChecker.RoleDriftReport? roles = result.Roles;
+            if (scope.HasTableScope && report is null)
+            {
+                Console.Error.WriteLine("Note: no tables resolved from the given scope; verifying the Roles class only.");
+            }
 
             if (json)
             {
@@ -513,7 +510,7 @@ internal static class ModelsCommand
                 }
             }
 
-            return report?.HasDrift == true || roles?.HasDrift == true ? ExitDriftDetected : ExitSuccess;
+            return result.ExitCode;
         }
         catch (Exception ex) when (DataverseConnectionException.IsConnectionFailure(ex))
         {
@@ -553,6 +550,47 @@ internal static class ModelsCommand
         }
 
         return sources;
+    }
+
+    /// <summary>
+    /// The outcome of a --verify run over the scope: the table drift (null without a table scope), the role drift
+    /// (null without a role scope), or an <see cref="Error"/> that refuses the run as invalid arguments.
+    /// </summary>
+    internal sealed record VerifyResult(ModelDriftChecker.ModelDriftReport? Tables, RoleDriftChecker.RoleDriftReport? Roles, string? Error = null)
+    {
+        public int ExitCode =>
+            Error is not null ? ExitInvalidArguments
+            : Tables?.HasDrift == true || Roles?.HasDrift == true ? ExitDriftDetected
+            : ExitSuccess;
+    }
+
+    // The connected part of --verify: tables when the scope names any (--solution scopes its tables, as when
+    // generating), roles likewise, each compared with the model sources on disk.
+    internal static VerifyResult VerifyScope(IOrganizationService service, ModelsScope scope, string ns, bool dataAnnotations, IReadOnlyList<string> localSources)
+    {
+        ModelDriftChecker.ModelDriftReport? report = null;
+        if (scope.HasTableScope)
+        {
+            // A solution with roles but no tables is still verified for its roles (--solution-roles), as generation
+            // generates the Roles class alone; without a role scope there is nothing to check.
+            List<string> logicalNames = EntityMetadataReader.ResolveLogicalNames(service, scope.Solution, scope.Entities);
+            if (logicalNames.Count == 0 && !scope.HasRoleScope)
+            {
+                return new VerifyResult(null, null, "No tables resolved from the given scope.");
+            }
+
+            if (logicalNames.Count > 0)
+            {
+                EntityMetadata[] metadata = logicalNames.Select(name => EntityMetadataReader.ReadEntity(service, name)).ToArray();
+                IReadOnlyList<GeneratedModel> live = ModelGenerator.Generate(metadata, new ModelGenOptions(ns, dataAnnotations));
+                report = ModelDriftChecker.Compare(live.Select(m => m.Code).ToList(), localSources);
+            }
+        }
+
+        RoleDriftChecker.RoleDriftReport? roles = scope.HasRoleScope
+            ? VerifyRoles(service, scope.Roles, scope.SolutionRoles ? scope.Solution : null, ns, localSources)
+            : null;
+        return new VerifyResult(report, roles);
     }
 
     // The roles side of --verify: the Roles class the live roles of the scope generate, compared with the one on
@@ -622,7 +660,9 @@ internal static class ModelsCommand
 
         foreach (RoleDriftChecker.RoleDrift drift in report.Roles)
         {
-            string label = $"role {drift.Name}";
+            // Root roles sharing a name are told apart by their root id.
+            bool shared = report.Roles.Count(r => string.Equals(r.Name, drift.Name, StringComparison.OrdinalIgnoreCase)) > 1;
+            string label = shared ? $"role {drift.Name} ({drift.LiveId ?? drift.LocalId:D})" : $"role {drift.Name}";
             if (!drift.HasDrift)
             {
                 Console.WriteLine($"  {label}: {ConsoleTheme.Added("in sync", color)}");

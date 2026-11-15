@@ -336,6 +336,39 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void A_seeded_role_copy_is_owned_by_its_business_unit()
+        {
+            // A role row seeded with businessunitid only (no owningbusinessunit), like a child business unit's copy:
+            // a Parent: Child role Read reaches it, as it reaches the materialized copies; a Business Unit one does not.
+            Guid childBu = new Guid("b0000000-0000-0000-0000-000000000eb2");
+            Guid copy = new Guid("50100000-0000-0000-0000-000000000e78");
+            Entity seededCopy = new Entity("role", copy)
+            {
+                ["name"] = "Salesperson",
+                ["businessunitid"] = new EntityReference("businessunit", childBu),
+                ["parentrootroleid"] = new EntityReference("role", SalesRole),
+            };
+            InMemoryOrganizationService World(AccessLevel roleRead) => new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(Bu)
+                    .BusinessUnit(childBu, Bu)
+                    .Role("Salesperson", SalesRole, r => r.Grant("role", roleRead, Privilege.Read))
+                    .User(Alice, Bu, "Salesperson"))
+                .Seed(seededCopy);
+
+            InMemoryOrganizationService deep = World(AccessLevel.ParentChild);
+            Assert.Equal("Salesperson", deep.Retrieve("role", copy, new ColumnSet("name")).GetAttributeValue<string>("name"));
+            Assert.Contains(deep.RetrieveMultiple(new QueryExpression("role") { ColumnSet = new ColumnSet("name") }).Entities, r => r.Id == copy);
+            Assert.Equal(childBu, deep.GetAll("role").Single(r => r.Id == copy).GetAttributeValue<EntityReference>("owningbusinessunit").Id);
+
+            InMemoryOrganizationService local = World(AccessLevel.BusinessUnit);
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => local.Retrieve("role", copy, new ColumnSet("name")));
+            Assert.Equal(RecordReadAccessDenied, fault.Detail.ErrorCode);
+        }
+
+        [Fact]
         public void SystemService_reads_roles_without_any_privilege()
         {
             IOrganizationService system = SystemOf(RoleWorld(roleRead: null));
