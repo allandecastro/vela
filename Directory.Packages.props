@@ -36,8 +36,8 @@
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.2" />
-    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
-    <PackageVersion Include="coverlet.msbuild" Version="10.1.0" />
+    <PackageVersion Include="coverlet.collector" Version="10.1.1" />
+    <PackageVersion Include="coverlet.msbuild" Version="10.1.1" />
     <!-- Roslyn analyzer (Vela.Analyzers) + its test harness. 4.8.0 is broadly compatible with the SDKs/IDEs that
          build Vela consumer projects. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
