@@ -2,7 +2,8 @@
 
 Vela ships as two independent release lines, each cut by pushing a git tag. The
 [`release.yml`](.github/workflows/release.yml) workflow does the rest: build, test, pack, publish to
-NuGet.org via Trusted Publishing (OIDC, no stored API key), and create a GitHub Release.
+NuGet.org via Trusted Publishing (OIDC, no stored API key), and create a GitHub Release. It runs on a
+GitHub-hosted `windows-latest` runner (the net462 harness only builds on Windows), like `ci.yml`.
 
 | Line | Tag | Packages |
 | --- | --- | --- |
@@ -25,14 +26,12 @@ local-dev default.
 
 1. Move the relevant entries from `## [Unreleased]` to a new `## [X.Y.Z] - YYYY-MM-DD` section in
    [`CHANGELOG.md`](CHANGELOG.md) (open a PR, merge to `main`).
-2. Make sure the self-hosted Windows runner is online: `release.yml` runs on `[self-hosted, Windows]` (the net462
-   harness only packs on Windows), like `ci.yml`.
-3. Tag and push:
+2. Tag and push:
    ```bash
    git tag framework-v0.1.0 && git push origin framework-v0.1.0   # Vela.Messages + Vela.Plugins + Vela.Testing
    git tag cli-v0.1.0       && git push origin cli-v0.1.0         # Vela.Cli
    ```
-4. Watch the run under the repo's Actions tab. On success the packages are live on NuGet.org and a GitHub
+3. Watch the run under the repo's Actions tab. On success the packages are live on NuGet.org and a GitHub
    Release is created. `--skip-duplicate` keeps re-running the same tag safe.
 
 ## Framework version in scaffolded projects
