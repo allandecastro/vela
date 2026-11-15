@@ -1,7 +1,7 @@
 # Telemetry & Application Insights
 
 Emit leveled, structured telemetry from a plugin handler. When the environment has
-[Application Insights configured](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/application-insights-integration-overview),
+[Application Insights configured](https://learn.microsoft.com/power-platform/admin/overview-integration-application-insights),
 entries flow there at the right severity with custom dimensions; when it is not, nothing is lost - every entry
 still goes to the plug-in trace log (subject to the environment's trace-log setting). You never instantiate a
 `TelemetryClient`; the platform owns ingestion through the logger it provides,
@@ -28,7 +28,8 @@ the message.
 Vela attaches a default set of dimensions to every entry, from the execution context:
 `CorrelationId`, `MessageName`, `Stage`, `Mode`, `Depth`, `PrimaryEntityName`, `PrimaryEntityId`, `PluginType`
 (the plugin/Custom API class), and `Method` (the handler method currently running; present when Vela dispatches to
-a handler method, absent for a Custom API that overrides `Execute`). Query and correlate on these in Application
+a handler method, absent for a typed Custom API's `Execute(ctx, request)` and for an override of
+`ExecuteDataversePlugin`). Query and correlate on these in Application
 Insights.
 
 Add your own with a scope - they apply to every log written until the handle is disposed, and nest:

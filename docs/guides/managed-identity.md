@@ -14,10 +14,10 @@ string userToken = ctx.AcquireManagedIdentityToken(applicationUserId, new[] { "h
 
 Use the token as a bearer credential when calling the external API (for example on an `HttpClient` request).
 
-`AcquireManagedIdentityToken` throws when the environment has no managed identity available. Scaffold a solution
-with `vela init --managed-identity` (it adds the Integrations project) to wire the managed-identity signing/registration path, and configure the
-managed identity + federated credential on the environment (see
-[Use managed identity for server-to-server authentication](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/managed-identity-overview)).
+`AcquireManagedIdentityToken` throws an `InvalidPluginExecutionException` when the plug-in is served no
+managed-identity service (the package is not linked to a managed identity). Scaffold a solution with
+`vela init --managed-identity` (it adds the Integrations project and the signing step of its package), then
+configure the managed identity and its federated credential on the environment (below).
 
 ## Link the plugin package at deployment
 

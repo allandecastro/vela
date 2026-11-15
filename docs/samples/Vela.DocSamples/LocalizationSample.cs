@@ -58,17 +58,16 @@ namespace Vela.DocSamples
         [Fact]
         public void Rejects_An_Empty_Name_In_The_Users_Language()
         {
-            // The message service reads the user's UI language through the system service.
+            // The message service reads the initiating user's UI language through the system service.
             Guid user = Guid.NewGuid();
-            var crm = new InMemoryOrganizationService().Seed(
-                new Entity("usersettings", Guid.NewGuid()) { ["systemuserid"] = user, ["uilanguageid"] = 1036 });
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .WithCurrentUser(user)
+                .Seed(new Entity("usersettings", Guid.NewGuid()) { ["systemuserid"] = user, ["uilanguageid"] = 1036 })
+                .Register<AccountNamePlugin>();
+            Guid id = pipeline.Service.Create(new Account { Name = "Zava" });
 
             InvalidPluginExecutionException error = Assert.ThrowsAny<InvalidPluginExecutionException>(() =>
-                PluginContext.For<Account>()
-                    .WithSystemService(crm)
-                    .WithInitiatingUserId(user)
-                    .WithTarget(new Account { Name = "" })
-                    .Execute<AccountNamePlugin>());
+                pipeline.Service.Update(new Account { Id = id, Name = "" }));
 
             Assert.Equal("Le nom du compte est obligatoire.", error.Message);
         }

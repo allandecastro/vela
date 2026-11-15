@@ -27,7 +27,7 @@ injection; SYSTEM is never injected implicitly.
 ## The raw query
 
 A typed `Query.For<TEntity>()` converts implicitly to a `QueryExpression`, and also exposes it explicitly, so you
-can hand it to anything the SDK accepts or tweak parts the builder does not cover yet:
+can hand it to anything the SDK accepts or tweak parts the builder does not cover:
 
 ```csharp
 QueryExpression query = Query.For<Account>().Select(a => a.Name).Build();   // or the implicit conversion
@@ -86,7 +86,7 @@ and stitch them by their parent lookup.
 
 Dataverse creates a parent and its children in one transaction (a deep insert) when you populate
 `Entity.RelatedEntities` before `Create`. Because a Vela early-bound class is a normal `Entity`, this is a typed,
-one-call insert today:
+one-call insert:
 
 ```csharp
 using Microsoft.Xrm.Sdk;
@@ -102,8 +102,8 @@ Guid accountId = ctx.Service.Create(account);   // account + two contacts, in on
 ```
 
 The same shape associates existing records over an N:N relationship (populate the collection with references to
-records that already exist). Deep insert has platform limits (bounded depth, and N:N associates rather than
-creates), so keep the graph shallow.
+records that already exist). For the platform's rules, see
+[Create related entities in one operation](https://learn.microsoft.com/power-apps/developer/data-platform/org-service/entity-operations-create#create-related-entities-in-one-operation).
 
 > [!TIP]
 > **Typed deep insert (no schema strings).** When you generate the related tables together, `vela models` also

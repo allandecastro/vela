@@ -30,8 +30,8 @@ these, in this order:
    `src/Vela.Plugins/Steps/StepBuilder.Impl.cs` (both committed). Add **one line** to the generator's model,
    `tools/codegen/Vela.StepApiGen/MessageModel.cs`, stating whether the message supports `FilterOn(...)`, which
    images it allows (`Images.Pre`, `Images.Post`, `Images.PreAndPost`; pre-images are offered at every stage,
-   PreValidation included, post-images at PostOperation only) and, when Dataverse runs it on a single table, that
-   table (`Entity:`, checked by `Build()`), for example `new("QualifyLead", Entity: "lead"),` or
+   PreValidation included, post-images at PostOperation only) and, when Dataverse accepts a step on a known set of
+   tables only, those tables (`Entities:`, checked by `Build()`), for example `new("QualifyLead", Entities: ["lead"]),` or
    `new("Update", FilterOn: true, Images: Images.PreAndPost),`. Then regenerate:
 
    ```bash
@@ -52,12 +52,11 @@ these, in this order:
    registers on the sdkmessage, and for some business messages the two differ (`SendEmail` is `Send`, `WinQuote` is
    `Win`). Query `sdkmessage` / `sdkmessagefilter` for the request name: if it does not exist, add the mapping to
    `src/Vela.Plugins/Steps/SdkMessageNames.cs` (it lists every request of `sdkmessagerequest` whose name is not an
-   sdkmessage, with the table it runs on). When the message runs on a single table, set `Entity:` in
-   `MessageModel.cs` and list it there with its table. When its only filter is `none` (a global message), leave
-`Entity:` unset and add it to `PluginMessages.GlobalMessages`: the builder then registers the step on no table. If the
-filter for your entity has
-   `iscustomprocessingstepallowed = false`, do not model the message at all: Dataverse rejects every custom step on
-   it (0x80044187).
+   sdkmessage, with the table it runs on). When the message accepts steps on a known set of tables only, set
+   `Entities:` in `MessageModel.cs` to those tables. When its only filter is `none` (a global message), leave
+   `Entities:` unset and add it to `PluginMessages.GlobalMessages`: the builder then registers the step on no table.
+   If the filter for your table has `iscustomprocessingstepallowed = false`, do not model the message at all:
+   Dataverse rejects every custom step on it (0x80044187).
 
 ## Verify
 
