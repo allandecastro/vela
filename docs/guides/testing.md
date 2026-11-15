@@ -3,22 +3,220 @@
 `Vela.Testing` runs plugins and Custom APIs **without a Dataverse connection** and **without a mocking library**.
 It has two levels:
 
-- `PluginContext` builds a fake execution context and runs **one plugin** against it.
 - `PluginPipeline` runs **the Dataverse pipeline in memory**: writes fire the registered steps, cascade, and roll
   back as on the platform.
+- `PluginContext` builds a fake execution context and runs **one plugin** against it.
 
-`PluginContext` serves a hook-based fake `IOrganizationService` by default; pass an `InMemoryOrganizationService`
-(a stateful in-memory CRM) or your own service with `WithOrganizationService` when the plugin reads or writes data.
-`PluginPipeline` always runs on its own `InMemoryOrganizationService`.
+`PluginPipeline` always runs on its own `InMemoryOrganizationService`. `PluginContext` serves a hook-based fake
+`IOrganizationService` by default; pass an `InMemoryOrganizationService` (a stateful in-memory CRM) or your own
+service with `WithOrganizationService` when the plugin reads or writes data.
 
 ```powershell
 dotnet add package Vela.Testing
 ```
 
+## Which one to use
+
+Test with `PluginPipeline` by default. It runs what Dataverse runs for a request: every registered step with its
+filtering attributes and images, in stage and execution order across plugins, the cascade of the plugins' own writes,
+the rollback of a synchronous failure, and the asynchronous steps after the commit. Several steps of one plugin on the
+same trigger, differing only by their filter or step key, are tested this way: `PluginContext` does not choose between
+them.
+
+Use `PluginContext` for the edge cases the pipeline does not easily produce, as a unit test of one handler:
+
+- a `Depth` of 2 or more, or a crafted `ParentContext`;
+- shared variables set by another plugin;
+- an invalid Custom API input, to exercise the API's own checks (`.WithoutRequestValidation()`);
+- one specific error branch of a handler.
+
+## Simulate the pipeline (cascade)
+
+`PluginPipeline` simulates the Dataverse pipeline **in memory**: writes through its service auto-fire the
+registered plugins (pre/post stages, execution order, filtering attributes, pre/post images), and a plugin that
+writes triggers further plugins (**cascade**).
+Registrations are **discovered automatically** from the assembly via `GetStepDefinitions()`. A registration
+that would never fire fails the setup instead of leaving the tests green: `FromAssembly` throws when a step or
+Custom API names a type it cannot resolve, and `Register<T>()` throws for a type that declares no step and no
+Custom API.
+
+```csharp
+var pipeline = PluginPipeline.FromAssemblyOf<AccountPostCreate>()
+    .WithAutoNumber("task", "ticketnumber", "T-", 3);
+
+pipeline.Service.Create(new Account { Name = "Zava" });   // fires Create-account plugins, then cascades
+
+Assert.Single(pipeline.GetAll("task"));        // assert on the resulting CRM state
+Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPostCreate")); // and on what ran
+```
+
+An `ExecutionLog` entry means the step was **invoked by the platform**, not that its handler ran. Vela's runtime
+can still skip the handler: a `.ForRelationship(...)` step is invoked for every relationship, and
+`.SkipWhenDepthAbove(n)` or the plugin-level depth guard stop it past a depth. Such an entry has `HandlerInvoked`
+set to `false` and `SkipReason` set to the line the runtime traced. (An execution that fails before reaching the
+handler, in the plugin's constructor or its service registration, also has `HandlerInvoked` `false`, with no
+`SkipReason`.)
+
+```csharp
+pipeline.Service.Associate("account", accountId, new Relationship("account_partners"), contacts);
+
+PipelineExecutionEntry entry = Assert.Single(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountContactsPlugin"));
+Assert.False(entry.HandlerInvoked);   // invoked, but outside its ForRelationship scope
+Assert.Contains("ForRelationship", entry.SkipReason);
+```
+
+- **Transactions follow the platform's stage model** (checked against a live environment). The PreValidation stage
+  of the initial operation runs **before** the database transaction (`IsInTransaction` is `false`), so a write a
+  PreValidation plugin makes commits on its own even if the operation fails later. The transaction opens before
+  PreOperation; any operation a plugin triggers from inside it (including that operation's own PreValidation stage,
+  at depth 2) joins it, and a synchronous failure anywhere rolls the whole transaction back. A plugin's own
+  operations reach their PreValidation steps with the extra input `InputParameters["FromSandbox"] = true`. Reads
+  (`Retrieve`/`RetrieveMultiple`) are not transactional: their steps see `IsInTransaction` = `false`. A plugin that
+  catches the failure of one of its **writes** cannot carry on: its next service call fails with "There is no active
+  transaction" (`-2147220911`) and returning normally fails the operation with "ISV code reduced the open transaction
+  count" (`0x8009000C`, `-2146893812`), as on the platform. A caught failed **read** (a Retrieve of a record that
+  does not exist) does not end the transaction. `ExecuteTransaction` runs all its children inside one transaction.
+- Synchronous-plugin exceptions **roll the operation back** (snapshot/restore); **asynchronous** steps run
+  inline once the outermost operation (or `ExecuteTransaction` batch) commits, and never when it rolls back, as on
+  Dataverse where a rolled-back operation creates no async job. An asynchronous step's exception does **not**
+  surface to the caller (matching Dataverse, where async steps are decoupled system jobs) - it is recorded on
+  `pipeline.AsyncStepFailures` so you can still assert an async step failed, and the step's own writes are rolled
+  back. `ctx.IsInTransaction` is false for async steps, read steps and a depth-1 PreValidation step, true otherwise
+  (a PreValidation step inside an `ExecuteTransaction` is in its transaction).
+- **Execution-context ids.** `CorrelationId` is one id per top-level operation (an `ExecuteTransaction` batch shares
+  one, each `ExecuteMultiple` child gets its own), kept by the async steps it queues. `RequestId` is one id per call
+  into the pipeline; `OperationId` equals it on sync steps and is the async step's own job id on async steps.
+  `IsolationMode` is 2 (sandbox) and `SecondaryEntityName` is "none", as on Dataverse.
+- The steps work on a copy of the entity you pass to `Service.Create`/`Update`: your object never receives the
+  created id or a plugin's change to `Target`. Read the id from the return value of `Create`. Cascade depth is capped at the
+  Dataverse default of 8 (`WithMaxDepth` changes it; the one-hour window of the platform's loop detection is not
+  modelled), on top of the plugin's own depth guard.
+- **Asynchronous step context.** As on the platform, an async step's context has an `OwningExtension` with
+  the step's id but no `Name` (a sync step's carries its name), and its post images include
+  `AsynchronousStepPrimaryName` (the record's primary name and id).
+- **Execution-context identity.** The plugin's `ctx` reports the configured caller: `UserId`,
+  `InitiatingUserId`, `BusinessUnitId` and `OrganizationId` come from `WithCurrentUser(...)` /
+  `WithCurrentBusinessUnit(...)` / `WithOrganizationId(...)`, consistent with what `WhoAmI` and the
+  `createdby`/`ownerid` stamping report (not random values).
+- **Step registration is honoured.** A `.Disabled()` step never fires. The plugin is constructed with the step's
+  `WithUnsecureConfig(...)` value and, for `WithSecureConfigFrom("Name")`, the value you supply with
+  `pipeline.WithSecureConfig("Name", "value")` (what `vela apply --secure-config Name=value` provides in
+  production; unset configuration is passed as `null`). A step registered with `WithImpersonation(userId)` runs with
+  `ctx.UserId` set to that user, and its `ctx.Service` acts as that user (privileges under `WithSecurity`, audit
+  stamping); `InitiatingUserId` stays the caller.
+- **User vs SYSTEM service.** `ctx.Service` acts as `ctx.UserId` and is subject to the security model when
+  `WithSecurity` is used; `ctx.SystemService` is SYSTEM and is not (audit columns still record the calling user). A
+  plugin fired by a write made through `ctx.SystemService` runs as SYSTEM: its own `ctx.Service` is unrestricted too.
+- **`ParentContext` and shared variables.** A PreOperation/PostOperation step of a `Create`, `Update` or `Delete`
+  has the operation's own stage-30 (MainOperation) context as `ParentContext`, as on the platform; the context of the
+  plugin whose write triggered the operation is one level further up (`ParentContext.ParentContext`), and a PreValidation
+  step's `ParentContext` is that calling plugin's context directly. Shared variables set by a PreValidation step are
+  **not** in the later steps' own `SharedVariables`: they are visible only through `ParentContext.SharedVariables`
+  (verified live). A cascaded operation inherits the shared variables of the plugin that issued it. To avoid
+  re-entrancy, see [Preventing recursion](plugins.md#preventing-recursion).
+- **Not-found faults.** Retrieving or updating a record that does not exist throws
+  `FaultException<OrganizationServiceFault>` with the platform `ObjectDoesNotExist` code (`-2147220969`), like a
+  real `IOrganizationService`, so a plugin that catches that fault code is exercised faithfully.
+- **Custom APIs** run through `Service.Execute(new OrganizationRequest("vela_MyApi"){ ["x"] = 1 })`, as the full
+  pipeline: the steps registered on the API's message (`On<vela_MyApiRequest>()`) fire at PreValidation,
+  PreOperation and PostOperation around the API's own plugin (the MainOperation stage), as far as its
+  `AllowedCustomProcessingSteps(...)` allows (a step it does not allow fails the call, since Dataverse would refuse to
+  register it). The request is checked before any step runs, PreValidation included, with the platform's faults: a
+  missing required input throws `0x80040203` ("Required field 'X' is missing for RequestName='...'"), an input of the
+  wrong type or an undeclared input throws `0x80040315` ("Input field type 'Int32' does not match expected type
+  'String' for field 'X'", "Unrecognized request parameter: X"). The main operation runs at stage 30 under a step
+  named `CustomApi '<uniquename>' implementation` (its `OwningExtension`). A bound API's context has the bound table
+  as `PrimaryEntityName` and the Target id as `PrimaryEntityId`; a global API's main operation sees `"none"`.
+- **Bulk (`CreateMultiple`/`UpdateMultiple`)** fire steps the way Dataverse merges the two messages: a
+  `CreateMultiple`/`UpdateMultiple` request runs your single `Create`/`Update` steps **once per row**, and a
+  step registered with `OnCreateMultiple()`/`OnUpdateMultiple()` runs **once with the whole batch** (read it
+  via `ctx.BulkTargets`, with per-row pre/post images on `ctx.BulkPreEntityImagesCollection` /
+  `ctx.BulkPostEntityImagesCollection`, which also hold the plugin's other steps' images and the platform's
+  `PreBusinessEntity` / `PostBusinessEntity`, as on Dataverse: read images by alias). The merge
+  runs both ways, so a bulk step also fires for a plain `Create`/`Update` (a one-row batch). The whole batch is
+  one transaction: a synchronous failure rolls every row back.
+- **Owner, state, `Assign` and `SetState`** follow what the platform does (verified live), which differs from
+  Microsoft Learn on several points:
+  - An `Update` is **one** execution, even when it mixes `ownerid` or `statecode`/`statuscode` with other fields.
+    An `ownerid` Update never fires the `Assign` steps.
+  - An `Update` that sets `statecode` also fires the `SetStateDynamicEntity` steps, nested at depth + 1 between the
+    Update's PreOperation and PostOperation. Their `Status` is -1 when the Update sets no `statuscode`; the record
+    then lands on the state's default status, and the Update's Target stays as sent.
+  - `Execute(new AssignRequest { ... })` fires the `Assign` steps (PreValidation, PreOperation), then an `ownerid`
+    Update at the same depth that fires the Update steps at PreOperation and PostOperation only, then the `Assign`
+    PostOperation steps.
+  - `Execute(new SetStateRequest { ... })` fires the `SetStateDynamicEntity` steps the same way around a
+    `statecode`/`statuscode` Update. Steps registered on `SetState` never fire, on the platform or in the harness.
+  - Status -1 (or a missing status) resolves to the state's default status: state 0 gets status 1, any other state
+    status 2, unless you declare it with `WithDefaultStatus("table", state, status)`.
+- **Shared variables / `tag`.** A client passes the `tag` via a named request (not the shortcut methods, per
+  the platform); the pipeline routes `Execute(CreateRequest/UpdateRequest/...)` through the registered steps
+  and exposes it as a shared variable. Read it with `ctx.Tag` (or `ctx.GetSharedVariable("key")`):
+
+  ```csharp
+  // plugin: read the client tag
+  private void OnAccountCreated(OnAccountCreatedContext ctx)
+  {
+      if (ctx.Tag == "bulk-import") { /* skip enrichment for imports */ }
+  }
+
+  // test: pass it on the request
+  var request = new CreateRequest { Target = new Account { Name = "Zava" } };
+  request["tag"] = "bulk-import";
+  pipeline.Service.Execute(request);
+  ```
+
+  For a single-plugin unit test, set it on the context builder instead:
+  `PluginContext.For<Account>()....WithTag("bulk-import")`.
+- **Bypass parameters** on an `Execute(...)` request suppress steps the way the platform does:
+  `BypassCustomPluginExecution = true` skips every step; `BypassBusinessLogicExecution = "CustomSync"` /
+  `"CustomAsync"` skips by execution mode; and `BypassBusinessLogicExecutionStepIds` skips specific steps
+  (matched against the step **key**: pass a comma-separated string or a collection of keys). The data is still
+  written; only the plugins are skipped. They apply at any depth: a request's effective bypass is the one it
+  inherits (from an enclosing request or an `ExecuteMultiple`/`ExecuteTransaction` batch) plus its own, so a plugin
+  that writes with `BypassCustomPluginExecution = true` does not re-enter itself.
+- **Associate/Disassociate** fire their registered plugins whatever the entity (they are global messages, as on
+  the platform: a step declared on `account` also fires for an association made from `contact`), and the N:N
+  intersect rows persist when the relationship is declared with `WithManyToMany(...)` (or derived from registered
+  metadata); the store has no live relationship metadata otherwise.
+- **Upsert and alternate keys.** `Execute(new UpsertRequest { ... })` matches the target by id or alternate key
+  (declared with `WithAlternateKey(...)`): an existing record runs the Update steps, a new one runs the Create steps,
+  and the response reports `RecordCreated` and `Target`. `Update`/`Delete` addressed by `KeyAttributes` resolve the
+  key first, so their steps see the real record id. The `KeyAttributes` must be exactly one declared key, as on
+  Dataverse: any other set of columns faults with `0x80060889`, and a declared key that matches nothing with
+  `0x80060891`.
+- **Reads run through the pipeline.** `Retrieve`/`RetrieveMultiple` (the shortcut methods and the
+  `RetrieveRequest`/`RetrieveMultipleRequest` messages) fire their registered steps. A PreValidation/PreOperation step
+  that replaces `InputParameters["ColumnSet"]`, `["Target"]` or `["Query"]` changes what is read, and a PostOperation
+  step sees the result as `OutputParameters["BusinessEntity"]` / `["BusinessEntityCollection"]` (the platform's keys)
+  and can replace or change it. The same applies to any other message: a synchronous step's changes to the inputs
+  reach the main operation and its changes to the outputs reach the caller (the caller's request object is not
+  modified).
+- **Returned records have the platform's shape.** A read always returns the primary key column (`{table}id`,
+  `activityid` for activities, or the `PrimaryIdAttribute` of registered metadata), a lookup carries the referenced
+  record's primary name in `EntityReference.Name` and in `FormattedValues`, and a choice carries its label in
+  `FormattedValues` when its options are registered with `WithEntityMetadata(...)`.
+- **Isolation.** The pipeline works on copies of what you send: after `Create`, your entity's `Id` is still empty
+  (use the returned id) and a plugin's change to the Target is not visible on your object, as with a real service.
+  Like the platform, which caches plugin instances, each step (and each Custom API) runs on **one plugin instance
+  reused across executions**, so a plugin that keeps state in fields misbehaves in the test as it would in
+  production. A modelled message whose store simulation fails (an invalid `Merge`, a missing record) fails even when
+  steps are registered on it; only a message the store does not model at all runs its steps around a no-op.
+- Use `PluginPipeline.Empty().Register<MyPlugin>()` to scope a test to specific plugins.
+- **Pipeline configuration.** `PluginPipeline` forwards the store's configuration (`WithSecurity`,
+  `WithStrictSecurity`, `WithAlternateKey`, `WithAutoNumber`, `WithDefaultStatus`, relationships, metadata,
+  ownership, clock and id sequence), and adds `Seed(...)`, `WithSecureConfig(name, value)`, `WithMaxDepth(n)`,
+  `WithManagedIdentityService(service)` (for every plugin and Custom API it runs, nested executions included; see
+  [Managed identity](managed-identity.md#testing)) and `WithService<T>(instance)`
+  ([Replacing services](#replacing-services)).
+  Assert with `GetAll(table)`, `ExecutionLog`, `AsyncStepFailures`, `Trace` and `LogCapture` (the whole cascade's
+  `ctx.Log*` entries).
+
 ## Run a plugin against a fake context
 
-The fluent builder is strongly typed. The trigger (message/stage/mode) comes from the plugin's own registration,
-so you only state what tells its steps apart.
+`PluginContext` is for the edge cases listed in [Which one to use](#which-one-to-use). The fluent builder is
+strongly typed. The trigger (message/stage/mode) comes from the plugin's own registration, so you only state what
+tells its steps apart.
 
 ```csharp
 using Vela.Constants;
@@ -52,19 +250,10 @@ on a global message such as `Associate`. `WithPrimaryEntity(name, id)` sets it e
 `.Execute<AccountPostUpdate>()` constructs the plugin for you (parameterless constructor, or the
 `(string unsecureConfig, string secureConfig)` constructor with empty configuration) and returns it.
 
-**Several steps on one trigger.** When two steps of a plugin share the message, stage and mode, the runtime
-picks the handler from the executing step (`OwningExtension`), whose name ends with the step key. Set it on the
-builder's `Context`, or use `PluginPipeline`, which stamps it for you:
-
-```csharp
-var builder = PluginContext.For<Account>().OnUpdate().Stage(PluginStages.PostOperation).Sync()
-    .WithTarget(new Account { Id = accountId, Name = "Zava" });
-builder.Context.OwningExtension = new EntityReference("sdkmessageprocessingstep", Guid.NewGuid())
-{
-    Name = "validate-name", // the step's WithStepKey(...)
-};
-builder.Execute(new AccountNamePlugin(string.Empty, string.Empty));
-```
+**Several steps on one trigger.** When two steps of a plugin share the message, stage and mode and differ only by
+their filter or step key, test them with [`PluginPipeline`](#simulate-the-pipeline-cascade). The runtime picks the
+handler from the executing step (`OwningExtension`), whose name ends with the step key; the pipeline fires the steps
+whose filter the write matches and stamps each one's `OwningExtension`. `PluginContext` does not choose between them.
 
 **Custom APIs / message-only plugins:** `PluginContext.ForRequest(new DoThingRequest { Amount = 5 })` takes the
 typed request (an SDK request, or one generated by `vela models --messages` / `--custom-apis`): the message and the
@@ -395,188 +584,6 @@ grouping, and every other element or attribute.
 
 `Query.For<T>()` builds the same `QueryExpression`, fully typed, and runs against the in-memory CRM like any query.
 See [Typed queries](queries.md).
-
-## Simulate the pipeline (cascade)
-
-For scenario tests that go beyond a single plugin, `PluginPipeline` simulates the Dataverse pipeline **in
-memory**: writes through its service auto-fire the registered plugins (pre/post stages, execution order,
-filtering attributes, pre/post images), and a plugin that writes triggers further plugins (**cascade**).
-Registrations are **discovered automatically** from the assembly via `GetStepDefinitions()`. A registration
-that would never fire fails the setup instead of leaving the tests green: `FromAssembly` throws when a step or
-Custom API names a type it cannot resolve, and `Register<T>()` throws for a type that declares no step and no
-Custom API.
-
-```csharp
-var pipeline = PluginPipeline.FromAssemblyOf<AccountPostCreate>()
-    .WithAutoNumber("task", "ticketnumber", "T-", 3);
-
-pipeline.Service.Create(new Account { Name = "Zava" });   // fires Create-account plugins, then cascades
-
-Assert.Single(pipeline.GetAll("task"));        // assert on the resulting CRM state
-Assert.Contains(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountPostCreate")); // and on what ran
-```
-
-An `ExecutionLog` entry means the step was **invoked by the platform**, not that its handler ran. Vela's runtime
-can still skip the handler: a `.ForRelationship(...)` step is invoked for every relationship, and
-`.SkipWhenDepthAbove(n)` or the plugin-level depth guard stop it past a depth. Such an entry has `HandlerInvoked`
-set to `false` and `SkipReason` set to the line the runtime traced. (An execution that fails before reaching the
-handler, in the plugin's constructor or its service registration, also has `HandlerInvoked` `false`, with no
-`SkipReason`.)
-
-```csharp
-pipeline.Service.Associate("account", accountId, new Relationship("account_partners"), contacts);
-
-PipelineExecutionEntry entry = Assert.Single(pipeline.ExecutionLog, e => e.PluginTypeName.Contains("AccountContactsPlugin"));
-Assert.False(entry.HandlerInvoked);   // invoked, but outside its ForRelationship scope
-Assert.Contains("ForRelationship", entry.SkipReason);
-```
-
-- **Transactions follow the platform's stage model** (checked against a live environment). The PreValidation stage
-  of the initial operation runs **before** the database transaction (`IsInTransaction` is `false`), so a write a
-  PreValidation plugin makes commits on its own even if the operation fails later. The transaction opens before
-  PreOperation; any operation a plugin triggers from inside it (including that operation's own PreValidation stage,
-  at depth 2) joins it, and a synchronous failure anywhere rolls the whole transaction back. A plugin's own
-  operations reach their PreValidation steps with the extra input `InputParameters["FromSandbox"] = true`. Reads
-  (`Retrieve`/`RetrieveMultiple`) are not transactional: their steps see `IsInTransaction` = `false`. A plugin that
-  catches the failure of one of its **writes** cannot carry on: its next service call fails with "There is no active
-  transaction" (`-2147220911`) and returning normally fails the operation with "ISV code reduced the open transaction
-  count" (`0x8009000C`, `-2146893812`), as on the platform. A caught failed **read** (a Retrieve of a record that
-  does not exist) does not end the transaction. `ExecuteTransaction` runs all its children inside one transaction.
-- Synchronous-plugin exceptions **roll the operation back** (snapshot/restore); **asynchronous** steps run
-  inline once the outermost operation (or `ExecuteTransaction` batch) commits, and never when it rolls back, as on
-  Dataverse where a rolled-back operation creates no async job. An asynchronous step's exception does **not**
-  surface to the caller (matching Dataverse, where async steps are decoupled system jobs) - it is recorded on
-  `pipeline.AsyncStepFailures` so you can still assert an async step failed, and the step's own writes are rolled
-  back. `ctx.IsInTransaction` is false for async steps, read steps and a depth-1 PreValidation step, true otherwise
-  (a PreValidation step inside an `ExecuteTransaction` is in its transaction).
-- **Execution-context ids.** `CorrelationId` is one id per top-level operation (an `ExecuteTransaction` batch shares
-  one, each `ExecuteMultiple` child gets its own), kept by the async steps it queues. `RequestId` is one id per call
-  into the pipeline; `OperationId` equals it on sync steps and is the async step's own job id on async steps.
-  `IsolationMode` is 2 (sandbox) and `SecondaryEntityName` is "none", as on Dataverse.
-- The steps work on a copy of the entity you pass to `Service.Create`/`Update`: your object never receives the
-  created id or a plugin's change to `Target`. Read the id from the return value of `Create`. Cascade depth is capped at the
-  Dataverse default of 8 (`WithMaxDepth` changes it; the one-hour window of the platform's loop detection is not
-  modelled), on top of the plugin's own depth guard.
-- **Asynchronous step context.** As on the platform, an async step's context has an `OwningExtension` with
-  the step's id but no `Name` (a sync step's carries its name), and its post images include
-  `AsynchronousStepPrimaryName` (the record's primary name and id).
-- **Execution-context identity.** The plugin's `ctx` reports the configured caller: `UserId`,
-  `InitiatingUserId`, `BusinessUnitId` and `OrganizationId` come from `WithCurrentUser(...)` /
-  `WithCurrentBusinessUnit(...)` / `WithOrganizationId(...)`, consistent with what `WhoAmI` and the
-  `createdby`/`ownerid` stamping report (not random values).
-- **Step registration is honoured.** A `.Disabled()` step never fires. The plugin is constructed with the step's
-  `WithUnsecureConfig(...)` value and, for `WithSecureConfigFrom("Name")`, the value you supply with
-  `pipeline.WithSecureConfig("Name", "value")` (what `vela apply --secure-config Name=value` provides in
-  production; unset configuration is passed as `null`). A step registered with `WithImpersonation(userId)` runs with
-  `ctx.UserId` set to that user, and its `ctx.Service` acts as that user (privileges under `WithSecurity`, audit
-  stamping); `InitiatingUserId` stays the caller.
-- **User vs SYSTEM service.** `ctx.Service` acts as `ctx.UserId` and is subject to the security model when
-  `WithSecurity` is used; `ctx.SystemService` is SYSTEM and is not (audit columns still record the calling user). A
-  plugin fired by a write made through `ctx.SystemService` runs as SYSTEM: its own `ctx.Service` is unrestricted too.
-- **`ParentContext` and shared variables.** A PreOperation/PostOperation step of a `Create`, `Update` or `Delete`
-  has the operation's own stage-30 (MainOperation) context as `ParentContext`, as on the platform; the context of the
-  plugin whose write triggered the operation is one level further up (`ParentContext.ParentContext`), and a PreValidation
-  step's `ParentContext` is that calling plugin's context directly. Shared variables set by a PreValidation step are
-  **not** in the later steps' own `SharedVariables`: they are visible only through `ParentContext.SharedVariables`
-  (verified live). A cascaded operation inherits the shared variables of the plugin that issued it. To avoid
-  re-entrancy, see [Preventing recursion](plugins.md#preventing-recursion).
-- **Not-found faults.** Retrieving or updating a record that does not exist throws
-  `FaultException<OrganizationServiceFault>` with the platform `ObjectDoesNotExist` code (`-2147220969`), like a
-  real `IOrganizationService`, so a plugin that catches that fault code is exercised faithfully.
-- **Custom APIs** run through `Service.Execute(new OrganizationRequest("vela_MyApi"){ ["x"] = 1 })`, as the full
-  pipeline: the steps registered on the API's message (`On<vela_MyApiRequest>()`) fire at PreValidation,
-  PreOperation and PostOperation around the API's own plugin (the MainOperation stage), as far as its
-  `AllowedCustomProcessingSteps(...)` allows (a step it does not allow fails the call, since Dataverse would refuse to
-  register it). The request is checked before any step runs, PreValidation included, with the platform's faults: a
-  missing required input throws `0x80040203` ("Required field 'X' is missing for RequestName='...'"), an input of the
-  wrong type or an undeclared input throws `0x80040315` ("Input field type 'Int32' does not match expected type
-  'String' for field 'X'", "Unrecognized request parameter: X"). The main operation runs at stage 30 under a step
-  named `CustomApi '<uniquename>' implementation` (its `OwningExtension`). A bound API's context has the bound table
-  as `PrimaryEntityName` and the Target id as `PrimaryEntityId`; a global API's main operation sees `"none"`.
-- **Bulk (`CreateMultiple`/`UpdateMultiple`)** fire steps the way Dataverse merges the two messages: a
-  `CreateMultiple`/`UpdateMultiple` request runs your single `Create`/`Update` steps **once per row**, and a
-  step registered with `OnCreateMultiple()`/`OnUpdateMultiple()` runs **once with the whole batch** (read it
-  via `ctx.BulkTargets`, with per-row pre/post images on `ctx.BulkPreEntityImagesCollection` /
-  `ctx.BulkPostEntityImagesCollection`, which also hold the plugin's other steps' images and the platform's
-  `PreBusinessEntity` / `PostBusinessEntity`, as on Dataverse: read images by alias). The merge
-  runs both ways, so a bulk step also fires for a plain `Create`/`Update` (a one-row batch). The whole batch is
-  one transaction: a synchronous failure rolls every row back.
-- **Owner, state, `Assign` and `SetState`** follow what the platform does (verified live), which differs from
-  Microsoft Learn on several points:
-  - An `Update` is **one** execution, even when it mixes `ownerid` or `statecode`/`statuscode` with other fields.
-    An `ownerid` Update never fires the `Assign` steps.
-  - An `Update` that sets `statecode` also fires the `SetStateDynamicEntity` steps, nested at depth + 1 between the
-    Update's PreOperation and PostOperation. Their `Status` is -1 when the Update sets no `statuscode`; the record
-    then lands on the state's default status, and the Update's Target stays as sent.
-  - `Execute(new AssignRequest { ... })` fires the `Assign` steps (PreValidation, PreOperation), then an `ownerid`
-    Update at the same depth that fires the Update steps at PreOperation and PostOperation only, then the `Assign`
-    PostOperation steps.
-  - `Execute(new SetStateRequest { ... })` fires the `SetStateDynamicEntity` steps the same way around a
-    `statecode`/`statuscode` Update. Steps registered on `SetState` never fire, on the platform or in the harness.
-  - Status -1 (or a missing status) resolves to the state's default status: state 0 gets status 1, any other state
-    status 2, unless you declare it with `WithDefaultStatus("table", state, status)`.
-- **Shared variables / `tag`.** A client passes the `tag` via a named request (not the shortcut methods, per
-  the platform); the pipeline routes `Execute(CreateRequest/UpdateRequest/...)` through the registered steps
-  and exposes it as a shared variable. Read it with `ctx.Tag` (or `ctx.GetSharedVariable("key")`):
-
-  ```csharp
-  // plugin: read the client tag
-  private void OnAccountCreated(OnAccountCreatedContext ctx)
-  {
-      if (ctx.Tag == "bulk-import") { /* skip enrichment for imports */ }
-  }
-
-  // test: pass it on the request
-  var request = new CreateRequest { Target = new Account { Name = "Zava" } };
-  request["tag"] = "bulk-import";
-  pipeline.Service.Execute(request);
-  ```
-
-  For a single-plugin unit test, set it on the context builder instead:
-  `PluginContext.For<Account>()....WithTag("bulk-import")`.
-- **Bypass parameters** on an `Execute(...)` request suppress steps the way the platform does:
-  `BypassCustomPluginExecution = true` skips every step; `BypassBusinessLogicExecution = "CustomSync"` /
-  `"CustomAsync"` skips by execution mode; and `BypassBusinessLogicExecutionStepIds` skips specific steps
-  (matched against the step **key**: pass a comma-separated string or a collection of keys). The data is still
-  written; only the plugins are skipped. They apply at any depth: a request's effective bypass is the one it
-  inherits (from an enclosing request or an `ExecuteMultiple`/`ExecuteTransaction` batch) plus its own, so a plugin
-  that writes with `BypassCustomPluginExecution = true` does not re-enter itself.
-- **Associate/Disassociate** fire their registered plugins whatever the entity (they are global messages, as on
-  the platform: a step declared on `account` also fires for an association made from `contact`), and the N:N
-  intersect rows persist when the relationship is declared with `WithManyToMany(...)` (or derived from registered
-  metadata); the store has no live relationship metadata otherwise.
-- **Upsert and alternate keys.** `Execute(new UpsertRequest { ... })` matches the target by id or alternate key
-  (declared with `WithAlternateKey(...)`): an existing record runs the Update steps, a new one runs the Create steps,
-  and the response reports `RecordCreated` and `Target`. `Update`/`Delete` addressed by `KeyAttributes` resolve the
-  key first, so their steps see the real record id. The `KeyAttributes` must be exactly one declared key, as on
-  Dataverse: any other set of columns faults with `0x80060889`, and a declared key that matches nothing with
-  `0x80060891`.
-- **Reads run through the pipeline.** `Retrieve`/`RetrieveMultiple` (the shortcut methods and the
-  `RetrieveRequest`/`RetrieveMultipleRequest` messages) fire their registered steps. A PreValidation/PreOperation step
-  that replaces `InputParameters["ColumnSet"]`, `["Target"]` or `["Query"]` changes what is read, and a PostOperation
-  step sees the result as `OutputParameters["BusinessEntity"]` / `["BusinessEntityCollection"]` (the platform's keys)
-  and can replace or change it. The same applies to any other message: a synchronous step's changes to the inputs
-  reach the main operation and its changes to the outputs reach the caller (the caller's request object is not
-  modified).
-- **Returned records have the platform's shape.** A read always returns the primary key column (`{table}id`,
-  `activityid` for activities, or the `PrimaryIdAttribute` of registered metadata), a lookup carries the referenced
-  record's primary name in `EntityReference.Name` and in `FormattedValues`, and a choice carries its label in
-  `FormattedValues` when its options are registered with `WithEntityMetadata(...)`.
-- **Isolation.** The pipeline works on copies of what you send: after `Create`, your entity's `Id` is still empty
-  (use the returned id) and a plugin's change to the Target is not visible on your object, as with a real service.
-  Like the platform, which caches plugin instances, each step (and each Custom API) runs on **one plugin instance
-  reused across executions**, so a plugin that keeps state in fields misbehaves in the test as it would in
-  production. A modelled message whose store simulation fails (an invalid `Merge`, a missing record) fails even when
-  steps are registered on it; only a message the store does not model at all runs its steps around a no-op.
-- Use `PluginPipeline.Empty().Register<MyPlugin>()` to scope a test to specific plugins.
-- **Pipeline configuration.** `PluginPipeline` forwards the store's configuration (`WithSecurity`,
-  `WithStrictSecurity`, `WithAlternateKey`, `WithAutoNumber`, `WithDefaultStatus`, relationships, metadata,
-  ownership, clock and id sequence), and adds `Seed(...)`, `WithSecureConfig(name, value)`, `WithMaxDepth(n)`,
-  `WithManagedIdentityService(service)` (for every plugin and Custom API it runs, nested executions included; see
-  [Managed identity](managed-identity.md#testing)) and `WithService<T>(instance)`
-  ([Replacing services](#replacing-services)).
-  Assert with `GetAll(table)`, `ExecutionLog`, `AsyncStepFailures`, `Trace` and `LogCapture` (the whole cascade's
-  `ctx.Log*` entries).
 
 ## Not supported (by design)
 
