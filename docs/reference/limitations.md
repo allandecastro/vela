@@ -29,9 +29,11 @@ change.
   interface, each member keeps an empty default: `null` for the ids, `false` for the flags, an empty string for
   `InitiatingUserAgent` and empty collections for the bulk image collections.
 - **Sandbox constraints.** No filesystem access (`System.IO.File` / `Directory` / `FileStream` throw at runtime -
-  flagged by [VELA019](analyzers.md#vela019)); outbound HTTP is limited to an administrator-configured allow-list
-  over TLS; and the whole synchronous pipeline must finish within a ~2-minute execution budget. See
-  [Respect the sandbox](../guides/plugins.md#respect-the-sandbox).
+  flagged by [VELA019](analyzers.md#vela019)); outbound calls are HTTP or HTTPS to a named host, never an IP address
+  or localhost ([Access external web services](https://learn.microsoft.com/power-apps/developer/data-platform/access-web-services),
+  [VELA025](analyzers.md#vela025)); and a plug-in has about two minutes to complete
+  ([Set Timeout when making external calls](https://learn.microsoft.com/power-apps/developer/data-platform/best-practices/business-logic/set-timeout-for-external-calls-from-plug-ins)).
+  See [Respect the sandbox](../guides/plugins.md#respect-the-sandbox).
 - **Step registration follows platform rules.** `MainOperation` is reserved for Custom API handlers (rejected
   for plugin steps); `FilteringAttributes` apply to `Create`/`Update` (and `CreateMultiple`/`UpdateMultiple`) only, and Vela requires
   at least one there ([VELA020](analyzers.md#vela020));
@@ -65,7 +67,7 @@ change.
 untouched.
 
 - **Managed:** plugin **packages**/assemblies (uploaded from the `.nupkg`), plugin **steps**, step
-  **images**, **Custom APIs** with their request/response parameters, and **web resources** (with
+  **images**, **Custom APIs** with their request/response parameters, and, in preview, **web resources** (with
   `--webresources --solution`).
 - **Not managed:** solutions (must already exist - `--solution` only adds components to it), SDK message
   filters (read-only lookup), security roles / field security, environment variables. Assemblies are upserted,
@@ -117,7 +119,7 @@ untouched.
   under redirected/piped stdin (safe for CI and agents); the optional package-assembly prompt and interactive
   OAuth prompts are terminal-only, and `apply` still refuses to write without `--auto-approve` when there is no
   stdin TTY.
-- **`vela add`** generates one file per run (plugin/service/customapi/test/step/form-script/ribbon-script); a
+- **`vela add`** adds one component per run (plugin/service/customapi/test/step/form-script/ribbon-script); a
   plugin/service needs an early-bound model type (`--entity`).
 - **`vela models`** generates entity classes (typed properties, primary-id sync, XML doc, DataAnnotations,
   option-set enums local/global, multi-select as `IList<Enum>`, alternate-key reference factories) scoped by
@@ -149,8 +151,9 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   ([Testing](../guides/testing.md#run-a-plugin-against-a-fake-context)).
 - **`Execute` covers a common set:** `Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`,
   `CreateMultiple`/`UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`/`SetState`/`Merge`/`Associate`/`Disassociate`,
-  the file block messages, the metadata reads
-  (`RetrieveEntity`/`RetrieveAllEntities`/`RetrieveAttribute`), and `ExecuteMultiple`/`ExecuteTransaction`
+  `WhoAmI`, the sharing and record-team messages (`GrantAccess`/`ModifyAccess`/`RevokeAccess`/
+  `RetrievePrincipalAccess`/`RetrieveSharedPrincipalsAndAccess`, `AddUserToRecordTeam`/`RemoveUserFromRecordTeam`),
+  the file block messages, the metadata reads (`RetrieveEntity`/`RetrieveAllEntities`/`RetrieveAttribute`), and `ExecuteMultiple`/`ExecuteTransaction`
   (the latter rolls the whole batch back on failure). For any other message, inject your own service.
 - **Non-CRUD "modelled" messages don't produce their server-side data effect.** A step registered on
   `QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident` and the like fires so you can test your own
@@ -159,13 +162,11 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   `ctx.PrimaryEntityId`.
 - **Transactions are simulated with store snapshots.** The stage model (PreValidation of the initial operation
   outside the transaction, non-transactional reads, async steps after the commit, a swallowed failed write ending the
-  transaction while a swallowed failed read does not) follows the platform as verified on a live environment, but
-  there is no locking, isolation level or concurrency: operations run one at a time. Which messages count as reads is
+  transaction while a swallowed failed read does not) follows Dataverse, but there is no locking, isolation level or concurrency: operations run one at a time. Which messages count as reads is
   a name rule (`Retrieve*`, `WhoAmI`, file downloads). A read issued by a plugin inside a write's transaction runs
-  within it, and its steps report `IsInTransaction` = `false` as a top-level read's do; only the top-level case was
-  verified live, so the nested value is an assumption. `InputParameters["FromSandbox"]` is set only on the
-  PreValidation stage of a plugin's own operation, the only stage where it was observed live; the other stages were
-  not observed to carry it, so the harness does not set it there.
+  within it, and its steps report `IsInTransaction` = `false` as a top-level read's do; only the top-level value was
+  checked against Dataverse. `InputParameters["FromSandbox"]` is set only on the PreValidation stage of a plugin's
+  own operation, the only stage where Dataverse was seen to set it.
 - **Formatted values are partial.** Reads fill `FormattedValues` for lookups (the referenced record's primary name)
   and for choices whose labels are registered as metadata, in the registered label language only. Money, dates,
   numbers and Yes/No columns get no formatted value. Without metadata a primary name is looked up in `name` (or
@@ -176,11 +177,13 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   Create/Update/Delete, whose direct parent is the operation's stage-30 context).
 - **Steps on a global Custom API.** A global API's main operation sees `PrimaryEntityName` = `"none"`, but a step on
   its message is declared through `EntityPluginBase<TEntity>` and so carries a table; the harness gives that step's
-  context the step's table so the runtime still matches it. Vela has no entity-less step declaration yet.
-- **Fault codes are partial.** The faults the harness raises itself carry the platform code (not found
-  `0x80040217`, duplicate key `0x80040237`, privilege denial `0x80040220`, undeclared key `0x80060889`, no record for
-  a key `0x80060891`, delete blocked by Restrict `0x80040227`, invalid argument `0x80040203`, the transaction faults,
-  the Custom API input checks); any other exception surfaces as an `OrganizationServiceFault` with no `ErrorCode`. No
+  context the step's table so the runtime still matches it. Vela declares steps only through
+  `EntityPluginBase<TEntity>`.
+- **Fault codes are partial.** The faults the harness raises itself carry the platform code (for example not found
+  `0x80040217`, duplicate record `0x80040237`, duplicate alternate-key value `0x80060892`, missing privilege
+  `0x80040220`, record out of the caller's reach `0x80048306`, undeclared key `0x80060889`, no record for a key
+  `0x80060891`, delete blocked by Restrict `0x80040227`, invalid argument `0x80040203`, the transaction faults, the
+  Custom API input checks); any other exception surfaces as an `OrganizationServiceFault` with no `ErrorCode`. No
   formula/rollup/calculated columns, business rules, or duplicate-detection.
 - **N:N `Associate`/`Disassociate` need a declared relationship.** Declare it with `WithManyToMany(...)` or via a
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise); then Associate/
@@ -188,7 +191,7 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   existing pair throws a `DuplicateRecord` (`0x80040237`) fault, as Dataverse does, and a self-referential N:N maps
   its two columns positionally. A 1:N relationship is modelled by `Update`-ing the lookup column. `Merge` moves the
   subordinate's N:N rows and reparents its 1:N children, except over a relationship whose Merge behaviour is
-  `NoCascade` (verified live).
+  `NoCascade`.
 - **`RetrieveMultiple` is a common subset.** No query hints, `NoLock`, `FilterHint=union`, or faithful paging
   cookies: pages are read by page number (5,000 rows at most, as on Dataverse). FetchXML support covers a common subset (incl. aggregates); anything outside it throws
   `NotSupportedException` naming the element or attribute (see [Testing](../guides/testing.md#queries)).
@@ -208,22 +211,22 @@ anything below, a single-plugin test can inject its own `IOrganizationService` w
   Alternate keys and auto-numbers only behave as you declare them (`WithAlternateKey` / `WithAutoNumber`): a
   record addressed by `KeyAttributes` that are not a declared key faults, as on Dataverse.
 - **The security model is opt-in and off by default.** With no `WithSecurity(...)` call there are no
-  privilege/access checks (full access), exactly as before. When enabled it models security roles, privileges at
-  the four access levels, business units, teams (incl. the Member's-privilege-inheritance mode), record sharing
+  privilege/access checks (full access). When enabled it models security roles (one copy per business unit, with
+  `roletemplateid` on system roles), privileges at the four access levels, business units, teams (incl. the Member's-privilege-inheritance mode), record sharing
   (PoA, incl. org-wide), inherited access from parental relationships (Reparent and Share cascades; a reparent
-  re-derives only the moved record, not its descendants, and an Assign of the parent re-derives nothing - neither
-  case was probed; a setup call such as `WithSharedRecord` made after the test has started re-derives the seeded
+  re-derives only the moved record, not its descendants, and an Assign of the parent re-derives nothing; a setup call such as `WithSharedRecord` made after the test has started re-derives the seeded
   rows from the store's current state, except those a run-time Share/Unshare cascade reached), 1:N relationship
   cascades, access teams,
-  **manager and position** hierarchy security, field-level (column) security, and link-entity (joined-table)
-  read-trimming (a join to a record the caller can't read drops the primary row on an inner join, or omits the
+  **manager and position** hierarchy security, field-level (column) security, the Read privilege on every table a
+  read touches (a read without it throws `0x80040220`, also for a linked table), and link-entity (joined-table)
+  record trimming (a join to a record the caller can't read drops the primary row on an inner join, or omits the
   linked columns on a left-outer join, recursively through nested joins). A parent's Delete PreValidation steps
   still see its cascaded children; by PreOperation they are gone (the children's Delete plugins run in between), as
-  on Dataverse (verified live). With security on, a lookup set by id must point at an existing record, as on
+  on Dataverse. With security on, a lookup set by id must point at an existing record, as on
   Dataverse; with it off, a lookup may point at a record the test never seeded. Step images carry only the columns
   the calling user may read, like a Retrieve: a secured column without field read permission is absent from them,
-  as on Dataverse (verified live). For a step that impersonates another user, the calling user's permissions still
-  apply; that case was not probed.
+  as on Dataverse. For a step that impersonates another user, the images still carry the columns the calling user
+  may read; that case was not checked against Dataverse.
 
 ---
 

@@ -47,3 +47,46 @@ Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 VELA018 | Vela.Reliability | Warning | AsyncTargetWriteAnalyzer
 VELA019 | Vela.Reliability | Warning | FilesystemAccessAnalyzer
+
+## Release 0.32.0
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+VELA020 | Vela.Usage | Error | MissingFilterAnalyzer
+VELA021 | Vela.Usage | Warning | ImageProjectionGenerator
+VELA022 | Vela.Reliability | Warning | SetStateStepAnalyzer
+VELA023 | Vela.Usage | Error | TypedTriggerRequiredAnalyzer
+VELA024 | Vela.Reliability | Warning | ParallelExecutionAnalyzer
+
+### Removed Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+VELA006 | Vela.Usage | Warning | PreferTypedMessageAnalyzer
+
+## Release 0.37.0
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+VELA025 | Vela.Reliability | Warning | IpAddressCallAnalyzer
+VELA026 | Vela.Reliability | Warning | HttpClientTimeoutAnalyzer
+
+## Release 0.38.0
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+VELA027 | Vela.Reliability | Warning | EmptyCatchAnalyzer
+
+## Release 0.42.0
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+VELA028 | Vela.Usage | Error | LabelLengthAnalyzer
