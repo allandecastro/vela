@@ -467,8 +467,8 @@ internal static class PackageScanner
 
     // Pick one target framework when a package ships several. The Dataverse sandbox runs .NET Framework, so
     // prefer net4x, then netstandard, then a flat lib, and only then anything else; break ties by the higher
-    // version string (net471 over net462). A net4x build an environment older than the package fix can register
-    // (net471 or below) ranks above a higher supported one, which ranks above an unsupported one (net481).
+    // version string (net48 over net462). A supported net4x build (up to net48) ranks above an unsupported one
+    // (net481).
     internal static string? ChooseTargetFramework(IEnumerable<string> targetFrameworks)
 {
     List<string> distinct = targetFrameworks.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -487,7 +487,7 @@ internal static class PackageScanner
 {
     if (tfm.StartsWith("net4", StringComparison.OrdinalIgnoreCase))
     {
-        return ExceedsSupportedFramework(tfm) ? 3 : ExceedsLegacyPluginPackageCap(tfm) ? 4 : 5;
+        return ExceedsSupportedFramework(tfm) ? 3 : 4;
     }
 
     if (tfm.StartsWith("netstandard", StringComparison.OrdinalIgnoreCase))
@@ -502,13 +502,7 @@ internal static class PackageScanner
     // October 2026).
     internal const string SupportedFrameworkMax = "net48";
 
-    // Plugin packages above net471 failed to register until a platform fix (Dataverse 9.2.26092, rolling out in
-    // October 2026); plain assemblies were not affected. An environment older than the fix still rejects them.
-    internal const string LegacyPluginPackageFrameworkCap = "net471";
-
     internal static bool ExceedsSupportedFramework(string tfm) => FrameworkNumber(tfm) > 480;
-
-    internal static bool ExceedsLegacyPluginPackageCap(string tfm) => FrameworkNumber(tfm) > 471;
 
     // The target framework apply reports when Dataverse rejects a package; null when the file is not a readable
     // package or ships no lib/ assemblies.

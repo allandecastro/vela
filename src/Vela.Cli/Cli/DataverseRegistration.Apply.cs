@@ -401,10 +401,9 @@ internal static partial class DataverseRegistration
     });
 }
 
-    // Dataverse older than 9.2.26092 rejects plugin packages above net471, with an error that does not name the
-    // target framework. When the package targets net472 to net48, say so and give the way out; above net48 (net481) is
-    // not supported by Dataverse at all, so the way out is net48. ServiceClient often wraps the fault, so the
-    // exception chain is walked (as IsIgnorableCustomApiStageException does).
+    // Dataverse supports plug-ins up to .NET Framework 4.8, and its error for a package above that (net481) does not
+    // name the target framework. When the package targets above net48, say so and give the way out. ServiceClient
+    // often wraps the fault, so the exception chain is walked (as IsIgnorableCustomApiStageException does).
     private static Guid WithPackageFrameworkHint(PluginPackagePayload package, string packageName, Func<Guid> write)
 {
     try
@@ -413,15 +412,12 @@ internal static partial class DataverseRegistration
     }
     catch (Exception ex)
         when (FindOrganizationFault(ex) is { } fault
-            && PackageScanner.PackageTargetFramework(package.PackagePath) is { } tfm && PackageScanner.ExceedsLegacyPluginPackageCap(tfm))
+            && PackageScanner.PackageTargetFramework(package.PackagePath) is { } tfm && PackageScanner.ExceedsSupportedFramework(tfm))
     {
-        string rejected = $"Dataverse rejected plugin package '{packageName}', which targets {tfm}: {fault.Message}";
-        throw new InvalidOperationException(PackageScanner.ExceedsSupportedFramework(tfm)
-            ? $"{rejected} Dataverse supports plug-ins up to .NET Framework 4.8 ({PackageScanner.SupportedFrameworkMax}). " +
-              $"Set <TargetFramework>{PackageScanner.SupportedFrameworkMax}</TargetFramework> in the plugin project and rebuild."
-            : $"{rejected} Plugin packages above {PackageScanner.LegacyPluginPackageFrameworkCap} register only on Dataverse " +
-              $"9.2.26092 or later. On an older environment, set <TargetFramework>{PackageScanner.LegacyPluginPackageFrameworkCap}" +
-              "</TargetFramework> in the plugin project and rebuild.", ex);
+        throw new InvalidOperationException(
+            $"Dataverse rejected plugin package '{packageName}', which targets {tfm}: {fault.Message} " +
+            $"Dataverse supports plug-ins up to .NET Framework 4.8 ({PackageScanner.SupportedFrameworkMax}). " +
+            $"Set <TargetFramework>{PackageScanner.SupportedFrameworkMax}</TargetFramework> in the plugin project and rebuild.", ex);
     }
 }
 

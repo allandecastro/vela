@@ -68,9 +68,7 @@ $$"""
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- .NET Framework 4.8 is the version Microsoft supports and recommends for plug-ins (4.8.1 is not supported).
-         Plugin packages above net471 register only on Dataverse 9.2.26092 or later; on an older environment, set
-         net471 here until it is updated. -->
+    <!-- .NET Framework 4.8 is the version Microsoft supports and recommends for plug-ins (4.8.1 is not supported). -->
     <TargetFramework>net48</TargetFramework>
     <RootNamespace>{{projectName}}</RootNamespace>
     <AssemblyName>{{projectName}}</AssemblyName>

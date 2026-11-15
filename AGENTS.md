@@ -86,9 +86,7 @@ A new typed message touches more files: [docs/contributing/extending-plugins.md]
   `### Fixed (Framework)`, `### Changed (CLI, breaking)`, `### Added (CLI)`, `### Fixed (CLI)`.
 - **Web resources are a work-in-progress preview** (`--webresources`, `DataverseRegistration.WebResources.cs`, the
   client-side scaffold): exclude them from coverage and mutation gates, and don't invest in them.
-- **Plugin TFM**: the libraries target net462; the plugin projects scaffolded by `vela init` target net48. Plugin
-  *packages* above net471 register only on Dataverse 9.2.26092 or later, so net471 is the fallback for a plugin
-  project deployed to an older environment.
+- **Plugin TFM**: the libraries target net462; the plugin projects scaffolded by `vela init` target net48.
 - **Dataverse behaviour**: don't infer it from Microsoft docs alone; several documented behaviours were disproved on
   a live environment (images on `*Multiple`, `FilterOn` on Create, the owner/state Update split). Code comments and
   CHANGELOG entries mark live-verified facts ("verified live"); keep them and say so when a claim is unverified.

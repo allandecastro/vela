@@ -27,9 +27,7 @@ to large integration-heavy ones).
 
 - Target `net48`. Microsoft supports plug-ins on .NET Framework 4.6.2 through 4.8 and recommends 4.8; 4.8.1 is
   not supported, and `vela` warns when a package targets it. Existing plug-ins on an older version keep running,
-  but plan the move to 4.8. One caveat: **plugin packages** (which `vela apply` uses) above `net471` register only
-  on Dataverse 9.2.26092 or later, where Microsoft fixed a registration failure. On an older environment, target
-  `net471` until it is updated; `vela apply` says so when Dataverse rejects the package.
+  but plan the move to 4.8.
 - Reference the published `Vela.Plugins` package from NuGet. Do not pin an in-repo development version. Its
   dependency surface is deliberately lean so the plugin package loads in the Dataverse sandbox unmerged (no
   ILMerge / ILRepack step): the SDK core assemblies, `Microsoft.Extensions.DependencyInjection.Abstractions`
