@@ -21,14 +21,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Fixed (Framework)
+## [0.30.0] - 2026-11-15 (Vela.Cli)
 
-- A `role` row given to `InMemoryOrganizationService.Seed(...)` with `businessunitid` and no `owningbusinessunit` is
-  now owned by that business unit, like the role copies the security model materializes. A Business Unit or Parent:
-  Child Read on `role` reaches it; it was treated as having no business unit, so queries dropped it and a Retrieve
-  failed with 0x80048306.
-
-### Changed (CLI)
+### Changed
 
 - The `AGENTS.md` that `vela init` scaffolds (and the samples README) says to test with `PluginPipeline` by default,
   and with `PluginContext` only for edge cases the pipeline does not easily produce (a `Depth` of 2 or more, a crafted
@@ -37,8 +32,9 @@ All notable changes to Vela are documented here. The format is based on
 - When a plugin package ships several .NET Framework builds, the scanner picks the highest supported one (up to
   `net48`; `net481` is still ranked below it). `vela apply` and the projects `vela init` scaffolds no longer mention
   a `net471` cap for plugin packages, and `vela apply` explains a rejected package only when it targets above `net48`.
+- `vela init` falls back to framework 0.42.1 when it cannot resolve the latest published version from NuGet.
 
-### Fixed (CLI)
+### Fixed
 
 - The `--pfx-credential` help of `vela sign` names the Windows Credential Manager, the only store it reads.
 - `vela models --verify` with only `--messages` / `--custom-apis` (no table or role scope) checked nothing and exited
@@ -62,6 +58,15 @@ All notable changes to Vela are documented here. The format is based on
   (Contributor Covenant 2.1), a pull request template and a Dependabot configuration. CI, docs, mutation and release
   workflows run on GitHub-hosted Windows runners, pull requests from forks included; `RELEASING.md`, `AGENTS.md`,
   `CONTRIBUTING.md` and the mutation testing page are updated accordingly.
+
+## [0.42.1] - 2026-11-15 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Fixed
+
+- A `role` row given to `InMemoryOrganizationService.Seed(...)` with `businessunitid` and no `owningbusinessunit` is
+  now owned by that business unit, like the role copies the security model materializes. A Business Unit or Parent:
+  Child Read on `role` reaches it; it was treated as having no business unit, so queries dropped it and a Retrieve
+  failed with 0x80048306.
 
 ## [0.29.0] - 2026-11-15 (Vela.Cli)
 
