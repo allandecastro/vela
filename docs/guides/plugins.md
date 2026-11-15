@@ -98,13 +98,14 @@ The builder enforces this order (the type-state makes any other order a compile 
    exempt):
    - `FilterOn(a => a.Col, ...)`: **required on `Create`, `Update`, `CreateMultiple` and `UpdateMultiple`**
      ([VELA020](../reference/analyzers.md#vela020)), not offered on other messages. The step fires only when the
-     request sets one of the columns: the changed columns on Update, the initial columns on Create.
+     request sends one of the columns: the columns sent on Update, the initial columns on Create.
    - `WithPreImage(...)` / `WithPostImage(...)`: see [Images](#images).
    - `WithDescription("...")`, `WithExecutionOrder(n)`, `WithStepKey("...")`, `WithImpersonation(userId)`,
      `WithSupportedDeployment(...)`, `WithUnsecureConfig("...")`, `WithSecureConfigFrom("Name")`, `Disabled()`,
      `SkipWhenDepthAbove(n)`, and `ForRelationship(...)` on `OnAssociate()` / `OnDisassociate()`.
 5. **Handler**: `Handle(...)` closes the chain. A chain that stops earlier is flagged by
-   [VELA002](../reference/analyzers.md#vela002).
+   [VELA002](../reference/analyzers.md#vela002). `vela add` names the handler `Handle{Message}` (`HandleUpdate`)
+   unless you pass `--handler`.
 
 > [!NOTE]
 > Column selectors (`FilterOn`, image selectors, typed query helpers) take an early-bound column such as
@@ -384,7 +385,7 @@ knows the sdkmessage, and the handler sees it in `ctx.MessageName`: `SendEmail` 
 `Cancel`, `CloneContract` → `Clone`, `AddMembersTeam` → `AddMembers`, `RemoveMembersTeam` → `RemoveMembers`,
 `AddListMembersList` → `AddListMembers`, `AddMemberList` → `AddMember`, `RemoveMemberList` → `RemoveMember`,
 `AddItemCampaign` → `AddItem`, `RemoveItemCampaign` → `RemoveItem`, `SendFax` / `SendTemplate` → `Send`.
-The test harness (`For<T>().OnMessage(...)`, `WithRequest(...)`) translates the same way. The translation covers every
+The test harness (`PluginContext.For<T>().OnMessage("...")`, `WithRequest(...)`) translates the same way. The translation covers every
 SDK request whose name is not an sdkmessage, so `On<CloseQuoteRequest>()` registers on `Close` too, and
 `On<SetStateRequest>()` on `SetStateDynamicEntity` (a step on `SetState` never fires; `SetStateRequest` itself is
 deprecated, see [the table above](#choosing-a-step)). A request type outside the table
@@ -622,7 +623,7 @@ recursion prevention. `PluginPipeline` caps the cascade at the same depth by def
   ```
 
   No TLS setup is needed: the sandbox runs plugins on .NET Framework 4.8 with `SecurityProtocol` at
-  `SystemDefault` (verified live). Don't set `ServicePointManager.SecurityProtocol`; it is process-wide. The
+  `SystemDefault`. Don't set `ServicePointManager.SecurityProtocol`; it is process-wide. The
   scaffolded plugin project already references `System.Net.Http`.
 - **About 2 minutes** for the whole synchronous pipeline. Offload slow work to an async step or outside Dataverse.
 - **Retry only what can be retried.** Service-protection limits don't apply to data operations from a plugin, and a
