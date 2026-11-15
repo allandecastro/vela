@@ -632,8 +632,8 @@ recursion prevention. `PluginPipeline` caps the cascade at the same depth by def
   capped at 30 s, and `maxElapsed` bounds the total:
 
   ```csharp
-  Entity remote = RetryPolicy.Execute(ctx,
-      () => otherEnvironment.Retrieve("account", id, new ColumnSet("name")),
+  Account remote = RetryPolicy.Execute(ctx,
+      () => otherEnvironment.Retrieve<Account>(id, a => a.Name),
       retryOnTimeout: true,
       maxElapsed: TimeSpan.FromSeconds(20));
   ```

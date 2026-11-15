@@ -11,7 +11,8 @@ namespace Vela.Analyzers
     /// <summary>
     /// Flags a generated relationship navigation property (one carrying <c>[RelationshipSchemaName(...)]</c>) used
     /// where a column is expected - a column selector such as <c>FilterOn</c>, <c>Select</c>, <c>Where</c>,
-    /// <c>OrderBy</c>, <c>WithPreImage</c> / <c>WithPostImage</c>. A relationship is not a column: at runtime the
+    /// <c>OrderBy</c>, <c>WithPreImage</c> / <c>WithPostImage</c>, or the typed reads <c>Retrieve&lt;T&gt;</c> /
+    /// <c>RetrieveByKey&lt;T&gt;</c>. A relationship is not a column: at runtime the
     /// resolver rejects it (it would otherwise silently build a bogus column from the property name). Load related
     /// records with a relationship-aware read or a deep insert instead.
     /// </summary>
@@ -27,12 +28,13 @@ namespace Vela.Analyzers
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "A generated relationship navigation property is not a storable column. Using it in a column selector (FilterOn/Select/Where/OrderBy/WithPreImage/WithPostImage) fails at runtime. Load related records with a relationship-aware read or deep insert.");
+            description: "A generated relationship navigation property is not a storable column. Using it in a column selector (FilterOn/Select/Where/OrderBy/WithPreImage/WithPostImage/Retrieve/RetrieveByKey) fails at runtime. Load related records with a relationship-aware read or deep insert.");
 
         // The column-selector methods on Vela's step builder and typed query. A relationship in any of these is wrong.
         private static readonly ImmutableHashSet<string> SelectorMethods = ImmutableHashSet.Create(
             "FilterOn", "Select", "Where", "WhereAll", "WhereAny", "WhereColumns",
-            "OrderBy", "OrderByDescending", "WithPreImage", "WithPostImage", "WithSubordinatePreImage", "WithSubordinatePostImage");
+            "OrderBy", "OrderByDescending", "WithPreImage", "WithPostImage", "WithSubordinatePreImage", "WithSubordinatePostImage",
+            "Retrieve", "RetrieveByKey");
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 

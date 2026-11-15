@@ -12,7 +12,7 @@ VELA021, VELA022, VELA024, VELA025, VELA026 and VELA027) are **warnings**.
 | [VELA002](#vela002) | Vela.Usage | Error | A `RegisterStep()` chain never ends with `.Handle(...)` |
 | [VELA003](#vela003) | Vela.Usage | Error | A single-value step modifier is set more than once |
 | [VELA004](#vela004) | Vela.Usage | Error | A step handler is a `static` method instead of an instance method |
-| [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn`, image capture or typed-query `Select` |
+| [VELA005](#vela005) | Vela.Usage | Error | The same column is listed twice in one `FilterOn`, image capture, typed-query `Select` or typed read |
 | [VELA007](#vela007) | Vela.Usage | Error | An image the message can never provide (pre-image on Create/CreateMultiple, post-image on Delete, any image on RouteTo) |
 | [VELA008](#vela008) | Vela.Usage | Error | Two steps in one plugin share a trigger and nothing tells them apart, or reuse a step key |
 | [VELA009](#vela009) | Vela.Usage | Error | `HasChanged`/`HasAnyChanged` in a handler whose step registers no pre-image |
@@ -86,8 +86,9 @@ framework's instance-bound handler dispatch, so `.Handle(SomeStaticMethod)` is f
 ## VELA005
 
 **Do not list the same column twice in one selector list.** `FilterOn(...)`, `WithPreImage(...)`,
-`WithPostImage(...)`, `WithSubordinatePreImage(...)`, `WithSubordinatePostImage(...)` and the typed query's
-`Select(...)` (`Query.For<T>().Select(...)`) take a list of column selectors; repeating a column (for example
+`WithPostImage(...)`, `WithSubordinatePreImage(...)`, `WithSubordinatePostImage(...)`, the typed query's
+`Select(...)` (`Query.For<T>().Select(...)`) and the typed reads `Retrieve<T>(id, ...)` and
+`RetrieveByKey<T>(key, ...)` take a list of column selectors; repeating a column (for example
 `FilterOn(a => a.Name, a => a.Name)`) has no effect and is almost always a copy/paste slip. Only lambda column
 selectors are compared, so a leading image alias string is ignored, and the same column in two different calls
 (one in `FilterOn`, one in `WithPreImage`) is fine.
@@ -164,7 +165,8 @@ whenever the Target carries it.
 
 **A relationship is not a column.** The generated early-bound classes expose relationship navigation properties
 (a single typed parent for N:1, a typed collection for 1:N) carrying `[RelationshipSchemaName(...)]`. Passing one to
-a column selector (`FilterOn`, `Select`, `Where`, `OrderBy`, `WithPreImage`, `WithPostImage`) is a mistake: a
+a column selector (`FilterOn`, `Select`, `Where`, `OrderBy`, `WithPreImage`, `WithPostImage`, `Retrieve<T>`,
+`RetrieveByKey<T>`) is a mistake: a
 relationship has no storable column, and at runtime the resolver rejects it (without this rule it would silently
 build a bogus column from the property name). Only Vela's own selectors are checked, so ordinary LINQ
 `Select`/`Where` is never flagged.

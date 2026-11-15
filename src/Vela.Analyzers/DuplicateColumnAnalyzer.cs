@@ -9,8 +9,9 @@ namespace Vela.Analyzers
 {
     /// <summary>
     /// Flags the same column listed twice in a single <c>FilterOn(...)</c>, <c>WithPreImage(...)</c>,
-    /// <c>WithPostImage(...)</c>, or typed-query <c>Select(...)</c> call (for example
-    /// <c>FilterOn(a =&gt; a.Name, a =&gt; a.Name)</c> or <c>Query.For&lt;T&gt;().Select(c =&gt; c.Name, c =&gt; c.Name)</c>).
+    /// <c>WithPostImage(...)</c>, typed-query <c>Select(...)</c>, or typed read <c>Retrieve&lt;T&gt;(...)</c> /
+    /// <c>RetrieveByKey&lt;T&gt;(...)</c> call (for example <c>FilterOn(a =&gt; a.Name, a =&gt; a.Name)</c> or
+    /// <c>Query.For&lt;T&gt;().Select(c =&gt; c.Name, c =&gt; c.Name)</c>).
     /// A repeated column adds nothing and is almost always a copy/paste slip, so it is reported at build. Only lambda
     /// column selectors are considered; a leading image alias string is ignored. The relationship selector
     /// <c>Include(...)</c> is a different method (handled by VELA010) and is not considered here.
@@ -27,7 +28,7 @@ namespace Vela.Analyzers
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "The same column appears more than once in a single FilterOn / With...Image / typed-query Select call. A repeated column has no effect and is usually a copy/paste mistake.");
+            description: "The same column appears more than once in a single FilterOn / With...Image / typed-query Select / typed Retrieve call. A repeated column has no effect and is usually a copy/paste mistake.");
 
         // Step-authoring column-list methods, gated on Vela.Steps.IFluentStep.
         private static readonly ImmutableHashSet<string> FluentColumnMethods = ImmutableHashSet.Create(
@@ -40,6 +41,10 @@ namespace Vela.Analyzers
         // The typed-query column selector Query.For<T>().Select(...); gated on the Vela.Querying namespace so an
         // unrelated Select (LINQ, a user type) is ignored. Include (relationship selector) is a different name.
         private const string SelectMethod = "Select";
+
+        // The typed reads service.Retrieve<T>(id, ...) and service.RetrieveByKey<T>(key, ...); gated on the
+        // Vela.Context namespace so IOrganizationService.Retrieve (and any other Retrieve) is ignored.
+        private static readonly ImmutableHashSet<string> ReadMethods = ImmutableHashSet.Create("Retrieve", "RetrieveByKey");
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 
@@ -69,15 +74,17 @@ namespace Vela.Analyzers
 
             string methodName = member.Name.Identifier.ValueText;
             bool isSelect = methodName == SelectMethod;
-            if (!isSelect && !FluentColumnMethods.Contains(methodName))
+            bool isRead = ReadMethods.Contains(methodName);
+            if (!isSelect && !isRead && !FluentColumnMethods.Contains(methodName))
             {
                 return;
             }
 
-            // Scope to Vela's own methods: the typed-query Select is recognised by its declaring namespace, the
-            // step-authoring methods by the IFluentStep marker, so a same-named method on an unrelated type is ignored.
-            bool recognised = isSelect
-                ? IsVelaQuerySelect(context.SemanticModel, invocation, context.CancellationToken)
+            // Scope to Vela's own methods: the typed-query Select and the typed reads are recognised by their
+            // declaring namespace, the step-authoring methods by the IFluentStep marker, so a same-named method on an
+            // unrelated type is ignored.
+            bool recognised = isSelect || isRead
+                ? IsDeclaredIn(context.SemanticModel, invocation, isSelect ? "Vela.Querying" : "Vela.Context", context.CancellationToken)
                 : FluentStep.IsFluentMethod(context.SemanticModel, invocation, fluent, context.CancellationToken);
             if (!recognised)
             {
@@ -99,18 +106,19 @@ namespace Vela.Analyzers
             }
         }
 
-        // True when the invoked Select is Vela's typed-query column selector (TypedQuery<T>.Select /
-        // TypedLink<T>.Select / the QueryExpression Select extension), identified by the Vela.Querying namespace of
-        // the declaring type. Anything else named Select (LINQ, a user type) is not a duplicate-column concern here.
-        private static bool IsVelaQuerySelect(SemanticModel model, InvocationExpressionSyntax invocation, System.Threading.CancellationToken cancellationToken)
+        // True when the invoked method is declared in the given Vela namespace: Vela.Querying for the typed-query
+        // column selector (TypedQuery<T>.Select / TypedLink<T>.Select / the QueryExpression Select extension),
+        // Vela.Context for the typed reads. Anything else of that name (LINQ Select, IOrganizationService.Retrieve, a
+        // user type) is not a duplicate-column concern here.
+        private static bool IsDeclaredIn(SemanticModel model, InvocationExpressionSyntax invocation, string ns, System.Threading.CancellationToken cancellationToken)
         {
             if (model.GetSymbolInfo(invocation, cancellationToken).Symbol is not IMethodSymbol method)
             {
                 return false;
             }
 
-            INamespaceSymbol? ns = method.ContainingType?.ContainingNamespace;
-            return ns is not null && ns.ToDisplayString() == "Vela.Querying";
+            INamespaceSymbol? declaring = method.ContainingType?.ContainingNamespace;
+            return declaring is not null && declaring.ToDisplayString() == ns;
         }
 
         // A column selector is a lambda whose body is a member access on the parameter, e.g. a => a.Name. Returns
