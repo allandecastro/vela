@@ -26,6 +26,10 @@ tests/
   Vela.Cli.Tests/        # CLI unit tests
   Vela.Analyzers.Tests/  # Analyzer + source-generator tests
   Vela.CodeFixes.Tests/  # Code-fix tests
+  ContractPluginFixture/ # A real Vela.Plugins plugin checked by both the CLI and the framework...
+  contracts/             # ...against plugin-contract.golden.json
+  SamplePluginFixture/, BrokenPluginFixture/  # Packages the CLI tests scan
+  stryker/               # Mutation-testing configuration, one file per area
 .github/workflows/     # ci.yml, mutation.yml, docs.yml, release.yml
 ```
 
@@ -107,7 +111,7 @@ flowchart TB
    images that combination supports, and the analyzers catch what the types cannot (a missing `FilterOn` on
    Create/Update is VELA020, an image the message refuses is VELA007), so a bad registration fails the build. `Build()` produces the immutable `StepDefinition`
    and re-checks the invariants as a backstop for reflection/out-of-order assembly.
-4. **Typed message contexts (the socle).** For a modelled message the router wraps the runtime context in an
+4. **Typed message contexts (the foundation).** For a modelled message the router wraps the runtime context in an
    `I<Message>Context<TEntity>` (for example `IUpdatePostContext<Account>`). That context is a thin, allocation-cheap
    view: `ctx.Response` is the **standard SDK response class** (`CreateResponse`, `UpdateResponse`, ...) and
    `ctx.Request` is a **Vela-owned typed request** for `Create` / `Update` / `SendEmailFromTemplate`

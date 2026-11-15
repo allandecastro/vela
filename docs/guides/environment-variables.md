@@ -1,6 +1,6 @@
 # Environment variables
 
-Read Dataverse [environment variables](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/environmentvariables)
+Read Dataverse [environment variables](https://learn.microsoft.com/power-apps/maker/data-platform/environmentvariables)
 from a plugin handler, typed, with sensible handling for a missing value and optional caching. The effective value
 is the environment variable **value** when one is set, otherwise the definition's **default value** - read through
 the elevated system service, so it works regardless of the calling user's privilege.
@@ -33,18 +33,19 @@ if (ctx.TryGetEnvironmentVariableAs<bool>("adc_FeatureFlag", out bool enabled) &
 
 ## Types
 
-The definition's type drives conversion for `GetEnvironmentVariableAs<T>`:
+`GetEnvironmentVariableAs<T>` converts the effective value (stored as text) to the `T` you ask for, whatever the
+definition's type; a value that does not convert throws `InvalidPluginExecutionException`. The usual pairings:
 
 | Dataverse type | `GetEnvironmentVariableAs<T>` |
 | --- | --- |
 | String | any `T` (raw string, or parsed/deserialized as below) |
 | Number | `int`, `long`, `decimal`, `double`, ... (invariant parse) |
-| Boolean | `bool` (accepts `true`/`false`, `yes`/`no`, `1`/`0`) |
+| Boolean | `bool` (accepts `true`/`false`, `yes`/`no`, `1`/`0`, ignoring case) |
 | JSON | a complex `T` (deserialized with JSON) |
 | Data Source | raw string (a connection-reference JSON) |
 | Secret | not supported - reading one throws (secrets resolve through Azure Key Vault) |
 
-`Guid` and `DateTime` (invariant / round-trip) are also supported, as are enums (by name).
+`Guid` and `DateTime` (invariant / round-trip) are also supported, as are enums (by name, ignoring case).
 
 ## Caching
 

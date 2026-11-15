@@ -71,9 +71,9 @@ are an `OrganizationRequest` / `OrganizationResponse`. Their constructor takes t
 
 **Required by default.** A request parameter you declare with `Add(x => x.Foo)` or `RequestParameter<T>("Foo")` is
 required (`isoptional = false`), whether or not the property carries `[Required]`. Pass `optional: true` to make it
-optional. When you call neither `Request(...)` nor `Response(...)`, the parameters are inferred from the model's
-properties, and an inferred request parameter is optional unless the property carries `[Required]`. Response
-properties have no optionality in Dataverse.
+optional. Without a `Request(...)` call, the request parameters are inferred from the request model's properties,
+and an inferred request parameter is optional unless the property carries `[Required]`; without a `Response(...)`
+call, the response properties are inferred the same way. Response properties have no optionality in Dataverse.
 
 **Description.** The third argument of `Add` (or `description:`), else a `[Description]` attribute on the property.
 
@@ -199,7 +199,8 @@ typed to the captured columns.
   by hand.
 
 The method name is the unique name minus its publisher prefix, PascalCased (`zava_AccountEstimateValue` becomes
-`OnAccountEstimateValue`).
+`OnAccountEstimateValue`). When two APIs would produce the same name (`zava_Calc` and `acme_Calc`), both keep their
+prefix (`OnZavaCalc`, `OnAcmeCalc`).
 
 ## Changing an existing Custom API
 

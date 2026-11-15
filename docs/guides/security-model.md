@@ -101,9 +101,11 @@ var crm = new InMemoryOrganizationService()
   depth only). The intersect tables have no read check. `ctx.SystemService` reads all of them. Generate a `Roles`
   class with the **real** role privileges + ids from your environment with
   [`vela models --roles`](models.md) (dependency-light, generated into the shared models project), then
-  `Role(Roles.XName, Roles.XId, Roles.X)`. The harness seeds one `role` row per business unit: the root business
-  unit's copy keeps the declared id (`roleid == parentrootroleid`), every other copy gets its own stable id and
-  points at the root through `parentrootroleid`. `systemuserroles.roleid` / `teamroles.roleid` hold the copy of the
+  `Role(Roles.XName, Roles.XId, Roles.X)` (for a system role,
+  `Role(Roles.XName, Roles.XId, Roles.XTemplateId, Roles.X)`). The harness seeds one `role` row per business unit:
+  the root business unit's copy keeps the declared id (`roleid == parentrootroleid`), every other copy gets its own
+  stable id and points at the root through `parentrootroleid`. A role declared with a template id carries it as
+  `roletemplateid` on every copy. `systemuserroles.roleid` / `teamroles.roleid` hold the copy of the
   user's or team's business unit, so `Roles.XId` (the root id) matches them only for the root business unit: match
   `role.parentrootroleid` to `Roles.XId` instead (see the `--roles` section of [Models](models.md)).
   The root business unit is the single top of the declared `BusinessUnit(...)` hierarchy, or, with none declared,
