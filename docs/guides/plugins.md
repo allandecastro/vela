@@ -34,7 +34,8 @@ namespace Zava.Plugins.Account.Plugins
 
 The `using` directives sit inside the namespace so that `Account` resolves to the model and not to the
 `Zava.Plugins.Account` namespace (see [Namespaces and usings](scaffold.md#namespaces-and-usings)). Deploy it with [`vela plan` / `vela apply`](plan-apply.md) and test it with
-[Vela.Testing](testing.md). A Custom API is a different base class: see [Write a Custom API](custom-apis.md).
+[`PluginPipeline`](testing.md#simulate-the-pipeline-cascade), which runs its steps as Dataverse does
+(`PluginContext` is for edge cases: see [Which one to use](testing.md#which-one-to-use)). A Custom API is a different base class: see [Write a Custom API](custom-apis.md).
 
 ## Choosing a step
 
