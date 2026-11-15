@@ -193,6 +193,10 @@ underscores). `Build()` rejects what Dataverse refuses, such as a function witho
 """"
 ## Write a test
 
+Test with `PluginPipeline` by default; use `PluginContext` only for edge cases the pipeline does not easily produce
+(a `Depth` of 2 or more, a crafted `ParentContext`, shared variables set by another plugin, an invalid Custom API
+input, one error branch of a handler).
+
 ```csharp
 namespace {{prefix}}.Plugins.Tests.Account.Plugins
 {
@@ -247,7 +251,7 @@ namespace {{prefix}}.Plugins.Tests.GlobalCustomApis
 ```
 
 `PluginPipeline` runs every registered step around each request, as Dataverse does (stages, filters, images,
-transactions, async steps after the commit). Read stored rows with `pipeline.GetAll("account")`. For a single
-handler, `PluginContext.For<Account>().WithTarget(...).Execute<AccountCreditPlugin>()` runs one step directly.
+transactions, async steps after the commit). Read stored rows with `pipeline.GetAll("account")`. For an edge
+case, `PluginContext.For<Account>().WithTarget(...).Execute<AccountCreditPlugin>()` runs one handler directly.
 """";
 }
