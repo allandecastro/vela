@@ -77,7 +77,7 @@ jobs:
           Copy-Item CHANGELOG.md docs\_site\CHANGELOG.md
           $out = foreach ($page in $pages) { "<!-- $page -->"; Get-Content -Raw -Encoding UTF8 (Join-Path docs\_site $page); '' }
           Set-Content -Path docs\_site\llms-full.txt -Value $out -Encoding UTF8
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         with:
           enablement: true
       # Build the Pages artifact (a `github-pages` artifact containing `artifact.tar`) ourselves with the
