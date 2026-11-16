@@ -95,7 +95,7 @@ of its files), unless noted.
 | `harness-query` | `InMemoryQueryEngine`, `FetchXmlParser`, `EntityValues` | 94.1% | 92 |
 | `security-enforcement` | `InMemoryOrganizationService.Security.cs` | 83.8% | 82 |
 | `security-harness` | `Security/SecurityModel.cs`, `SharingTable.cs`, `AccessTeamGrants.cs`, `Fakes/OneToManyRegistry.cs` | 89.9% | 87 |
-| `cli-apply` | `DataverseRegistration.Apply.cs` (web resources excluded) | 83.8% | 81 |
+| `cli-apply` | `DataverseRegistration.Apply.cs`, its `Apply.*.cs` partials and `PluginTypeRemoval.cs` (web resources excluded) | 83.8% (before the split; the partials and `PluginTypeRemoval.cs` not measured yet) | 81 |
 | `cli-customapi` | `DataverseRegistration.CustomApi.cs` | about 82.7% (earlier run) | 80 |
 | `cli-reader` | `DataverseRegistration.cs` | 86.9% | 84 |
 | `cli-steps` | `DataverseRegistration.Steps.cs` | 90.1% | 88 |
