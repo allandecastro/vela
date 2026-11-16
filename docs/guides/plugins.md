@@ -437,7 +437,9 @@ type outside the table states its sdkmessage with `[SdkMessage("...")]` (`Vela.M
 
 **Messages without a trigger.** `ReviseQuote`, `FulfillSalesOrder`, `ConvertQuoteToSalesOrder`,
 `GenerateSalesOrderFromOpportunity`, `GenerateInvoiceFromOpportunity` and the three `Get*ProductsFromOpportunity`
-accept no custom step (Dataverse fails with 0x80044187), so they have no trigger. Neither do `RenewContract`,
+accept no custom step (see
+[Available events](https://learn.microsoft.com/power-apps/developer/data-platform/event-framework#available-events)),
+so they have no trigger. Neither do `RenewContract`,
 `RenewEntitlement`, `QualifyMemberList`, `CopyCampaignResponse`, `ExecuteWorkflow`, `SetProcess`, `SendBulkMail`,
 `ReassignObjectsOwner`, `InitializeFrom`, `ConvertProductToKit` and `ConvertKitToProduct`, for the same reason.
 Global messages such as `WhoAmI` cannot carry an entity-bound step either; call them from a handler
@@ -495,7 +497,7 @@ Contact? first = Query.For<Contact>()
 ```
 
 `Retrieve<T>` sends a real Retrieve (the steps registered on Retrieve run) and needs at least one column. See
-[Reading one record by id](queries.md#reading-one-record-by-id) and [Typed queries](queries.md) for the full
+[Reading one record by id](queries.md#read-one-record) and [Typed queries](queries.md) for the full
 query builder.
 
 To write by alternate key, `service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` upserts a copy of
@@ -690,7 +692,7 @@ recursion prevention. `PluginPipeline` caps the cascade at the same depth by def
   `SystemDefault`. Don't set `ServicePointManager.SecurityProtocol`; it is process-wide. The scaffolded plugin
   project already references `System.Net.Http`.
 - **Time limit.** Microsoft states that "a Dataverse message operation must complete within **2 minutes**",
-  including all its registered plug-ins, and advises limiting a plug-in to about 2 seconds
+  including all its registered plug-ins, and advises limiting a plugin to about 2 seconds
   ([Time and resource constraints](https://learn.microsoft.com/power-apps/developer/data-platform/analyze-performance#time-and-resource-constraints)).
   Offload slow work to an async step or outside Dataverse.
 - **Retry only what can be retried.** Service-protection limits don't apply to data operations from a plugin, and a

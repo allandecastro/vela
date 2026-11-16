@@ -66,8 +66,8 @@ cause and run `apply` again. See [Plan and apply](plan-apply.md) for authenticat
 ## 6. Verify in Dataverse
 
 Rename an account, then read the trace line with
-[`vela logs`](cli-overview.md#reading-execution-logs-vela-logs) (`vela logs --since 1h -i`) or in the plug-in trace
-log. Trace logging must be
+[`vela logs`](cli-overview.md#reading-execution-logs-vela-logs) (`vela logs --since 1h -i`) or in the Plug-in Trace
+Log. Trace logging must be
 [enabled on the environment](https://learn.microsoft.com/power-apps/developer/data-platform/logging-tracing#enable-trace-logging).
 
 ## Next steps

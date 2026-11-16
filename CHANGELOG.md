@@ -42,8 +42,18 @@ All notable changes to Vela are documented here. The format is based on
   prefix.
 - `vela help --json` describes exit code `5` as drift from `models --verify` or an apply that did not converge, as the
   text help does.
+- The plugin project that `vela init` and `vela add` scaffold no longer claims, in its comments, that Dataverse caches
+  plugin assemblies by version or that `vela apply` fails fast on a new plugin type without a version bump. The
+  comments now say that the package version stays fixed and that the assembly version is informational for a plugin
+  package; the properties are unchanged.
 
 ### Docs
+
+- The documentation was reviewed page by page against the code and the CLI: examples compile from
+  `docs/samples/Vela.DocSamples`, the navigation and titles are consistent, and factual errors are fixed, among them
+  the token cache path, certificate authentication through `--connection-string`, `Associate` support for 1:N
+  relationships, and "The plug-in type could not be found" in the first seconds after a deployment (run the operation
+  again after a few seconds; bumping the assembly version does not change it).
 
 - [`vela add`](docs/guides/add.md) says `--entity` takes the class name or the table logical name.
 - The README lists the typed reads (`Retrieve<T>`, `RetrieveByKey`, `Query.For<T>()`) and `vela logs`, says `--solution`

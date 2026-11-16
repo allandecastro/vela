@@ -2,7 +2,7 @@
 
 This page lists the errors you are most likely to meet with Vela, in the order you meet them (writing code,
 generating code, building, deploying, running), with their cause and fix. Each issue has its own heading, so you can
-link to it. Exit codes are those of the [vela CLI](cli-overview.md#exit-codes). For questions that are not errors,
+link to it. Exit codes are those of the [vela CLI](cli-overview.md#output-and-exit-codes). For questions that are not errors,
 see the [FAQ](../reference/faq.md).
 
 ## A step handler does not compile or does not bind
@@ -69,16 +69,34 @@ The `.nupkg` may be stale: an incremental build does not always re-run `Generate
 
 ## `apply` fails with `Plugin type not found in Dataverse after the plugin package publish`
 
-After it publishes the plugin package, `apply` waits up to 60 seconds for Dataverse to expose every plugin type the
-planned steps and Custom APIs need. When a type is still missing, it stops with this message, which names the missing
-types, before registering any step or Custom API on them.
+After it publishes the plugin package, `apply` waits up to 60 seconds for the plugin type rows that the planned steps
+and Custom APIs need to appear in Dataverse. When a type is still missing, it stops with this message, which names
+the missing types, before registering any step or Custom API on them.
 
 - Check that each named type is a class of the package's assembly, under that full name. A stale package can miss a
   class you just added: rebuild cleanly (`dotnet clean`, then `dotnet build -c Release`) and run `plan` again.
 - Run `apply` again: every operation is idempotent, and a type that Dataverse exposed after the wait is then found.
 
+This wait only covers the registration rows. It does not mean that the first executions after the deployment
+already run the new code (see the next entry).
+
 For how Dataverse imports and updates a plugin package, see
 [plugin packages on Microsoft Learn](https://learn.microsoft.com/power-platform/developer/howto/cli-create-package).
+
+## At run time: "The plug-in type could not be found in the plug-in assembly"
+
+In the first seconds after a deployment, Dataverse can still run the previous build of a plugin package: an
+execution can run the previous code, and a step just registered on a newly added class can fail with this error.
+
+- Run the operation again after a few seconds.
+- Bumping the assembly version does not change this: the version of a plugin package or assembly is not a factor in
+  how Dataverse upgrades it (see
+  [Update a plug-in package](https://learn.microsoft.com/power-platform/developer/howto/cli-create-package#update-a-plug-in-package)).
+- In CI, a pipeline that runs tests against Dataverse right after `vela apply` should add a short pause before them.
+
+If the error persists beyond about a minute, the cause is something else: check that the deployed package contains
+the class under that full name, and run `vela plan` to compare it with the environment. See
+[Build and package plug-in code](https://learn.microsoft.com/power-apps/developer/data-platform/build-and-package).
 
 ## `apply` fails partway (exit 7)
 
