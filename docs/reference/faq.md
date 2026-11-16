@@ -1,122 +1,141 @@
 # FAQ
 
-Common questions about what Vela does, doesn't do, and how to get unstuck. See [limitations](limitations.md)
-for the full "by design" list.
+Short answers to common questions about Vela, grouped by topic. For the full list of what Vela does not do by
+design, see [Limitations](limitations.md); for step-by-step fixes, see [Troubleshooting](../guides/troubleshooting.md).
+
+## Deploying with plan and apply
 
 ### Why does `plan` report no changes?
 
-Confirm the `.nupkg` path, its version, and the environment connection are correct - `plan` compares the
-metadata extracted from your package against the live environment, so a wrong path or stale version shows
-nothing to reconcile. See [plan/apply](../guides/plan-apply.md).
+`plan` compares the metadata in your package with the live environment. Check that `--package` or `--packages-dir`
+points at the package you just built, that its version is the one you expect (`--packages-dir` keeps only the highest
+version of each package id), and that the connection targets the right environment. See
+[Plan and apply](../guides/plan-apply.md).
 
-### At runtime I get "The plug-in type could not be found in the plug-in assembly" - why?
+### Why does `plan` or `apply` say my solution is managed or not found?
 
-Dataverse caches plugin assemblies **by version**, so re-deploying changed code under the **same** assembly
-version can keep serving the old assembly. Bump the assembly version and rebuild. Solutions scaffolded by
-`vela init` auto-increment `AssemblyVersion` (`1.0.*`). When a plugin type is still missing after the package
-publish, `vela apply` stops with `Plugin type not found in Dataverse after the plugin package publish` instead of
-registering its steps.
+`plan` and `apply` deploy into an unmanaged solution of a development environment. They exit `4` before reading or
+writing anything when the `--solution` solution does not exist in the target environment, or is managed there. A
+managed solution usually means the connection points at a test or production environment. See
+[The solution must be unmanaged](../guides/plan-apply.md#the-solution-must-be-unmanaged).
 
-### I get "can only call RegisterCustomApi(uniqueName, handler) inside RegisterCustomApi()" - what does it mean?
+### Does `apply` manage solutions, security roles or environment variables?
 
-Call `RegisterCustomApi("name", ...)` only from inside your `protected override void RegisterCustomApi()`.
-
-### My step handler isn't found (or has the wrong signature) - what should it be?
-
-A step handler is an instance method returning `void` with one parameter, bound by method group
-(`.Handle(OnUpdated)`). The parameter is one of:
-
-- the stage-typed message context: `IUpdatePostContext<TEntity>` at PostOperation, `IUpdatePreContext<TEntity>` at
-  PreValidation/PreOperation (it has `ctx.Request` but no `ctx.Response`);
-- the generated `{Handler}Context` (here `OnUpdatedContext`), which adds the typed `ctx.PreImage` / `ctx.PostImage`
-  (the plugin must be `partial`, [VELA014](analyzers.md#vela014));
-- `ILocalPluginContext`, for `OnMessage<TMarker>()` steps or when you need nothing typed.
-
-A context for another message or stage is a build error ([VELA015](analyzers.md#vela015)), and every step chain
-must end with `.Handle(...)` ([VELA002](analyzers.md#vela002)). A lightweight Custom API handler is
-`void Handler(ILocalPluginContext ctx)`.
-
-### Can `plan`/`apply` authenticate with a managed identity or a certificate?
-
-Managed identity: yes. A bare `--url` uses the ambient Azure credential (`DefaultAzureCredential`: `az login`,
-environment variables, workload identity, and managed identity) - the recommended default for CI and agents.
-Certificate auth: no. The other supported methods are connection string, client secret (env var / stdin / arg),
-and interactive MSAL (with sovereign-cloud overrides). See [authentication](../configuration/authentication.md)
-and [limitations](limitations.md).
-
-### Does `apply` manage solutions, security roles, or environment variables?
-
-No. `plan`/`apply` manage plugin packages/assemblies, steps, step images and Custom APIs, including each step's
-enabled/disabled state and unsecure configuration (and its secure configuration when you supply the value with
-`--secure-config`). Solutions must already exist (the required `--solution` only adds components to one), and SDK
-message filters, security roles / field security, and environment
-variables are not managed. Assemblies are upserted, never deleted. See [limitations](limitations.md).
+No. `plan` and `apply` manage plugin packages and assemblies, steps, step images and Custom APIs, including each
+step's enabled state and unsecure configuration, and its secure configuration when you supply the value with
+`--secure-config`. The solution must already exist and be unmanaged: `--solution` only adds components to it. SDK
+message filters, security roles, field security and environment variables are not managed. Assemblies are created and
+updated, never deleted. See [Limitations](limitations.md).
 
 ### Can I register a plugin from a bare `.dll`?
 
-No. A plugin-package `.nupkg` (built via `Microsoft.PowerApps.MSBuild.Plugin`) is required; a bare `.dll` is
-not supported. See [limitations](limitations.md).
+No. Vela deploys plugin packages (`.nupkg`) only. See [Limitations](limitations.md).
 
-### Does the in-memory test harness support every SDK message?
+### Can I run `plan`, `apply` and `inspect` in CI or from a coding agent without them hanging?
 
-No - it covers a common set (`Create`/`Update`/`Delete`/`Retrieve`/`RetrieveMultiple`, the `*Multiple` bulk
-messages, `Upsert`, `Assign`/`SetState`/`Merge`/`Associate`/`Disassociate`, file blocks, metadata reads, and
-`ExecuteMultiple`/`ExecuteTransaction`). For any other message, a single-plugin test can inject its own
-`IOrganizationService` via `WithOrganizationService(...)`; see [limitations](limitations.md#velatesting).
-See [testing](../guides/testing.md).
+Yes. They never wait on a prompt when stdin is redirected or piped: the optional "package assembly name" prompt and
+the browser sign-in prompts appear only on a real terminal. Pass your inputs on the command line (and
+`--auto-approve` for `apply`) and the command finishes or fails with a clear message. See
+[Run unattended](../guides/plan-apply.md#run-unattended).
 
-### Can I run `plan`/`apply`/`inspect` in CI or from a coding agent without them hanging?
+### At run time I get "The plug-in type could not be found in the plug-in assembly". Why?
 
-Yes. They never block on a prompt under redirected or piped stdin: the optional "package assembly name" prompt
-and the interactive OAuth prompts only appear on a real terminal. Supply your inputs on the command line (and
-`--auto-approve` for `apply`) and the command runs to completion or fails with a clear message.
-See [plan → apply](../guides/plan-apply.md).
+That message comes from Dataverse. On the Vela side:
 
-### `apply` rejected my signed plugin package - why?
+- `vela apply` republishes the plugin package whenever its content changed, and stops with
+  `Plugin type not found in Dataverse after the plugin package publish` when a plugin type it needs is still missing
+  after the publish, instead of registering steps on it.
+- Solutions scaffolded by `vela init` set `AssemblyVersion` to `1.0.*`, so every build gets a new assembly version.
+  Dataverse keeps the package version set when the package was created; for how versions affect plugin packages, see
+  [Build and package plug-in code](https://learn.microsoft.com/power-apps/developer/data-platform/build-and-package)
+  and [Create and register a plug-in package using PAC CLI](https://learn.microsoft.com/power-platform/developer/howto/cli-create-package).
 
-Dataverse only imports a plugin package whose name carries a solution publisher prefix. When the name lacks it,
-`apply --solution` adds the prefix by rewriting the `.nupkg`, which would invalidate a signature applied by
-`vela sign` (Dataverse returns `0x80040265`), so `apply` refuses a signed package that needs the rename. Give the
-package its prefixed name (for example `zava_Zava.Plugins`) before building and signing it.
-See [signing](../guides/signing.md).
+Check that the package you deployed contains the plugin class, then run `vela plan` to compare it with the
+environment. See [Troubleshooting](../guides/troubleshooting.md).
 
-### Why was my workflow-enabled Custom API rejected?
+## Authentication
 
-A Custom API with `WorkflowSdkStepEnabled` set must be an action (not a function) and cannot use
-`Entity`/`EntityCollection`/`string[]` parameters, nor an `EntityReference` unless it is bound to a table.
-`Build()` rejects such a definition with a message naming the API and the parameter, so `plan` fails before
-any write. See [Write a Custom API](../guides/custom-apis.md).
+### Can `plan` and `apply` authenticate with a managed identity or a certificate?
 
-### Is the harness security model on by default?
+Managed identity: yes. `--url` on its own uses the ambient Azure credential (`DefaultAzureCredential`), which covers
+`az login`, environment variables, workload identity and managed identity. It is the recommended default for CI and
+coding agents.
 
-No - it is opt-in and off by default. With no `WithSecurity(...)` call the in-memory service grants full
-access, exactly as before. Opt in only when you need privilege/access checks.
-See [security model](../guides/security-model.md).
+Certificate: Vela has no certificate options of its own. A `--connection-string` is passed unchanged to the Dataverse
+`ServiceClient`, so you can use the authentication types that its connection strings support. See
+[Authentication](../configuration/authentication.md#connection-string).
 
-### Can `vela models` generate relationship navigation properties or LINQ / OrganizationServiceContext?
+## Signing
 
-Relationship navigation properties: yes. `vela models` generates typed N:1 / 1:N / N:N navs, read with
-`RetrieveWithRelated` and written with `CreateWithRelated` / `AssociateRelated` (see
-[Relationship navigation properties](../guides/models.md#relationship-navigation-properties)).
-LINQ / `OrganizationServiceContext` is out of scope (lazy loading and change-tracking don't fit the plugin sandbox;
-use `Query.For<T>()` instead), as are localized multi-language labels and custom class/property casing; use
-`pac modelbuilder` if you need those. See [limitations](limitations.md).
+### Why did `apply` reject my signed plugin package?
+
+Dataverse imports a plugin package only when its name carries a solution publisher prefix. When the name lacks it,
+`apply` adds the prefix by rewriting the `.nupkg`, which would invalidate the signature, so `apply` refuses a signed
+package that needs the rename. Give the package its prefixed name (for example `zava_Zava.Plugins`) before you build
+and sign it. See [Signing](../guides/signing.md#signed-packages-and-vela-apply).
 
 ### Does `vela sign` support Key Vault or HSM signing?
 
-No. `vela sign` accepts a certificate by fingerprint (`CurrentUser\My`), a `.pfx` (with password/credential),
-or a base64 `.pfx`, and delegates to `dotnet nuget sign`. Key Vault / HSM signing is out of scope, and
-`--pfx-credential` is Windows-only. See [signing](../guides/signing.md).
+No. `vela sign` takes a certificate by fingerprint (`CurrentUser\My` store), a `.pfx` file, or a base64 `.pfx`, and
+calls `dotnet nuget sign`. Key Vault and HSM signing are out of scope, and `--pfx-credential` is Windows only. See
+[Signing](../guides/signing.md).
 
-### Is Vela available on nuget.org?
+## Writing plugins and Custom APIs
 
-Yes. `Vela.Plugins`, `Vela.Testing` and `Vela.Messages` (the framework line) and `Vela.Cli` (the CLI) are
-published on nuget.org. Reference the framework packages with `dotnet add package Vela.Plugins` / `Vela.Testing`, and
-install the CLI with `dotnet tool install --global Vela.Cli`. It is still **pre-1.0**, so APIs may change
-between minor versions; the [changelog](https://github.com/allandecastro/vela/blob/main/CHANGELOG.md) calls out
-each breaking change.
+### What signature must a step handler have?
+
+A step handler is an instance method that returns `void` and takes one parameter. It is bound by method group
+(`.Handle(OnUpdated)`). The parameter is one of:
+
+- the stage-typed message context: `IUpdatePostContext<TEntity>` at PostOperation, `IUpdatePreContext<TEntity>` at
+  PreValidation or PreOperation (it has `ctx.Request` but no `ctx.Response`);
+- the generated `{Handler}Context` (here `OnUpdatedContext`), which adds the typed `ctx.PreImage` and `ctx.PostImage`
+  (the plugin must be `partial`, see [VELA014](analyzers.md#vela014));
+- `ILocalPluginContext`, for `OnMessage<TMarker>()` steps or when you need nothing typed.
+
+A context for another message or stage is a build error ([VELA015](analyzers.md#vela015)), and every step chain must
+end with `.Handle(...)` ([VELA002](analyzers.md#vela002)). A lightweight Custom API handler is
+`void Handler(ILocalPluginContext ctx)`.
+
+### What does "can only call RegisterCustomApi(uniqueName, handler) inside RegisterCustomApi()" mean?
+
+Call `RegisterCustomApi("name", ...)` only from inside your `protected override void RegisterCustomApi()`. See
+[Lightweight mode](../guides/custom-apis.md#lightweight-mode).
+
+### Why was my workflow-enabled Custom API rejected?
+
+A Custom API with `WorkflowSdkStepEnabled` set must be an action (not a function) and cannot use `Entity`,
+`EntityCollection` or `string[]` parameters, nor an `EntityReference` unless it is bound to a table. `Build()` rejects
+such a definition with a message that names the API and the parameter, so `plan` fails before any write. See
+[Rules checked by `Build()`](../guides/custom-apis.md#rules-checked-by-build).
 
 ### Can the plugin cache do async I/O?
 
-No - `IPluginCacheService` is synchronous only. The plugin pipeline runs synchronously and the cache locks
-with `Monitor`, so do your I/O inside the factory and cache the result. See [caching](../guides/caching.md).
+No. `IPluginCacheService` is synchronous. See [Caching](../guides/caching.md).
+
+## Models
+
+### Can `vela models` generate relationship navigation properties, or LINQ and `OrganizationServiceContext`?
+
+Navigation properties: yes. `vela models` generates typed N:1, 1:N and N:N navigation properties, read with
+`RetrieveWithRelated` and written with `CreateWithRelated` or `AssociateRelated`. See
+[Relationship navigation properties](../guides/models.md#relationship-navigation-properties).
+
+LINQ and `OrganizationServiceContext` are out of scope (lazy loading and change tracking do not fit the plugin
+sandbox; use `Query.For<T>()` instead), as are localized multi-language labels and custom class or property casing.
+Use `pac modelbuilder` if you need those. See [Limitations](limitations.md).
+
+## Testing
+
+### Does the in-memory test harness support every SDK message?
+
+No. It covers a common set: `Create`, `Update`, `Delete`, `Retrieve`, `RetrieveMultiple`, the `*Multiple` bulk
+messages, `Upsert`, `Assign`, `SetState`, `Merge`, `Associate`, `Disassociate`, file blocks, metadata reads,
+`ExecuteMultiple` and `ExecuteTransaction`. For any other message, a single-plugin test can inject its own
+`IOrganizationService` with `WithOrganizationService(...)`. See [Testing](../guides/testing.md) and
+[Limitations](limitations.md#velatesting).
+
+### Is the harness security model on by default?
+
+No. It is opt-in: without a `WithSecurity(...)` call, the in-memory service grants full access. Turn it on only when
+you need privilege and access checks. See [Security model in tests](../guides/security-model.md).

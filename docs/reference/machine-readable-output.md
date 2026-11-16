@@ -1,7 +1,11 @@
 # Machine-readable output
 
-`vela plan`, `vela apply` and `vela inspect` write a JSON document that scripts, CI pipelines and coding agents can
-rely on. This page is the contract: the fields, what they mean, and the exit codes.
+`vela plan`, `vela apply` and `vela inspect` write a versioned JSON document that scripts, CI pipelines and coding
+agents can rely on. This page is that contract: when you get JSON, what each field means, the command table of
+`vela help --json`, and the exit codes of every command.
+
+`init`, `add`, `models`, `logs`, `solution show` and `sign` also accept `--json` and print a JSON report, but those
+reports carry no `schemaVersion` and are not part of this contract; `vela <command> --help` describes them.
 
 ## When you get JSON
 
@@ -15,14 +19,14 @@ rely on. This page is the contract: the fields, what they mean, and the exit cod
 
 stdout never carries anything but the result. Warnings (for example `--client-secret` on the command line), progress
 lines, the confirmation prompt, the resume report of a failed apply and update notices all go to stderr. `--verbose`
-adds detail on stderr and never removes the JSON. `vela init --json` follows the same rule.
+adds detail on stderr and never removes the JSON.
 
 ## Versioning
 
 Every document starts with `"schemaVersion": 1`. The version changes only when an existing field changes meaning or
 shape, or is removed. A new field is added without a version change, so read the fields you need and ignore the rest.
 
-## plan and apply
+## `plan` and `apply`
 
 ```json
 {
@@ -32,24 +36,24 @@ shape, or is removed. A new field is added without a version change, so read the
   "hasChanges": true,
   "summary": { "added": 1, "removed": 0, "changed": 0 },
   "operations": [
-    { "action": "create", "kind": "step", "type": "Zava.Plugins.AccountPlugin", "reason": "Exists locally but not in Dataverse." },
-    { "action": "update", "kind": "package", "type": "zava_Plugins", "reason": "Plugin package version or content differs from Dataverse; apply will republish it." },
-    { "action": "add-to-solution", "kind": "custom-api", "type": "zava_DoThing", "reason": "Exists in Dataverse but is not in the target solution; apply will add it." }
+    { "action": "add-to-solution", "kind": "custom-api", "type": "zava_DoThing", "reason": "Exists in Dataverse but is not in the target solution; apply will add it." },
+    { "action": "update", "kind": "package", "type": "zava_Zava.Plugins", "reason": "Plugin package version or content differs from Dataverse; apply will republish it." },
+    { "action": "create", "kind": "step", "type": "Zava.Plugins.AccountPlugin", "reason": "Exists locally but not in Dataverse." }
   ],
   "diff": {
     "localAssemblies": ["Zava.Plugins"],
     "currentAssemblies": ["Zava.Plugins"],
     "added": [ { "kind": "step", "type": "Zava.Plugins.AccountPlugin", "definition": { } } ],
     "removed": [],
-    "changed": [ { "kind": "custom-api", "type": "Zava.Plugins.MyApi", "before": { }, "after": { } } ],
+    "changed": [],
     "localItems": [],
     "currentItems": [],
-    "summary": { "added": 1, "removed": 0, "changed": 1 }
+    "summary": { "added": 1, "removed": 0, "changed": 0 }
   },
   "diagnostics": [],
   "notes": ["Compared local .nupkg plugin metadata with live Dataverse state.", "This is a preview; nothing was written to Dataverse."],
   "unmanaged": [],
-  "info": ["Plugin assembly 'Zava.Plugins' not found in Dataverse (first deployment)."]
+  "info": []
 }
 ```
 
@@ -95,7 +99,7 @@ shape, or is removed. A new field is added without a version change, so read the
 On `apply-failed`, the document is the pre-apply plan with mode `apply-failed` and the failure in `notes`. The
 per-operation report (completed / failed / not applied) is on stderr; re-run `apply` to converge.
 
-## inspect
+## `inspect`
 
 ```json
 {
@@ -112,24 +116,31 @@ per-operation report (completed / failed / not applied) is on stderr; re-run `ap
 
 ## The command table
 
-`vela help --json` describes every command, its options (name, aliases, `kind`: `flag`, `value` or
-`optional-value`, value name, description) and the exit codes. It is generated from the same table that validates
-the options, so an agent can discover the CLI without parsing help text.
+`vela help --json` describes the CLI for agents and completion scripts, without parsing help text:
+
+- `schemaVersion`, `tool` and `version`;
+- `commands[]`: `name`, `aliases`, `summary`, `usage` and `options[]`, where each option has `name`, `aliases`,
+  `kind` (`flag`, `value` or `optional-value`), `value` (the value placeholder) and `description`;
+- `exitCodes`: each code with a short description.
+
+It is generated from the same table that validates the options, so it lists exactly what each command accepts.
 
 ## Exit codes
 
+Every `vela` command returns one of these codes. This table is the reference; other pages summarize it.
+
 | Code | Meaning |
 | --- | --- |
-| `0` | Success (for `plan`, also "changes found" unless `--detailed-exitcode`) |
-| `2` | Invalid arguments (unknown option, missing value, option of another command, `plan`/`apply` without `--solution`, `add customapi` without `--prefix`) |
-| `3` | File not found (package, folder, secure-config file) |
-| `4` | Error, including a `--strict` failure, a refused non-interactive `apply` without `--auto-approve`, and a `plan`/`apply` `--solution` that is missing or managed in the target environment |
-| `5` | Drift detected (`vela models --verify`), or `apply` did not converge (mode `apply-not-converged`) |
-| `6` | Dataverse connection failure |
-| `7` | Partial apply: the run stopped mid-way; Dataverse may be partly updated. Re-run `apply`. |
-| `8` | `vela plan --detailed-exitcode` only: the plan found changes to apply |
+| `0` | Success. For `plan`, also when it finds changes, unless `--detailed-exitcode` is set. For `apply`, also when you answer anything but `yes` at the prompt (`Apply cancelled.`). |
+| `2` | Invalid arguments: an unknown option, an option of another command, a missing value, missing authentication options, a `--url` that is not an absolute `https` URL, `plan` or `apply` without `--solution`, `add customapi` without `--prefix`. |
+| `3` | A file or folder was not found: a package, a packages folder, a web resources folder, a `--secure-config` file, the package or PFX to sign. |
+| `4` | Error: a `--strict` failure; an `apply` refused because stdin is not a terminal and `--auto-approve` is missing; a `plan` or `apply` `--solution` that is missing or managed in the target environment; a failed `dotnet nuget sign`; any other unexpected failure. |
+| `5` | Drift detected: `vela models --verify` found the model on disk out of date, or `apply` wrote every change but the environment still differs (mode `apply-not-converged`). |
+| `6` | Dataverse connection failure: authentication, the endpoint, or a network error (DNS, socket, HTTP, timeout) on any call, including while reading the live state. |
+| `7` | Partial apply: the run stopped partway (mode `apply-failed`) and Dataverse may be partly updated. Fix the cause and run `apply` again. |
+| `8` | `vela plan --detailed-exitcode` only: the plan found changes to apply. |
 
-A typical CI gate:
+A typical CI gate, with the connection taken from `DATAVERSE_CONNECTION_STRING`:
 
 ```bash
 vela plan --packages-dir artifacts --solution ZavaSales --strict --json --detailed-exitcode > plan.json
