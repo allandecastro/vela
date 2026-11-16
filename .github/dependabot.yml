@@ -28,6 +28,12 @@ updates:
         update-types: [version-update:semver-major]
       - dependency-name: Microsoft.Extensions.DependencyInjection
         update-types: [version-update:semver-major]
+      # Pinned to the latest 8.x servicing patch, equal to the versions the vela init scaffold pins
+      # (ScaffoldTemplates.CryptographyXmlVersion / CryptographyPkcsVersion). Bumped by hand, with those constants.
+      - dependency-name: System.Security.Cryptography.Xml
+        update-types: [version-update:semver-major]
+      - dependency-name: System.Security.Cryptography.Pkcs
+        update-types: [version-update:semver-major]
       # From 1.18.0, Azure.Core pulls Microsoft.Extensions.* 10.x, which conflicts with the 8.x pin above (NU1109).
       - dependency-name: Azure.Identity
         versions: [">= 1.18.0"]
