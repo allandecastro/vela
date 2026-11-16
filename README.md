@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License: MIT" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License: MIT" /></a>
   <a href="https://github.com/allandecastro/vela/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/allandecastro/vela/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
   <a href="https://github.com/allandecastro/vela/actions/workflows/mutation.yml"><img src="https://github.com/allandecastro/vela/actions/workflows/mutation.yml/badge.svg" alt="Mutation Testing" /></a>
   <a href="https://github.com/allandecastro/vela/actions/workflows/release.yml"><img src="https://github.com/allandecastro/vela/actions/workflows/release.yml/badge.svg" alt="Release" /></a>
@@ -39,7 +39,8 @@ Vela is a framework (`Vela.Plugins`), a CLI (`Vela.Cli`, command `vela`) and a n
 Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://allandecastro.github.io/vela/)**:
 
 - [Getting started](https://allandecastro.github.io/vela/getting-started/install.html) - install, quickstart, initialize a solution
-- [Guides](https://allandecastro.github.io/vela/guides/) - plugins, Custom APIs, DI, caching, testing, plan/apply, models, signing
+- [Guides](https://allandecastro.github.io/vela/guides/) - plugins, Custom APIs, DI, caching, testing, plan and apply, models, signing
+- [Configuration](https://allandecastro.github.io/vela/configuration/) - authentication, environments and CI
 - [Reference](https://allandecastro.github.io/vela/reference/) - CLI cheat sheet, JSON output, analyzers, limitations, FAQ
 
 ## Features
@@ -65,7 +66,7 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 
 The libraries target .NET Framework 4.6.2 so any supported plug-in project can reference them (see
 [Support for .NET Framework versions](https://learn.microsoft.com/power-apps/developer/data-platform/supported-customizations#support-for-net-framework-versions)
-on Microsoft Learn); `vela init` scaffolds plugin projects on `net48`. See [Target framework](docs/guides/migrating.md#before-you-start) for the plugin-package caveat.
+on Microsoft Learn); `vela init` scaffolds plugin projects on `net48`. See [Target framework](https://allandecastro.github.io/vela/guides/migrating.html#before-you-start) for the plugin-package caveat.
 
 ## Install
 

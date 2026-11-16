@@ -1,6 +1,5 @@
+# Architecture and Mutation testing are listed once, under Advanced.
 - name: Contributing
   href: index.md
 - name: Add a typed plugin message
   href: extending-plugins.md
-- name: Architecture
-  href: ../advanced/architecture.md

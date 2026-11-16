@@ -19,12 +19,23 @@
     "globalMetadata": {
       "_appName": "Vela",
       "_appTitle": "Vela - Build Dataverse with confidence",
+      "_description": "Vela is a framework, a CLI and an in-memory test harness for Microsoft Dataverse plugins and Custom APIs, with a preview-first plan then apply workflow.",
+      "_lang": "en",
       "_appLogoPath": "images/vela-chevron.svg",
       "_appFaviconPath": "images/vela-favicon.svg",
       "_enableSearch": true,
       "_disableContribution": true,
-      "_appFooter": "<span>Vela &middot; Build Dataverse with confidence &middot; <a href=\"https://github.com/allandecastro/vela/releases\">Releases</a> &middot; <a href=\"https://github.com/allandecastro/vela\">GitHub</a> &middot; <a href=\"https://github.com/allandecastro/vela/issues/new/choose\">Report an issue</a></span>",
+      "_appFooter": "<span>Vela &middot; Build Dataverse with confidence &middot; <a href=\"https://github.com/allandecastro/vela/releases\">Releases</a> &middot; <a href=\"https://github.com/allandecastro/vela\">GitHub</a> &middot; <a href=\"https://github.com/allandecastro/vela/issues/new/choose\">Report an issue</a> &middot; <a href=\"https://github.com/allandecastro/vela/blob/main/LICENSE\">MIT License</a></span>",
       "pdf": false
+    },
+    "fileMetadata": {
+      "title": {
+        "index.md": "Home"
+      }
+    },
+    "sitemap": {
+      "baseUrl": "https://allandecastro.github.io/vela/",
+      "changefreq": "weekly"
     },
     "markdownEngineName": "markdig"
   }
