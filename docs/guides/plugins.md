@@ -689,8 +689,10 @@ recursion prevention. `PluginPipeline` caps the cascade at the same depth by def
   No TLS setup is needed: the sandbox runs plugins on .NET Framework 4.8 with `SecurityProtocol` at
   `SystemDefault`. Don't set `ServicePointManager.SecurityProtocol`; it is process-wide. The scaffolded plugin
   project already references `System.Net.Http`.
-- **About 2 minutes** for the whole synchronous part of the Dataverse pipeline. Offload slow work to an async step
-  or outside Dataverse.
+- **Time limit.** Microsoft states that "a Dataverse message operation must complete within **2 minutes**",
+  including all its registered plug-ins, and advises limiting a plug-in to about 2 seconds
+  ([Time and resource constraints](https://learn.microsoft.com/power-apps/developer/data-platform/analyze-performance#time-and-resource-constraints)).
+  Offload slow work to an async step or outside Dataverse.
 - **Retry only what can be retried.** Service-protection limits don't apply to data operations from a plugin, and a
   failed call inside a transaction cannot be replayed (`RetryPolicy` runs the operation once when
   `ctx.IsInTransaction` is true). `RetryPolicy.Execute(ctx, ...)` is for calls that leave the sandbox; each wait is
