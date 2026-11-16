@@ -62,7 +62,7 @@ namespace Vela.Testing.Tests
                 });
     }
 
-    // Account post-create, async: writes a note, then fails, so its own write must be rolled back.
+    // Account post-create, async: writes a note, then fails; the note stays (no transaction around an async step).
     public sealed class AtxAsyncWriteThenThrow : EntityPluginBase<FakeAccount>
     {
         public AtxAsyncWriteThenThrow(string u, string s) : base(u, s) { }
@@ -71,7 +71,7 @@ namespace Vela.Testing.Tests
             => RegisterStep().OnCreate().PostOperation().Async().FilterOn(a => a.Name)
                 .Handle(ctx =>
                 {
-                    ctx.SystemService.Create(new Entity("annotation") { ["subject"] = "lost" });
+                    ctx.SystemService.Create(new Entity("annotation") { ["subject"] = "kept" });
                     throw new PluginBusinessException("async fails");
                 });
     }
@@ -281,15 +281,16 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void A_failed_async_step_rolls_back_its_own_writes()
+        public void A_failed_async_step_keeps_the_writes_it_made_before_failing()
         {
             PluginPipeline pipeline = PluginPipeline.Empty()
                 .Register<AtxAsyncWriteThenThrow>();
 
             pipeline.Service.Create(new FakeAccount { Name = "Zava" });
 
+            // Verified live: an async step runs outside any transaction, so the row it created before throwing stays.
             Assert.Single(pipeline.GetAll("account"));      // the triggering operation committed
-            Assert.Empty(pipeline.GetAll("annotation"));   // the async job's own write did not
+            Assert.Equal("kept", Assert.Single(pipeline.GetAll("annotation")).GetAttributeValue<string>("subject"));
             Exception failure = Assert.Single(pipeline.AsyncStepFailures);
             Assert.Contains("async fails", failure.Message);
         }

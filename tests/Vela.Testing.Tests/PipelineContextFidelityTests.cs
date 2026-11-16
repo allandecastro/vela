@@ -35,7 +35,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void A_cascaded_delete_gives_the_root_record_its_own_stage_30_parent()
+        public void A_cascaded_delete_gives_the_children_the_roots_stage_30_parent()
         {
             Guid accountId = Guid.NewGuid();
             Guid contactId = Guid.NewGuid();
@@ -47,14 +47,20 @@ namespace Vela.Testing.Tests
 
             pipeline.Service.Delete("account", accountId);
 
-            Assert.Contains($"contact s20 parent=Delete/30 contact {contactId}", CfProbe.Events);
-            Assert.Contains($"contact s40 parent=Delete/30 contact {contactId}", CfProbe.Events);
-            Assert.Contains($"account s20 parent=Delete/30 account {accountId}", CfProbe.Events);
-            Assert.Contains($"account s40 parent=Delete/30 account {accountId}", CfProbe.Events);
+            // Verified live: the children's steps run first, with the root's Delete/30 as their ParentContext.
+            Assert.Equal(
+                new[]
+                {
+                    $"contact s20 parent=Delete/30 account {accountId}",
+                    $"contact s40 parent=Delete/30 account {accountId}",
+                    $"account s20 parent=Delete/30 account {accountId}",
+                    $"account s40 parent=Delete/30 account {accountId}",
+                },
+                CfProbe.Events.ToArray());
         }
 
         [Fact]
-        public void Each_row_of_a_batch_gets_its_own_stage_30_parent()
+        public void Each_row_of_a_CreateMultiple_has_the_CreateMultiple_stage_as_parent()
         {
             PluginPipeline pipeline = PluginPipeline.Empty().Register<CfCreateParentRecorder>();
             EntityCollection targets = new EntityCollection { EntityName = "account" };
@@ -63,7 +69,8 @@ namespace Vela.Testing.Tests
 
             pipeline.Service.Execute(new CreateMultipleRequest { Targets = targets });
 
-            Assert.Equal(new[] { "first<-first", "second<-second" }, CfProbe.Events.ToArray());
+            // Verified live: a row's Create/40 has CreateMultiple/40 as ParentContext, itself under CreateMultiple/30.
+            Assert.Equal(new[] { "first<-CreateMultiple/40 (2)<-CreateMultiple/30 (2)", "second<-CreateMultiple/40 (2)<-CreateMultiple/30 (2)" }, CfProbe.Events.ToArray());
         }
 
         [Fact]
@@ -272,8 +279,10 @@ namespace Vela.Testing.Tests
             {
                 IPluginExecutionContext context = ctx.PluginExecutionContext;
                 Entity own = (Entity)context.InputParameters["Target"];
-                Entity parents = (Entity)context.ParentContext.InputParameters["Target"];
-                CfProbe.Events.Add($"{own["name"]}<-{parents["name"]}");
+                IPluginExecutionContext parent = context.ParentContext;
+                IPluginExecutionContext grandParent = parent.ParentContext;
+                static int Count(IPluginExecutionContext c) => ((EntityCollection)c.InputParameters["Targets"]).Entities.Count;
+                CfProbe.Events.Add($"{own["name"]}<-{parent.MessageName}/{parent.Stage} ({Count(parent)})<-{grandParent.MessageName}/{grandParent.Stage} ({Count(grandParent)})");
             });
     }
 

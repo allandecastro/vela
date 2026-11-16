@@ -65,9 +65,9 @@ namespace Vela.Testing
         // plugin fired by another plugin's write.
         private readonly Stack<FakePluginExecutionContext> _contextStack = new Stack<FakePluginExecutionContext>();
 
-        // Shared variables for the operation currently running. Seeded from the request 'tag' (or other
-        // shared variables) at the top level, shared across every stage/plugin of the operation, and inherited
-        // by cascaded (nested) writes — mirroring how Dataverse surfaces them (and ParentContext.SharedVariables).
+        // The PreValidation shared variables of the operation currently running (its later stages get their own: see
+        // CaptureOperationContext). Seeded from the request 'tag' (or other shared variables). An operation a plugin
+        // issues starts its own; the calling plugin's reach it only through ParentContext (verified live).
         private ParameterCollection _sharedVariables = new ParameterCollection();
 
         // Bypass directives for the operation currently running, read from the request (BypassCustomPluginExecution

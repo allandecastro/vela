@@ -55,6 +55,12 @@ namespace Vela.Testing
         // Fires one stage of a Create/Update batch. The two registration messages are merged: a bulk step
         // (CreateMultiple/UpdateMultiple) fires once with the whole Targets collection; a single step
         // (Create/Update) fires once per row. Both are ordered by execution order and filtered by FilterOn.
+        // Their SharedVariables and ParentContext depend on the request (verified live). A single Create/Update: its
+        // Create/Update and CreateMultiple/UpdateMultiple steps share the operation's collections (one at
+        // PreValidation, one for PreOperation and PostOperation) and stage-30 context. A CreateMultiple/UpdateMultiple
+        // request: its bulk steps have the operation's, and each row's Create/Update steps have their own (one at
+        // PreValidation, one for PreOperation and PostOperation), with the CreateMultiple/UpdateMultiple context of the
+        // same stage as ParentContext.
         private void FireBatchStage(string singleMessage, string bulkMessage, PluginStages stage, string entityName, IReadOnlyList<BatchItem> items, List<Action> asyncQueue)
         {
             bool isUpdate = string.Equals(singleMessage, PluginMessages.Update, StringComparison.OrdinalIgnoreCase);
@@ -75,6 +81,12 @@ namespace Vela.Testing
             }
 
             EntityCollection? targets = null;
+            OperationFrame frame = _frames.Peek();
+            bool bulkRequest = frame.BulkMessage != null;
+            StageInvocation operation = NewInvocation(bulkRequest ? bulkMessage : singleMessage, stage, entityName, bulkRequest ? Guid.Empty : items[0].Target.Id, null);
+            CaptureOperationContext(operation, () => bulkRequest
+                ? new ParameterCollection { ["Targets"] = targets ??= BuildTargets(entityName, items) }
+                : new ParameterCollection { ["Target"] = items[0].Target });
 
             foreach (PipelineRegistration registration in matching)
             {
@@ -89,8 +101,7 @@ namespace Vela.Testing
                     }
 
                     EntityCollection capturedTargets = targets ??= BuildTargets(entityName, items);
-                    bool fromSandbox = _frames.Count > 0 && _frames.Peek().FromSandbox;
-                    Emit(captured, asyncQueue, () => DispatchBulk(captured, bulkMessage, stage, entityName, capturedTargets, items, fromSandbox));
+                    Emit(captured, asyncQueue, () => DispatchBulk(captured, bulkMessage, stage, entityName, capturedTargets, items, operation));
                 }
                 else
                 {
@@ -105,8 +116,20 @@ namespace Vela.Testing
                         StageInvocation invocation = NewInvocation(singleMessage, stage, entityName, capturedItem.Target.Id, capturedItem.Target);
                         invocation.PreState = capturedItem.PreState;
                         invocation.PostState = capturedItem.PostState;
-                        invocation.RecordKey = capturedItem;
-                        CaptureOperationContext(invocation);
+                        invocation.FromSandbox = operation.FromSandbox;
+                        if (bulkRequest)
+                        {
+                            invocation.SharedVariables = stage == PluginStages.PreValidation
+                                ? capturedItem.ValidationShared ??= new ParameterCollection()
+                                : capturedItem.MainShared ??= new ParameterCollection();
+                            invocation.ParentContext = BulkStageContext(frame, stage, operation, targets ??= BuildTargets(entityName, items));
+                        }
+                        else
+                        {
+                            invocation.SharedVariables = operation.SharedVariables;
+                            invocation.ParentContext = operation.ParentContext;
+                        }
+
                         // A Create Post step sees the created id as OutputParameters["id"], exactly as Dataverse
                         // surfaces it, so ctx.Response.id resolves in a post-create handler.
                         if (!isUpdate && stage == PluginStages.PostOperation)
@@ -117,6 +140,27 @@ namespace Vela.Testing
                     }
                 }
             }
+        }
+
+        // The CreateMultiple/UpdateMultiple context of a stage, which a row's Create/Update steps have as ParentContext
+        // under a bulk request (verified live): the bulk steps' SharedVariables at that stage, and the stage-30 context
+        // (or, at PreValidation, the operation's parent) as its own ParentContext.
+        private FakePluginExecutionContext BulkStageContext(OperationFrame frame, PluginStages stage, StageInvocation operation, EntityCollection targets)
+        {
+            if (!frame.BulkStageContexts.TryGetValue((int)stage, out FakePluginExecutionContext? context))
+            {
+                context = PlatformContext(
+                    operation.Message,
+                    stage,
+                    operation.EntityLogicalName,
+                    Guid.Empty,
+                    operation.SharedVariables ?? _sharedVariables,
+                    operation.ParentContext ?? (_contextStack.Count > 0 ? _contextStack.Peek() : null),
+                    new ParameterCollection { ["Targets"] = targets });
+                frame.BulkStageContexts[(int)stage] = context;
+            }
+
+            return context;
         }
 
         // Runs the dispatch now for a synchronous step, or queues it for an asynchronous one: it then runs, with the
@@ -144,7 +188,7 @@ namespace Vela.Testing
             return collection;
         }
 
-        private void DispatchBulk(PipelineRegistration registration, string message, PluginStages stage, string entityName, EntityCollection targets, IReadOnlyList<BatchItem> items, bool fromSandbox)
+        private void DispatchBulk(PipelineRegistration registration, string message, PluginStages stage, string entityName, EntityCollection targets, IReadOnlyList<BatchItem> items, StageInvocation operation)
         {
             FakePluginExecutionContext context = new FakePluginExecutionContext
             {
@@ -155,13 +199,13 @@ namespace Vela.Testing
                 PrimaryEntityName = entityName,
                 PrimaryEntityId = Guid.Empty,
                 CorrelationId = _correlationId,
-                SharedVariables = _sharedVariables
+                SharedVariables = operation.SharedVariables ?? _sharedVariables
             };
 
             // Bulk steps read the batch via ctx.BulkTargets (InputParameters["Targets"]) and per-row pre/post
             // images via the image collections (aligned by target index).
             context.InputParameters["Targets"] = targets;
-            if (fromSandbox && stage == PluginStages.PreValidation)
+            if (operation.FromSandbox && stage == PluginStages.PreValidation)
             {
                 // Verified live at PreValidation only (see Dispatch).
                 context.InputParameters[FromSandboxInput] = true;
@@ -183,7 +227,7 @@ namespace Vela.Testing
             PipelineExecutionEntry entry = new PipelineExecutionEntry(registration.Step.PluginTypeName, message, stage, registration.Step.Mode, entityName, _depth);
             _log.Add(entry);
             IPlugin plugin = registration.GetInstance(SecureConfigFor(registration.Step));
-            ExecuteWithContext(context, plugin, entry, registration.Step);
+            ExecuteWithContext(context, plugin, entry, registration.Step, operation.ParentContext);
         }
 
         // One target's image collection for a bulk step, as Dataverse fills it (verified live): the step's own images,
@@ -349,18 +393,23 @@ namespace Vela.Testing
         private const string AsyncPrimaryNameImage = "AsynchronousStepPrimaryName";
 
         // The messages whose PreValidation-stage shared variables the PreOperation/PostOperation steps see only through
-        // ParentContext.SharedVariables (MS Learn; verified live for Create).
+        // ParentContext.SharedVariables (MS Learn; verified live for Create, Update, Delete, CreateMultiple and
+        // UpdateMultiple).
         private static bool SplitsPreValidationSharedVariables(string message)
             => string.Equals(message, PluginMessages.Create, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(message, PluginMessages.Update, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(message, PluginMessages.Delete, StringComparison.OrdinalIgnoreCase);
+                || string.Equals(message, PluginMessages.Delete, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(message, PluginMessages.CreateMultiple, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(message, PluginMessages.UpdateMultiple, StringComparison.OrdinalIgnoreCase);
 
         // Records, on the invocation, what its step contexts need from the operation that fires it (so an async step
-        // dispatched later still sees them): whether a plugin issued the operation, and for Create/Update/Delete the
-        // PreOperation/PostOperation shared variables and their stage-30 ParentContext: the main operation of the
-        // record the step runs for (a cascaded child's Delete or another batch row has its own), or of the message
-        // whose main operation the Update is (Assign, SetState, Merge).
-        private void CaptureOperationContext(StageInvocation invocation)
+        // dispatched later still sees them), keeping what the caller already set: whether a plugin issued the
+        // operation, the ParentContext the operation's contexts have when it is not the calling plugin's (an Upsert's
+        // inner Create/Update), and for Create/Update/Delete and the bulk messages the PreOperation/PostOperation
+        // shared variables and their stage-30 ParentContext: the operation's main operation, or that of the message
+        // whose main operation the Update is (Assign, SetState, Merge). mainInputs gives the stage-30 context's inputs
+        // when no platform message set them (by default, the invocation's Target).
+        private void CaptureOperationContext(StageInvocation invocation, Func<ParameterCollection>? mainInputs = null)
         {
             if (_frames.Count == 0)
             {
@@ -371,45 +420,55 @@ namespace Vela.Testing
             invocation.FromSandbox = frame.FromSandbox;
             if (invocation.Stage == PluginStages.PreValidation || !SplitsPreValidationSharedVariables(invocation.Message))
             {
+                invocation.ParentContext ??= frame.ParentContext;
                 return;
             }
 
             frame.MainStageShared ??= CopyParameters(frame.InitialShared);
-            object recordKey = invocation.RecordKey ?? invocation.EntityLogicalName.ToLowerInvariant() + ":" + invocation.PrimaryId;
-            if (!frame.MainStageContexts.TryGetValue(recordKey, out FakePluginExecutionContext? main))
-            {
-                main = new FakePluginExecutionContext
-                {
-                    MessageName = frame.MainMessage ?? invocation.Message,
-                    Stage = (int)PluginStages.MainOperation,
-                    Mode = (int)ExecutionMode.Synchronous,
-                    Depth = _depth,
-                    PrimaryEntityName = invocation.EntityLogicalName,
-                    PrimaryEntityId = invocation.PrimaryId,
-                    CorrelationId = _correlationId,
-                    SharedVariables = _sharedVariables,
-                    ParentContext = _contextStack.Count > 0 ? _contextStack.Peek() : null,
-                    IsInTransaction = _transaction != null,
-                };
-                (main.UserId, main.BusinessUnitId, main.OrganizationId) = _store.CurrentActor();
-                main.InitiatingUserId = _initiatingUserId ?? main.UserId;
-                if (frame.MainInputs != null)
-                {
-                    foreach (KeyValuePair<string, object> input in frame.MainInputs)
-                    {
-                        main.InputParameters[input.Key] = input.Value;
-                    }
-                }
-                else if (invocation.Target != null)
-                {
-                    main.InputParameters["Target"] = invocation.Target;
-                }
+            invocation.SharedVariables ??= frame.MainStageShared;
+            invocation.ParentContext ??= MainStageContext(frame, invocation.Message, invocation.EntityLogicalName, invocation.PrimaryId,
+                mainInputs ?? (() => invocation.Target != null ? new ParameterCollection { ["Target"] = invocation.Target } : new ParameterCollection()));
+        }
 
-                frame.MainStageContexts[recordKey] = main;
+        // The operation's stage-30 context, created on first use (a Delete creates it up front for its root record: its
+        // cascaded children's steps run first and have it as their ParentContext too).
+        private FakePluginExecutionContext MainStageContext(OperationFrame frame, string message, string entityName, Guid entityId, Func<ParameterCollection> inputs)
+        {
+            return frame.MainStageContext ??= PlatformContext(
+                frame.MainMessage ?? message,
+                PluginStages.MainOperation,
+                entityName,
+                entityId,
+                _sharedVariables,
+                frame.ParentContext ?? (_contextStack.Count > 0 ? _contextStack.Peek() : null),
+                frame.MainInputs ?? inputs());
+        }
+
+        // A context no step runs under but that steps see in ParentContext (a stage-30 main operation, a
+        // CreateMultiple/UpdateMultiple stage), stamped with the depth, identity and transaction in force now.
+        private FakePluginExecutionContext PlatformContext(string message, PluginStages stage, string entityName, Guid entityId, ParameterCollection shared, FakePluginExecutionContext? parent, ParameterCollection inputs)
+        {
+            FakePluginExecutionContext context = new FakePluginExecutionContext
+            {
+                MessageName = message,
+                Stage = (int)stage,
+                Mode = (int)ExecutionMode.Synchronous,
+                Depth = _depth,
+                PrimaryEntityName = entityName,
+                PrimaryEntityId = entityId,
+                CorrelationId = _correlationId,
+                SharedVariables = shared,
+                ParentContext = parent,
+                IsInTransaction = _transaction != null,
+            };
+            (context.UserId, context.BusinessUnitId, context.OrganizationId) = _store.CurrentActor();
+            context.InitiatingUserId = _initiatingUserId ?? context.UserId;
+            foreach (KeyValuePair<string, object> input in inputs)
+            {
+                context.InputParameters[input.Key] = input.Value;
             }
 
-            invocation.SharedVariables = frame.MainStageShared;
-            invocation.ParentContext = main;
+            return context;
         }
 
         internal static ParameterCollection CopyParameters(ParameterCollection? source)

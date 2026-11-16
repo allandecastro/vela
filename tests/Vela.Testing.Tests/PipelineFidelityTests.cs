@@ -83,10 +83,11 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void SharedVariables_are_inherited_by_a_cascaded_operation()
+        public void A_cascaded_operation_sees_the_callers_SharedVariables_only_through_ParentContext()
         {
-            // A pre-stage sets a shared variable at the top level; a plugin fired by a cascaded (nested) write
-            // still sees it, mirroring how Dataverse flows SharedVariables down the cascade.
+            // A pre-stage sets a shared variable at the top level; a plugin fired by a cascaded (nested) write has its
+            // own collection and finds the variable on the calling step's context, its ParentContext's parent
+            // (verified live).
             PluginPipeline pipeline = PluginPipeline.Empty()
                 .Register<PfSetSharedVarPre>()
                 .Register<PfCascadeCreateTaskPost>()
@@ -94,9 +95,9 @@ namespace Vela.Testing.Tests
 
             pipeline.Service.Create(new FakeAccount { Name = "Zava" });
 
-            // The task-create plugin (depth 2) read the shared variable set by the account pre-stage (depth 1).
+            // The task-create plugin (depth 2): Create/30 of the task, then the account's Create/40 that wrote the task.
             Entity note = Assert.Single(pipeline.GetAll("annotation"));
-            Assert.Equal("inherited:hello", note.GetAttributeValue<string>("subject"));
+            Assert.Equal("own:<none> Create/30 d2 -> Create/40 d1:hello", note.GetAttributeValue<string>("subject"));
         }
 
         // --- Execution order (rank) ---------------------------------------------------------------------
@@ -258,8 +259,13 @@ namespace Vela.Testing.Tests
             => RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Subject).Handle(OnPost);
         private void OnPost(ICreatePostContext<FakeTask> ctx)
         {
-            string value = ctx.PluginExecutionContext.SharedVariables.TryGetValue("greeting", out object? v) ? v?.ToString() ?? "?" : "<none>";
-            ctx.SystemService.Create(new Entity("annotation") { ["subject"] = $"inherited:{value}" });
+            static string Read(IPluginExecutionContext c) => c.SharedVariables.TryGetValue("greeting", out object? v) ? v?.ToString() ?? "?" : "<none>";
+            IPluginExecutionContext main = ctx.PluginExecutionContext.ParentContext;
+            IPluginExecutionContext caller = main.ParentContext;
+            ctx.SystemService.Create(new Entity("annotation")
+            {
+                ["subject"] = $"own:{Read(ctx.PluginExecutionContext)} {main.MessageName}/{main.Stage} d{main.Depth} -> {caller.MessageName}/{caller.Stage} d{caller.Depth}:{Read(caller)}",
+            });
         }
     }
 

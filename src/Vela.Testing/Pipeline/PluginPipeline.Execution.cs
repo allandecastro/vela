@@ -52,20 +52,37 @@ namespace Vela.Testing
         internal const int IsvReducedTransactionCount = -2146893812;
         internal const int NoActiveTransaction = -2147220911;
 
-        private T RunOperation<T>(Func<List<Action>, T> body, ParameterCollection? sharedVariables = null)
+        // Runs one operation. A top-level operation starts from the supplied shared variables (e.g. the request 'tag').
+        // An operation a plugin issues starts from its own collection too: the calling plugin's variables reach it only
+        // through ParentContext, and nothing it sets flows back (verified live). A platform-nested operation with no
+        // plugin on the stack (a deep insert's child) keeps the enclosing operation's collection.
+        // innerOf: the operation is the main operation of another message at the same depth (the Create or Update of an
+        // Upsert, verified live): its contexts have that message's stage-30 context as ParentContext.
+        private T RunOperation<T>(Func<List<Action>, T> body, ParameterCollection? sharedVariables = null, string? bulkMessage = null, FakePluginExecutionContext? innerOf = null)
         {
-            _depth++;
+            bool inner = innerOf != null;
+            OperationFrame? outer = inner ? _frames.Peek() : null;
+            if (!inner)
+            {
+                _depth++;
+            }
+
             ParameterCollection previousShared = _sharedVariables;
-            // Top-level operation starts from the supplied shared variables (e.g. the request 'tag'); a cascaded
-            // write inherits the collection of the plugin that issued it (or of the enclosing operation) so upstream
-            // shared variables remain visible.
-            _sharedVariables = _depth == 1
-                ? (sharedVariables ?? new ParameterCollection())
-                : (_contextStack.Count > 0 ? _contextStack.Peek().SharedVariables : previousShared);
+            _sharedVariables = inner
+                ? CopyParameters(outer!.InitialShared)
+                : _depth == 1 || _contextStack.Count > 0
+                    ? (sharedVariables ?? new ParameterCollection())
+                    : previousShared;
             // An operation a plugin issues (through its own service) reaches the platform from the sandbox: its
             // PreValidation steps get the extra input FromSandbox = true (verified live; the other stages were not
             // observed to carry it).
-            OperationFrame frame = new OperationFrame { FromSandbox = _contextStack.Count > 0, InitialShared = CopyParameters(_sharedVariables) };
+            OperationFrame frame = new OperationFrame
+            {
+                FromSandbox = inner ? outer!.FromSandbox : _contextStack.Count > 0,
+                InitialShared = CopyParameters(_sharedVariables),
+                BulkMessage = bulkMessage,
+                ParentContext = innerOf,
+            };
             if (_frames.Count == 0 && !_correlationPinned)
             {
                 // A top-level operation gets its own correlation id, shared by everything it cascades into and the
@@ -127,7 +144,10 @@ namespace Vela.Testing
             {
                 _frames.Pop();
                 _sharedVariables = previousShared;
-                _depth--;
+                if (!inner)
+                {
+                    _depth--;
+                }
             }
         }
 
@@ -237,10 +257,9 @@ namespace Vela.Testing
                     _contextStack.Push(parent);
                 }
 
-                // The async step runs as its own system job, in its own rollback scope: if it fails, its writes are
-                // undone and the async steps they queued are dropped (outside any database transaction, though).
-                InMemoryOrganizationService.StoreSnapshot snapshot = _store.Snapshot();
-                int queued = _committedAsync.Count;
+                // The async step runs as its own system job, outside any transaction: a write it made before failing
+                // stays (verified live: the job fails, its created row persists), and the async steps that write
+                // queued still run. The failure is recorded in AsyncStepFailures.
                 try
                 {
                     if (caller == null)
@@ -255,12 +274,6 @@ namespace Vela.Testing
                             return null;
                         });
                     }
-                }
-                catch
-                {
-                    _store.RestoreTo(snapshot);
-                    DropQueuedAsyncSince(queued);
-                    throw;
                 }
                 finally
                 {
@@ -358,17 +371,6 @@ namespace Vela.Testing
             }
         }
 
-        // Drops the async steps queued after position <paramref name="count"/> of the committed queue.
-        private void DropQueuedAsyncSince(int count)
-        {
-            Action[] kept = _committedAsync.Take(count).ToArray();
-            _committedAsync.Clear();
-            foreach (Action pending in kept)
-            {
-                _committedAsync.Enqueue(pending);
-            }
-        }
-
         private static System.ServiceModel.FaultException<OrganizationServiceFault> TransactionFault(int errorCode, string message, Exception cause)
         {
             string full = $"{message} (Vela harness: the failed call was: {cause.Message})";
@@ -439,7 +441,9 @@ namespace Vela.Testing
             context.IsApplicationUser = _isApplicationUser;
 
             PipelineTransaction? transaction = _transaction;
-            _contextStack.Push(context);
+            // An operation the plugin issues sees this context as its ParentContext as it was before the plugin ran:
+            // the variables the plugin sets are not in it (verified live).
+            _contextStack.Push(context.SnapshotForChild());
             try
             {
                 if (!(plugin is Vela.Plugin.PluginBase))

@@ -47,6 +47,26 @@ All notable changes to Vela are documented here. The format is based on
   silently: a user or team in a business unit not declared (once any `BusinessUnit(...)` is declared), a `Manager`,
   `Position` or `FieldPermission` naming a principal that is not declared, two roles with the same id, and an id
   declared both as a user and as a team.
+- `Vela.Testing`: `PluginPipeline` gives the steps the `SharedVariables` and `ParentContext` that Dataverse gives
+  them (verified live). Tests that read shared variables across operations or walk `ParentContext` may need updating:
+  - An operation a plugin issues starts with its own `SharedVariables`. It no longer shares the calling plugin's
+    collection, and nothing it sets flows back. The calling plugin's context in its `ParentContext` chain holds the
+    variables as they were when that plugin started. Read the caller's values through `ParentContext`.
+  - A single `Create` or `Update`: its `CreateMultiple`/`UpdateMultiple` PreOperation and PostOperation steps share
+    the `Create`/`Update` steps' collection and `Create/30` (`Update/30`) parent. They used to see the PreValidation
+    collection directly and had no stage-30 parent.
+  - A `CreateMultiple` or `UpdateMultiple` request: each row's `Create`/`Update` steps have their own collections (one
+    at PreValidation, one for PreOperation and PostOperation) and the `CreateMultiple`/`UpdateMultiple` context of the
+    same stage as `ParentContext`, under `CreateMultiple/30` (`UpdateMultiple/30`). They had one per-row `Create/30`
+    parent and shared one collection across rows.
+  - An `Upsert` runs its `Create` or `Update` at the `Upsert`'s depth (it was one deeper), with `Upsert/30`
+    (`PrimaryEntityName` `"none"`) above the inner operation's contexts. A handler that skips depth 2 or more now runs
+    for it.
+  - A cascaded `Delete` child fires no PreValidation step (it did). Its PreOperation and PostOperation steps have the
+    root's `Delete/30` context as `ParentContext` (they had their own) and their own `SharedVariables`.
+- `Vela.Testing`: an asynchronous step that fails keeps the writes it made before failing, and the asynchronous steps
+  those writes queued run, as on Dataverse, where an asynchronous step runs outside any transaction (verified live).
+  The harness rolled them back. The failure is still recorded in `AsyncStepFailures`.
 - `PluginMessages.GlobalMessages` is an `IReadOnlyList<string>` (it was a `string[]`), so no caller can change the
   shared list every plugin reads. Code that indexed it or enumerated it still compiles; code that assigned it to a
   `string[]` or wrote into it does not. `PluginMessages.IsGlobalMessage(...)` is unchanged.

@@ -120,7 +120,8 @@ The pipeline follows the platform's
   record that does not exist) does not end the transaction.
 - **Asynchronous** steps run once the outermost operation (or `ExecuteTransaction` batch) commits, and never when
   it rolls back. An asynchronous step's exception does not reach the caller: it is recorded on
-  `pipeline.AsyncStepFailures`, and the step's own writes are rolled back.
+  `pipeline.AsyncStepFailures`. An asynchronous step runs outside any transaction, so the writes it made before
+  failing stay, and the asynchronous steps they queued run.
 - `ctx.IsInTransaction` is `false` for asynchronous steps, read steps and a depth-1 PreValidation step, and `true`
   otherwise (a PreValidation step inside an `ExecuteTransaction` is in its transaction).
 - The cascade depth is capped at 8 (`PluginBase.DefaultMaxDepth`), on top of the plugin's own depth guard.
@@ -157,14 +158,28 @@ The pipeline follows the platform's
 - **`ParentContext`.** A PreOperation or PostOperation step of a `Create`, `Update` or `Delete` has the operation's
   own stage-30 (MainOperation) context as `ParentContext`. The context of the plugin whose write triggered the
   operation is one level further up (`ParentContext.ParentContext`). A PreValidation step's `ParentContext` is that
-  calling plugin's context directly. Each record has its own stage-30 context: the root of a cascaded `Delete` and
-  each row of a `CreateMultiple`/`UpdateMultiple` see their own record there. The Update steps fired inside an
-  `Assign`, a `SetState` or a `Merge` have that message's stage-30 context as `ParentContext` (`Assign/30`,
-  `SetStateDynamicEntity/30`, `Merge/30`).
+  calling plugin's context directly, as it was when that plugin started: the shared variables the plugin set
+  afterwards are not in it.
+  - The Update steps fired inside an `Assign`, a `SetState` or a `Merge` have that message's stage-30 context as
+    `ParentContext` (`Assign/30`, `SetStateDynamicEntity/30`, `Merge/30`).
+  - An `Upsert` runs its `Create` or `Update` at its own depth, with the `Upsert/30` context (`PrimaryEntityName`
+    `"none"`) as the parent of that operation's contexts.
+  - The children of a cascaded `Delete` fire no PreValidation step. Their PreOperation and PostOperation steps run
+    before the root's, at the root's depth, with the root's `Delete/30` context as `ParentContext`.
+  - Under a `CreateMultiple` or `UpdateMultiple` request, a row's `Create` or `Update` step has the
+    `CreateMultiple`/`UpdateMultiple` context of the same stage as `ParentContext`, and that context has the
+    `CreateMultiple/30` or `UpdateMultiple/30` context as its own.
 - **Shared variables.** Shared variables set by a PreValidation step are not in the later steps' own
-  `SharedVariables`: they are visible only through `ParentContext.SharedVariables`. A cascaded operation inherits the
-  shared variables of the plugin that issued it. To avoid re-entrancy, see
-  [Preventing recursion](plugins.md#preventing-recursion).
+  `SharedVariables`: they are visible only through `ParentContext.SharedVariables`.
+  - A single `Create` or `Update` shares one collection between its PreOperation and PostOperation steps, the
+    `CreateMultiple`/`UpdateMultiple` ones included.
+  - Under a `CreateMultiple` or `UpdateMultiple` request, each row's `Create` or `Update` steps have their own
+    collections: one at PreValidation, which no later step sees, and one shared by PreOperation and PostOperation.
+  - A cascaded `Delete` child has its own collection.
+  - An operation a plugin issues starts with its own collection. It finds the calling plugin's variables through its
+    `ParentContext` chain, and nothing it sets reaches the calling plugin.
+
+  To avoid re-entrancy, see [Preventing recursion](plugins.md#preventing-recursion).
 - **The `tag`.** A client passes a `tag` on a request object (the shortcut methods such as `Create` take none), and
   the plugin reads it with `ctx.Tag` (or `ctx.GetSharedVariable("tag")`):
 
