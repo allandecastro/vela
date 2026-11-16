@@ -116,7 +116,7 @@ namespace {{ns}}
 
     /// <summary>The namespaces the plugin test methods use, which <c>vela add test</c> adds to an existing test file that lacks them.</summary>
     internal static string[] PluginTestUsings(string pluginNamespace, string modelsNamespace) =>
-        ["System", "Microsoft.Xrm.Sdk", "Vela.Querying", "Vela.Testing", "Xunit", pluginNamespace, modelsNamespace];
+        ["System", "Microsoft.Xrm.Sdk", "Vela.Context", "Vela.Querying", "Vela.Testing", "Xunit", pluginNamespace, modelsNamespace];
 
     // The plugin test drives each step through PluginPipeline, which applies the registration as Dataverse does
     // (message, stage, entity, filtering columns, images), and asserts from the ExecutionLog that it fired - whatever the
@@ -167,13 +167,11 @@ namespace {{ns}}
             $"{I}EntityReferenceCollection related = new EntityReferenceCollection {{ new EntityReference({logical}, relatedId) }};\n";
         // A read names its columns rather than new ColumnSet(true), which VELA013 flags in plugin code: the step's
         // filtering columns, else the primary key (a => a.Id, whose column `vela models` names on the Id override),
-        // through the typed query plugins use (Vela.Querying, one of PluginTestUsings).
+        // through the typed reads plugins use: Retrieve<T> by id (Vela.Context) and Query.For<T>() by criteria
+        // (Vela.Querying), both in PluginTestUsings.
         string selected = step.Filters.Length > 0 ? string.Join(", ", step.Filters.Select(f => $"x => x.{f}")) : "x => x.Id";
-        string typedQuery = $"Query.For<{entityType}>().Select({selected})";
         string columnsRead = step.Filters.Length > 0 ? "the step's filtering columns" : "the primary key";
         string columnsNote = $"{I}// Read only the columns the test needs ({columnsRead}), not every column.\n";
-        // A typed FirstOrDefault would send RetrieveMultiple, so the Retrieve test sends Retrieve with the query's columns.
-        string retrieveNote = $"{I}// A real Retrieve (a typed FirstOrDefault sends RetrieveMultiple), reading only {columnsRead}.\n";
 
         bool typed = true;
         string act = step.Message switch
@@ -187,8 +185,8 @@ namespace {{ns}}
                 $"{I}pipeline.Service.Execute(new Microsoft.Xrm.Sdk.Messages.UpdateMultipleRequest\n{I}{{\n" +
                 $"{I}    Targets = new EntityCollection(new Entity[] {{ new {entityType} {{ Id = id{filters} }} }}) {{ EntityName = {logical} }},\n{I}}});\n",
             "Delete" => seed + $"{I}pipeline.Service.Delete({logical}, id);\n",
-            "Retrieve" => seed + retrieveNote +$"{I}pipeline.Service.Retrieve({logical}, id, {typedQuery}.Expression.ColumnSet);\n",
-            "RetrieveMultiple" => seed + columnsNote + $"{I}pipeline.Service.RetrieveMultiple({typedQuery});\n",
+            "Retrieve" => seed + columnsNote + $"{I}pipeline.Service.Retrieve<{entityType}>(id, {selected});\n",
+            "RetrieveMultiple" => seed + columnsNote + $"{I}pipeline.Service.RetrieveMultiple(Query.For<{entityType}>().Select({selected}));\n",
             "Assign" => seed +
                 $"{I}Guid ownerId = Guid.NewGuid();\n{I}pipeline.Seed(new Entity(\"systemuser\", ownerId));\n" +
                 $"{I}pipeline.Service.Execute(new Microsoft.Crm.Sdk.Messages.AssignRequest\n{I}{{\n" +
@@ -250,7 +248,7 @@ $$"""
             // Act: send the {{step.Message}} through pipeline.Service, as in {{firesMethod}}.
 
             // Assert: read back what the plugin wrote and check it, e.g.
-            //   {{entityType}} saved = Query.For<{{entityType}}>().Where(x => x.Id, Microsoft.Xrm.Sdk.Query.ConditionOperator.Equal, id).Select(x => x.SomeColumn).FirstOrDefault(pipeline.Service);
+            //   {{entityType}} saved = pipeline.Service.Retrieve<{{entityType}}>(id, x => x.SomeColumn);
             //   Assert.Equal(expected, saved.SomeColumn);
         }
 
