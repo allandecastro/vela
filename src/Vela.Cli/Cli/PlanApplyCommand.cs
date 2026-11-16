@@ -11,9 +11,12 @@ using static Vela.Cli.OutputWriter;
 namespace Vela.Cli;
 
 /// <summary>An open Dataverse connection: the service plus whatever owns it (a <c>ServiceClient</c>).</summary>
-internal sealed class OrganizationConnection(IOrganizationService service, IDisposable? lifetime = null) : IDisposable
+internal sealed class OrganizationConnection(IOrganizationService service, IDisposable? lifetime = null, string? url = null) : IDisposable
 {
     public IOrganizationService Service { get; } = service;
+
+    /// <summary>The organization URL the connection reached, when known; the apply prompt names it.</summary>
+    public string? Url { get; } = url;
 
     public void Dispose() => lifetime?.Dispose();
 }
@@ -34,7 +37,7 @@ internal sealed class PlanApplyHost
     public Func<SharedOptions, OrganizationConnection> Connect { get; init; } = options =>
     {
         Microsoft.PowerPlatform.Dataverse.Client.ServiceClient client = DataverseRegistration.CreateDataverseClient(options);
-        return new OrganizationConnection(client, client);
+        return new OrganizationConnection(client, client, client.ConnectedOrgUriActual?.GetLeftPart(UriPartial.Authority));
     };
 
     public Func<bool> IsInputRedirected { get; init; } = () => Console.IsInputRedirected;
@@ -100,7 +103,7 @@ internal static class PlanApplyCommand
             {
                 InspectMode => EmitInspect(local, current, unmanaged, options, jsonOptions, host),
                 PlanMode => RunPlan(service, local, current, unmanaged, options, jsonOptions, host, tempDirectories),
-                _ => RunApply(service, local, current, unmanaged, options, jsonOptions, host, tempDirectories),
+                _ => RunApply(service, connection.Url, local, current, unmanaged, options, jsonOptions, host, tempDirectories),
             };
         }
         catch (Exception ex) when (DataverseConnectionException.IsConnectionFailure(ex))
@@ -266,7 +269,7 @@ internal static class PlanApplyCommand
         return options.DetailedExitCode && plan.HasChanges ? ExitChangesPending : ExitSuccess;
     }
 
-    private static int RunApply(IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host, List<string> tempDirectories)
+    private static int RunApply(IOrganizationService service, string? orgUrl, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host, List<string> tempDirectories)
     {
         PlanPreview preview = BuildPreview("apply", service, local, current, unmanaged, options, tempDirectories, out RegistrationDiff diff);
         if (FailsStrict(options, preview.Diagnostics, afterApply: false, out int strictExit))
@@ -313,7 +316,7 @@ internal static class PlanApplyCommand
             string packageNote = packageNeedsPublish ? " + plugin package (code change)" : string.Empty;
             string linkNote = linksToWrite > 0 ? $" + {linksToWrite} managed identity link(s)" : string.Empty;
             Console.Error.Write(
-                $"Apply {preview.Summary.Added} to create / {preview.Summary.Changed} to update / {preview.Summary.Removed} to delete{packageNote}{linkNote} against {options.Environment ?? "Dataverse"}? Type 'yes' to continue: ");
+                $"Apply {preview.Summary.Added} to create / {preview.Summary.Changed} to update / {preview.Summary.Removed} to delete{packageNote}{linkNote} against {EscapeControl(DescribeTarget(options.Environment, orgUrl))}? Type 'yes' to continue: ");
             return host.ReadLine();
         }))
         {
@@ -445,6 +448,20 @@ internal static class PlanApplyCommand
                 (linksRemaining > 0 ? $" / {linksRemaining} managed identity link(s)" : string.Empty) + " remain. " +
                 "Dataverse accepted the writes but did not keep them; re-running apply would plan the same changes.",
                 ExitDriftDetected, includeUsage: false);
+    }
+
+    // The target the apply prompt names: the --environment label with the URL the connection reached, so a label (or a
+    // connection string, which leaves no --url) cannot hide which organization is about to be written.
+    internal static string DescribeTarget(string? label, string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return string.IsNullOrWhiteSpace(label) ? "Dataverse" : label!;
+        }
+
+        return string.IsNullOrWhiteSpace(label) || string.Equals(label.TrimEnd('/'), url.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)
+            ? url
+            : $"{label} ({url})";
     }
 
     private static bool FailsStrict(SharedOptions options, string[] diagnostics, bool afterApply, out int exitCode)

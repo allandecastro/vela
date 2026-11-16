@@ -113,10 +113,10 @@ public sealed class PlanApplyCommandTests : IDisposable
         }
     }
 
-    private static PlanApplyHost Host(FakeOrgService org, RegistrationState local, bool inputRedirected = true, string? answer = null) => new()
+    private static PlanApplyHost Host(FakeOrgService org, RegistrationState local, bool inputRedirected = true, string? answer = null, string? orgUrl = null) => new()
     {
         ScanLocal = (_, _, _) => local,
-        Connect = _ => new OrganizationConnection(org),
+        Connect = _ => new OrganizationConnection(org, url: orgUrl),
         IsInputRedirected = () => inputRedirected,
         IsOutputRedirected = () => true,
         ReadLine = () => answer,
@@ -417,6 +417,27 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Equal(writes, org.Created.Any(e => e.LogicalName == "sdkmessageprocessingstep"));
         Assert.Equal(!writes, _error.ToString().Contains("Apply cancelled."));
     }
+
+    // The prompt names the organization the connection reached, not only the --environment label: a label (or a
+    // connection string, which leaves no --url to show) cannot hide which environment is about to be written.
+    [Fact]
+    public void The_confirmation_prompt_names_the_connected_organization_url()
+    {
+        SharedOptions options = Options() with { Environment = "production" };
+
+        Run("apply", options, Host(Org(), Local([LocalStep()]), inputRedirected: false, answer: "no", orgUrl: "https://zava-dev.crm.dynamics.com"));
+
+        Assert.Contains("against production (https://zava-dev.crm.dynamics.com)?", _error.ToString());
+    }
+
+    [Theory]
+    [InlineData("production", "https://zava.crm.dynamics.com", "production (https://zava.crm.dynamics.com)")]
+    [InlineData("https://zava.crm.dynamics.com/", "https://zava.crm.dynamics.com", "https://zava.crm.dynamics.com")]
+    [InlineData(null, "https://zava.crm.dynamics.com", "https://zava.crm.dynamics.com")]
+    [InlineData("production", null, "production")]
+    [InlineData(null, null, "Dataverse")]
+    public void The_apply_target_combines_the_label_and_the_organization_url(string? label, string? url, string expected) =>
+        Assert.Equal(expected, PlanApplyCommand.DescribeTarget(label, url));
 
     [Fact]
     public void Apply_reports_what_it_executed()

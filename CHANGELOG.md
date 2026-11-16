@@ -282,6 +282,9 @@ All notable changes to Vela are documented here. The format is based on
   to end with a generic error (exit `4`), with no resume report and no `apply-failed` document; it now exits `7` with
   both, listing every write as completed and the read-back as failed. A failure while adding unchanged components to
   the solution now prints the resume report on stderr too.
+- The `vela apply` confirmation prompt names the URL of the organization the connection reached, next to the
+  `--environment` label (`against production (https://contoso.crm.dynamics.com)?`). It showed only the label, which is
+  free text, or `Dataverse` for a connection string, so the prompt did not say which environment would be written.
 
 ### Docs
 
