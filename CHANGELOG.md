@@ -285,9 +285,6 @@ All notable changes to Vela are documented here. The format is based on
 - The `vela apply` confirmation prompt names the URL of the organization the connection reached, next to the
   `--environment` label (`against production (https://contoso.crm.dynamics.com)?`). It showed only the label, which is
   free text, or `Dataverse` for a connection string, so the prompt did not say which environment would be written.
-- `vela sign` opens a password-protected PFX with an ephemeral key set (except on macOS, which has none), so on
-  Windows the private key is no longer written to the user's key store while the passwordless copy is made, where a
-  crash would have left the key file behind.
 - `vela plan` and `vela apply` with `--solution` read the solution's publisher prefix once per connection. Each phase
   (package actions, retired assemblies, solution membership, the publish, the read-back) queried the solution and
   retrieved its publisher again, up to six times per apply.

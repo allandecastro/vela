@@ -317,28 +317,9 @@ internal static class SignCommand
     /// signing tool can load it with no password argument. The caller keeps the result off disk except in an
     /// owner-only temp file. Throws <see cref="CryptographicException"/> on a wrong password or invalid content.
     /// </summary>
-    internal static byte[] ToPasswordlessPfx(byte[] pfx, string password) =>
-        ToPasswordlessPfx(pfx, password, PfxLoadFlags(OperatingSystem.IsMacOS()));
-
-    // Exportable, and an ephemeral key set where the platform has one: on Windows the default key storage writes the
-    // private key to the user's key store for the life of the certificate object, and a crash leaves that key file
-    // behind. macOS has no ephemeral key set (PlatformNotSupportedException); Linux keys are always in memory.
-    internal static X509KeyStorageFlags PfxLoadFlags(bool isMacOS) =>
-        isMacOS ? X509KeyStorageFlags.Exportable : X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet;
-
-    internal static byte[] ToPasswordlessPfx(byte[] pfx, string password, X509KeyStorageFlags flags)
+    internal static byte[] ToPasswordlessPfx(byte[] pfx, string password)
     {
-        X509Certificate2Collection certificates;
-        try
-        {
-            certificates = X509CertificateLoader.LoadPkcs12Collection(pfx, password, flags);
-        }
-        catch (PlatformNotSupportedException) when (flags.HasFlag(X509KeyStorageFlags.EphemeralKeySet))
-        {
-            // A platform without an ephemeral key set: the default key storage, as before.
-            return ToPasswordlessPfx(pfx, password, flags & ~X509KeyStorageFlags.EphemeralKeySet);
-        }
-
+        X509Certificate2Collection certificates = X509CertificateLoader.LoadPkcs12Collection(pfx, password, X509KeyStorageFlags.Exportable);
         try
         {
             return certificates.Export(X509ContentType.Pkcs12)

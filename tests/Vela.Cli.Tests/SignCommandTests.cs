@@ -235,42 +235,6 @@ public class SignCommandTests
         Assert.ThrowsAny<System.Security.Cryptography.CryptographicException>(() => SignCommand.ToPasswordlessPfx(protectedPfx, "wrong"));
     }
 
-    // The PFX is opened with an ephemeral key set wherever the platform supports one, so on Windows the private key is
-    // never written to the user's key store (a key file that a crash would leave behind). macOS has no ephemeral key
-    // set (PlatformNotSupportedException).
-    [Theory]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    public void ToPasswordlessPfx_LoadsTheKeyEphemerally_ExceptOnMacOS(bool isMacOS, bool ephemeral)
-    {
-        System.Security.Cryptography.X509Certificates.X509KeyStorageFlags flags = SignCommand.PfxLoadFlags(isMacOS);
-
-        Assert.True(flags.HasFlag(System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.Exportable));
-        Assert.Equal(ephemeral, flags.HasFlag(System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.EphemeralKeySet));
-    }
-
-    // With an ephemeral key set the export still carries the key; where the platform refuses the flag (macOS), the
-    // conversion falls back to the default key storage instead of failing the signing.
-    [Fact]
-    public void ToPasswordlessPfx_WithAnEphemeralKeySet_KeepsTheKey()
-    {
-        using System.Security.Cryptography.RSA rsa = System.Security.Cryptography.RSA.Create(2048);
-        System.Security.Cryptography.X509Certificates.CertificateRequest request = new(
-            "CN=vela-sign-test", rsa, System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1);
-        using System.Security.Cryptography.X509Certificates.X509Certificate2 original =
-            request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddDays(1));
-        byte[] protectedPfx = original.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12, "s3cret");
-
-        byte[] unprotected = SignCommand.ToPasswordlessPfx(protectedPfx, "s3cret", SignCommand.PfxLoadFlags(isMacOS: false));
-
-        using System.Security.Cryptography.X509Certificates.X509Certificate2 reloaded =
-            System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12(unprotected, null);
-        Assert.Equal(original.Thumbprint, reloaded.Thumbprint);
-        Assert.True(reloaded.HasPrivateKey);
-        Assert.ThrowsAny<System.Security.Cryptography.CryptographicException>(
-            () => SignCommand.ToPasswordlessPfx(protectedPfx, "wrong", SignCommand.PfxLoadFlags(isMacOS: false)));
-    }
-
     [Fact]
     public void Execute_NeverPassesAPasswordToNugetSign()
     {
