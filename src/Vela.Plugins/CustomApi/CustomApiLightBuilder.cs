@@ -19,6 +19,7 @@ public sealed class CustomApiLightBuilder : CustomApiBuilderBase<ICustomApiBuild
     public ICustomApiBuilder Handler(string methodName)
     {
         Definition.HandlerMethodName = RequireValue(methodName, nameof(methodName));
+        Definition.RuntimeHandler = null;
         return this;
     }
 
@@ -31,7 +32,11 @@ public sealed class CustomApiLightBuilder : CustomApiBuilderBase<ICustomApiBuild
             throw new ArgumentException("Handler delegate must reference an instance method.", nameof(handler));
         }
 
-        return Handler(handler.Method.Name);
+        // Keep the delegate: the name alone resolves only for a method of the plug-in type (or a lambda capturing
+        // `this`), not for a lambda compiled onto a compiler-generated class or a method of another object.
+        Definition.HandlerMethodName = handler.Method.Name;
+        Definition.RuntimeHandler = handler;
+        return this;
     }
 
     /// <inheritdoc />
