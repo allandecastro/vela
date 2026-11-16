@@ -22,7 +22,7 @@ vela plan --packages-dir ./artifacts --solution ZavaSales --interactive
 | `vela apply` | Make those changes. Asks for confirmation on a terminal; needs `--auto-approve` in a script. | [Plan and apply](plan-apply.md) |
 | `vela inspect` | Show the registrations in your packages next to the live ones. Read-only. | [Plan and apply](plan-apply.md) |
 | `vela solution show <uniquename>` | Print the publisher prefix of a solution. Read-only. | [Below](#print-a-solutions-publisher-prefix-vela-solution-show) |
-| `vela logs` (alias `trace`) | Read the plug-in trace log, or failed system jobs with `--jobs`. Read-only. | [Below](#reading-execution-logs-vela-logs) |
+| `vela logs` (alias `trace`) | Read the Plug-in Trace Log, or failed system jobs with `--jobs`. Read-only. | [Below](#reading-execution-logs-vela-logs) |
 | `vela sign` | Sign a plugin package (needed for managed-identity plugins). | [Signing](signing.md) |
 | `vela logout` | Remove the cached interactive-login token and the remembered Dataverse URL. | [Authentication](../configuration/authentication.md#interactive-browser-login) |
 | `vela update` | Update the tool to the latest version on nuget.org, or to `--version <x.y.z>`. | [Below](#update-the-tool) |
@@ -121,8 +121,8 @@ It is read-only, and `show` is its only subcommand.
 `vela logs` (alias `vela trace`) reads the execution diagnostics of a Dataverse environment, so you or a coding agent
 can see why a plugin failed without opening the Power Platform UI. It is read-only and reads one of two sources:
 
-- **Plug-in trace log** (default): what plugins write with `ctx.Trace(...)`, plus the line Vela writes when a
-  handler starts. The log has rows only when plug-in trace logging is turned on for the environment (see
+- **Plug-in Trace Log** (default): what plugins write with `ctx.Trace(...)`, plus the line Vela writes when a
+  handler starts. The log has rows only when plugin trace logging is turned on for the environment (see
   [Enable trace logging](https://learn.microsoft.com/power-apps/developer/data-platform/logging-tracing#enable-trace-logging)).
   When it finds nothing, `vela logs` says so and points to that setting.
 - **System jobs** with `--jobs`: the `asyncoperation` rows, which record the error of a failed asynchronous step

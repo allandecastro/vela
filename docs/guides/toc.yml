@@ -8,8 +8,6 @@
       href: custom-apis.md
     - name: Typed queries
       href: queries.md
-    - name: Early-bound models (vela models)
-      href: models.md
     - name: Dependency injection
       href: dependency-injection.md
     - name: Escape hatches
@@ -20,11 +18,11 @@
       href: caching.md
     - name: Environment variables
       href: environment-variables.md
-    - name: Localized messages (i18n)
+    - name: Localized messages
       href: localization.md
     - name: Managed identity
       href: managed-identity.md
-    - name: Telemetry & Application Insights
+    - name: Telemetry and Application Insights
       href: telemetry.md
 - name: Test
   items:
@@ -40,6 +38,8 @@
       href: scaffold.md
     - name: Add a component (vela add)
       href: add.md
+    - name: Early-bound models (vela models)
+      href: models.md
     - name: Plan and apply
       href: plan-apply.md
     - name: Sign the plugin package (vela sign)

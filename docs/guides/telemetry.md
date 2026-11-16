@@ -6,7 +6,7 @@ metrics, and how to assert on telemetry in tests.
 When the environment has
 [Application Insights configured](https://learn.microsoft.com/power-platform/admin/overview-integration-application-insights),
 entries go there at their severity, with custom dimensions. When it does not, nothing is lost: every entry still goes
-to the plug-in trace log (subject to the environment's trace-log setting). You never instantiate a
+to the Plug-in Trace Log (subject to the environment's trace-log setting). You never instantiate a
 `TelemetryClient`; the platform owns ingestion through the logger it provides,
 [`Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`](https://learn.microsoft.com/power-apps/developer/data-platform/application-insights-ilogger).
 Vela calls it for you and exposes it as `ctx.Logger` (and as the injected `ILogger`) when you need its other
@@ -44,7 +44,7 @@ using (ctx.BeginLogScope(("OrderId", orderId), ("Region", "EU")))
 }
 ```
 
-A scope also **indents** the plug-in trace log lines written inside it (nested scopes indent further), so the trace
+A scope also **indents** the Plug-in Trace Log lines written inside it (nested scopes indent further), so the trace
 log reads as a tree. Application Insights entries carry the scope as dimensions rather than indentation.
 
 ## Metrics
@@ -54,17 +54,17 @@ ctx.LogMetric("OrdersProcessed", 1);
 ctx.LogMetric("LinesImported", lines.Count, new Dictionary<string, object?> { ["Source"] = "ERP" });
 ```
 
-Writes a `[Metric] name=value` line to the plug-in trace log and passes the metric to the platform logger's
+Writes a `[Metric] name=value` line to the Plug-in Trace Log and passes the metric to the platform logger's
 `LogMetric`. The value is a `long`: the platform's metric API only takes integers. The metric carries the default
 dimensions plus the properties you pass, converted to invariant strings. Scope properties from `BeginLogScope` are
 not copied onto metrics; pass them explicitly.
 
 ## Trace vs Log
 
-`ctx.Trace(...)` still works and is equivalent to `ctx.LogInformation(...)`: it writes to the plug-in trace log and,
+`ctx.Trace(...)` still works and is equivalent to `ctx.LogInformation(...)`: it writes to the Plug-in Trace Log and,
 at Information level, to Application Insights. Use the leveled helpers when you want a severity other than
 Information, an attached exception, or metrics. Execution snapshots (the automatic ones and
-`ctx.TraceExecutionSnapshot(...)`) are the exception: they go to the plug-in trace log only, never to Application
+`ctx.TraceExecutionSnapshot(...)`) are the exception: they go to the Plug-in Trace Log only, never to Application
 Insights, and the automatic ones list only metadata (message, stage, ids, column names) unless the plugin overrides
 `AutoSnapshotDetail` (see [Write a plugin](plugins.md)).
 
@@ -74,7 +74,7 @@ The integration is safe either way and never throws for telemetry reasons:
 
 - **Configured:** Vela hands logs and metrics to the platform logger. What reaches Application Insights from
   there is up to the platform; see [Microsoft's documentation](https://learn.microsoft.com/power-apps/developer/data-platform/application-insights-ilogger).
-- **Not configured:** the Application Insights channel is a no-op; entries still land in the plug-in trace log
+- **Not configured:** the Application Insights channel is a no-op; entries still land in the Plug-in Trace Log
   (when the environment's trace-log setting is on), so debugging via the Plugin Trace Viewer keeps working.
 
 ## Testing

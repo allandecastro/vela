@@ -40,18 +40,19 @@ the browser sign-in prompts appear only on a real terminal. Pass your inputs on 
 
 ### At run time I get "The plug-in type could not be found in the plug-in assembly". Why?
 
-That message comes from Dataverse. On the Vela side:
+That message comes from Dataverse. In the first seconds after a deployment, Dataverse can still run the previous
+build of a plugin package: an execution can run the previous code, and a step just registered on a newly added
+class can fail with this error. Run the operation again after a few seconds. Bumping the assembly version does not
+change this: Microsoft states that "the version of the plug-in package or plug-in assembly is not a factor in any
+upgrade behaviors" (see
+[Update a plug-in package](https://learn.microsoft.com/power-platform/developer/howto/cli-create-package#update-a-plug-in-package)).
 
-- `vela apply` republishes the plugin package whenever its content changed, and stops with
-  `Plugin type not found in Dataverse after the plugin package publish` when a plugin type it needs is still missing
-  after the publish, instead of registering steps on it.
-- Solutions scaffolded by `vela init` set `AssemblyVersion` to `1.0.*`, so every build gets a new assembly version.
-  Dataverse keeps the package version set when the package was created; for how versions affect plugin packages, see
-  [Build and package plug-in code](https://learn.microsoft.com/power-apps/developer/data-platform/build-and-package)
-  and [Create and register a plug-in package using PAC CLI](https://learn.microsoft.com/power-platform/developer/howto/cli-create-package).
+A pipeline that runs tests against Dataverse right after `vela apply` should add a short pause before them.
 
-Check that the package you deployed contains the plugin class, then run `vela plan` to compare it with the
-environment. See [Troubleshooting](../guides/troubleshooting.md).
+If the error persists beyond about a minute, the cause is something else. Check that the package you deployed
+contains the plugin class under that full name, then run `vela plan` to compare it with the environment. See
+[Troubleshooting](../guides/troubleshooting.md#at-run-time-the-plug-in-type-could-not-be-found-in-the-plug-in-assembly)
+and [Build and package plug-in code](https://learn.microsoft.com/power-apps/developer/data-platform/build-and-package).
 
 ## Authentication
 
@@ -107,7 +108,7 @@ Call `RegisterCustomApi("name", ...)` only from inside your `protected override 
 A Custom API with `WorkflowSdkStepEnabled` set must be an action (not a function) and cannot use `Entity`,
 `EntityCollection` or `string[]` parameters, nor an `EntityReference` unless it is bound to a table. `Build()` rejects
 such a definition with a message that names the API and the parameter, so `plan` fails before any write. See
-[Rules checked by `Build()`](../guides/custom-apis.md#rules-checked-by-build).
+[Rules checked by `Build()`](../guides/custom-apis.md#rules-checked-when-the-definition-is-built).
 
 ### Can the plugin cache do async I/O?
 

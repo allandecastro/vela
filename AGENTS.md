@@ -20,6 +20,12 @@ Human contributors: [`CONTRIBUTING.md`](CONTRIBUTING.md). User docs: `docs/` (in
 | `docs/` | | docfx site. `docs/samples/Vela.DocSamples` (net462, in `Vela.sln`) holds compiled snippets that the pages include. |
 | `tools/codegen/Vela.StepApiGen` | net10.0 | Generates the step API (below). |
 
+Architecture rules (details in [docs/advanced/architecture.md](docs/advanced/architecture.md#architecture-rules)):
+`Vela.Plugins` is the runtime and runs in the Dataverse sandbox; `Vela.Cli` is the one CLI used locally and in CI;
+early-bound models belong to the consumer's repository; no sample application code in the shipped packages (samples
+and fixtures live under `docs/samples` and `tests`); registration metadata and runtime execution meet only through
+`StepDefinition`.
+
 ## Build and test
 
 ```bash
@@ -50,7 +56,7 @@ Docs: `docfx docs/docfx.json --warningsAsErrors` must report 0 warnings.
 
 ## Generated step API
 
-`src/Vela.Plugins/Steps/StepApi.cs` and `StepBuilder.Impl.cs` are generated from
+`StepApi.cs`, `StepBuilder.Impl.cs` and `TypedTriggers.cs` in `src/Vela.Plugins/Steps/` are generated from
 `tools/codegen/Vela.StepApiGen/MessageModel.cs` (one line per message). Never edit them by hand:
 
 ```bash

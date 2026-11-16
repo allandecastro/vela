@@ -120,9 +120,11 @@ is left untouched.
 - **Authentication.** A bare `--url` uses the ambient Azure credential (`DefaultAzureCredential`: `az login`,
   environment variables, workload identity and managed identity), the recommended default for CI and agents. Vela
   also supports a connection string, a client secret (environment variable, stdin or argument) and interactive MSAL
-  sign-in (sovereign clouds through `--auth-client-id` and `--authority`). Certificate authentication is not
-  supported. Prefer `DATAVERSE_CLIENT_SECRET` or `--client-secret-stdin` over `--client-secret`, which shows in
-  shell history and process listings (the CLI warns). `--client-secret-stdin` requires piped stdin.
+  sign-in (sovereign clouds through `--auth-client-id` and `--authority`). Vela has no certificate options of its
+  own: a `--connection-string` is passed unchanged to the Dataverse `ServiceClient`, so a certificate connection
+  string works (see [Authentication](../configuration/authentication.md#connection-string)). Prefer
+  `DATAVERSE_CLIENT_SECRET` or `--client-secret-stdin` over `--client-secret`, which shows in shell history and
+  process listings (the CLI warns). `--client-secret-stdin` requires piped stdin.
 - **Secure configuration is redacted.** In all `plan` and `inspect` output (the terminal summary, the JSON and any
   `--out` plan file), a secure step configuration appears as a digest (an HMAC keyed per run). Changes are still
   detected, but the value never appears. Unsecure configuration is shown as is.
