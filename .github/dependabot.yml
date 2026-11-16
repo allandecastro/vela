@@ -19,6 +19,9 @@ updates:
       # The analyzers compile against the oldest Roslyn they support; a newer one stops them loading in older SDKs/IDEs.
       - dependency-name: Microsoft.CodeAnalysis.CSharp
       - dependency-name: Microsoft.CodeAnalysis.CSharp.Workspaces
+      # Its major versions require a matching newer Roslyn, and Dependabot then bumps the pinned one with it.
+      - dependency-name: Microsoft.CodeAnalysis.Analyzers
+        update-types: [version-update:semver-major]
       # Vela.Plugins ships Microsoft.Extensions.DependencyInjection.Abstractions 8.x into the plugin sandbox; a new
       # major is a framework decision. Microsoft.Extensions.DependencyInjection must stay on the same major.
       - dependency-name: Microsoft.Extensions.DependencyInjection.Abstractions
