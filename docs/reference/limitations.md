@@ -203,9 +203,11 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
 - **N:N `Associate` and `Disassociate` need a declared relationship.** Declare it with `WithManyToMany(...)` or a
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise). Associate and Disassociate
   then persist the intersect rows, and `RetrieveMultiple` joins through them. Associating an existing pair again
-  throws a `DuplicateRecord` (`0x80040237`) fault, and a self-referential N:N maps its two columns by position.
+  throws a `DuplicateRecord` (`0x80040237`) fault, associating records outside the relationship's two tables throws
+  an invalid argument (`0x80040203`) fault, and a self-referential N:N maps its two columns by position.
   Over a 1:N relationship declared with `WithRelationship(...)`, Associate sets the child's lookup column and
-  Disassociate clears it, from either side. `Merge` moves the subordinate's N:N rows and reparents its 1:N
+  Disassociate clears it, from either side. The 1:N relationship is found by the `schemaName` it was declared with,
+  or by `{referenced}_{referencing}` when it was declared without one. `Merge` moves the subordinate's N:N rows and reparents its 1:N
   children, except over a relationship whose Merge behaviour is `NoCascade`.
 - **`RetrieveMultiple` supports a common subset.** No query hints, `NoLock`, `FilterHint=union` or faithful paging
   cookies: pages are read by page number, 5,000 rows at most. FetchXML support covers a common subset, aggregates
@@ -216,8 +218,9 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   `WithOrganizationId`), not computed by a server. Without `WithCurrentUser`, a stable default user
   (`DefaultCallingUser`) is used. `statecode`, `statuscode`, `versionnumber` and `overriddencreatedon` backdating are
   stamped too. `WithClock(...)` and `WithIdSequence(...)` make timestamps and ids deterministic; the same clock
-  expires the harness's plugin cache. The ownership type is inferred from the early-bound `OwnerId` property or
-  declared explicitly (`AsOrganizationOwned`, `AsUserOwned`, `AsVirtual`, `AsElastic`); elastic tables are ownable.
+  expires the harness's plugin cache. The ownership type is declared explicitly (`AsOrganizationOwned`,
+  `AsUserOwned`, `AsVirtual`, `AsElastic`), or read from the `OwnershipType` of registered metadata, or inferred from
+  the early-bound `OwnerId` property; a table with none of these is user-owned. Elastic tables are ownable.
   `Seed(...)` stamps nothing, on purpose: it is raw setup.
 - **Virtual tables are partial.** `AsVirtual(...)` turns off system-column population. `AsVirtual(name,
   readOnly: true)` also rejects Create, Update and Delete. A virtual table that is not read-only still stores rows

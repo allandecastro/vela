@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Microsoft.Xrm.Sdk;
 using Vela.Context;
 
@@ -35,6 +36,7 @@ namespace Vela.Testing
         public static Entity CloneTarget(Entity entity)
         {
             Entity clone = Clone(entity);
+            CarryEarlyBoundType(entity, clone);
             clone.RowVersion = entity.RowVersion;
             foreach (KeyValuePair<string, object> key in entity.KeyAttributes)
             {
@@ -50,6 +52,34 @@ namespace Vela.Testing
             }
 
             return clone;
+        }
+
+        // The early-bound type a plain-Entity copy was made from (CloneTarget, a key-resolved write target), so the
+        // store can still infer the table's ownership from the generated class after the pipeline copied the target.
+        private static readonly ConditionalWeakTable<Entity, Type> EarlyBoundTypes = new ConditionalWeakTable<Entity, Type>();
+
+        // The generated class of an entity: its own type when early-bound, else the type its copy was made from.
+        public static Type? EarlyBoundType(Entity entity)
+        {
+            if (entity.GetType() != typeof(Entity))
+            {
+                return entity.GetType();
+            }
+
+            return EarlyBoundTypes.TryGetValue(entity, out Type? type) ? type : null;
+        }
+
+        // Records that the plain-Entity copy came from an early-bound entity (see EarlyBoundType).
+        public static void CarryEarlyBoundType(Entity source, Entity copy)
+        {
+            Type? type = EarlyBoundType(source);
+            if (type == null || copy.GetType() != typeof(Entity))
+            {
+                return;
+            }
+
+            EarlyBoundTypes.Remove(copy);
+            EarlyBoundTypes.Add(copy, type);
         }
 
         public static object? CloneValue(object? value)
