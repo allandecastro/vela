@@ -1,157 +1,153 @@
 # The vela CLI
 
-`Vela.Cli` packs as a .NET global tool that exposes the **`vela`** command. See
-[Install](../getting-started/install.md) to get it. Then run, for example:
+`Vela.Cli` is a .NET global tool that installs the **`vela`** command. This page lists the commands, explains the
+conventions they share (help, option syntax, output, exit codes, update notices, proxies), and documents the two
+small commands that have no page of their own: `vela solution show` and `vela logs`.
+
+To install the tool, see [Install](../getting-started/install.md). For a one-page list of every option, see the
+[CLI cheat sheet](../reference/cli-cheatsheet.md).
 
 ```bash
 vela plan --packages-dir ./artifacts --solution ZavaSales --interactive
 ```
 
-`vela help` lists the commands; `vela help <command>` (or `vela <command> --help`) prints that command's usage,
-options, notes and examples, and `vela help --json` describes every command, option and exit code for scripts and
-coding agents. The help is generated from the same table that validates the options, so it never lists an option
-the command rejects.
+## Commands
 
-Core commands:
+| Command | What it does | Details |
+| --- | --- | --- |
+| `vela init` (alias `new`) | Scaffold a build-ready plugin solution. | [Scaffold a solution](scaffold.md) |
+| `vela add` | Add a plugin, service, Custom API, test or step to an existing project. | [Add a file](add.md) |
+| `vela models` | Generate early-bound classes, typed messages or a `Roles` class. | [Early-bound models](models.md) |
+| `vela plan` | Preview the changes needed to bring Dataverse in line with your packages. Read-only. | [Plan and apply](plan-apply.md) |
+| `vela apply` | Make those changes. Asks for confirmation on a terminal; needs `--auto-approve` in a script. | [Plan and apply](plan-apply.md) |
+| `vela inspect` | Show the registrations in your packages next to the live ones. Read-only. | [Plan and apply](plan-apply.md) |
+| `vela solution show <uniquename>` | Print the publisher prefix of a solution. Read-only. | [Below](#print-a-solutions-publisher-prefix-vela-solution-show) |
+| `vela logs` (alias `trace`) | Read the plug-in trace log, or failed system jobs with `--jobs`. Read-only. | [Below](#reading-execution-logs-vela-logs) |
+| `vela sign` | Sign a plugin package (needed for managed-identity plugins). | [Signing](signing.md) |
+| `vela logout` | Remove the cached interactive-login token and the remembered Dataverse URL. | [Authentication](../configuration/authentication.md#interactive-browser-login) |
+| `vela update` | Update the tool to the latest version on nuget.org, or to `--version <x.y.z>`. | [Below](#update-the-tool) |
+| `vela menu` (or `vela` with no arguments) | Open an interactive menu that guides you through the commands. | |
+| `vela version` | Print the tool version. | |
+| `vela help [<command>]` | Print help for all commands or one command; `--json` for the whole command table. | [Below](#get-help) |
 
-| Command | What it does |
-| --- | --- |
-| `vela init` / `vela new` | [Scaffold](scaffold.md) a complete, build-ready plugin solution. |
-| `vela add` | [Generate a single file](add.md) (plugin / service / customapi / test) into an existing project, or add a step to an existing plugin. |
-| `vela models` | [Generate early-bound classes](models.md) for a solution or table list over your connection. |
-| `vela plan` | Preview the create/update/delete operations needed to converge Dataverse with your package (read-only). |
-| `vela apply` | Apply those operations (idempotent upsert/delete); writes by default, prompting on a terminal or `--auto-approve` for CI. See [CLI automation](plan-apply.md). |
-| `vela inspect` | Report local package registrations alongside live Dataverse state, with diagnostics (read-only). |
-| `vela solution show <uniquename>` | Print the publisher prefix of a solution (read-only). See [below](#solution-prefix-vela-solution-show). |
-| `vela logs` (alias `vela trace`) | Read the Plug-in Trace Log, or failed system jobs with `--jobs` (read-only). See [Reading execution logs](#reading-execution-logs-vela-logs). |
-| `vela sign` | [Sign a plugin package](signing.md) (required for managed-identity plugins). |
-| `vela logout` | Clear the cached interactive token and remembered Dataverse URL. |
-| `vela update` | Update the vela global tool to the latest published version (or `--version <x.y.z>`). |
-| `vela menu` (or bare `vela`) | Launch the interactive menu that guides you through the commands above. |
-| `vela version` | Print the tool version. |
-| `vela help [<command>]` | Help for one command, or `--json` for the whole command table. |
+The commands that connect to Dataverse (`plan`, `apply`, `inspect`, `models`, `logs` and `solution show`) share the
+same connection options. See [Authentication](../configuration/authentication.md).
 
-> [!NOTE]
-> **`vela update`** runs `dotnet tool update --global Vela.Cli` for you. On **Windows** the running executable is
-> locked, so it cannot replace itself while `vela` is running - the command detects this and asks you to run
-> `dotnet tool update -g Vela.Cli` from a fresh shell. On macOS/Linux it updates in place.
+## Get help
 
-### Exit codes
+- `vela help` lists the commands.
+- `vela help <command>` (or `vela <command> --help`) prints the usage, options, notes and examples of one command.
+- `vela help --json` describes every command, option and exit code as JSON, for scripts and coding agents. See
+  [The command table](../reference/machine-readable-output.md#the-command-table).
 
-Every command returns a stable exit code, so scripts and coding agents can branch on the outcome:
+The help is generated from the same table that validates the options, so it lists exactly the options each command
+accepts.
 
-| Code | Meaning |
-| --- | --- |
-| `0` | Success. |
-| `2` | Invalid arguments (unknown option, missing/insufficient scope). |
-| `3` | A required file was not found (for example a package path). |
-| `4` | Error: a malformed package, definition or response, a `--strict` failure, a refused non-interactive `apply` without `--auto-approve`, a `plan`/`apply` `--solution` that is missing or managed in the target environment, or an unexpected failure. |
-| `5` | Drift detected (`vela models --verify` found the local model out of sync with the live schema, or `apply` wrote every change but the environment still differs afterwards). |
-| `6` | Dataverse connection failure: auth, endpoint, or a network error (DNS, socket, HTTP, timeout) on any call, including while reading the live state. |
-| `7` | Partial apply (a mid-run `apply` failure; Dataverse may be partially updated, so re-run `apply` to reconcile). |
-| `8` | Changes pending (`vela plan --detailed-exitcode` only). |
+## Option syntax
 
-> [!NOTE]
-> **Client-side options (preview).** `vela models --forms` / `--tables`, `vela init --web-resources` and
-> `vela plan` / `apply --webresources` belong to a client-side preview that may change.
+- Every option accepts both `--option value` and `--option=value`.
+- Each command accepts only its own options. A misspelled option, or one that belongs to another command (such as
+  `plan --auto-approve`), fails with exit code `2` before anything runs.
+- An option that needs a value but has none (it is the last token, or is followed by another option) fails with
+  `Option '--x' requires a value.`
+- Add `--verbose` (`-v`) to the commands that support it for more detail on stderr and the full stack trace on
+  failure.
 
-> [!NOTE]
-> **Output: human on a terminal, JSON when piped.** `plan`, `apply`, and `inspect` print a colorized,
-> human-readable summary when stdout is a terminal, and machine-readable JSON when the output is piped,
-> redirected, or written with `--out <file>`. Pass `--json` to force JSON even on a terminal. Color is
-> disabled automatically for non-terminal output and can be turned off with the `NO_COLOR` or `VELA_NO_COLOR`
-> environment variables. Scripts and coding agents that consume the JSON are unaffected. `init`, `add`, `models`,
-> `logs`, `solution show` and `sign` also take `--json`.
+## Output and exit codes
 
-> [!TIP]
-> **Secrets:** prefer the `DATAVERSE_CLIENT_SECRET` environment variable or `--client-secret-stdin`
-> over `--client-secret`, which is exposed to shell history and process listings (the CLI warns when
-> you use it). For sovereign clouds / custom app registrations under `--interactive`, override the
-> MSAL login with `--auth-client-id` and `--authority`. Add `--verbose` for full exception stack traces
-> on failure.
+`plan`, `apply` and `inspect` print a colored summary when stdout is a terminal, and a versioned JSON document when
+stdout is piped or redirected, with `--json`, or with `--out <file>`. `init`, `add`, `models`, `logs`,
+`solution show` and `sign` also accept `--json`. Notices, warnings and `--verbose` detail always go to stderr.
 
-> [!TIP]
-> **Interactive login is remembered.** The first `--interactive` run opens a browser; the token is then
-> cached (`~/.vela/token.dat`, DPAPI-encrypted on Windows) so later runs are silent, and the last Dataverse
-> URL is offered as the prompt default. Use `--fresh-login` to force a new prompt, or `vela logout` to clear
-> the cached token and remembered URL. Override the config location with `$VELA_CONFIG_DIR`.
+Color is turned off for output that is not a terminal, and when the `NO_COLOR` or `VELA_NO_COLOR` environment
+variable is set.
 
-> [!TIP]
-> **Option syntax.** Every option accepts both `--option value` and `--option=value`. Each command accepts only
-> its own options: a misspelled option, or one that belongs to another command (`plan --auto-approve`), is
-> rejected up front with exit `2`, and an option that needs a value but has none (it is the last token, or is followed by
-> another known option) fails with `Option '--x' requires a value.` rather than silently doing the wrong thing.
+Every command returns a stable exit code: `0` on success, `2` for invalid arguments, `4` for an error, `6` for a
+connection failure, and a few more for specific outcomes. [Machine-readable output](../reference/machine-readable-output.md#exit-codes) lists every exit code and the cases
+behind it, and documents the JSON fields.
 
-> [!NOTE]
-> **Update notice.** After a command runs, the CLI checks nuget.org at most once a day and prints a one-line
-> notice to stderr when a newer version is available (`dotnet tool update -g Vela.Cli`). It never blocks or fails a
-> command, and is silent for `--json` output. Set `VELA_NO_UPDATE_CHECK` to disable it.
+## Update the tool
+
+`vela update` runs `dotnet tool update --global Vela.Cli` for you. On Windows the running executable is locked, so
+when the update cannot replace it, `vela update` asks you to run `dotnet tool update --global Vela.Cli` from a new
+shell.
+
+After a command runs, the CLI checks nuget.org at most once a day and, when a newer version exists, prints a one-line
+notice to stderr. The check never blocks or fails a command and is skipped for `--json` output. Set
+`VELA_NO_UPDATE_CHECK` to turn it off.
 
 ## Behind a proxy
 
-`vela` runs on .NET 10, so it takes its proxy the way .NET does
-([`HttpClient.DefaultProxy`](https://learn.microsoft.com/dotnet/api/system.net.http.httpclient.defaultproxy)), not
-from a `.config` file: the `<system.net><defaultProxy>` element of an `app.config` is a .NET Framework setting, and
-`vela` ignores it.
+`vela` runs on .NET 10, so it picks up a proxy the way .NET does
+([`HttpClient.DefaultProxy`](https://learn.microsoft.com/dotnet/api/system.net.http.httpclient.defaultproxy)). The
+`<system.net><defaultProxy>` element of an `app.config` is a .NET Framework setting, and `vela` ignores it.
 
-- `HTTPS_PROXY` (or `ALL_PROXY`) names the proxy; `NO_PROXY` lists the hosts reached directly, comma-separated,
+- `HTTPS_PROXY` (or `ALL_PROXY`) names the proxy. `NO_PROXY` lists the hosts to reach directly, comma-separated,
   with a leading dot for subdomains (`.contoso.com`).
-- When none of them is set, Windows and macOS use the system proxy settings; Linux connects directly.
+- When none of them is set, .NET uses the system proxy settings on Windows and macOS, and connects directly on
+  Linux.
 
 ```bash
 export HTTPS_PROXY=http://proxy.contoso.com:8080      # PowerShell: $env:HTTPS_PROXY = "http://proxy.contoso.com:8080"
 vela plan --packages-dir ./artifacts --solution ZavaSales --interactive
 ```
 
-The connection to Dataverse and the sign-in requests go through that proxy. With `--interactive`, the sign-in page
-itself opens in your browser, which uses its own proxy settings. A proxy that can't be reached fails the command
-with exit code 6, like any connection failure. The proxy URL may carry credentials
-(`http://user:password@proxy:8080`), which leaves the password in the environment of every process started from
-that shell.
+The Dataverse connection and the sign-in requests go through the proxy. With `--interactive`, the sign-in page opens
+in your browser, which uses its own proxy settings. An unreachable proxy fails the command with exit code `6`, like
+any connection failure. A proxy URL can carry credentials (`http://user:password@proxy:8080`), but the password then
+sits in the environment of every process started from that shell.
 
-`dotnet tool install` / `vela update` download the tool through NuGet, which has its own
-[proxy settings](https://learn.microsoft.com/nuget/reference/nuget-config-file#config-section). The generated
-ConsoleApp is .NET 10 too and follows the same rules. Plugin code runs in the Dataverse sandbox, where your proxy
-settings play no part.
+`dotnet tool install` and `vela update` download the tool through NuGet, which has its own
+[proxy settings](https://learn.microsoft.com/nuget/reference/nuget-config-file#config-section). The ConsoleApp that
+`vela init --samples` generates is .NET 10 too and follows the same rules as `vela`. Plugin code runs in Dataverse,
+where your local proxy settings play no part.
 
-## Solution prefix (`vela solution show`)
+## Print a solution's publisher prefix (`vela solution show`)
 
 `vela solution show <uniquename>` connects with the usual options and prints the customization prefix of the
-solution's publisher, so you can align a scaffold with the solution before the first `apply` rejects a mismatch:
+solution's publisher. Use it to align a scaffold or a Custom API with the solution before the first `apply`:
 
 ```bash
 vela solution show ZavaSales -i            # prints: zava
 vela solution show ZavaSales -i --json     # {"solution":"ZavaSales","publisherPrefix":"zava"}
 vela init --name ZavaSales --prefix Zava --publisher-prefix "$(vela solution show ZavaSales -i)" --solution ZavaSales
+vela add customapi ApproveOrder --prefix "$(vela solution show ZavaSales -i)"
 ```
 
-It is read-only. `show` is its only subcommand.
+It is read-only, and `show` is its only subcommand.
 
 ## Reading execution logs (`vela logs`)
 
-`vela logs` (alias `vela trace`) is a **read-only** reader of a Dataverse environment's execution diagnostics, so
-you - or a coding agent - can see why a plugin failed without opening the UI. It reads two sources:
+`vela logs` (alias `vela trace`) reads the execution diagnostics of a Dataverse environment, so you or a coding agent
+can see why a plugin failed without opening the Power Platform UI. It is read-only and reads one of two sources:
 
-- **Plug-in Trace Log** (default): the trace output of plugins (what `ctx.Trace(...)` and the automatic
-  handler-entry line emit). Only populated when plug-in trace logging is enabled on the environment
-  ([Enable trace logging](https://learn.microsoft.com/power-apps/developer/data-platform/logging-tracing#enable-trace-logging)). On an empty result, `vela logs` says so and points at that setting.
-- **Failed system jobs** with `--jobs`: the `asyncoperation` rows, where an **asynchronous** step's failure is
-  recorded (with its error message) **even when trace logging is off**. Defaults to failed jobs; `--all-statuses`
-  shows every status.
+- **Plug-in trace log** (default): what plugins write with `ctx.Trace(...)`, plus the line Vela writes when a
+  handler starts. The log has rows only when plug-in trace logging is turned on for the environment (see
+  [Enable trace logging](https://learn.microsoft.com/power-apps/developer/data-platform/logging-tracing#enable-trace-logging)).
+  When it finds nothing, `vela logs` says so and points to that setting.
+- **System jobs** with `--jobs`: the `asyncoperation` rows, which record the error of a failed asynchronous step
+  even when trace logging is off. Only failed jobs by default; `--all-statuses` shows every status.
 
 ```bash
-# recent plugin errors in the last hour (interactive login)
+# Recent plugin errors from the last hour (interactive login)
 vela logs --errors --since 1h -i
 
-# why did my async step fail? (trace log may be off - look at the jobs)
+# Why did my async step fail? Look at the system jobs.
 vela logs --jobs --since 1d -i
 
-# machine-readable, for an agent to parse
-vela logs --since 2h --type AccountNamePlugin --json
+# Machine-readable output for an agent
+vela logs --since 2h --type AccountNamePlugin --json -i
 ```
 
-Filters: `--top <n>` (1-200, default 20, newest first), `--since 30m|2h|3d|<date>`, `--type <plugin type>`,
-`--message <sdk message>`, `--entity <logical name>`, `--correlation <guid>`, `--errors` (trace log only: rows with a non-empty exception),
-`--full` (do not truncate the trace/exception text). `--json` emits `{ mode, count, logs: [...] }`; the trace text
-and exception are always complete in JSON. Connects with the usual options (`-i` or `--connection-string` /
-client-secret flags); it never writes or deletes anything.
+| Option | Effect |
+| --- | --- |
+| `--top <n>` | Maximum number of rows, newest first (1 to 200, default 20). |
+| `--since <when>` | A duration (`30m`, `2h`, `3d`) or a date. |
+| `--type <name>` | Plugin type name (substring match). |
+| `--message <name>` | SDK message. |
+| `--entity <logical name>` | Table logical name. |
+| `--correlation <guid>` | Correlation id. |
+| `--errors` | Trace log only: rows with an exception. |
+| `--jobs` / `--all-statuses` | Read system jobs instead of the trace log / include every status. |
+| `--full` | Do not truncate the trace and exception text. |
+| `--json` | Print `{ "mode", "count", "logs": [...] }`. The JSON always carries the full text. |

@@ -1,15 +1,25 @@
-# Plan & Apply
+# Plan and apply
 
-This page is the reference for `vela plan`, `vela apply` and `vela inspect`; other pages link here rather than
-repeating the commands. `vela help plan` (or `vela plan --help`) lists every option, and each command accepts only
-its own options (an unknown or misplaced one, such as `plan --auto-approve`, exits `2`).
+This page is the reference for `vela plan`, `vela apply` and `vela inspect`, the commands that deploy plugin
+packages to Dataverse. Other pages link here instead of repeating it.
+
+- `plan` previews the changes. It never writes.
+- `apply` makes them, after a confirmation.
+- `inspect` shows the registrations in your packages next to the live ones. It never writes.
+
+Before you start, build the solution (the build packs the plugin package into `artifacts/`, see
+[Quickstart](../getting-started/quickstart.md)) and pick a way to connect (see [Authentication](../configuration/authentication.md)).
+For the full option list, run `vela plan --help` or see the [CLI cheat sheet](../reference/cli-cheatsheet.md). Each
+command accepts only its own options: an unknown or misplaced one, such as `plan --auto-approve`, exits `2`.
+
+## Quick start
 
 ```bash
-# Local: browser login, preview then apply into your solution (prompts for confirmation)
+# Local: browser sign-in, preview, then apply (apply asks you to type "yes")
 vela plan  --packages-dir ./artifacts --solution ZavaSales --interactive
 vela apply --packages-dir ./artifacts --solution ZavaSales --interactive
 
-# CI: app registration, secret from the environment (never on the command line)
+# CI: app registration, with the secret in the environment (never on the command line)
 export DATAVERSE_CLIENT_SECRET=...   # set by the pipeline's secret store
 vela plan --package ./artifacts/zava_Zava.Plugins.1.0.0.nupkg --solution ZavaSales \
   --url https://zava.crm.dynamics.com --tenant-id <tenant-id> --client-id <app-id> \
@@ -19,19 +29,40 @@ vela apply --package ./artifacts/zava_Zava.Plugins.1.0.0.nupkg --solution ZavaSa
   --auto-approve
 ```
 
-`plan` and `apply` require `--solution <uniqueName>` (alias `--solution-unique-name`). Without it they exit `2`
-before connecting; with `--interactive` they prompt for it instead. The plan depends on the solution: every written
-component is placed in it, a component missing from it is an `add-to-solution` operation, Custom API names are checked
-against its publisher prefix, and a package name takes its prefix from it. Dataverse imports a plugin package only when
-its name carries a publisher prefix (`pfx_Name`), so `apply` renames `Zava.Plugins` to `zava_Zava.Plugins` in memory. A
-package already named with a prefix is uploaded as is: `vela init --publisher-prefix zava` (or `--samples`,
-`--managed-identity`) names the packages `zava_Zava.Plugins` and `zava_Zava.Integrations`. `inspect` is read-only:
-`--solution` is optional there, and required only with `--webresources`. See
-[Authentication](../configuration/authentication.md) for the other ways to connect.
+## Choose the packages
+
+Pass the packages with `--package <file.nupkg>` (`-p`, repeatable) or `--packages-dir <folder>`.
+
+- **One version per package.** A folder can hold several builds of the same package (`Zava.Plugins.1.0.0.nupkg` and
+  `Zava.Plugins.1.0.1.nupkg`). `--packages-dir` scans only the highest version of each package id and names the
+  others on stderr.
+- **Plugin assembly.** Vela infers the plugin assembly from the package: the assembly named like the package id, or
+  like the id without its publisher prefix (`zava_Zava.Plugins` ships `Zava.Plugins.dll`). When a package holds more
+  than one candidate, or the assembly name differs from the package id, name it with `--package-assembly <name.dll>`.
+- **No bare assemblies.** Vela deploys plugin packages only. A standalone `.dll` is not an input.
+
+## Choose the solution
+
+`plan` and `apply` require `--solution <uniquename>` (alias `--solution-unique-name`). Without it they exit `2` before
+connecting; with `--interactive` they prompt for it. The solution drives the plan:
+
+- every component the run writes is placed in it;
+- a Vela component that exists but is missing from it is an `add-to-solution` operation;
+- Custom API names are checked against its publisher prefix;
+- an unprefixed package name takes its prefix from it.
+
+Dataverse imports a plugin package only when its name carries a publisher prefix (`pfx_Name`), so `apply` renames
+`Zava.Plugins` to `zava_Zava.Plugins` in memory. A package that already has a prefix is uploaded as is:
+`vela init --publisher-prefix zava` (or `--samples`, `--managed-identity`) names the packages `zava_Zava.Plugins` and
+`zava_Zava.Integrations`.
+
+`inspect` is read-only: `--solution` is optional there, and required only with `--webresources`.
+
+### The solution must be unmanaged
 
 `plan` and `apply` deploy into an unmanaged solution, which lives in a development environment. Right after
-connecting, before reading or writing anything, they check the `--solution` solution in the target environment and
-exit `4` when it does not exist, or when it is managed:
+connecting, before reading or writing anything, they look up the `--solution` solution in the target environment and
+exit `4` when it does not exist (`Solution not found: ZavaSales`) or when it is managed:
 
 ```text
 Solution 'ZavaSales' is managed in https://zava-test.crm.dynamics.com. Vela deploys to the unmanaged solution in a
@@ -39,13 +70,14 @@ development environment: check that the connection points at the development env
 one where the solution was imported managed. Nothing was written.
 ```
 
-A managed solution there usually means the connection points at a test or production environment, where the solution
-was imported managed. Microsoft documents that components can't be added to a managed solution: see
-[Solutions in Power Apps](https://learn.microsoft.com/power-apps/maker/data-platform/solutions-overview#contextual-commands).
-`inspect` is read-only and does not run this check.
+A managed solution usually means that the connection points at a test or production environment where the solution
+was imported as managed. For how Dataverse treats managed solutions, see
+[Solutions in Power Apps](https://learn.microsoft.com/power-apps/maker/data-platform/solutions-overview).
+`inspect` does not run this check.
 
-One run targets one solution. Packages that deploy into different solutions take one run per solution, each with its
-`-p`:
+### One solution per run
+
+Packages that deploy into different solutions take one run per solution, each with its own `-p`:
 
 ```bash
 vela plan -p ./artifacts/zava_Zava.Plugins.1.0.0.nupkg      --solution ZavaCore         --interactive
@@ -55,126 +87,242 @@ vela plan -p ./artifacts/zava_Zava.Integrations.1.0.0.nupkg --solution ZavaInteg
 The CLI never reads `PROJECT.md`. `vela init` writes it once, with the solution of each package, for the people and
 agents who type these commands (see [PROJECT.md](scaffold.md#projectmd)).
 
+## Preview the changes (`vela plan`)
 
-`plan` compares local plugin/custom-api metadata extracted from `.nupkg` against Dataverse and returns a preview of the ordered `create` / `update` / `delete` / `add-to-solution` operations plus a detailed diff. At a terminal this is a colorized human summary; piped, redirected, or with `--json`, it is a versioned JSON document (`schemaVersion`, `hasChanges`, `summary`, `operations`, `diff`, `diagnostics`, `info`, ...) documented in [Machine-readable output](../reference/machine-readable-output.md). Notices and the `--verbose` summary go to stderr, so `--verbose --json` still writes the JSON. With `--detailed-exitcode`, `plan` exits `8` when there are changes to apply and `0` when there is nothing to do.
+`plan` reads the steps and Custom APIs from your packages, reads the live registrations, and lists the ordered
+operations that `apply` would run: `create`, `update`, `delete`, `add-to-solution` and `link`, with a detailed diff.
 
-> **`--strict` and the first deployment.** `diagnostics` holds warnings (rank collisions, a secure configuration without a value, a Custom API name without the publisher prefix) and `--strict` fails on them. A plugin assembly that is not in Dataverse yet is expected on a first deployment: it is reported under `info`, which never fails `--strict`.
+On a terminal it prints a colored summary. Piped, redirected, or with `--json` / `--out <file>`, it prints a versioned
+JSON document (`schemaVersion`, `hasChanges`, `summary`, `operations`, `diff`, `diagnostics`, `info`, and more),
+described in [Machine-readable output](../reference/machine-readable-output.md). Notices and the `--verbose` summary go
+to stderr, so `--verbose --json` still writes clean JSON.
 
-> **One version per package.** `--packages-dir` may hold several builds of the same package (`Zava.Plugins.1.0.0.nupkg` and `Zava.Plugins.1.0.1.nupkg`). Only the highest version of each package id is scanned; the others are named on stderr.
+A successful `plan` exits `0`. With `--detailed-exitcode`, it exits `8` when there are changes to apply and `0` when
+there is nothing to do.
 
-> **Solution membership.** A component that did not change (deployed earlier outside the solution, or into another solution) would never be written, so it would never join the solution. `plan` lists each Vela component missing from the solution (package, assembly, steps, Custom APIs and their parameters) as an `add-to-solution` operation, and `apply` adds it with `AddSolutionComponent` (without required components).
+### Warnings and `--strict`
 
-> **Code-only rebuilds show up too.** A rebuild that changes no step or custom-API definition but recompiles the assembly leaves the registration diff empty, yet `apply` still republishes the plugin package. `plan` surfaces this as a `package` operation (`create` when the package is new, `update` when its stored version or content differs) and sets `hasChanges: true`, so a rebuild is never reported as "no changes". The numeric `summary` stays the non-package registration diff (steps and custom APIs, plus web resources on a `--webresources` run), matching the apply JSON where `packageRepublished` is a field separate from the counts; the package operation is listed under `operations`.
+`diagnostics` holds warnings: rank collisions, a declared secure configuration without a value, and a Custom API name
+without the solution's publisher prefix. `--strict` turns any warning into exit `4`, which makes `plan --strict` a
+useful gate in CI.
 
-> **An empty package is not created.** A package that holds no plugin and no Custom API yet (a freshly scaffolded project) and is not in Dataverse gets no `package` operation: `plan` names it under `info` and `apply` skips it. Once it is in Dataverse, it is republished like any other package, so removing its last plugin still updates it.
+Information that is not a problem goes to `info` and never fails `--strict`. The most common case is a plugin
+assembly that is not in Dataverse yet, on a first deployment.
 
-> **How steps are matched.** A step is identified by its plugin type and step key (`WithStepKey(...)`, or the key Vela derives from its trigger, filters and images); its rank is not part of it, so a rank change is an `update`. Several steps may share a trigger (message, stage, mode, entity). A step whose key changed still pairs with its live step by trigger, and that `update` carries `liveStepKey` (the live step's key) in its `after` definition, so `apply` rewrites exactly that step; an added step never takes over another step on its trigger. `asyncAutoDelete` (`Async(deleteJobOnSuccess: true)`, async steps only) is compared too.
->
-> **Relationship scope.** A step scoped with `ForRelationship(...)` shows its scope in the plan and inspect output (`[filter=none; pre=0; post=0; relationships=account_contacts]`) and in the JSON as `relationships` on its local definition. Vela applies the scope at run time and does not deploy it (Associate and Disassociate steps register with no relationship filter), so the live read has no value to compare and a scope change is not a diff. The new scope deploys with the plugin package. A keyless step that is not the first keyless step on its trigger is the exception: its derived key includes the scope, so a scope change gives it a new key, and `plan` shows an `update` carrying `liveStepKey` (the rename described above). The first keyless step on a trigger keeps its key.
+**Publisher-prefix check.** Dataverse requires a Custom API unique name to carry the publisher prefix of its
+solution. `plan` resolves the prefix of the `--solution` solution and warns for every Custom API it would create or
+update without it (for example `DoThing` under prefix `acme`: rename it `acme_DoThing`). You see the problem in the
+preview instead of at `apply`.
 
-> Upgrading: a step deployed at a rank other than 1 without an explicit step key gets a new automatic key once (the rank used to be part of it); the first `plan` shows it as an `update` (a rename), not a delete and create.
+### What the plan contains
 
-> **Publisher-prefix check.** Dataverse requires a Custom API unique name to carry the target solution's publisher prefix, and `apply` rejects one that does not. `plan` resolves the prefix of the `--solution` solution and emits a warning for every Custom API being created or updated whose unique name lacks it (for example `DoThing` under publisher prefix `acme` warns to rename it `acme_DoThing`), so the mismatch is caught in the preview instead of at `apply`. The warnings appear in the `warnings` block (human) and the `diagnostics` array (JSON); under `--strict` they fail the command, which makes `plan --strict` a useful pre-apply gate in CI.
+**Code-only rebuilds.** A rebuild that changes no step or Custom API still recompiles the assembly, so `apply`
+republishes the plugin package. `plan` shows this as a `package` operation (`create` for a new package, `update` when
+its version or content differs) and sets `hasChanges: true`. The numeric `summary` counts only the step and Custom API
+changes (plus web resources on a `--webresources` run), so it can be zero while `hasChanges` is `true`.
 
-`apply` applies Dataverse create/update/delete operations to converge with local package metadata, then prints the post-apply state diff (human summary at a terminal, JSON when piped or with `--json`). It writes by default: on a terminal it shows the plan and asks you to type `yes`; in a non-interactive session (no stdin TTY) it refuses unless you pass `--auto-approve` (alias `--yes`), so a script never writes unattended by accident. Use `vela plan` to preview without writing.
+**Empty packages.** A package with no plugin and no Custom API yet (a freshly scaffolded project) that is not in
+Dataverse gets no `package` operation: `plan` names it under `info` and `apply` skips it. Once the package is in
+Dataverse, it is republished like any other, so removing its last plugin still updates it.
 
-> **Reading the apply JSON (scripts/agents).** `summary` on a successful apply is the **post-apply remaining** diff, so it is `{added:0,changed:0,removed:0}` even though work was done. Read the separate **`executed`** block for what actually happened: `{ "created": N, "updated": M, "deleted": K, "packageRepublished": bool, "addedToSolution": S, "linkedToManagedIdentity": L, "byKind": [ { "kind": "step", "created": .., "updated": .., "deleted": .. }, ... ] }`, taken from the pre-apply diff (`byKind` breaks the totals down per component: `step` / `custom-api` / `web-resource`). `executed` is present only on `apply` (mode `apply-execute`, or `apply-not-converged` when the environment still differs after the writes: `summary` is then non-zero and the exit code is `5`), not on `plan`/`inspect`. Do not parse the free-text `notes`. See [Machine-readable output](../reference/machine-readable-output.md).
+**Solution membership.** A component that did not change is never written, so it would never join the solution on its
+own. `plan` lists each Vela component missing from the solution (package, assembly, steps, Custom APIs and their
+parameters) as an `add-to-solution` operation, and `apply` adds it with `AddSolutionComponent`, without its required
+components.
 
-`plan`, `apply` and `inspect` are safe to run under redirected or piped stdin (CI, agents): they never block waiting on a prompt. The optional "package assembly name" prompt only appears on a real terminal, and interactive OAuth prompts are terminal-only too, so a scripted run that supplies its inputs on the command line runs to completion (or fails with a clear message) without hanging.
+**How steps are matched.** A step is identified by its plugin type and its step key: `WithStepKey(...)`, or the key
+Vela derives from its trigger, filters and images. The rank is not part of the key, so a rank change is an `update`.
+Several steps can share a trigger (message, stage, mode and table).
+
+- A step whose key changed still pairs with its live step by trigger. That `update` carries `liveStepKey` (the live
+  step's key) in its `after` definition, so `apply` rewrites exactly that step.
+- An added step never takes over another step on its trigger.
+- `asyncAutoDelete` (`Async(deleteJobOnSuccess: true)`, asynchronous steps only) is compared too.
+- When you upgrade from a version where the rank was part of the key, a step deployed at a rank other than 1 without
+  an explicit key gets a new key once. The first `plan` shows it as an `update` (a rename), not a delete and a create.
+
+**Relationship scope.** A step scoped with `ForRelationship(...)` shows its scope in the `plan` and `inspect` output
+(`[filter=none; pre=0; post=0; relationships=account_contacts]`) and as `relationships` on its local JSON definition.
+Vela applies the scope at run time and does not deploy it (Associate and Disassociate steps register with no
+relationship filter), so there is no live value to compare and a scope change alone is not a diff. The new scope ships
+with the plugin package. One exception: a keyless step that is not the first keyless step on its trigger has the
+scope in its derived key, so a scope change gives it a new key, and `plan` shows an `update` with `liveStepKey`.
+
+**Unmanaged registrations.** An assembly can mix Vela plugins with classic `IPlugin` or `CodeActivity` classes
+registered by other tools. Vela leaves the steps and Custom APIs of those classes alone and lists them under
+`unmanaged` (JSON) or "unmanaged (left untouched)" (terminal). This is information, not a warning: `--strict` does
+not fail on it.
+
+## Apply the changes (`vela apply`)
+
+`apply` runs the operations of the plan, then reads the environment again and prints what still differs (a summary
+on a terminal, JSON when piped or with `--json`).
+
+It writes by default, with a guard:
+
+- On a terminal, it shows the plan and asks you to type `yes`. Any other answer prints `Apply cancelled.` and exits
+  `0` without writing.
+- When stdin is not a terminal (a script, CI, a coding agent), it refuses with exit `4` unless you pass
+  `--auto-approve` (alias `--yes`), so a script never writes by accident.
+
+Use `vela plan` to preview without writing.
+
+`--strict` is checked twice on `apply`: on the plan before any write, and on the state read back after the writes.
+
+### Read the apply result
+
+On success, `summary` is what remains after the apply, so it is normally all zero even though work was done. The
+`executed` block reports what the run did: created, updated and deleted counts, `packageRepublished`,
+`addedToSolution`, `linkedToManagedIdentity`, and a per-kind breakdown in `byKind`. When every write succeeded but the
+environment still differs, the mode is `apply-not-converged` and the exit code is `5`. The fields are described in
+[Machine-readable output](../reference/machine-readable-output.md). Do not parse the free-text `notes`.
 
 ### Batched writes
 
-`apply` sends its writes in **batches** rather than one request per record: the create/update/delete operations are grouped into dependency tiers (the step and custom API rows first, then their images, parameters, secure config and state) and each tier is flushed in chunked `ExecuteMultiple` requests. Each `ExecuteMultiple` carries up to 100 requests; tune it with `--batch-size <1-1000>`. This collapses hundreds of round-trips into a handful, so `apply` is much faster on a large environment and far less likely to hit the connection timeout. Deletes run in the reverse order (children before parents). The output is unchanged: results are still reported **per plugin and per custom API**, and the `--verbose` progress lines (`[step] create ...`) are printed once the batch has run, a failed one ending with `(not applied)`. If a whole batch cannot run on a given environment (for example `ExecuteMultiple` is unavailable, or a request times out), that chunk automatically falls back to one-by-one execution, so batching never makes `apply` less reliable. When the batch had in fact run before the call failed (a timeout after the server executed it), a replayed create whose id already exists is counted as applied, not as a failure. See [connection timeout](../configuration/authentication.md#connection-timeout) to raise the per-request budget on a very large org.
+`apply` sends its writes in batches. It groups the operations into dependency tiers (first the step and Custom API
+rows, then their images, parameters, secure configuration and state) and sends each tier as `ExecuteMultiple`
+requests of up to 100 operations. Set the size with `--batch-size <1-1000>`. Deletes run in reverse order, children
+before parents.
 
-**Unmanaged registrations.** An assembly can mix Vela plugins with classic `IPlugin` / `CodeActivity` classes
-registered by other tools. Those classes are not Vela types, so `plan` and `apply` leave their steps and Custom APIs
-alone and list them under `unmanaged` (JSON) / "unmanaged (left untouched)" (terminal). This is information, not a
-warning: `--strict` does not fail on it.
+- Results are still reported per plugin and per Custom API. The `--verbose` progress lines (`[step] create ...`) are
+  printed once a batch has run, and a failed one ends with `(not applied)`.
+- When a whole batch cannot run (for example `ExecuteMultiple` is unavailable, or the request times out), that chunk
+  falls back to one request per operation.
+- When the batch had in fact run before the call failed, a replayed create whose id already exists counts as applied,
+  not as a failure.
 
-**Custom APIs owned by another assembly.** A Custom API unique name is environment-wide. If a local Custom API's
-name already exists in the environment, implemented by a plugin type in an assembly that is not being applied,
-`apply` stops with an error naming that type and assembly instead of re-pointing it to your plugin. Rename the
-Custom API, or remove the existing one first.
+On a very large environment, raise the request timeout with
+[`--timeout`](../configuration/authentication.md#connection-timeout).
 
-**Secure configuration.** A step's secure configuration value is supplied at plan/apply time with
-`--secure-config NAME=VALUE` / `NAME=@file` (or `VELA_SECURE_CONFIG_<NAME>`), never compiled into the package;
-without a value the environment keeps its own. A value read from a file loses one trailing line ending (`\n` or
-`\r\n`, as `echo secret > key.txt` adds); everything else in the file is kept. Deleting a step also deletes its secure-configuration row. See
-the step configuration section of [Write a plugin](plugins.md).
+### Resume a failed apply
 
-**Managed identity link.** `--managed-identity <managedidentityid>` links every plugin package the run publishes to
-that `managedidentity` record of the target environment (`pluginpackage.managedidentityid`). The package is the same in
-every environment and each environment has its own record, so the id is an option of the run, not a project setting.
-`plan` checks that the record exists (an unknown id fails with exit 4 before anything is written), then reports each
-package as already linked, to link, or to change from the managed identity it is linked to now: a `link` operation of
-kind `package` and a `managedIdentity` block in the JSON, counted in `hasChanges` and `--detailed-exitcode`. `apply`
-writes the link right after the package publish, so a package the same run creates is linked too, through `--solution`
-reads it back to check it converged, and counts it in `executed.linkedToManagedIdentity`. Without the option,
-the link is neither read nor changed. Vela links plugin packages only: it does not deploy standalone plugin assemblies.
-See [Managed identity](managed-identity.md).
+`apply` has no transaction across operations, so a failure partway through (a rejected registration, a transient
+Dataverse error) leaves the operations that already succeeded in place. The run exits `7`.
 
-### Package code runs in a separate process (not a sandbox)
+Each batch continues past a failed item, and a child row (an image or a parameter) whose parent row failed is skipped
+and reported. The output lists, for each plugin and Custom API, what was applied and what failed and why, followed by
+a resume report: every planned operation under exactly one of `completed`, `failed` and `not applied` (steps are named
+by their step key). Because a batch continues past a failure, a step planned after the failed one can still be listed
+as completed.
 
-Reading a package's steps and Custom APIs instantiates its plugin types and calls their definition methods, so the scan runs code from the package. `plan`, `apply`, `inspect` and `vela models --package` run the scan in a child `vela` process. That keeps package code away from the CLI's own memory: the open Dataverse connection, the access token, the resolved client secret and secure-config values. The child also starts with an allowlisted environment (system paths, locale, .NET runtime variables), so `DATAVERSE_*`, `VELA_SECURE_CONFIG_*`, `AZURE_*`, managed-identity and CI token variables are not handed to it by accident, and its output goes to stderr.
+Every operation is an idempotent upsert or a safe delete. Fix the cause and run `apply` again (with `--auto-approve`
+in CI): the operations that already succeeded do nothing, the failed ones are retried, and the next `plan` is clean.
 
-> [!WARNING]
-> This is **not** a sandbox. The child runs with your OS user's rights, so hostile package code can still read the parent process's command line and environment (`ps`, and `/proc/<pid>/cmdline` and `/proc/<pid>/environ` on Linux), your files (including the interactive token cache under `~/.vela`) and the network. Scan only packages you build or trust.
+### Custom APIs owned by another assembly
 
-Keep secrets off the command line, where every process on the machine can see them: prefer `DATAVERSE_CLIENT_SECRET` or `--client-secret-stdin` to `--client-secret`, `DATAVERSE_CONNECTION_STRING` to `--connection-string`, `VELA_SECURE_CONFIG_<NAME>` or `--secure-config NAME=@file` to an inline value, or no secret at all with `--interactive` (cached token) or the ambient Azure credential (`--url` alone: `az login`, managed identity). Set `VELA_SCAN_IN_PROCESS=1` to scan in-process (debugging).
-
-By default the plugin assembly is inferred from the package: the assembly named like the package id, or like the id without its publisher prefix (`zava_Zava.Plugins`, as `vela init --publisher-prefix zava` names it, ships `Zava.Plugins.dll`). If a package bundles more than one candidate assembly, or the assembly name differs from the package id, name it explicitly with `--package-assembly <name.dll>`.
+A Custom API unique name is unique in the environment. If a local Custom API's name already exists, implemented by a
+plugin type in an assembly that this run does not deploy, `apply` stops with an error naming that type and assembly
+instead of pointing the Custom API at your plugin. Rename the Custom API, or remove the existing one first.
 
 ### Assembly name collisions across projects
 
-The registered plugin assembly is keyed by its **.NET assembly name** (the csproj `<AssemblyName>`, e.g. `Zava.Plugins`), which is **unique per org**. `vela init --prefix <prefix>` scaffolds the plugins project as `<prefix>.Plugins`, so two solutions initialized with the same prefix build the same assembly name and **collide**: applying the second rewrites the first's assembly content in that org. When `apply` is run with `--solution` and the target assembly already exists but is **not part of that solution**, it warns before overwriting:
+The registered plugin assembly is keyed by its .NET assembly name (the `<AssemblyName>` of the project, for example
+`Zava.Plugins`), which is unique in the environment. `vela init --prefix <prefix>` names the plugins project
+`<prefix>.Plugins`, so two solutions created with the same prefix build the same assembly name, and applying the
+second overwrites the first's assembly. When the assembly already exists but is not part of the `--solution`
+solution, `apply` warns before the confirmation prompt:
 
-```
+```text
 Warning: plugin assembly 'Zava.Plugins' already exists in this org and is not part of solution 'Sales'. Applying
 overwrites its content, modifying an assembly owned by another solution. Set a unique <AssemblyName> in the plugins
 project (for example prefix it with the solution name) to avoid the collision.
 ```
 
-To avoid it, give each project a distinct `<AssemblyName>` (for example prefix it with the solution name). The registered name follows the csproj, so renaming the assembly is the override.
+To avoid it, give each project a distinct `<AssemblyName>`, for example prefixed with the solution name.
+
+## Secure configuration
+
+A step's secure configuration value is supplied at `plan` or `apply` time, never compiled into the package:
+
+- `--secure-config NAME=@file` reads the value from a file. The file loses one trailing line ending (`\n` or `\r\n`,
+  as `echo secret > key.txt` adds); everything else is kept.
+- `VELA_SECURE_CONFIG_<NAME>` supplies it from the environment.
+- `--secure-config NAME=VALUE` works but warns, because the value is visible in shell history and process listings.
+
+Without a value, the environment keeps its own secure configuration and `apply` does not touch it. Deleting a step
+also deletes its secure configuration row. See
+[Description, state and configuration](plugins.md#description-state-and-configuration).
+
+## Link a managed identity
+
+`--managed-identity <managedidentityid>` links every plugin package the run publishes to that `managedidentity` record
+of the target environment (`pluginpackage.managedidentityid`). The package is the same in every environment and each
+environment has its own record, so the id is an option of the run, not a project setting.
+
+- `plan` checks that the record exists (an unknown id fails with exit `4` before anything is written), then reports
+  each package as already linked, to link, or to change from its current managed identity. A package to link or
+  change is a `link` operation of kind `package`, appears in the `managedIdentity` JSON block, and counts in
+  `hasChanges` and `--detailed-exitcode`.
+- `apply` writes the link right after the package publish, so a package created by the same run is linked too. It
+  then reads the link back to check that it converged, and counts it in `executed.linkedToManagedIdentity`.
+- Without the option, the link is neither read nor changed.
+
+See [Managed identity](managed-identity.md) and [Signing](signing.md).
+
+## Package code runs in a separate process
+
+To read a package's steps and Custom APIs, Vela loads its plugin types and calls their definition methods, so the
+scan runs code from the package. `plan`, `apply`, `inspect` and `vela models --package` run the scan in a child
+`vela` process. This keeps package code away from the CLI's own memory: the open Dataverse connection, the access
+token, the client secret and the secure configuration values. The child starts with an allowlisted environment
+(system paths, locale and .NET runtime variables), so `DATAVERSE_*`, `VELA_SECURE_CONFIG_*`, `AZURE_*`,
+managed-identity and CI token variables are not passed to it. Its output goes to stderr.
+
+> [!WARNING]
+> The child process is **not** a sandbox. It runs with your user's rights, so hostile package code can still read the
+> parent process's command line and environment (`ps`, and `/proc/<pid>/cmdline` and `/proc/<pid>/environ` on
+> Linux), your files (including the interactive token cache under `~/.vela`) and the network. Scan only packages you
+> build or trust.
+
+For the same reason, keep secrets off the command line, where other processes on the machine can read them. Prefer
+`DATAVERSE_CLIENT_SECRET` or `--client-secret-stdin` to `--client-secret`, `DATAVERSE_CONNECTION_STRING` to
+`--connection-string`, and `VELA_SECURE_CONFIG_<NAME>` or `--secure-config NAME=@file` to an inline value. Or use no
+secret at all, with `--interactive` or the ambient Azure credential (`--url` alone).
+
+Set `VELA_SCAN_IN_PROCESS=1` to scan inside the `vela` process, for debugging only.
+
+## Run unattended
+
+`plan`, `apply` and `inspect` never wait on a prompt when stdin is redirected or piped. The optional "package assembly
+name" prompt and the browser sign-in prompts appear only on a real terminal. A scripted run that passes its inputs on
+the command line finishes, or fails with a clear message, without hanging. For CI patterns, see
+[Environments and CI](../configuration/environments-secrets.md).
 
 ## Deploy web resources (`--webresources`)
 
 > [!NOTE]
-> Preview / work in progress. This is part of the new client-side initiative and may change.
+> Preview. This is part of the client-side initiative and may change.
 
-`plan` and `apply` can also deploy **web resources** (form scripts, CSS, images, HTML, ...) from a folder mirror,
-alongside or instead of plugins:
+`plan` and `apply` can also deploy web resources (form scripts, CSS, images, HTML) from a folder, alongside plugins or
+on their own:
 
-```powershell
-# preview: create/update/delete web resources so the solution matches ./dist
+```bash
+# Preview the creates, updates and deletes that make the solution match ./dist
 vela plan --webresources ./dist --solution ZavaSales --interactive
 
-# apply them (and publish the changes so they go live)
+# Apply them and publish the changes
 vela apply --webresources ./dist --solution ZavaSales --interactive
 ```
 
-The folder is mirrored **verbatim**: each file's unique name is its path relative to the root, with forward
-slashes, so the top-level folder (for example `adc_`) is a real folder, not a prepended prefix. The type is
-inferred from the extension (`.js`, `.css`, `.html`, `.png`, ...); a content hash drives the diff, so unchanged
-files are skipped. Changed and created resources are published in one `PublishXmlRequest`.
+- **Names.** The folder is mirrored as is: each file's unique name is its path relative to the folder, with forward
+  slashes. The top-level folder (for example `adc_`) is a real folder, not a prefix Vela adds. Each name must start
+  with the solution's publisher prefix; Vela checks this up front.
+- **Types and changes.** The type comes from the extension (`.js`, `.css`, `.html`, `.png`, ...). A content hash
+  drives the diff, so unchanged files are skipped. Created and changed resources are published in one
+  `PublishXmlRequest`.
+- **Independent of plugins.** A plugin-only `apply` never touches web resources, and a `--webresources` run needs no
+  `--package` and never touches plugins.
+- **Solution.** `--webresources` requires `--solution`: web resources are reconciled within a solution.
+- **Deletes.** A live web resource is deleted only when it shares a top-level folder with the local set but is absent
+  from it. Mirroring one folder never prunes another, and an empty folder deletes nothing.
 
-Web resources reconcile **independently and additively**: a plugin-only `apply` never touches web resources, and
-a `--webresources` run never touches plugins. `--webresources` **requires `--solution`** (web resources are
-reconciled within a solution, component type 61). Deletion is **scoped to the top-level folders you actually
-deploy**: a live web resource is removed only when it shares a top-level folder (e.g. `adc_`) with the local set
-but is absent from it, so mirroring a subset folder never prunes other folders, and an empty folder deletes
-nothing. A `--webresources` run needs no `--package`, so you can deploy web resources on their own. Each name must
-start with the solution's publisher prefix (its top-level folder); Vela validates this up front and fails with a
-clear message otherwise. Generate the TypeScript form models the scripts build on with
-[`vela models --forms`](models.md), and scaffold the client project with
-[`vela init --web-resources`](scaffold.md).
+Generate the TypeScript form models the scripts build on with [`vela models --forms`](models.md), and scaffold the
+client project with [`vela init --web-resources`](scaffold.md).
 
-## Resuming a failed apply
+## Read the registration manifest in code
 
-`apply` has no cross-operation transaction, so a failure partway through (a rejected registration, a transient Dataverse error) leaves the operations that already succeeded in place. Batching does not change this: each chunk runs with continue-on-error, so a single failed item does not abort the rest, and a tier-2 child (image, parameter) whose tier-1 row failed is skipped and reported rather than orphaned. The output is a per-owner report listing, for each plugin and custom API, what was applied and what failed and why, followed by the resume report: every planned operation under exactly one of `completed`, `failed` and `not applied` (a step is named with its step key). Since a batch continues past a failure, a step planned after the failed one can still be listed as completed. Every operation is an idempotent upsert or an already-safe delete, so once you fix the cause you re-run `apply` (add `--auto-approve` in CI): the operations that already succeeded become no-ops and the failed ones are reconciled, converging to a clean `plan`.
-
-## Registration manifest
-
-Use `FrameworkManifestScanner` to extract both plugin steps and Custom APIs:
+`FrameworkManifestScanner` (namespace `Vela.Manifest`, in `Vela.Plugins`) lists the plugin steps and Custom APIs that
+an assembly declares. Call it yourself, for example in a test:
 
 ```csharp
 var manifest = FrameworkManifestScanner.Scan(typeof(AccountPostUpdate).Assembly);
@@ -186,7 +334,7 @@ foreach (var def in manifest.PluginSteps)
 }
 ```
 
-Use strict mode in CI when you want scanner diagnostics to fail the build:
+Pass `Strict = true` to make the scan throw when it reports any diagnostic:
 
 ```csharp
 var manifest = FrameworkManifestScanner.Scan(
