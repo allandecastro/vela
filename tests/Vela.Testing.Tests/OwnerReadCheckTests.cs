@@ -225,6 +225,62 @@ namespace Vela.Testing.Tests
             Assert.Equal("changed", stored.GetAttributeValue<string>("name"));
             Assert.Equal(Bob, stored.GetAttributeValue<EntityReference>("ownerid").Id);
         }
+
+        // --- SYSTEM: the check is on the owner, not the caller (verified live through ctx.SystemService) -----
+
+        [Theory]
+        [InlineData("7ea00000-0000-0000-0000-000000000c03", false, unchecked((int)0x80040299))] // Create, no role
+        [InlineData("7ea00000-0000-0000-0000-000000000c04", false, unchecked((int)0x80040299))] // Create, no Read
+        [InlineData("7ea00000-0000-0000-0000-000000000c03", true, unchecked((int)0x80042f0a))]  // Assign, no role
+        [InlineData("7ea00000-0000-0000-0000-000000000c04", true, unchecked((int)0x80040299))]  // Assign, no Read
+        public void System_service_does_not_bypass_the_owner_read_check(string team, bool assign, int expectedCode)
+        {
+            OrcSystemSetsOwner.Owner = TeamRef(new Guid(team));
+            OrcSystemSetsOwner.Assign = assign;
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<OrcSystemSetsOwner>().WithCurrentUser(Alice).WithSecurity(Security);
+
+            OrganizationServiceFault fault = Fault(() => pipeline.Service.Create(new FakeAccount { Name = "trigger" }));
+
+            Assert.Equal(expectedCode, fault.ErrorCode);
+            Assert.Empty(pipeline.GetAll("account"));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void System_service_can_hand_a_record_to_an_owner_with_read(bool assign)
+        {
+            OrcSystemSetsOwner.Owner = TeamRef(ReaderTeam);
+            OrcSystemSetsOwner.Assign = assign;
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<OrcSystemSetsOwner>().WithCurrentUser(Alice).WithSecurity(Security);
+
+            pipeline.Service.Create(new FakeAccount { Name = "trigger" });
+
+            Assert.Contains(pipeline.GetAll("account"), a => a.GetAttributeValue<EntityReference>("ownerid")?.Id == ReaderTeam);
+        }
+    }
+
+    // Account post-create: as SYSTEM, assigns the new record to Owner, or creates another account owned by Owner.
+    public sealed class OrcSystemSetsOwner : EntityPluginBase<FakeAccount>
+    {
+        public static EntityReference? Owner;
+        public static bool Assign;
+
+        public OrcSystemSetsOwner(string u, string s) : base(u, s) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name)
+                .Handle(ctx =>
+                {
+                    if (Assign)
+                    {
+                        ctx.SystemService.Execute(new AssignRequest { Target = new EntityReference("account", ctx.PrimaryEntityId), Assignee = Owner });
+                    }
+                    else if (ctx.GetTarget<FakeAccount>().Name == "trigger")
+                    {
+                        ctx.SystemService.Create(new Entity("account") { ["name"] = "system-created", ["ownerid"] = Owner });
+                    }
+                });
     }
 
     // Account pre-create: hands the record to Owner.
