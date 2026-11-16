@@ -89,6 +89,9 @@ is left untouched.
   `CodeActivity` class in the same assembly is not a Vela type: its registrations (made with the Plugin
   Registration Tool, for example) are left untouched and listed under `unmanaged` in the plan. An existing Custom
   API implemented by another assembly is never taken over: `apply` stops with an error that names its owner.
+- **Custom workflow activities are not supported.** A `CodeActivity` class is not a Vela type: `plan` and `apply`
+  neither register nor remove it, and `Vela.Testing` has no workflow runtime to run it. Keep registering and testing
+  workflow activities with your existing tools.
 - **Custom API parameter types are limited** to the Dataverse Custom API types: `bool`, `int`, `decimal`, `double`,
   `DateTime`, `Guid`, `string`, `string[]`, `Money`, `OptionSetValue`, `EntityReference`, `Entity` (or an early-bound
   entity) and `EntityCollection`. Any other type (`long`, `float`, enums, multi-select choices, nested or complex
@@ -160,9 +163,11 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   `RemoveUserFromRecordTeam`), the file block messages, the metadata reads (`RetrieveEntity`,
   `RetrieveAllEntities`, `RetrieveAttribute`), `ExecuteMultiple` and `ExecuteTransaction` (which rolls the whole
   batch back on failure). For any other message, inject your own service.
-- **Other modelled messages fire steps but have no data effect.** A step on `QualifyLead`, `WinOpportunity`,
-  `SendEmail`, `CloseIncident` and similar messages fires, so you can test your own logic, but the record changes
-  the platform would make are not simulated. The steps fire on the sdkmessage the request runs as (`Send` for
+- **Business messages fire their steps, but their data effect is not simulated.** For `QualifyLead`,
+  `WinOpportunity`, `CloseIncident`, `SendEmail` and the other business messages, the harness runs the registered
+  steps with the request's inputs and the response's outputs, but it does not reproduce Microsoft's server logic:
+  no lead is qualified, no opportunity is closed, no email is sent. Tests cover how your plugins react to the
+  message, not what the platform does. The steps fire on the sdkmessage the request runs as (`Send` for
   `SendEmailRequest`), on the message's table, with an empty `ctx.PrimaryEntityId`.
 - **Transactions are simulated with store snapshots.** The stage model follows Dataverse: PreValidation of the
   initial operation runs outside the transaction, reads are not transactional, asynchronous steps run after the
@@ -192,9 +197,10 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
 - **N:N `Associate` and `Disassociate` need a declared relationship.** Declare it with `WithManyToMany(...)` or a
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise). Associate and Disassociate
   then persist the intersect rows, and `RetrieveMultiple` joins through them. Associating an existing pair again
-  throws a `DuplicateRecord` (`0x80040237`) fault, and a self-referential N:N maps its two columns by position. A
-  1:N relationship is modelled by updating the lookup column. `Merge` moves the subordinate's N:N rows and reparents
-  its 1:N children, except over a relationship whose Merge behaviour is `NoCascade`.
+  throws a `DuplicateRecord` (`0x80040237`) fault, and a self-referential N:N maps its two columns by position.
+  Over a 1:N relationship declared with `WithRelationship(...)`, Associate sets the child's lookup column and
+  Disassociate clears it, from either side. `Merge` moves the subordinate's N:N rows and reparents its 1:N
+  children, except over a relationship whose Merge behaviour is `NoCascade`.
 - **`RetrieveMultiple` supports a common subset.** No query hints, `NoLock`, `FilterHint=union` or faithful paging
   cookies: pages are read by page number, 5,000 rows at most. FetchXML support covers a common subset, aggregates
   included; anything outside it throws `NotSupportedException` naming the element or attribute (see
@@ -233,5 +239,12 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   are gone, because the children's Delete plugins run in between. Step images carry only the columns the calling
   user may read, like a Retrieve: a secured column without field read permission is absent from them. For a step
   that impersonates another user, the harness still filters the images by the calling user's access.
+
+  Not modelled:
+  - **Ownership across business units.** Each user or team belongs to one business unit (`User(id, businessUnit,
+    roles)`), and its roles apply in that business unit. With security on, a record's `owningbusinessunit` always
+    follows its owner's business unit. A role assigned from another business unit, or a record whose owning business
+    unit differs from its owner's (modernized business units), is not modelled.
+  - **Filtered record ownership** (a preview feature of Dataverse).
 
 See also the [Testing guide](../guides/testing.md).
