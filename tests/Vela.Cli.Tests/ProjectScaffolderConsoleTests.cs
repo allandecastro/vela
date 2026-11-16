@@ -65,13 +65,13 @@ public class ProjectScaffolderConsoleTests
                 Console.SetOut(original);
             }
 
-            const string Models = "vela models --entities account,contact --project src/Zava.Shared/Zava.Shared.csproj --interactive";
+            const string Models = "vela models --entities account --out src/Zava.Shared/Models/Generated --namespace Zava.Shared.Models.Generated --interactive";
             string readme = File.ReadAllText(Path.Combine(temp, "ZavaSales", "README.md"));
             string agents = File.ReadAllText(Path.Combine(temp, "ZavaSales", "AGENTS.md"));
             foreach (string text in new[] { readme, agents, captured.ToString() })
             {
                 Assert.Contains(Models, text);
-                Assert.DoesNotContain("--namespace", text);
+                Assert.DoesNotContain("--project src/Zava.Shared", text);
             }
         });
     }
