@@ -15,12 +15,10 @@ namespace Vela.Analyzers
     /// (for example <c>IUpdatePostContext&lt;T&gt;</c>), its generated typed context (a subclass of it), or the plain
     /// <c>ILocalPluginContext</c>. A context for a different message or stage (or an unrelated type) is reported.
     ///
-    /// Scope (known limitation, #309 M1): only the guided single Create/Update/Delete path is validated. The typed
-    /// <c>On&lt;TRequest&gt;()</c> and permissive <c>OnMessage&lt;TMessage&gt;()</c> paths, and the CreateMultiple/UpdateMultiple
-    /// variants, are intentionally left alone - their expected context is the generated per-step context
-    /// (<c>MessagePre/PostContext&lt;TRequest,TEntity&gt;</c>), which is not derivable from the guided message/stage
-    /// resolution used here. A wrong context on those paths compiles through <c>Handle(Delegate)</c> and is caught at
-    /// runtime by the image/context cast rather than at compile time. Extending coverage there is tracked separately.
+    /// Scope: every typed <c>On{Message}()</c> trigger (<c>TypedTriggers.Messages</c>, shared with the runtime), whose
+    /// context is <c>I{Message}{Pre|Post}Context&lt;TEntity&gt;</c>. The type-stated <c>On&lt;TRequest&gt;()</c> and
+    /// <c>OnMessage&lt;TMessage&gt;()</c> paths are left to the runtime, which checks the handler's context when the
+    /// steps are registered: their request type is not always known statically.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class HandlerContextMatchAnalyzer : DiagnosticAnalyzer
@@ -98,7 +96,7 @@ namespace Vela.Analyzers
                 return;
             }
 
-            // Guided message + stage from the chain preceding .Handle(...). Only Create/Update/Delete are handled.
+            // Typed message + stage from the chain preceding .Handle(...).
             (string? message, bool? isPost) = ResolveGuidedMessageAndStage(member.Expression);
             if (message is null || isPost is null)
             {
@@ -210,9 +208,9 @@ namespace Vela.Analyzers
             }
         }
 
-        // Minimal guided-chain resolver: the message from OnCreate/OnUpdate/OnDelete and whether the stage is
-        // PostOperation. Returns (null, null) for anything else (typed On<TRequest>(), permissive OnMessage<TMessage>(), or
-        // an unresolved chain), so those paths are left alone.
+        // Typed-chain resolver: the message from a typed On{Message}() trigger (its name, against the shared
+        // TypedTriggers list) and whether the stage is PostOperation. Returns (null, null) for anything else
+        // (type-stated On<TRequest>(), OnMessage<TMessage>(), or an unresolved chain), so those paths are left alone.
         private static (string? Message, bool? IsPost) ResolveGuidedMessageAndStage(ExpressionSyntax? receiver)
         {
             string? message = null;
@@ -222,12 +220,16 @@ namespace Vela.Analyzers
             {
                 switch (call.MethodName)
                 {
-                    case "OnCreate": message ??= "Create"; break;
-                    case "OnUpdate": message ??= "Update"; break;
-                    case "OnDelete": message ??= "Delete"; break;
                     case "PostOperation": isPost ??= true; break;
                     case "PreOperation":
                     case "PreValidation": isPost ??= false; break;
+                    default:
+                        if (call.Name is not GenericNameSyntax && FluentStep.TypedTriggerMessage(call.MethodName) is { } typed)
+                        {
+                            message ??= typed;
+                        }
+
+                        break;
                 }
             }
 

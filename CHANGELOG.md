@@ -47,6 +47,12 @@ All notable changes to Vela are documented here. The format is based on
   silently: a user or team in a business unit not declared (once any `BusinessUnit(...)` is declared), a `Manager`,
   `Position` or `FieldPermission` naming a principal that is not declared, two roles with the same id, and an id
   declared both as a user and as a team.
+- `PluginMessages.GlobalMessages` is an `IReadOnlyList<string>` (it was a `string[]`), so no caller can change the
+  shared list every plugin reads. Code that indexed it or enumerated it still compiles; code that assigned it to a
+  `string[]` or wrote into it does not. `PluginMessages.IsGlobalMessage(...)` is unchanged.
+- A step handler whose context does not match its step, and an `OnMessage<TMarker>().Handle<TRequest>(...)` whose
+  request belongs to another message, now fail when the steps are registered (see Fixed). A plugin that registered
+  such a step but never ran it (or caught the error) now fails to load.
 
 ### Added (Framework)
 
@@ -108,6 +114,37 @@ All notable changes to Vela are documented here. The format is based on
   version or later. `Vela.Testing` uses `Vela.Plugins` internals, so a newer `Vela.Plugins` with an older
   `Vela.Testing` could fail at run time with `MissingMethodException` or `TypeLoadException`; NuGet now reports the
   mismatch at restore (NU1608). Reference the same version of both packages.
+- A step handler whose context does not match its step now fails when the steps are registered, with an
+  `InvalidPluginExecutionException` naming the handler, the step and the context the step passes (for example
+  `This step passes IAssignPostContext<Account>`). Through the permissive `Handle(Delegate)` overload, an `OnAssign()`
+  step bound to an `IUpdatePostContext<T>` handler (and the same mismatch on every typed trigger but Create, Update and
+  Delete) compiled and threw a raw `ArgumentException` on every execution. The check covers the generated
+  `{Handler}Context`, a generic message context on a modelled message, and a post-operation context at a pre-stage.
+- `OnMessage<TMarker>().Handle<TRequest>(...)` checks `TRequest` against the step's message when the steps are
+  registered: a request whose `RequestName` (or `[CustomMessage]` / `[SdkMessage]`) names another message is rejected,
+  since `ctx.Request` would read the parameters of a message it does not describe. A request that names no message
+  is still accepted as a typed view.
+- VELA015 checks the handler context of every typed `On{Message}()` trigger (`OnAssign()`, `OnSendEmail()`, ...), not
+  only `OnCreate()`, `OnUpdate()` and `OnDelete()`.
+- VELA003 flags a second `ForRelationship(...)` or `SkipWhenDepthAbove(...)`, which the builder already rejected. The
+  analyzer and the builder now read one list of set-once modifiers.
+- VELA008 compares every typed `On{Message}()` trigger (it knew 11), keyed by the sdkmessage it registers on, and
+  treats an `OnAsyncOnly<TRequest>()` step as asynchronous.
+- VELA019 also flags `new StreamReader(path)` / `new StreamWriter(path)` and `File` / `Directory` calls imported with
+  `using static System.IO.File;`. A reader or writer over a `Stream` is not flagged.
+- The VELA012 code fix binds each argument to its constructor parameter: `new ArgumentNullException(nameof(x))` no
+  longer becomes an exception whose message is the parameter name, named arguments (`paramName:`, `innerException:`)
+  no longer produce code that does not compile, and an inner exception alone gives `(inner.Message, inner)` (no fix
+  when that inner exception is an expression it would evaluate twice).
+- The VELA004 code fix is offered only for a handler named without a qualifier and declared in the registering class
+  or one of its base classes, from a non-static member of a non-static class. It used to edit a same-named static
+  method of the file when the handler belonged to another class, or make a static helper class's method an instance
+  method that no longer compiled.
+- A typed request or response property read (`Get<T>()` on `TypedRequest` / `TypedResponse`) whose parameter holds
+  another type throws `InvalidPluginExecutionException` (it threw `InvalidCastException`), so the caller sees the
+  message naming the parameter. The base `Entity` to early-bound conversion is bound once per type instead of through
+  reflection on every read.
+- `RetryPolicy` rethrows the last fault with its original stack trace when a wait overran the time budget.
 
 ### Added (CLI)
 

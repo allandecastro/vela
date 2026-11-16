@@ -31,38 +31,11 @@ namespace Vela.CodeFixes
 
             foreach (Diagnostic diagnostic in context.Diagnostics)
             {
-                SyntaxNode handler = root.FindNode(diagnostic.Location.SourceSpan);
-                // The handler is a method name (StaticHandler) or member access (Handlers.OnCreate); the method
-                // name is the last simple name. FindNode may return the enclosing argument, so search within it.
-                SimpleNameSyntax? nameNode = handler.DescendantNodesAndSelf().OfType<SimpleNameSyntax>().LastOrDefault();
-                if (nameNode == null)
+                if (model == null || HandlerDeclaration(root.FindNode(diagnostic.Location.SourceSpan), model, context.CancellationToken) is not { } target)
                 {
                     continue;
                 }
 
-                // Prefer the bound method symbol (correct with overloads); fall back to a name match. A method group
-                // resolves via CandidateSymbols, not Symbol.
-                MethodDeclarationSyntax? declaration = null;
-                if (model != null)
-                {
-                    SymbolInfo info = model.GetSymbolInfo(nameNode, context.CancellationToken);
-                    if ((info.Symbol ?? info.CandidateSymbols.FirstOrDefault()) is IMethodSymbol method)
-                    {
-                        declaration = method.DeclaringSyntaxReferences
-                            .Select(r => r.GetSyntax(context.CancellationToken))
-                            .OfType<MethodDeclarationSyntax>()
-                            .FirstOrDefault(d => d.Modifiers.Any(SyntaxKind.StaticKeyword));
-                    }
-                }
-
-                declaration ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-                    .FirstOrDefault(d => d.Identifier.ValueText == nameNode.Identifier.ValueText && d.Modifiers.Any(SyntaxKind.StaticKeyword));
-                if (declaration == null)
-                {
-                    continue;
-                }
-
-                MethodDeclarationSyntax target = declaration;
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         "Make the handler an instance method",
@@ -70,6 +43,72 @@ namespace Vela.CodeFixes
                         equivalenceKey: "RemoveStaticModifier"),
                     diagnostic);
             }
+        }
+
+        // The declaration of the static handler to make an instance method, or null when the fix would not compile or
+        // would edit the wrong method. Offered only when the handler is named without a qualifier (Handle(OnCreated),
+        // not Handle(Handlers.OnCreated)), binds to exactly one method, that method is declared in the class making the
+        // call or one of its base classes, and neither that class nor the calling member is static: the call then
+        // reaches the instance method through the implicit this. A same-named method elsewhere is never touched.
+        private static MethodDeclarationSyntax? HandlerDeclaration(SyntaxNode node, SemanticModel model, CancellationToken cancellationToken)
+        {
+            ExpressionSyntax? handler = node is ArgumentSyntax argument ? argument.Expression : node as ExpressionSyntax;
+            if (handler is not SimpleNameSyntax name)
+            {
+                return null;
+            }
+
+            SymbolInfo info = model.GetSymbolInfo(name, cancellationToken);
+            if ((info.Symbol ?? (info.CandidateSymbols.Length == 1 ? info.CandidateSymbols[0] : null)) is not IMethodSymbol { IsStatic: true } method)
+            {
+                return null;
+            }
+
+            if (name.FirstAncestorOrSelf<TypeDeclarationSyntax>() is not { } callingDeclaration
+                || model.GetDeclaredSymbol(callingDeclaration, cancellationToken) is not INamedTypeSymbol callingType
+                || callingType.IsStatic
+                || method.ContainingType.IsStatic
+                || !IsSelfOrBase(method.ContainingType, callingType)
+                || model.GetEnclosingSymbol(name.SpanStart, cancellationToken) is not { } caller
+                || IsStaticContext(caller))
+            {
+                return null;
+            }
+
+            // A partial method's two declarations must agree; leave it to the developer.
+            ImmutableArray<SyntaxReference> declarations = method.DeclaringSyntaxReferences;
+            return declarations.Length == 1 && declarations[0].GetSyntax(cancellationToken) is MethodDeclarationSyntax declaration
+                && declaration.Modifiers.Any(SyntaxKind.StaticKeyword)
+                ? declaration
+                : null;
+        }
+
+        private static bool IsSelfOrBase(INamedTypeSymbol candidate, INamedTypeSymbol type)
+        {
+            for (INamedTypeSymbol? t = type; t != null; t = t.BaseType)
+            {
+                if (SymbolEqualityComparer.Default.Equals(t.OriginalDefinition, candidate.OriginalDefinition))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // A static member, a static lambda or local function, or any of them inside one: no implicit this to reach an
+        // instance method.
+        private static bool IsStaticContext(ISymbol caller)
+        {
+            for (ISymbol? s = caller; s != null && s is not INamedTypeSymbol; s = s.ContainingSymbol)
+            {
+                if (s.IsStatic)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         // Solution-based: the handler method may be declared in a DIFFERENT file from the .Handle(...) diagnostic, so

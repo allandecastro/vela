@@ -326,9 +326,9 @@ public sealed class RetryPolicyTests
         int calls = 0;
         TimeSpan? waited = null;
 
-        Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
+        FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
             RetryPolicy.Execute<int>(Ctx,
-                () => { calls++; throw Throttled(TimeSpan.FromMilliseconds(50)); },
+                () => ThrowThrottled(ref calls),
                 retryOnTimeout: false,
                 maxAttempts: 3,
                 initialDelayMs: 0,
@@ -337,6 +337,15 @@ public sealed class RetryPolicyTests
 
         Assert.Equal(TimeSpan.FromMilliseconds(50), waited);
         Assert.Equal(1, calls);
+        // The fault keeps the stack trace of the operation that threw it, not one starting in the retry loop.
+        Assert.Contains(nameof(ThrowThrottled), ex.StackTrace);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static int ThrowThrottled(ref int calls)
+    {
+        calls++;
+        throw Throttled(TimeSpan.FromMilliseconds(50));
     }
 
     [Fact]
