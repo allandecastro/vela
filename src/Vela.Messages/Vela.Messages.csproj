@@ -7,7 +7,7 @@
     <AssemblyName>Vela.Messages</AssemblyName>
     <RootNamespace>Vela.Messages</RootNamespace>
     <PackageId>Vela.Messages</PackageId>
-    <Version>1.0.0</Version>
+    <Version>0.0.0-local</Version>
     <Title>Vela.Messages — typed Dataverse request/response contracts</Title>
     <Description>Lightweight, SDK-only base types (TypedRequest / TypedResponse) that Vela typed message and Custom API request/response classes derive from. Multi-targets net462 (plugins) and net10.0 (clients) so a generated Custom API contract compiles wherever it is called from.</Description>
   </PropertyGroup>

@@ -87,8 +87,69 @@ namespace Vela.Testing.Tests
 
             Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Update(new Entity("account", id) { ["creditlimit"] = new Money(1m) }));
+        }
+
+        // A role that may also create accounts, so a Create is decided by the column permission alone.
+        private static SecurityConfiguration Creators(SecurityConfiguration s) => Base(s)
+            .Role("creator", r => r.Grant("account", AccessLevel.Organization, Privilege.Create))
+            .User(Alice, SalesBu, "editor", "creator")
+            .User(Bob, SalesBu, "editor", "creator");
+
+        [Fact]
+        public void Setting_a_secured_column_on_create_is_rejected_without_field_create_permission()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => Creators(s));
+
+            svc.Create(new Entity("account") { ["name"] = "Zava" }); // non-secured column: fine
+
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Create(new Entity("account") { ["creditlimit"] = new Money(1m) }));
+            Assert.Contains("prvCreateaccount.creditlimit", fault.Detail.Message);
+        }
+
+        [Fact]
+        public void Field_update_permission_does_not_allow_setting_the_column_on_create()
+        {
+            // A column security profile grants Create and Update separately (Learn, column-level security).
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Bob)
+                .WithSecurity(s => Creators(s).FieldPermission(Bob, "account", "creditlimit", read: true, update: true));
+
             Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Create(new Entity("account") { ["creditlimit"] = new Money(1m) }));
+            Assert.Empty(svc.GetAll("account"));
+        }
+
+        [Fact]
+        public void Field_create_permission_allows_create_but_not_update()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Bob)
+                .WithSecurity(s => Creators(s).FieldPermission(Bob, "account", "creditlimit", read: true, create: true));
+
+            Guid id = svc.Create(new Entity("account") { ["creditlimit"] = new Money(10m) });
+
+            Assert.Equal(10m, svc.Retrieve("account", id, new ColumnSet(true)).GetAttributeValue<Money>("creditlimit").Value);
+            Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Update(new Entity("account", id) { ["creditlimit"] = new Money(20m) }));
+        }
+
+        [Fact]
+        public void Field_create_permission_granted_to_a_team_reaches_its_members()
+        {
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => Creators(s)
+                    .Team(SalesTeam, SalesBu)
+                    .Member(Alice, SalesTeam)
+                    .FieldPermission(SalesTeam, "account", "creditlimit", read: false, create: true));
+
+            Guid id = svc.Create(new Entity("account") { ["creditlimit"] = new Money(10m) });
+
+            Assert.Equal(10m, Assert.Single(svc.GetAll("account")).GetAttributeValue<Money>("creditlimit").Value);
+            Assert.False(svc.Retrieve("account", id, new ColumnSet(true)).Contains("creditlimit")); // no read permission
         }
 
         [Fact]

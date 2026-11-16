@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -139,9 +141,9 @@ internal sealed record ScaffoldOptions(
     /// <summary>The default JS global name suggested at init: the prefix with dots removed, lower-cased.</summary>
     public static string SuggestGlobalName(string prefix) => ScaffoldTemplates.ApiPrefix(prefix);
 
-    // Offline fallback only. `vela init` normally resolves the latest published Vela.Plugins version from
-    // nuget.org (see ResolveLatestFrameworkVersion); this is used when that lookup fails or `--core-version`
-    // is not passed and the machine is offline. Keep it a real, published version - and at least the version
+    // The framework release this CLI generates code for, and the offline fallback. `vela init` normally resolves the
+    // newest listed Vela.Plugins version on this release line from nuget.org (see ResolveLatestFrameworkVersion);
+    // this is used when that lookup fails or finds no compatible version. Keep it a real, published version - and at least the version
     // whose API the scaffolded code needs (the typed message contexts landed in 0.3.0; the typed-requests
     // surface - Vela.Messages.TypedRequest - landed in 0.8.0; the async-only Custom API step surface the
     // generated On<Message>() extensions can emit - OnAsyncOnly / IAsyncOnlyModeSelector - landed in 0.9.0).
@@ -519,40 +521,89 @@ internal sealed record ScaffoldOptions(
         return answer.Trim().StartsWith("y", StringComparison.OrdinalIgnoreCase);
     }
 
-    // Resolve the latest published stable Vela.Plugins version from nuget.org, so `vela init` scaffolds against
-    // the current framework without the CLI needing a new release per framework version. Returns null on any
-    // failure (offline, timeout, parse), so the caller falls back to DefaultCoreVersion. Not called during
-    // arg parsing (kept out of the unit-tested path); the init command calls it before generating.
-    internal static string? ResolveLatestFrameworkVersion()
+    // The NuGet registration index of Vela.Plugins (SemVer 2.0.0 hive, gzipped). Unlike the flat container, it says
+    // whether each version is listed, so an unlisted (withdrawn) release is never picked.
+    internal const string FrameworkRegistrationUrl = "https://api.nuget.org/v3/registration5-gz-semver2/vela.plugins/index.json";
+
+    // Resolve the newest listed, stable Vela.Plugins version on nuget.org that this CLI is compatible with, so
+    // `vela init` picks up framework patch releases without a CLI release. Compatible means the release line of
+    // DefaultCoreVersion: the same minor before 1.0 (a pre-1.0 minor may break the API the scaffold generates), the
+    // same major from 1.0. Returns null on any failure (offline, timeout, parse) or when no listed version is
+    // compatible, so the caller falls back to DefaultCoreVersion. Not called during arg parsing; the init command
+    // calls it before generating. Tests pass a fake feed through handler.
+    internal static string? ResolveLatestFrameworkVersion(HttpMessageHandler? handler = null)
     {
         try
         {
-            using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(5) };
-            string json = http.GetStringAsync("https://api.nuget.org/v3-flatcontainer/vela.plugins/index.json")
-                .GetAwaiter().GetResult();
-            using JsonDocument doc = JsonDocument.Parse(json);
-            Version? best = null;
-            string? bestStr = null;
-            foreach (JsonElement element in doc.RootElement.GetProperty("versions").EnumerateArray())
+            using HttpClient http = handler is null
+                ? new HttpClient(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate })
+                : new HttpClient(handler, disposeHandler: false);
+            http.Timeout = TimeSpan.FromSeconds(5);
+            List<(string Version, bool Listed)> published = [];
+            using JsonDocument index = JsonDocument.Parse(http.GetStringAsync(FrameworkRegistrationUrl).GetAwaiter().GetResult());
+            foreach (JsonElement page in index.RootElement.GetProperty("items").EnumerateArray())
             {
-                string? candidate = element.GetString();
-                if (string.IsNullOrEmpty(candidate) || candidate.Contains('-'))
+                if (page.TryGetProperty("items", out JsonElement leaves))
                 {
-                    continue; // skip prerelease versions
+                    CollectRegistrationLeaves(leaves, published);
+                    continue;
                 }
 
-                if (Version.TryParse(candidate, out Version? parsed) && (best is null || parsed > best))
-                {
-                    best = parsed;
-                    bestStr = candidate;
-                }
+                // A large registration index links its pages instead of inlining them.
+                string pageUrl = page.GetProperty("@id").GetString()!;
+                using JsonDocument pageDoc = JsonDocument.Parse(http.GetStringAsync(pageUrl).GetAwaiter().GetResult());
+                CollectRegistrationLeaves(pageDoc.RootElement.GetProperty("items"), published);
             }
 
-            return bestStr;
+            return SelectFrameworkVersion(published, DefaultCoreVersion);
         }
         catch
         {
             return null;
         }
+    }
+
+    private static void CollectRegistrationLeaves(JsonElement leaves, List<(string Version, bool Listed)> published)
+    {
+        foreach (JsonElement leaf in leaves.EnumerateArray())
+        {
+            JsonElement entry = leaf.GetProperty("catalogEntry");
+            // `listed` is optional in the registration schema; absent means listed.
+            bool listed = !entry.TryGetProperty("listed", out JsonElement flag) || flag.ValueKind != JsonValueKind.False;
+            published.Add((entry.GetProperty("version").GetString()!, listed));
+        }
+    }
+
+    // The newest listed stable version on the release line of compatibleWith (same minor before 1.0, same major
+    // from 1.0), or null when there is none.
+    internal static string? SelectFrameworkVersion(IEnumerable<(string Version, bool Listed)> published, string compatibleWith)
+    {
+        Version line = Version.Parse(compatibleWith);
+        Version? best = null;
+        string? bestStr = null;
+        foreach ((string candidate, bool listed) in published)
+        {
+            if (!listed || string.IsNullOrEmpty(candidate) || candidate.Contains('-'))
+            {
+                continue; // unlisted or prerelease
+            }
+
+            // Build metadata (+sha) does not take part in the precedence.
+            string core = candidate.Split('+')[0];
+            if (!Version.TryParse(core, out Version? parsed)
+                || parsed.Major != line.Major
+                || (line.Major == 0 && parsed.Minor != line.Minor))
+            {
+                continue;
+            }
+
+            if (best is null || parsed > best)
+            {
+                best = parsed;
+                bestStr = core;
+            }
+        }
+
+        return bestStr;
     }
 }

@@ -41,8 +41,6 @@ namespace Vela.Testing
                 // A disabled step (.Disabled()) is registered but dormant: it never fires, as on a real org.
                 .Where(registration => registration.Step.Stage == invocation.Stage
                     && StepMatches(registration.Step, invocation.Message, invocation.EntityLogicalName))
-                .Where(registration => !string.Equals(invocation.Message, PluginMessages.Update, StringComparison.OrdinalIgnoreCase)
-                    || FiltersMatch(registration.Step, invocation.ChangedAttributes))
                 .Where(registration => !_bypass.ShouldBypass(registration.Step))
                 .OrderBy(registration => registration.Step.ExecutionOrder)
                 .ToList();
@@ -107,7 +105,7 @@ namespace Vela.Testing
                         StageInvocation invocation = NewInvocation(singleMessage, stage, entityName, capturedItem.Target.Id, capturedItem.Target);
                         invocation.PreState = capturedItem.PreState;
                         invocation.PostState = capturedItem.PostState;
-                        invocation.ChangedAttributes = capturedItem.ChangedAttributes;
+                        invocation.RecordKey = capturedItem;
                         CaptureOperationContext(invocation);
                         // A Create Post step sees the created id as OutputParameters["id"], exactly as Dataverse
                         // surfaces it, so ctx.Response.id resolves in a post-create handler.
@@ -204,6 +202,7 @@ namespace Vela.Testing
             foreach (PipelineRegistration sibling in _registrations)
             {
                 if (ReferenceEquals(sibling, registration)
+                    || !sibling.Step.Enabled
                     || sibling.PluginType != registration.PluginType
                     || !string.Equals(sibling.Step.Message, message, StringComparison.OrdinalIgnoreCase))
                 {
@@ -358,7 +357,9 @@ namespace Vela.Testing
 
         // Records, on the invocation, what its step contexts need from the operation that fires it (so an async step
         // dispatched later still sees them): whether a plugin issued the operation, and for Create/Update/Delete the
-        // PreOperation/PostOperation shared variables and their stage-30 ParentContext.
+        // PreOperation/PostOperation shared variables and their stage-30 ParentContext: the main operation of the
+        // record the step runs for (a cascaded child's Delete or another batch row has its own), or of the message
+        // whose main operation the Update is (Assign, SetState, Merge).
         private void CaptureOperationContext(StageInvocation invocation)
         {
             if (_frames.Count == 0)
@@ -374,11 +375,12 @@ namespace Vela.Testing
             }
 
             frame.MainStageShared ??= CopyParameters(frame.InitialShared);
-            if (frame.MainStageContext == null)
+            object recordKey = invocation.RecordKey ?? invocation.EntityLogicalName.ToLowerInvariant() + ":" + invocation.PrimaryId;
+            if (!frame.MainStageContexts.TryGetValue(recordKey, out FakePluginExecutionContext? main))
             {
-                FakePluginExecutionContext main = new FakePluginExecutionContext
+                main = new FakePluginExecutionContext
                 {
-                    MessageName = invocation.Message,
+                    MessageName = frame.MainMessage ?? invocation.Message,
                     Stage = (int)PluginStages.MainOperation,
                     Mode = (int)ExecutionMode.Synchronous,
                     Depth = _depth,
@@ -391,16 +393,23 @@ namespace Vela.Testing
                 };
                 (main.UserId, main.BusinessUnitId, main.OrganizationId) = _store.CurrentActor();
                 main.InitiatingUserId = _initiatingUserId ?? main.UserId;
-                if (invocation.Target != null)
+                if (frame.MainInputs != null)
+                {
+                    foreach (KeyValuePair<string, object> input in frame.MainInputs)
+                    {
+                        main.InputParameters[input.Key] = input.Value;
+                    }
+                }
+                else if (invocation.Target != null)
                 {
                     main.InputParameters["Target"] = invocation.Target;
                 }
 
-                frame.MainStageContext = main;
+                frame.MainStageContexts[recordKey] = main;
             }
 
             invocation.SharedVariables = frame.MainStageShared;
-            invocation.ParentContext = frame.MainStageContext;
+            invocation.ParentContext = main;
         }
 
         internal static ParameterCollection CopyParameters(ParameterCollection? source)

@@ -59,7 +59,8 @@ post images), and a plugin's own writes fire further steps (the **cascade**).
   the assembly. It throws when a step or Custom API names a type it cannot resolve, since that registration would
   never fire.
 - `PluginPipeline.Empty().Register<MyPlugin>()` scopes a test to the plugins you name. `Register<T>()` throws for a
-  type that declares no step and no Custom API.
+  type that declares no step and no Custom API, and for a type already registered (by an earlier `Register` or by
+  `FromAssembly`), whose steps would otherwise fire twice.
 
 ### Configure the pipeline
 
@@ -74,6 +75,7 @@ clock and id sequence; see [In-memory Dataverse](#in-memory-dataverse)). It adds
 | `WithMaxDepth(n)` | The cascade depth limit (default 8, the Dataverse default). |
 | `WithManagedIdentityService(service)` | A managed-identity service for every plugin and Custom API the pipeline runs (see [Managed identity](managed-identity.md#testing)). |
 | `WithService<T>(instance)` | A test double for a service the plugin registers (see [Replacing services](#replacing-services)). |
+| `WithEnvironmentId(id)`, `WithTenantId(id)`, `AsApplicationUser()` | The `EnvironmentId`, `TenantId` and `IsApplicationUser` of every step's context (empty, `Guid.Empty` and `false` by default). |
 
 ### Assert on the result
 
@@ -142,7 +144,7 @@ The pipeline follows the platform's
   set to that user, and its `ctx.Service` acts as that user (privileges under `WithSecurity`, audit stamping);
   `InitiatingUserId` stays the caller.
 - **Ids.** `CorrelationId` is one id per top-level operation (an `ExecuteTransaction` batch shares one, each
-  `ExecuteMultiple` child gets its own), kept by the asynchronous steps it queues. `RequestId` is one id per call
+  `ExecuteMultiple` child gets its own), kept by the asynchronous steps it queues and by the writes they make. `RequestId` is one id per call
   into the pipeline. `OperationId` equals it on synchronous steps and is the job id on asynchronous steps.
   `IsolationMode` is 2 (sandbox) and `SecondaryEntityName` is `"none"`.
 - **Asynchronous steps.** An asynchronous step's `OwningExtension` has the step's id but no `Name` (a synchronous
@@ -151,7 +153,10 @@ The pipeline follows the platform's
 - **`ParentContext`.** A PreOperation or PostOperation step of a `Create`, `Update` or `Delete` has the operation's
   own stage-30 (MainOperation) context as `ParentContext`. The context of the plugin whose write triggered the
   operation is one level further up (`ParentContext.ParentContext`). A PreValidation step's `ParentContext` is that
-  calling plugin's context directly.
+  calling plugin's context directly. Each record has its own stage-30 context: the root of a cascaded `Delete` and
+  each row of a `CreateMultiple`/`UpdateMultiple` see their own record there. The Update steps fired inside an
+  `Assign`, a `SetState` or a `Merge` have that message's stage-30 context as `ParentContext` (`Assign/30`,
+  `SetStateDynamicEntity/30`, `Merge/30`).
 - **Shared variables.** Shared variables set by a PreValidation step are not in the later steps' own
   `SharedVariables`: they are visible only through `ParentContext.SharedVariables`. A cascaded operation inherits the
   shared variables of the plugin that issued it. To avoid re-entrancy, see
@@ -208,6 +213,9 @@ The pipeline follows the platform's
     PostOperation steps.
   - `Execute(new SetStateRequest { ... })` fires the `SetStateDynamicEntity` steps the same way around a
     `statecode`/`statuscode` Update. Steps registered on `SetState` never fire.
+  - `Execute(new MergeRequest { ... })` writes the master's new values (`UpdateContent` and the columns filled from
+    the subordinate) through an Update that fires the Update steps at PreOperation and PostOperation, between the
+    `Merge` PreOperation and PostOperation steps. No Update runs when the master does not change.
   - Status -1 (or no status) resolves to the state's default status: status 1 for state 0, status 2 for any other
     state, unless you declare it with `WithDefaultStatus("table", state, status)`.
 - **Bypass parameters.** On an `Execute(...)` request, `BypassCustomPluginExecution = true` skips every step,
@@ -221,8 +229,9 @@ The pipeline follows the platform's
   relationship is declared (see [Relationships](#relationships)).
 - **Upsert and alternate keys.** `Execute(new UpsertRequest { ... })` matches the target by id or by an alternate key
   declared with `WithAlternateKey(...)`: an existing record runs the Update steps, a new one the Create steps, and
-  the response reports `RecordCreated` and `Target`. An `Update` or `Delete` addressed by `KeyAttributes` resolves
-  the key first, so its steps see the real record id. The `KeyAttributes` must be exactly one declared key: any
+  the response reports `RecordCreated` and `Target`. An `Update`, `UpdateMultiple`, `Assign` or `Delete` addressed by
+  `KeyAttributes` resolves the key first, on `InMemoryOrganizationService` as through `PluginPipeline`, so its steps
+  see the real record id. The `KeyAttributes` must be exactly one declared key: any
   other set of columns faults with `0x80060889`, and a declared key that matches nothing with `0x80060891`.
 - **Business messages** (`WinOpportunity`, `QualifyLead`, `CloseIncident`, `SendEmail`, `AddToQueue` and the like).
   The harness does not reproduce the server logic of these messages. The steps registered on them fire at
@@ -259,7 +268,8 @@ another at PostOperation), or none does, they throw an `InvalidOperationExceptio
 you state in full is passed to the plugin as is. The plugin-less `Build()` keeps whatever trigger you set.
 
 `Execute<TPlugin>()` constructs the plugin (parameterless constructor, or the
-`(string unsecureConfig, string secureConfig)` constructor with empty configuration) and returns it.
+`(string unsecureConfig, string secureConfig)` constructor with `null` for both, as `PluginPipeline` passes for a step
+with no configuration) and returns it.
 
 `ctx.PrimaryEntityId` is the `Target`'s id (an entity or an `EntityReference`), and `Guid.Empty` without a Target or
 on a global message such as `Associate`. `WithPrimaryEntity(name, id)` sets it explicitly.
@@ -394,7 +404,17 @@ just **data**: the child carries an `EntityReference` to its parent, and that al
 joins and filtering. Declare the relationship with `WithParentalRelationship(...)`,
 `WithReferentialRelationship(...)` or `WithRelationship(...)` only when the test exercises a **cascade or inherited
 access** (see [Security model in tests](security-model.md)). Once declared, `Associate` and `Disassociate` over it
-set and clear the child's lookup; its schema name is `{referenced}_{referencing}` (`account_contact`).
+set and clear the child's lookup. Pass the relationship's real schema name to find it by that name in `Associate`,
+`Disassociate`, a deep insert and a `RelatedEntitiesQuery`; two relationships cannot share a schema name. Without
+one, the schema name is `{referenced}_{referencing}` (`account_contact`):
+
+```csharp
+var crm = new InMemoryOrganizationService()
+    .WithParentalRelationship("account", "contact", "parentcustomerid", schemaName: "contact_customer_accounts");
+
+crm.Associate("account", accountId, new Relationship("contact_customer_accounts"),
+    new EntityReferenceCollection { new EntityReference("contact", contactId) });
+```
 
 For N:N, declare the relationship once with `WithManyToMany(...)` and use `Associate`/`Disassociate`: they create
 and delete the intersect rows, so `RetrieveMultiple` joins through them as in Dataverse:
@@ -413,7 +433,8 @@ link.LinkCriteria.AddCondition("accountid", ConditionOperator.Equal, accountId);
 crm.RetrieveMultiple(q);
 ```
 
-`Associate` is idempotent (an existing pair is not duplicated); an undeclared relationship throws. With early-bound
+Associating a pair that is already associated faults with `0x80040237`, and the records must belong to the
+relationship's two tables; an undeclared relationship throws. With early-bound
 types, a typed overload takes the table and column names from the types and the property accesses:
 
 ```csharp
@@ -478,9 +499,10 @@ they do online:
 - **Ids** are random `Guid`s. Make them reproducible with `WithIdSequence()` (`00000000-0000-0000-0000-000000000001`,
   `...0002`, ...; assert with `SequentialIds.At(n)`) or `WithIdSequence(() => myGuid)` for your own generator.
 
-The **ownership type** is resolved per table. An early-bound row's is inferred (a generated class has an `OwnerId`
-property only for user- or team-owned tables); late-bound rows default to user-owned. Declare it to override the
-inference or to model the special table types:
+The **ownership type** is resolved per table, in this order: a declaration (below); the `OwnershipType` of metadata
+registered with `WithEntityMetadata(...)`; the early-bound type of the row (a generated class has an `OwnerId`
+property only for user- or team-owned tables), also through `PluginPipeline`; otherwise user-owned. Declare it to
+override the inference or to model the special table types:
 
 ```csharp
 var crm = new InMemoryOrganizationService()
@@ -525,7 +547,7 @@ To derive the metadata from an early-bound type instead, use `FakeEntityMetadata
 - each `[AttributeLogicalName]` property becomes an attribute (its CLR type gives the `AttributeTypeCode`);
 - generated choice enums become picklists;
 - the `{logicalname}id` column is the primary id, and a `name` column the primary name;
-- the ownership is inferred from an `ownerid` column;
+- the ownership is inferred from an `ownerid` column: user-owned with one, organization-owned without;
 - the maximum length comes from the generated `[StringLength]` annotation.
 
 ```csharp
@@ -574,7 +596,8 @@ Supported:
 - ordering (linked columns included), TopCount, paging, Distinct, total record count and column aliases;
 - aggregates (count, countcolumn, sum, avg, min, max, with group-by), on linked columns and over joins too.
 
-Null values and paging follow Dataverse. `ne`, `not-in`, `not-like`, `not-begin-with` and `not-end-with` match a row
+Null values and paging follow Dataverse. A null never matches in a join or an Any/All filter: a row whose link
+column is empty is joined to nothing. `ne`, `not-in`, `not-like`, `not-begin-with` and `not-end-with` match a row
 whose column is null; the comparisons, `not-between`, `like` (even `'%'`) and `ne-userid` do not. Distinct compares
 text without case. A query with no page size returns a page of at most 5,000 rows with `MoreRecords`, and no page is
 larger. The engine pages by page number: the paging cookie is not read (Dataverse also returns the same page again

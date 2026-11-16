@@ -203,9 +203,11 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
 - **N:N `Associate` and `Disassociate` need a declared relationship.** Declare it with `WithManyToMany(...)` or a
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise). Associate and Disassociate
   then persist the intersect rows, and `RetrieveMultiple` joins through them. Associating an existing pair again
-  throws a `DuplicateRecord` (`0x80040237`) fault, and a self-referential N:N maps its two columns by position.
+  throws a `DuplicateRecord` (`0x80040237`) fault, associating records outside the relationship's two tables throws
+  an invalid argument (`0x80040203`) fault, and a self-referential N:N maps its two columns by position.
   Over a 1:N relationship declared with `WithRelationship(...)`, Associate sets the child's lookup column and
-  Disassociate clears it, from either side. `Merge` moves the subordinate's N:N rows and reparents its 1:N
+  Disassociate clears it, from either side. The 1:N relationship is found by the `schemaName` it was declared with,
+  or by `{referenced}_{referencing}` when it was declared without one. `Merge` moves the subordinate's N:N rows and reparents its 1:N
   children, except over a relationship whose Merge behaviour is `NoCascade`.
 - **`RetrieveMultiple` supports a common subset.** No query hints, `NoLock`, `FilterHint=union` or faithful paging
   cookies: pages are read by page number, 5,000 rows at most. FetchXML support covers a common subset, aggregates
@@ -216,8 +218,9 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   `WithOrganizationId`), not computed by a server. Without `WithCurrentUser`, a stable default user
   (`DefaultCallingUser`) is used. `statecode`, `statuscode`, `versionnumber` and `overriddencreatedon` backdating are
   stamped too. `WithClock(...)` and `WithIdSequence(...)` make timestamps and ids deterministic; the same clock
-  expires the harness's plugin cache. The ownership type is inferred from the early-bound `OwnerId` property or
-  declared explicitly (`AsOrganizationOwned`, `AsUserOwned`, `AsVirtual`, `AsElastic`); elastic tables are ownable.
+  expires the harness's plugin cache. The ownership type is declared explicitly (`AsOrganizationOwned`,
+  `AsUserOwned`, `AsVirtual`, `AsElastic`), or read from the `OwnershipType` of registered metadata, or inferred from
+  the early-bound `OwnerId` property; a table with none of these is user-owned. Elastic tables are ownable.
   `Seed(...)` stamps nothing, on purpose: it is raw setup.
 - **Virtual tables are partial.** `AsVirtual(...)` turns off system-column population. `AsVirtual(name,
   readOnly: true)` also rejects Create, Update and Delete. A virtual table that is not read-only still stores rows
@@ -229,18 +232,23 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
 - **The security model is opt-in and off by default.** Without a `WithSecurity(...)` call there are no privilege or
   access checks. When it is on, the harness models:
   - security roles (one copy per business unit, with `roletemplateid` on system roles), privileges at the four
-    access levels, business units, and teams (including the member's privilege inheritance mode);
+    access levels, business units, and teams (including each role's member's privilege inheritance setting);
   - record sharing, including organization-wide access, and access teams;
   - access inherited through parental relationships (Reparent and Share cascades) and 1:N relationship cascades.
     A reparent re-derives access for the moved record only, not its descendants, and an Assign of the parent
     re-derives nothing. A setup call such as `WithSharedRecord` made after the test has started re-derives the
     seeded rows from the store's current state, except those that a Share or Unshare cascade reached at run time;
-  - manager and position hierarchy security, and field-level (column) security;
+  - manager and position hierarchy security, and field-level (column) security with separate read, update and
+    create permissions;
+  - the Append privilege on both tables for an N:N Associate or Disassociate; a 1:N one is checked as the Update of
+    the child's lookup;
   - the Read privilege on every table a read touches, linked tables included (a read without it throws
     `0x80040220`), and record trimming on joins: a join to a record the caller cannot read drops the primary row on
     an inner join, or omits the linked columns on a left outer join, recursively through nested joins;
   - the Read privilege a new record owner must hold, for owners declared in the model; an owner id the model does not
     know is not checked. A user owner counts Read from any of its roles, whatever its teams' inheritance mode.
+
+  A role with "Team privileges only" inheritance assigned to a user directly keeps all its grants in the harness.
 
   With security on, a lookup set by id must point at an existing record; with it off, a lookup may point at a record
   the test never seeded. A parent's Delete PreValidation steps still see its cascaded children; by PreOperation they
