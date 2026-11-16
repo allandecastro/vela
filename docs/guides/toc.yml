@@ -1,19 +1,19 @@
-- name: The vela CLI
-  href: cli-overview.md
-- name: Scaffold a solution
-  href: scaffold.md
-- name: Add a file (vela add)
-  href: add.md
-- name: Write a plugin
-  href: plugins.md
-- name: Typed queries
-  href: queries.md
-- name: Escape hatches (drop to the SDK)
-  href: escape-hatches.md
-- name: Write a Custom API
-  href: custom-apis.md
-- name: Dependency injection
-  href: dependency-injection.md
+# Grouped along the learning path: write the code, use the built-in services, test it, deploy it, then examples.
+# Each page appears once; a title is the page's H1 or a short form of it.
+- name: Build plugins
+  items:
+    - name: Write a plugin
+      href: plugins.md
+    - name: Write a Custom API
+      href: custom-apis.md
+    - name: Typed queries
+      href: queries.md
+    - name: Early-bound models (vela models)
+      href: models.md
+    - name: Dependency injection
+      href: dependency-injection.md
+    - name: Escape hatches
+      href: escape-hatches.md
 - name: Built-in services
   items:
     - name: Caching
@@ -26,23 +26,33 @@
       href: managed-identity.md
     - name: Telemetry & Application Insights
       href: telemetry.md
-- name: Testing
-  href: testing.md
-- name: Security model in tests
-  href: security-model.md
-- name: Plan & Apply
-  href: plan-apply.md
-- name: Early-bound models
-  href: models.md
-- name: Client-side (preview)
-  href: client-side.md
-- name: Signing
-  href: signing.md
-- name: End-to-end example
-  href: end-to-end.md
-- name: Migrating an existing project
-  href: migrating.md
-- name: Cookbook
-  href: cookbook.md
-- name: Troubleshooting
-  href: troubleshooting.md
+- name: Test
+  items:
+    - name: Testing
+      href: testing.md
+    - name: Security model in tests
+      href: security-model.md
+- name: CLI and deployment
+  items:
+    - name: The vela CLI
+      href: cli-overview.md
+    - name: Scaffold a solution (vela init)
+      href: scaffold.md
+    - name: Add a component (vela add)
+      href: add.md
+    - name: Plan and apply
+      href: plan-apply.md
+    - name: Sign the plugin package (vela sign)
+      href: signing.md
+    - name: Client-side (preview)
+      href: client-side.md
+- name: Examples and troubleshooting
+  items:
+    - name: End-to-end example
+      href: end-to-end.md
+    - name: Cookbook
+      href: cookbook.md
+    - name: Migrating an existing project
+      href: migrating.md
+    - name: Troubleshooting
+      href: troubleshooting.md
