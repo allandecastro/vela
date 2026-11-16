@@ -79,10 +79,11 @@ namespace Vela.Testing.Tests
         [Fact]
         public void Scalar_min_and_max_return_the_column_type_over_the_matching_rows()
         {
-            InMemoryOrganizationService crm = new InMemoryOrganizationService();
-            crm.Create(new Entity("account") { ["name"] = "keep", ["numberofemployees"] = 10, ["createdon"] = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc) });
-            crm.Create(new Entity("account") { ["name"] = "keep", ["numberofemployees"] = 30, ["createdon"] = new DateTime(2022, 6, 1, 0, 0, 0, DateTimeKind.Utc) });
-            crm.Create(new Entity("account") { ["name"] = "drop", ["numberofemployees"] = 999, ["createdon"] = new DateTime(1999, 1, 1, 0, 0, 0, DateTimeKind.Utc) });
+            // Seeded: a Create ignores a supplied createdon, as on Dataverse.
+            InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
+                new Entity("account") { ["name"] = "keep", ["numberofemployees"] = 10, ["createdon"] = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new Entity("account") { ["name"] = "keep", ["numberofemployees"] = 30, ["createdon"] = new DateTime(2022, 6, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new Entity("account") { ["name"] = "drop", ["numberofemployees"] = 999, ["createdon"] = new DateTime(1999, 1, 1, 0, 0, 0, DateTimeKind.Utc) });
 
             TypedQuery<FakeAccount> Matching() => Query.For<FakeAccount>().Where(a => a.Name, ConditionOperator.Equal, "keep");
 

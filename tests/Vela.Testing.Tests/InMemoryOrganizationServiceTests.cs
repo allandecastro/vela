@@ -695,9 +695,10 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService crm = new InMemoryOrganizationService();
             Guid accountId = crm.Create(new Entity("account") { ["name"] = "Zava" });
 
-            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+            FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
                 crm.Associate("account", accountId, new Relationship("account_contacts"),
                     new EntityReferenceCollection { new EntityReference("contact", Guid.NewGuid()) }));
+            Assert.Equal(unchecked((int)0x80040216), ex.Detail.ErrorCode);
             Assert.Contains("WithManyToMany", ex.Message);
         }
 

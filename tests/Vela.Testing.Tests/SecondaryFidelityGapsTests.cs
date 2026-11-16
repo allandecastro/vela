@@ -457,7 +457,7 @@ namespace Vela.Testing.Tests
                     new Entity("account", master) { ["name"] = "Master" },
                     new Entity("account", subordinate) { ["name"] = "Sub" },
                     new Entity("account", other) { ["name"] = "Other" });
-            Relationship peers = new Relationship("account_peers");
+            Relationship peers = new Relationship("account_peers") { PrimaryEntityRole = EntityRole.Referencing };
             crm.Associate("account", subordinate, peers, new EntityReferenceCollection { new EntityReference("account", master), new EntityReference("account", other) });
 
             crm.Execute(new MergeRequest { Target = new EntityReference("account", master), SubordinateId = subordinate, UpdateContent = new Entity("account") });
