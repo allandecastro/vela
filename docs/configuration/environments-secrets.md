@@ -27,7 +27,9 @@ A managed identity or workload identity with `--url` alone needs no secret at al
 A step's secure configuration (declared in code with `WithSecureConfigFrom("Name")`) is a deployment secret too. Pass
 it to `plan` and `apply` with `--secure-config Name=@file`, or set `VELA_SECURE_CONFIG_<Name>` in the pipeline. An
 inline `--secure-config Name=VALUE` works but warns. Without a value, `apply` leaves the environment's own secure
-configuration untouched. See [Plan and apply](../guides/plan-apply.md#secure-configuration).
+configuration untouched. An empty variable or an empty file counts as no value and prints a warning, so a secret
+missing from the pipeline's store never clears the live one; only an explicit `--secure-config Name=` clears it.
+See [Plan and apply](../guides/plan-apply.md#secure-configuration).
 
 ### Example
 

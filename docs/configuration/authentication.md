@@ -44,6 +44,10 @@ vela apply --packages-dir ./artifacts --url https://zava.crm.dynamics.com --solu
 identity and an `az login` session, so the same command works on a developer machine and in a pipeline. The
 Microsoft page linked above lists the chain. When no source yields a token, the command exits `6`.
 
+Vela gets the first token before it reads the packages, so a sign-in failure stops the run early. During the run it
+asks the same credential again when the token is about to expire, so a long scan, a wait at the apply prompt or a
+long apply does not fail on an expired token.
+
 ## Client id and client secret
 
 For unattended runs with an app registration, pass the environment URL, the tenant, the application (client) id and a
@@ -90,6 +94,7 @@ vela plan --packages-dir ./artifacts --solution ZavaSales --interactive
 
 - Without `--url`, Vela asks for the environment URL and offers the last one you used as the default.
 - The first run opens the browser to sign in. The token is then cached, so later runs sign in silently.
+- During a run, Vela renews the token silently when it is about to expire, so a long run does not outlive it.
 - The cache is the file `msal.cache` in the Vela config folder (`~/.vela`, or `$VELA_CONFIG_DIR`): encrypted with
   DPAPI on Windows, and readable only by your user on macOS and Linux.
 - `--fresh-login` ignores the cached account and opens the browser again.

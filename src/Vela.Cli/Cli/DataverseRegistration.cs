@@ -128,12 +128,14 @@ internal static partial class DataverseRegistration
 
     if (!string.IsNullOrEmpty(options.OAuthUrl) && options.OAuthToken != null)
     {
-        string token = options.OAuthToken;
+        // A provider, not a fixed token: the ServiceClient asks it before its requests, and it renews the token
+        // near expiry, so a run longer than the token's lifetime does not fail with 401 mid-apply.
+        DataverseTokenProvider tokenProvider = options.OAuthToken;
         string oauthUrl = options.OAuthUrl;
         ServiceClient client;
         try
         {
-            client = new ServiceClient(new Uri(oauthUrl), _ => Task.FromResult(token), useUniqueInstance: true);
+            client = new ServiceClient(new Uri(oauthUrl), TokenCallback(tokenProvider), useUniqueInstance: true);
         }
         catch (Exception ex) when (ex is not DataverseConnectionException)
         {
@@ -153,6 +155,12 @@ internal static partial class DataverseRegistration
     return CreateDataverseClientFromConnectionString(options.ConnectionString!);
 }
 
+    // Stryker restore all
+
+    // The ServiceClient token callback: it asks the provider on each call rather than capturing one token.
+    internal static Func<string, Task<string>> TokenCallback(DataverseTokenProvider provider) => _ => provider.GetTokenAsync();
+
+    // Stryker disable all : live network I/O, as above.
     internal static ServiceClient CreateDataverseClientFromConnectionString(string connectionString)
 {
     ServiceClient client;

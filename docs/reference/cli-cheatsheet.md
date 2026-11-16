@@ -36,7 +36,7 @@ Options marked *(preview)* belong to the client-side preview and may change.
 | Option | Notes |
 | --- | --- |
 | `--solution <uniquename>` | Alias `--solution-unique-name`. The unmanaged solution the run deploys into. Required by `plan` and `apply` (prompted for with `--interactive`). |
-| `--secure-config NAME=VALUE` or `NAME=@file` | Value of a step's named secure configuration. Repeatable. An inline value warns; prefer `@file` or `VELA_SECURE_CONFIG_<NAME>`. |
+| `--secure-config NAME=VALUE` or `NAME=@file` | Value of a step's named secure configuration. Repeatable. An inline value warns; prefer `@file` or `VELA_SECURE_CONFIG_<NAME>`. An empty variable or file is ignored with a warning; `NAME=` clears the value. |
 | `--managed-identity <managedidentityid>` | Link the published plugin packages to this `managedidentity` record. |
 | `--strict` | Exit `4` when `diagnostics` has any warning. |
 | `--detailed-exitcode` | `plan` only: exit `8` when there are changes to apply. |
