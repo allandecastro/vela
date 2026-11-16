@@ -38,49 +38,51 @@ namespace Vela.Testing
             OrganizationRequest inputs = CopyRequest(request);
             (string Name, Guid Id) mainEntity = CustomApiRequestValidator.PrimaryEntity(definition, request.Parameters);
 
-            return RunOperation(asyncQueue =>
+            return RunOperation(asyncQueue => RunStages(
+                stage => FireStage(GenericInvocation(message, stage, entityName, entityId, inputs.Parameters, null), asyncQueue),
+                () => ExecuteCustomApiMain(plugin, pluginType, message, entityName, mainEntity, inputs),
+                response => FireStage(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, inputs.Parameters, response.Results), asyncQueue)),
+                shared);
+        }
+
+        // The Custom API's main operation: its plugin runs under the step the platform creates for the API, and its
+        // OutputParameters become the response.
+        private OrganizationResponse ExecuteCustomApiMain(IPlugin plugin, Type pluginType, string message, string entityName, (string Name, Guid Id) mainEntity, OrganizationRequest inputs)
+        {
+            FakePluginExecutionContext context = new FakePluginExecutionContext
             {
-                FireStage(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, inputs.Parameters, null), asyncQueue);
-                EnterTransaction();
-                FireStage(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, inputs.Parameters, null), asyncQueue);
-
-                FakePluginExecutionContext context = new FakePluginExecutionContext
+                MessageName = message,
+                Stage = (int)PluginStages.MainOperation,
+                Mode = (int)ExecutionMode.Synchronous,
+                Depth = _depth,
+                // Verified live: "none" for a global API, the bound table (and the Target id) for a bound one.
+                PrimaryEntityName = mainEntity.Name,
+                PrimaryEntityId = mainEntity.Id,
+                CorrelationId = _correlationId,
+                SharedVariables = _sharedVariables,
+                // The main operation runs under a step the platform creates for the API.
+                OwningExtension = new EntityReference("sdkmessageprocessingstep", Security.DeterministicGuid.From("customapi", message))
                 {
-                    MessageName = message,
-                    Stage = (int)PluginStages.MainOperation,
-                    Mode = (int)ExecutionMode.Synchronous,
-                    Depth = _depth,
-                    // Verified live: "none" for a global API, the bound table (and the Target id) for a bound one.
-                    PrimaryEntityName = mainEntity.Name,
-                    PrimaryEntityId = mainEntity.Id,
-                    CorrelationId = _correlationId,
-                    SharedVariables = _sharedVariables,
-                    // The main operation runs under a step the platform creates for the API.
-                    OwningExtension = new EntityReference("sdkmessageprocessingstep", Security.DeterministicGuid.From("customapi", message))
-                    {
-                        Name = $"CustomApi '{message}' implementation",
-                    },
-                };
+                    Name = $"CustomApi '{message}' implementation",
+                },
+            };
 
-                foreach (KeyValuePair<string, object> parameter in inputs.Parameters)
-                {
-                    context.InputParameters[parameter.Key] = parameter.Value;
-                }
+            foreach (KeyValuePair<string, object> parameter in inputs.Parameters)
+            {
+                context.InputParameters[parameter.Key] = parameter.Value;
+            }
 
+            PipelineExecutionEntry entry = new PipelineExecutionEntry(pluginType.FullName ?? pluginType.Name, message, PluginStages.MainOperation, ExecutionMode.Synchronous, entityName, _depth);
+            _log.Add(entry);
+            ExecuteWithContext(context, plugin, entry);
 
-                PipelineExecutionEntry entry = new PipelineExecutionEntry(pluginType.FullName ?? pluginType.Name, message, PluginStages.MainOperation, ExecutionMode.Synchronous, entityName, _depth);
-                _log.Add(entry);
-                ExecuteWithContext(context, plugin, entry);
+            OrganizationResponse response = new OrganizationResponse { ResponseName = message };
+            foreach (KeyValuePair<string, object> output in context.OutputParameters)
+            {
+                response.Results[output.Key] = output.Value;
+            }
 
-                OrganizationResponse response = new OrganizationResponse { ResponseName = message };
-                foreach (KeyValuePair<string, object> output in context.OutputParameters)
-                {
-                    response.Results[output.Key] = output.Value;
-                }
-
-                FireStage(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, inputs.Parameters, response.Results), asyncQueue);
-                return response;
-            }, shared);
+            return response;
         }
 
         // A step registered on the Custom API's message fires only if the API allows it: None allows no step, AsyncOnly

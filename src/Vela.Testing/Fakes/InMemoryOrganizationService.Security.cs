@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.ServiceModel;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -182,6 +183,30 @@ namespace Vela.Testing
             return new SystemActor(_currentUserId, businessUnit, _currentOrganizationId);
         }
 
+        // The identity stamped into the audit and owner columns. As SYSTEM (ctx.SystemService) it is the SYSTEM user in
+        // the root business unit, with the calling user as createdonbehalfby (verified live); otherwise the acting user.
+        private SystemActor StampingActor()
+        {
+            SystemActor actor = Actor();
+            return _actingAsSystem
+                ? new SystemActor(SystemUserId, RootBusinessUnit(actor), actor.OrganizationId, onBehalfOfUserId: actor.UserId)
+                : actor;
+        }
+
+        // WhoAmI inside a plugin returns the SYSTEM user on every service, whether created for null, the context's
+        // UserId or Guid.Empty (verified live). The store runs on behalf of a plugin's service inside RunAs; the
+        // test's own calls (outside any plugin) see the configured current user.
+        private SystemActor WhoAmIActor()
+        {
+            SystemActor actor = Actor();
+            return _actingAsSystem || _runAsDepth > 0
+                ? new SystemActor(SystemUserId, RootBusinessUnit(actor), actor.OrganizationId)
+                : actor;
+        }
+
+        // The root business unit: the top of the security model's hierarchy, else the acting user's business unit.
+        private Guid RootBusinessUnit(SystemActor actor) => _security?.RootBusinessUnitId() ?? actor.BusinessUnitId;
+
         /// <summary>
         /// The acting identity (user, its business unit, and organization) the pipeline stamps onto a plugin
         /// execution context. Kept consistent with what <c>WhoAmI</c> reports and how <c>createdby</c>/<c>ownerid</c>
@@ -196,9 +221,16 @@ namespace Vela.Testing
 
         // Set while the store runs on behalf of the SYSTEM identity (a plugin's ctx.SystemService, i.e.
         // IOrganizationServiceFactory.CreateOrganizationService(null)): SYSTEM is not subject to the security model,
-        // so every privilege / field-security / read-filter check is skipped. Audit/owner stamping still uses the
-        // calling user (and its registered business unit), so the configured security model is not torn down.
+        // so every privilege / field-security / read-filter check is skipped, and the audit/owner columns are stamped
+        // with the SYSTEM user (see StampingActor).
         private bool _actingAsSystem;
+
+        // How many RunAs scopes are open: above zero, the store runs on behalf of a plugin's service.
+        private int _runAsDepth;
+
+        // The id the store stands the org's SYSTEM user in with: stamped into createdby/modifiedby/ownerid by a write
+        // through the SYSTEM service and returned by WhoAmI inside a plugin.
+        internal static Guid SystemUserId => PluginPipeline.SystemUserId;
 
         // The security model to ENFORCE for the current call: null when no model is configured or when acting as
         // SYSTEM. Stamping (Actor, owning-business-unit realignment) keeps reading _security directly.
@@ -212,6 +244,7 @@ namespace Vela.Testing
         {
             Guid previousUser = _currentUserId;
             bool previousSystem = _actingAsSystem;
+            _runAsDepth++;
             if (userId.HasValue)
             {
                 _currentUserId = userId.Value;
@@ -230,6 +263,7 @@ namespace Vela.Testing
             {
                 _currentUserId = previousUser;
                 _actingAsSystem = previousSystem;
+                _runAsDepth--;
             }
         }
 
@@ -267,8 +301,13 @@ namespace Vela.Testing
                 field = aliased.AttributeLogicalName;
             }
 
-            return _security!.IsSecuredColumn(table, field) && !_security.CanReadColumn(_currentUserId, table, field);
+            return IsUnreadableSecuredColumn(table, field);
         }
+
+        // Whether the column is field-secured and the current user holds no read permission on it. Assumes security
+        // is enforced.
+        private bool IsUnreadableSecuredColumn(string entity, string column) =>
+            !string.IsNullOrEmpty(column) && _security!.IsSecuredColumn(entity, column) && !_security.CanReadColumn(_currentUserId, entity, column);
 
         // Field-level security: reject a RetrieveMultiple that aggregates or groups by a field-secured column the
         // caller can't read (the aggregate value would otherwise leak it).
@@ -290,15 +329,7 @@ namespace Vela.Testing
 
             foreach (KeyValuePair<string, string> column in InMemoryQueryEngine.AttributeExpressionColumns(expression))
             {
-                DemandSecuredAggregateColumn(column.Key, column.Value);
-            }
-        }
-
-        private void DemandSecuredAggregateColumn(string entity, string column)
-        {
-            if (!string.IsNullOrEmpty(column) && _security!.IsSecuredColumn(entity, column) && !_security.CanReadColumn(_currentUserId, entity, column))
-            {
-                throw _security.PrivilegeDenied(_currentUserId, Privilege.Read, $"{entity}.{column}");
+                DemandSecuredColumnRead(column.Key, column.Value);
             }
         }
 
@@ -312,14 +343,16 @@ namespace Vela.Testing
                 return;
             }
 
-            if (!string.IsNullOrEmpty(column) && _security!.IsSecuredColumn(entity, column) && !_security.CanReadColumn(_currentUserId, entity, column))
+            if (IsUnreadableSecuredColumn(entity, column))
             {
-                throw _security.PrivilegeDenied(_currentUserId, Privilege.Read, $"{entity}.{column}");
+                throw _security!.PrivilegeDenied(_currentUserId, Privilege.Read, $"{entity}.{column}");
             }
         }
 
-        // Field-level security: reject a Create/Update that sets a field-secured column the caller can't write.
-        private void DemandSecuredColumnWrites(Entity entity)
+        // Field-level security: reject a Create that sets a field-secured column the caller has no create permission
+        // on, or an Update that sets one the caller has no update permission on (a column security profile grants the
+        // two separately).
+        private void DemandSecuredColumnWrites(Entity entity, bool onCreate)
         {
             if (Enforcing == null)
             {
@@ -328,9 +361,17 @@ namespace Vela.Testing
 
             foreach (string column in entity.Attributes.Keys)
             {
-                if (_security!.IsSecuredColumn(entity.LogicalName, column) && !_security.CanWriteColumn(_currentUserId, entity.LogicalName, column))
+                if (!_security!.IsSecuredColumn(entity.LogicalName, column))
                 {
-                    throw _security.PrivilegeDenied(_currentUserId, Privilege.Write, $"{entity.LogicalName}.{column}");
+                    continue;
+                }
+
+                bool allowed = onCreate
+                    ? _security.CanCreateColumn(_currentUserId, entity.LogicalName, column)
+                    : _security.CanUpdateColumn(_currentUserId, entity.LogicalName, column);
+                if (!allowed)
+                {
+                    throw _security.PrivilegeDenied(_currentUserId, onCreate ? Privilege.Create : Privilege.Write, $"{entity.LogicalName}.{column}");
                 }
             }
         }
@@ -488,16 +529,17 @@ namespace Vela.Testing
         // assignment, so it additionally needs Assign. No-op when security is off.
         private void DemandCreate(Entity entity)
         {
-            if (Enforcing == null)
-            {
-                DemandStrictSecurityConfigured();
-                return;
-            }
-
             EntityReference owner =
                 entity.Contains(SystemFieldApplier.OwnerId) && entity[SystemFieldApplier.OwnerId] is EntityReference explicitOwner
                     ? explicitOwner
-                    : new EntityReference("systemuser", _currentUserId);
+                    : new EntityReference(PrincipalKind.SystemUser, _currentUserId);
+
+            if (Enforcing == null)
+            {
+                DemandStrictSecurityConfigured();
+                DemandOwnerCanRead(entity.LogicalName, owner, onCreate: true);
+                return;
+            }
 
             Entity prospective = new Entity(entity.LogicalName) { [SystemFieldApplier.OwnerId] = owner };
             Guid ownerBusinessUnit = _security!.BusinessUnitOfPrincipal(owner);
@@ -508,20 +550,58 @@ namespace Vela.Testing
 
             _security.Demand(_currentUserId, entity.LogicalName, Privilege.Create, prospective);
 
-            bool ownedByCaller = string.Equals(owner.LogicalName, "systemuser", StringComparison.OrdinalIgnoreCase) && owner.Id == _currentUserId;
-            if (!ownedByCaller)
+            if (!PrincipalKind.IsUser(owner, _currentUserId))
             {
                 // Pass the prospective record (with its owner/BU set) so Assign is depth/BU-checked against the
                 // record's target owner, exactly as a real org checks an assignment — not treated as a blanket grant.
                 _security.Demand(_currentUserId, entity.LogicalName, Privilege.Assign, prospective);
             }
+
+            DemandOwnerCanRead(entity.LogicalName, owner, onCreate: true);
         }
 
-        // Relating records needs AppendTo on the record being related to and Append on each record related to it,
-        // mirroring the platform. Off (or nothing configured) is a no-op.
-        private void DemandAssociationAccess(string entityName, Guid entityId, EntityReferenceCollection relatedEntities)
+        // A record's owner must hold Read on its table, whoever sets it (Create with ownerid, an ownerid Update, Assign,
+        // or a PreOperation plugin writing Target["ownerid"]) — verified live. The check is on the owner, not the
+        // caller, so it also runs as SYSTEM; it needs a configured model and an owner the model knows, and skips the
+        // caller owning its own record.
+        private void DemandOwnerCanRead(string entityName, EntityReference? owner, bool onCreate)
+        {
+            if (_security == null || owner == null || PrincipalKind.IsUser(owner, _currentUserId))
+            {
+                return;
+            }
+
+            FaultException<OrganizationServiceFault>? denied = _security.OwnerReadDenied(owner, entityName, onCreate);
+            if (denied != null)
+            {
+                throw denied;
+            }
+        }
+
+        // Associating or disassociating over an N:N relationship needs Append on the records of both tables (Learn,
+        // security roles and privileges: "For many-to-many relationships, a user must have Append privilege for both
+        // tables being associated or disassociated"), whichever side the call is made from. Off is a no-op.
+        private void DemandManyToManyAccess(string entityName, Guid entityId, EntityReferenceCollection relatedEntities)
         {
             if (Enforcing == null)
+            {
+                return;
+            }
+
+            DemandAccess(entityName, Privilege.Append, StoredOrNull(entityName, entityId));
+            foreach (EntityReference related in relatedEntities)
+            {
+                DemandAccess(related.LogicalName, Privilege.Append, StoredOrNull(related.LogicalName, related.Id));
+            }
+        }
+
+        // A 1:N Associate/Disassociate made from the parent (referenced) side needs AppendTo on the parent and Append on
+        // each child before the children's lookups are written. From the child side no pre-check runs: the call is the
+        // Update of the child's lookup, which demands Write and Append on the child and, when it sets the lookup,
+        // AppendTo on the parent. Off is a no-op.
+        private void DemandOneToManyAccess(string entityName, Guid entityId, OneToManyRegistry.OneToMany relationship, EntityReferenceCollection relatedEntities)
+        {
+            if (Enforcing == null || !string.Equals(entityName, relationship.ReferencedEntity, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -631,7 +711,7 @@ namespace Vela.Testing
                 return access;
             }
 
-            AccessRights sharerRights = EffectiveAccess(new EntityReference("systemuser", _currentUserId), target);
+            AccessRights sharerRights = EffectiveAccess(new EntityReference(PrincipalKind.SystemUser, _currentUserId), target);
             return new PrincipalAccess { Principal = access.Principal, AccessMask = access.AccessMask & sharerRights };
         }
         // Applies each child 1:N relationship's Delete cascade, then removes the record via <paramref name="removeRecord"/>:
@@ -886,14 +966,14 @@ namespace Vela.Testing
         private void ApplyCascadedOwner(Entity child, EntityReference newOwner)
         {
             child[SystemFieldApplier.OwnerId] = newOwner;
-            if (string.Equals(newOwner.LogicalName, "team", StringComparison.OrdinalIgnoreCase))
+            if (PrincipalKind.IsTeam(newOwner))
             {
-                child[SystemFieldApplier.OwningTeam] = new EntityReference("team", newOwner.Id);
+                child[SystemFieldApplier.OwningTeam] = new EntityReference(PrincipalKind.Team, newOwner.Id);
                 child.Attributes.Remove(SystemFieldApplier.OwningUser);
             }
             else
             {
-                child[SystemFieldApplier.OwningUser] = new EntityReference("systemuser", newOwner.Id);
+                child[SystemFieldApplier.OwningUser] = new EntityReference(PrincipalKind.SystemUser, newOwner.Id);
                 child.Attributes.Remove(SystemFieldApplier.OwningTeam);
             }
 

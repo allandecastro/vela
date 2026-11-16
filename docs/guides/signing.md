@@ -1,45 +1,94 @@
+---
+_description: "Sign a plugin package for managed identity"
+---
+
 # Sign the plugin package (`vela sign`)
 
-When a plugin uses a **managed identity**, Dataverse requires the plugin **package** (`.nupkg`) to carry a
-trusted signature. `vela sign` applies one by calling `dotnet nuget sign` (so it runs anywhere the .NET SDK
-does - Windows, Linux, macOS):
+A plugin that uses a managed identity must ship in a signed plugin package (`.nupkg`); see
+[Set up managed identity for Power Platform](https://learn.microsoft.com/power-platform/admin/set-up-managed-identity)
+for the platform requirements. `vela sign` signs a package by calling `dotnet nuget sign`, so it runs wherever the
+.NET SDK runs: Windows, Linux and macOS.
 
-```powershell
+This page covers the command, the build integration that `vela init --managed-identity` generates, and how signed
+packages work with `vela apply`. To link the package to a managed identity at deployment, see
+[Managed identity](managed-identity.md).
+
+## Sign a package
+
+```bash
+# Certificate in the CurrentUser\My store, by SHA-256 fingerprint
 vela sign --package artifacts/zava_Zava.Integrations.1.0.0.nupkg --fingerprint <sha256-fingerprint>
-vela sign --package artifacts/zava_Zava.Integrations.1.0.0.nupkg --pfx cert.pfx --pfx-credential <cred>
+
+# PFX file, password from the Windows Credential Manager (Windows only)
+vela sign --package artifacts/zava_Zava.Integrations.1.0.0.nupkg --pfx cert.pfx --pfx-credential <credential-name>
+
+# Base64 PFX and password from environment variables (CI)
 vela sign --package artifacts/zava_Zava.Integrations.1.0.0.nupkg --pfx-base64-env PFX_B64 --pfx-password-env PFX_PW
 ```
 
-Certificate sources (exactly one): `--fingerprint` (cert in `CurrentUser\My` - recommended, no secret on
-disk), `--pfx <file>` with a password (`--pfx-password-env`) or `--pfx-credential` (a Windows Credential Manager entry,
-Windows only), or the base64
-`.pfx` content (a CI secret, decoded to an owner-only temp file and deleted after). Optional `--timestamp`
-(default `http://timestamp.digicert.com`).
+Give exactly one certificate source:
 
-Pass secrets by **environment-variable name**: `--pfx-base64-env <VAR>` and `--pfx-password-env <VAR>` read the
-value from that variable, so it never appears on a command line, where other users of a shared host can read it
-(`ps`, `/proc`). The literal `--pfx-base64 <content>` / `--pfx-password <pw>` still work but warn. `dotnet nuget
-sign` only accepts a PFX password as a command-line argument, so `vela sign` never gives it one: it opens the PFX
-itself and passes the tool a passwordless copy in an owner-only temporary file, deleted once signing ends.
+| Source | Option | Notes |
+| --- | --- | --- |
+| Certificate store | `--fingerprint <hex>` | The certificate's SHA-256 fingerprint. Recommended: no secret on disk or on the command line. |
+| PFX file | `--pfx <file>` | Needs a password (below). |
+| Base64 PFX | `--pfx-base64-env <VAR>` | The variable holds the PFX as base64, typically a CI secret. Needs a password (below). |
 
-`vela init --managed-identity` (which adds the Integrations project, with or without `--samples`) wires this into the build of the **Integrations** project: a `SignPluginPackage`
-MSBuild target runs after `Pack`, **inert until a certificate source is configured** and **skipped inside CI**
-(`GITHUB_ACTIONS` / `TF_BUILD`) so a pipeline owns its own sign step - no double-signing. Configure it with
-MSBuild properties, e.g. `dotnet build src/Zava.Integrations -c Release
--p:PluginSigningFingerprint=<sha256>` (or `-p:PluginSigningCertificate=path.pfx -p:PluginSigningCredential=<cred>`).
-A `PluginSigningPassword` reaches `vela sign` through an environment variable, not its command line. The
-generated solution's README documents the full property set.
+A PFX needs a password from one of:
 
-The signed package's id carries the solution publisher prefix (`zava_Zava.Integrations`): `vela apply --solution`
-adds that prefix to an unprefixed package by renaming it, which would invalidate the signature. `vela init
---managed-identity` therefore needs a valid publisher prefix, from `--publisher-prefix` or derived from `--prefix`.
+| Option | Notes |
+| --- | --- |
+| `--pfx-password-env <VAR>` | The variable holds the password. |
+| `--pfx-credential <name>` | A generic credential in the Windows Credential Manager. Windows only. |
 
-## Signed packages and `apply --solution`
+Other options:
 
-`apply --solution <name>` adds the solution's publisher prefix to the plugin package name, which it does by
-rewriting the `.nupkg`. That rewrite changes the archive, so it would invalidate a signature already applied by
-`vela sign` (Dataverse rejects the import with `0x80040265`, "the package is signed but its signature does not
-cover the package content"). `apply` detects a signed package up front and fails with a clear message rather
-than uploading one Dataverse will reject. To deploy a signed package, build and sign it with the
-publisher-prefixed name already in place (package id `zava_Zava.Integrations` for prefix `zava`): `apply --solution`
-then needs no rename and uploads the signed bytes unchanged. See [Plan & Apply](plan-apply.md).
+- `--timestamp <url>`: the RFC 3161 timestamp server. Default `http://timestamp.digicert.com`.
+- `--json`: print `{ "package", "signed", "method", "timestampUrl" }` on success.
+
+A package that is already signed is signed again (the signature is overwritten), so a rebuilt package can be re-signed.
+
+### Keep secrets off the command line
+
+Pass secrets by environment variable name. `--pfx-base64-env` and `--pfx-password-env` read the value from the named
+variable, so it never appears on a command line, where other users of a shared host can read it (`ps`, `/proc`). The
+literal `--pfx-base64 <content>` and `--pfx-password <password>` still work but print a warning.
+
+`dotnet nuget sign` accepts a PFX password only as a command-line argument, so `vela sign` never passes it one.
+Instead, `vela sign` opens the PFX itself, writes a passwordless copy to an owner-only temporary file, hands that file
+to `dotnet nuget sign`, and deletes it when signing ends. A base64 PFX takes the same path.
+
+## Sign during the build
+
+`vela init --managed-identity` adds the Integrations project (with or without `--samples`) and a
+`SignPluginPackage` MSBuild target to it. The target runs after `Pack` and:
+
+- does nothing until you configure a certificate source;
+- is skipped in CI (when `GITHUB_ACTIONS` or `TF_BUILD` is set), so the pipeline owns its signing step and the package
+  is not signed twice.
+
+Configure it with MSBuild properties:
+
+```bash
+dotnet build src/Zava.Integrations -c Release -p:PluginSigningFingerprint=<sha256>
+dotnet build src/Zava.Integrations -c Release -p:PluginSigningCertificate=cert.pfx -p:PluginSigningCredential=<credential-name>
+```
+
+A `PluginSigningPassword` property reaches `vela sign` through an environment variable, not its command line. The
+README of the generated solution lists every property.
+
+`vela init --managed-identity` needs a valid publisher prefix, from `--publisher-prefix` or derived from `--prefix`,
+because the signed package must already carry it (see below).
+
+## Signed packages and `vela apply`
+
+Dataverse imports a plugin package only when its name carries the solution publisher prefix. When the name lacks it,
+`vela apply` adds the prefix by rewriting the package id inside the `.nupkg`. That rewrite changes the archive, which
+invalidates any signature on it.
+
+So `apply` checks for a signature first. When a signed package would need the rename, `apply` stops before uploading,
+with a message that names the expected package id. To deploy a signed package, build and sign it with the prefixed
+name already in place (package id `zava_Zava.Integrations` for prefix `zava`). `apply` then needs no rename and
+uploads the signed bytes unchanged.
+
+See [Plan and apply](plan-apply.md#choose-the-solution) for how `apply` names packages.

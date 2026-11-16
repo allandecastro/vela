@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Metadata;
 
 namespace Vela.Testing
 {
@@ -35,9 +37,11 @@ namespace Vela.Testing
     /// </summary>
     /// <remarks>
     /// The ownership type is resolved per table: an explicit declaration (<c>AsOrganizationOwned</c>/<c>AsUserOwned</c>/
-    /// <c>AsVirtual</c>/<c>AsElastic</c>) wins; otherwise it is inferred from the early-bound type (a generated class
-    /// exposes an <c>OwnerId</c> property only for user/team-owned tables); late-bound rows with no declaration default
-    /// to user-owned. Values the caller already set are never overwritten on Create.
+    /// <c>AsVirtual</c>/<c>AsElastic</c>) wins; then the <c>OwnershipType</c> of the table's registered metadata
+    /// (<c>WithEntityMetadata</c>); then the early-bound type (a generated class exposes an <c>OwnerId</c> property only
+    /// for user/team-owned tables), also when the pipeline handed the store a plain copy of it; late-bound rows with
+    /// none of these default to user-owned. The audit columns and <c>owningbusinessunit</c> are always stamped (a value
+    /// the caller supplies is ignored, as on Dataverse); <c>ownerid</c> is kept when the caller sets it.
     /// </remarks>
     internal sealed class SystemFieldApplier
     {
@@ -53,6 +57,7 @@ namespace Vela.Testing
         internal const string OwningUser = "owninguser";
         internal const string OwningTeam = "owningteam";
         internal const string OwningBusinessUnit = "owningbusinessunit";
+        internal const string CreatedOnBehalfBy = "createdonbehalfby";
         internal const string OrganizationId = "organizationid";
 
         private const string SystemUser = "systemuser";
@@ -60,7 +65,14 @@ namespace Vela.Testing
         private const string BusinessUnit = "businessunit";
         private const string Organization = "organization";
 
+        // Whether an early-bound type exposes an OwnerId property, per type: a type's members never change, and the
+        // ownership inference reads it on every write of a typed record.
+        private static readonly ConcurrentDictionary<Type, bool> EarlyBoundOwnable = new ConcurrentDictionary<Type, bool>();
+
         private readonly Dictionary<string, OwnershipKind> _declared =
+            new Dictionary<string, OwnershipKind>(StringComparer.OrdinalIgnoreCase);
+
+        private readonly Dictionary<string, OwnershipKind> _registered =
             new Dictionary<string, OwnershipKind>(StringComparer.OrdinalIgnoreCase);
 
         public void Declare(string entityLogicalName, OwnershipKind kind)
@@ -71,6 +83,41 @@ namespace Vela.Testing
             }
 
             _declared[entityLogicalName] = kind;
+        }
+
+        // The ownership the table's registered metadata states (WithEntityMetadata). A later registration replaces it;
+        // an OwnershipType that names no ownership (None, or not set) clears it.
+        public void Register(string entityLogicalName, OwnershipTypes? ownership)
+        {
+            OwnershipKind? kind = FromMetadata(ownership);
+            if (kind == null)
+            {
+                _registered.Remove(entityLogicalName);
+            }
+            else
+            {
+                _registered[entityLogicalName] = kind.Value;
+            }
+        }
+
+        private static OwnershipKind? FromMetadata(OwnershipTypes? ownership)
+        {
+            if (ownership == null)
+            {
+                return null;
+            }
+
+            if ((ownership.Value & OwnershipTypes.OrganizationOwned) != 0)
+            {
+                return OwnershipKind.OrganizationOwned;
+            }
+
+            if ((ownership.Value & (OwnershipTypes.UserOwned | OwnershipTypes.TeamOwned)) != 0)
+            {
+                return OwnershipKind.UserOwned;
+            }
+
+            return null;
         }
 
         /// <summary>Populates create-time system columns on <paramref name="stored"/> (the record about to be saved).</summary>
@@ -84,16 +131,32 @@ namespace Vela.Testing
 
             EntityReference caller = new EntityReference(SystemUser, actor.UserId);
 
-            // overriddencreatedon backdates createdon (e.g. data migrations), exactly as the platform does.
-            if (!stored.Contains(CreatedOn) && stored.Contains(OverriddenCreatedOn) && stored[OverriddenCreatedOn] is DateTime overridden)
+            // Verified live: the audit columns and owningbusinessunit a caller supplies on Create are silently ignored
+            // and stamped from the actual time, caller and owner. overriddencreatedon=X backdates createdon to X (a data
+            // migration) and itself records the actual creation time.
+            stored[CreatedOn] = stored.GetAttributeValue<object>(OverriddenCreatedOn) is DateTime overridden ? overridden : now;
+            if (stored.Contains(OverriddenCreatedOn) && stored[OverriddenCreatedOn] is DateTime)
             {
-                stored[CreatedOn] = overridden;
+                stored[OverriddenCreatedOn] = now;
             }
 
-            SetIfAbsent(stored, CreatedOn, now);
-            SetIfAbsent(stored, CreatedBy, caller);
-            SetIfAbsent(stored, ModifiedOn, now);
-            SetIfAbsent(stored, ModifiedBy, caller);
+            stored[CreatedBy] = caller;
+            stored[ModifiedOn] = now;
+            stored[ModifiedBy] = caller;
+            stored.Attributes.Remove(OwningBusinessUnit);
+            if (actor.OnBehalfOfUserId is Guid onBehalfOf)
+            {
+                // Verified live: a write through the SYSTEM service records the calling user here.
+                stored[CreatedOnBehalfBy] = new EntityReference(SystemUser, onBehalfOf);
+            }
+
+            // Verified live: a statecode supplied without a statuscode is ignored; the record is created in the default
+            // state and status.
+            if (stored.Contains(StateCode) && !(stored.Contains(StatusCode) && stored[StatusCode] != null))
+            {
+                stored.Attributes.Remove(StateCode);
+            }
+
             SetIfAbsent(stored, StateCode, new OptionSetValue(0));
             SetIfAbsent(stored, StatusCode, new OptionSetValue(1));
             SetIfAbsent(stored, VersionNumber, version);
@@ -107,6 +170,16 @@ namespace Vela.Testing
                 SetIfAbsent(stored, OrganizationId, new EntityReference(Organization, actor.OrganizationId));
             }
         }
+
+        /// <summary>
+        /// Whether the table is declared organization-owned (<c>AsOrganizationOwned</c>) or registered so by its metadata,
+        /// so it has no <c>ownerid</c> column. The early-bound inference is left out: a hand-written test class without an
+        /// <c>OwnerId</c> property does not make a write fail.
+        /// </summary>
+        public bool IsKnownOrganizationOwned(string logicalName) =>
+            (_declared.TryGetValue(logicalName, out OwnershipKind declared)
+                || _registered.TryGetValue(logicalName, out declared))
+            && declared == OwnershipKind.OrganizationOwned;
 
         /// <summary>Refreshes modified columns and re-derives owner columns when the update changed the owner.</summary>
         public void ApplyOnUpdate(Entity update, Entity stored, SystemActor actor, DateTime now, long version)
@@ -167,11 +240,18 @@ namespace Vela.Testing
                 return declared;
             }
 
-            // Early-bound generated classes expose an OwnerId property only for user/team-owned tables, so a
-            // typed instance lets us infer ownership with no configuration. Late-bound rows default to user-owned.
-            if (source != null && source.GetType() != typeof(Entity))
+            if (_registered.TryGetValue(logicalName, out OwnershipKind registered))
             {
-                return source.GetType().GetProperty(nameof(OwnerId)) != null
+                return registered;
+            }
+
+            // Early-bound generated classes expose an OwnerId property only for user/team-owned tables, so a
+            // typed instance lets us infer ownership with no configuration. The pipeline hands the store a plain copy
+            // of the target, which still carries the type it was copied from. Late-bound rows default to user-owned.
+            Type? earlyBound = source == null ? null : EntityValues.EarlyBoundType(source);
+            if (earlyBound != null)
+            {
+                return EarlyBoundOwnable.GetOrAdd(earlyBound, type => type.GetProperty(nameof(OwnerId)) != null)
                     ? OwnershipKind.UserOwned
                     : OwnershipKind.OrganizationOwned;
             }
@@ -191,12 +271,16 @@ namespace Vela.Testing
     /// <summary>The calling identity stamped into system columns: user, business unit and organization.</summary>
     internal readonly struct SystemActor
     {
-        public SystemActor(Guid userId, Guid businessUnitId, Guid organizationId)
+        public SystemActor(Guid userId, Guid businessUnitId, Guid organizationId, Guid? onBehalfOfUserId = null)
         {
             UserId = userId;
             BusinessUnitId = businessUnitId;
             OrganizationId = organizationId;
+            OnBehalfOfUserId = onBehalfOfUserId;
         }
+
+        /// <summary>The calling user a SYSTEM write is made for (stamped into <c>createdonbehalfby</c>), else null.</summary>
+        public Guid? OnBehalfOfUserId { get; }
 
         public Guid UserId { get; }
 

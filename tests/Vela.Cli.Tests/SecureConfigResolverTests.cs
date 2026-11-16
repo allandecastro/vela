@@ -102,13 +102,94 @@ public class SecureConfigResolverTests
     [InlineData("x", "x")]
     [InlineData(" x ", " x ")]
     [InlineData("\tx\r", "\tx\r")]
-    [InlineData("\n", "")]
-    [InlineData("", "")]
     public void ParseSpecs_drops_exactly_one_trailing_line_ending_from_a_file_value(string content, string expected)
     {
         Dictionary<string, string> values = SecureConfigResolver.ParseSpecs(["Key=@key.txt"], _ => content);
 
         Assert.Equal(expected, values["Key"]);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void ParseSpecs_treats_an_empty_file_as_unset_and_warns(string content)
+    {
+        // An empty file is a missing secret, not a request to clear: the name is left out, so the live value stays.
+        List<string> warnings = [];
+        Dictionary<string, string> values = SecureConfigResolver.ParseSpecs(["Key=@key.txt"], _ => content, warnings.Add);
+
+        Assert.False(values.ContainsKey("Key"));
+        string warning = Assert.Single(warnings);
+        Assert.Contains("'Key'", warning);
+        Assert.Contains("key.txt", warning);
+        Assert.Contains("--secure-config Key=", warning);
+    }
+
+    [Fact]
+    public void ParseSpecs_still_rejects_a_name_given_twice_when_one_file_is_empty()
+    {
+        Assert.Throws<ArgumentException>(() => SecureConfigResolver.ParseSpecs(["Key=@empty.txt", "Key=@full.txt"], path => path == "empty.txt" ? "" : "v"));
+    }
+
+    [Fact]
+    public void An_empty_environment_variable_keeps_the_live_secure_config_and_warns_once()
+    {
+        // GitHub Actions substitutes "" for an undefined secret: that must not clear the live value under --auto-approve.
+        string live = DefinitionNormalizer.HashSecret("admin-set");
+        RegistrationState current = State([Step(PluginA, live), Step(PluginB, live)]);
+        RegistrationState local = State([Step(PluginA), Step(PluginB)], new() { [PluginA + ":stepkey:main"] = "Key", [PluginB + ":stepkey:main"] = "Key" });
+        Dictionary<string, string> env = new() { [SecureConfigResolver.EnvironmentVariablePrefix + "Key"] = "" };
+        List<string> warnings = [];
+
+        RegistrationState resolved = SecureConfigResolver.Resolve(local, current, new Dictionary<string, string>(), name => env.TryGetValue(name, out string? v) ? v : null, Web, warnings.Add);
+
+        Assert.Empty(resolved.SecureConfigByStepKey!);
+        Assert.Equal(live, Digest(resolved, PluginA));
+        Assert.Empty(DiffEngine.BuildDiff(resolved, current).Changed);
+        string warning = Assert.Single(warnings);
+        Assert.Contains("VELA_SECURE_CONFIG_Key", warning);
+        Assert.Contains("--secure-config Key=", warning);
+    }
+
+    [Fact]
+    public void An_empty_environment_variable_with_no_live_value_is_reported_as_missing()
+    {
+        RegistrationState local = State([Step(PluginA)], new() { [PluginA + ":stepkey:main"] = "Key" });
+
+        RegistrationState resolved = Resolve(local, State([]), env: new() { [SecureConfigResolver.EnvironmentVariablePrefix + "Key"] = "" });
+
+        Assert.Empty(resolved.SecureConfigByStepKey!);
+        Assert.Contains(resolved.Diagnostics, d => d.Contains("'Key'"));
+    }
+
+    [Fact]
+    public void An_empty_file_keeps_the_live_secure_config_end_to_end()
+    {
+        string live = DefinitionNormalizer.HashSecret("admin-set");
+        RegistrationState current = State([Step(PluginA, live)]);
+        RegistrationState local = State([Step(PluginA)], new() { [PluginA + ":stepkey:main"] = "Key" });
+
+        RegistrationState resolved = Resolve(local, current, supplied: SecureConfigResolver.ParseSpecs(["Key=@key.txt"], _ => "\n"));
+
+        Assert.Empty(resolved.SecureConfigByStepKey!);
+        Assert.Empty(DiffEngine.BuildDiff(resolved, current).Changed);
+    }
+
+    [Fact]
+    public void An_explicit_empty_inline_value_clears_the_live_secure_config()
+    {
+        // Only --secure-config Key= clears: the digest becomes empty, so the diff changes the step and apply unlinks it.
+        string live = DefinitionNormalizer.HashSecret("admin-set");
+        RegistrationState current = State([Step(PluginA, live)]);
+        RegistrationState local = State([Step(PluginA)], new() { [PluginA + ":stepkey:main"] = "Key" });
+        Dictionary<string, string> env = new() { [SecureConfigResolver.EnvironmentVariablePrefix + "Key"] = "from-env" };
+
+        RegistrationState resolved = Resolve(local, current, supplied: SecureConfigResolver.ParseSpecs(["Key="], _ => ""), env: env);
+
+        Assert.Equal(string.Empty, resolved.SecureConfigByStepKey![PluginA + ":stepkey:main"]);
+        Assert.Equal(string.Empty, Digest(resolved, PluginA));
+        Assert.Single(DiffEngine.BuildDiff(resolved, current).Changed);
     }
 
     [Fact]
@@ -148,18 +229,18 @@ public class SecureConfigResolverTests
     [Fact]
     public void Deleting_a_step_also_deletes_its_secure_config_row()
     {
-        Guid stepId = Guid.NewGuid(), configId = Guid.NewGuid();
+        Guid stepId = Guid.NewGuid(), configId = Guid.NewGuid(), pluginTypeId = Guid.NewGuid();
         var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
-        mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
-            .Returns((QueryBase q) => (q as QueryExpression)?.EntityName == "sdkmessageprocessingstep"
-                ? new EntityCollection([new Entity("sdkmessageprocessingstep", stepId)])
-                : new EntityCollection());
         mock.Setup(s => s.Retrieve("sdkmessageprocessingstep", stepId, It.IsAny<ColumnSet>()))
-            .Returns(new Entity("sdkmessageprocessingstep", stepId) { ["sdkmessageprocessingstepsecureconfigid"] = new EntityReference("sdkmessageprocessingstepsecureconfig", configId) });
+            .Returns(new Entity("sdkmessageprocessingstep", stepId)
+            {
+                ["eventhandler"] = new EntityReference("plugintype", pluginTypeId),
+                ["sdkmessageprocessingstepsecureconfigid"] = new EntityReference("sdkmessageprocessingstepsecureconfig", configId),
+            });
 
-        DataverseRegistration.DeleteStepByDefinition(mock.Object,
-            JsonSerializer.SerializeToElement(new { pluginTypeName = PluginA, name = "MyStep", message = "Update", stage = 40, mode = 0, stepKey = "k" }, Web),
-            new Dictionary<string, Guid> { [PluginA] = Guid.NewGuid() });
+        DataverseRegistration.DeleteRemovedStep(mock.Object,
+            new RegistrationItem("step", PluginA, JsonSerializer.SerializeToElement(new { pluginTypeName = PluginA, name = "MyStep", message = "Update", stage = 40, mode = 0, stepKey = "k" }, Web)) { LiveId = stepId },
+            [pluginTypeId]);
 
         mock.Verify(s => s.Delete("sdkmessageprocessingstep", stepId), Times.Once);
         mock.Verify(s => s.Delete("sdkmessageprocessingstepsecureconfig", configId), Times.Once);
@@ -241,7 +322,7 @@ public class SecureConfigResolverTests
         };
         var diff = new RegistrationDiff(["Zava.Plugins"], ["Zava.Plugins"], [], [Step(PluginA)], [], [], []);
 
-        Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
+        Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false));
 
         Assert.DoesNotContain(svc.Deleted, d => d.Entity == "sdkmessageprocessingstepsecureconfig");
     }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
 using Microsoft.Xrm.Sdk.Messages;
@@ -66,6 +67,25 @@ namespace Vela.Testing.Tests
             Assert.Equal("A-1", reference.KeyAttributes["accountnumber"]);
             Assert.Equal("Zava", payload["name"]);
             Assert.Equal("z", request["Nickname"]);
+        }
+
+        [Fact]
+        public void An_Assign_pre_step_editing_the_request_does_not_change_the_callers_request_and_reaches_the_main_operation()
+        {
+            Guid id = Guid.NewGuid();
+            Guid assignee = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<RiAssignEdits>()
+                .Seed(new Entity(FakeOwnable.EntityLogicalNameValue, id) { ["ownerid"] = new EntityReference("systemuser", Guid.NewGuid()) });
+            EntityReference target = new EntityReference(FakeOwnable.EntityLogicalNameValue, id);
+            AssignRequest request = new AssignRequest { Target = target, Assignee = new EntityReference("systemuser", assignee) };
+
+            pipeline.Service.Execute(request);
+
+            // The step's replacement of the Assignee is the owner written...
+            Assert.Equal(RiAssignEdits.Replacement, pipeline.GetAll(FakeOwnable.EntityLogicalNameValue).Single().GetAttributeValue<EntityReference>("ownerid").Id);
+            // ...and the caller's request and its objects are untouched.
+            Assert.Equal(assignee, request.Assignee.Id);
+            Assert.Null(target.Name);
         }
 
         [Fact]
@@ -219,6 +239,21 @@ namespace Vela.Testing.Tests
             RegisterStep().OnMessage<RiApiMessage>().PostOperation().Sync().Handle(ctx =>
                 ctx.PluginExecutionContext.OutputParameters.Remove("Internal"));
         }
+    }
+
+    public sealed class RiAssignEdits : EntityPluginBase<FakeOwnable>
+    {
+        public static readonly Guid Replacement = new Guid("5a5a5a00-0000-0000-0000-000000000001");
+
+        public RiAssignEdits(string u, string s) : base(u, s) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnAssign().PreOperation().Sync().Handle(ctx =>
+            {
+                ParameterCollection inputs = ctx.PluginExecutionContext.InputParameters;
+                ((EntityReference)inputs["Target"]).Name = "edited in place";
+                inputs["Assignee"] = new EntityReference("systemuser", Replacement);
+            });
     }
 
     public sealed class RiReadEdits : EntityPluginBase<RiRecord>

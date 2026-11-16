@@ -1,4 +1,4 @@
 - name: Authentication
   href: authentication.md
-- name: Environments & CI
+- name: Environments and CI
   href: environments-secrets.md

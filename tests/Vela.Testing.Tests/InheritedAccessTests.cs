@@ -385,6 +385,7 @@ namespace Vela.Testing.Tests
             {
                 ["parentcustomerid"] = new EntityReference("account", account),
                 ["statecode"] = new OptionSetValue(state),
+                ["statuscode"] = new OptionSetValue(state + 1), // a statecode without a statuscode is ignored on Create
             });
 
             Assert.Equal(inherited ? AccessRights.ReadAccess | AccessRights.WriteAccess : AccessRights.None, AccessOf(svc, Alice, "contact", contact));

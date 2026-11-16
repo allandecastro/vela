@@ -26,6 +26,10 @@
     <Compile Include="..\Vela.Plugins\Steps\SdkMessageNames.cs" Link="Shared\SdkMessageNames.cs" />
     <!-- Label lengths Dataverse stores, shared with the CLI's plan-time checks so VELA028 and plan agree. -->
     <Compile Include="..\Vela.Plugins\Constants\DataverseLabelLimits.cs" Link="Shared\DataverseLabelLimits.cs" />
+    <!-- The messages with a typed On{Message}() trigger (generated), so VELA008 and VELA015 read every one of them. -->
+    <Compile Include="..\Vela.Plugins\Steps\TypedTriggers.cs" Link="Shared\TypedTriggers.cs" />
+    <!-- The set-once step modifiers, shared with the runtime builder so VELA003 flags exactly what it rejects. -->
+    <Compile Include="..\Vela.Plugins\Steps\SetOnceModifiers.cs" Link="Shared\SetOnceModifiers.cs" />
   </ItemGroup>
 
   <ItemGroup>

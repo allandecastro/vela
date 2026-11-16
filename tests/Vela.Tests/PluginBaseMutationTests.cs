@@ -372,16 +372,15 @@ public sealed class PluginBaseMutationTests
     [Fact]
     public void A_handler_parameter_unrelated_to_step_contexts_is_not_built_as_one()
     {
-        // A class outside the step-context hierarchy (even a generic-based one) is left to the other builders: the
-        // modelled UpdatePostContext is built, cannot bind to the parameter, and the call fails as an unexpected error.
-        Guid correlation = Guid.NewGuid();
+        // A class outside the step-context hierarchy (even a generic-based one) is not built as a step context: the
+        // step would pass the modelled UpdatePostContext, which cannot bind to the parameter, so the registration
+        // refuses the handler before anything runs.
         ContextProbe<UnrelatedClass> plugin = new ContextProbe<UnrelatedClass>(PluginStages.PostOperation);
 
         InvalidPluginExecutionException ex = Assert.Throws<InvalidPluginExecutionException>(
-            () => plugin.Execute(Update(PluginStages.PostOperation).WithCorrelationId(correlation).BuildServiceProvider()));
+            () => plugin.Execute(Update(PluginStages.PostOperation).BuildServiceProvider()));
 
-        Assert.Equal($"An unexpected error occurred. Correlation id: {correlation}.", ex.Message);
-        Assert.IsType<ArgumentException>(ex.InnerException);
+        Assert.Contains("but takes 'UnrelatedClass'; it is a context for another message or stage. This step passes IUpdatePostContext<TestAccount>", ex.Message);
         Assert.Null(plugin.Received);
     }
 

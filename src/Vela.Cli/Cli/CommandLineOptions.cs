@@ -330,7 +330,7 @@ internal static class CommandLineOptions
             return false;
         }
 
-        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out exitCode))
+        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out DataverseTokenProvider? oauthToken, out string? url, out exitCode))
         {
             return false;
         }
@@ -504,7 +504,7 @@ internal static class CommandLineOptions
     /// Resolves Dataverse authentication from the shared connection flags (connection string, client-secret, or
     /// interactive browser OAuth). Shared by every connected command; carries no package/scope concerns.
     /// </summary>
-    public static bool TryResolveConnection(string[] args, bool interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode)
+    public static bool TryResolveConnection(string[] args, bool interactive, out string? connectionString, out string? oauthUrl, out DataverseTokenProvider? oauthToken, out string? url, out int exitCode)
     {
         exitCode = ExitSuccess;
         oauthUrl = null;
@@ -615,7 +615,7 @@ internal static class CommandLineOptions
                     return false;
                 }
 
-                string? token = TryAcquireAmbientToken(url, out string? ambientError);
+                DataverseTokenProvider? token = TryAcquireAmbientToken(url, out string? ambientError);
                 if (token == null)
                 {
                     exitCode = Fail(ambientError!, ExitConnectionFailure);
@@ -755,15 +755,23 @@ internal static class CommandLineOptions
     // DefaultAzureCredential - environment variables, workload identity / managed identity (CI, Azure-hosted),
     // and a local `az login` session. No browser and no flag: a bare `vela apply --url ...` works when the user
     // is already `az login`-ed or running under a managed identity. Returns null with a message on failure.
-    public static string? TryAcquireAmbientToken(string url, out string? error)
+    // The first token is acquired here, so a failure is reported before the scan; the returned provider asks the
+    // same credential again when that token nears its expiry (a long scan or apply outlives it).
+    public static DataverseTokenProvider? TryAcquireAmbientToken(string url, out string? error)
     {
-        string scope = url.TrimEnd('/') + "/.default";
+        Azure.Core.TokenRequestContext request = new([url.TrimEnd('/') + "/.default"]);
+        var credential = new Azure.Identity.DefaultAzureCredential();
         try
         {
-            var credential = new Azure.Identity.DefaultAzureCredential();
-            Azure.Core.AccessToken token = credential.GetToken(new Azure.Core.TokenRequestContext([scope]));
+            Azure.Core.AccessToken token = credential.GetToken(request, CancellationToken.None);
             error = null;
-            return token.Token;
+            return new DataverseTokenProvider(
+                new DataverseAccessToken(token.Token, token.ExpiresOn),
+                async cancellationToken =>
+                {
+                    Azure.Core.AccessToken renewed = await credential.GetTokenAsync(request, cancellationToken).ConfigureAwait(false);
+                    return new DataverseAccessToken(renewed.Token, renewed.ExpiresOn);
+                });
         }
         catch (Exception ex)
         {
@@ -780,7 +788,9 @@ internal static class CommandLineOptions
     // multi-tenant values but are overridable for sovereign clouds / custom app registrations. The token is
     // persisted by a cross-platform cache (InteractiveTokenCache), so a later run reuses it silently on every OS
     // instead of re-opening the browser. freshLogin forgets the cached account and forces a new prompt.
-    public static string AcquireTokenInteractive(string url, string? authClientId, string? authority, bool freshLogin = false)
+    // The returned provider renews the token with AcquireTokenSilent for the signed-in account (MSAL uses its
+    // refresh token), so a long scan, a human at the apply prompt or a long apply does not outlive it.
+    public static DataverseTokenProvider AcquireTokenInteractive(string url, string? authClientId, string? authority, bool freshLogin = false)
     {
         const string defaultInteractiveAuthority = "https://login.microsoftonline.com/common";
 
@@ -818,24 +828,35 @@ internal static class CommandLineOptions
         }
 
         // Try silent auth first (cached token from a previous login).
+        Microsoft.Identity.Client.AuthenticationResult? result = null;
         if (accounts.Count > 0)
         {
             try
             {
-                var silent = app.AcquireTokenSilent([scope], accounts[0])
+                result = app.AcquireTokenSilent([scope], accounts[0])
                     .ExecuteAsync().GetAwaiter().GetResult();
-                return silent.AccessToken;
             }
             catch (Microsoft.Identity.Client.MsalUiRequiredException) { }
         }
 
-        // Open browser for interactive login.
-        Console.Error.WriteLine("Opening browser for Microsoft login...");
-        var result = app.AcquireTokenInteractive([scope])
-            .WithPrompt(Microsoft.Identity.Client.Prompt.SelectAccount)
-            .ExecuteAsync().GetAwaiter().GetResult();
+        if (result == null)
+        {
+            // Open browser for interactive login.
+            Console.Error.WriteLine("Opening browser for Microsoft login...");
+            result = app.AcquireTokenInteractive([scope])
+                .WithPrompt(Microsoft.Identity.Client.Prompt.SelectAccount)
+                .ExecuteAsync().GetAwaiter().GetResult();
+        }
 
-        return result.AccessToken;
+        Microsoft.Identity.Client.IAccount signedIn = result.Account;
+        return new DataverseTokenProvider(
+            new DataverseAccessToken(result.AccessToken, result.ExpiresOn),
+            async cancellationToken =>
+            {
+                Microsoft.Identity.Client.AuthenticationResult renewed = await app.AcquireTokenSilent([scope], signedIn)
+                    .ExecuteAsync(cancellationToken).ConfigureAwait(false);
+                return new DataverseAccessToken(renewed.AccessToken, renewed.ExpiresOn);
+            });
     }
 
     // A dash-prefixed token that is an option (excludes a lone "-" and the bare "--" separator).

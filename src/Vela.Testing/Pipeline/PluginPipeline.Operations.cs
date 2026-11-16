@@ -21,45 +21,27 @@ namespace Vela.Testing
     {
         // A single Create is the one-row case of a Create batch. Routing it through the batch path means
         // CreateMultiple-registered steps also fire for a single Create (Dataverse merges the two messages).
-        internal Guid ExecuteCreate(Entity entity, ParameterCollection? sharedVariables = null)
+        internal Guid ExecuteCreate(Entity entity, ParameterCollection? sharedVariables = null, FakePluginExecutionContext? innerOf = null)
         {
             if (entity == null)
             {
                 throw new ArgumentNullException(nameof(entity));
             }
 
-            return ExecuteCreateMultiple(new[] { entity }, sharedVariables)[0];
+            return ExecuteCreateMultiple(new[] { entity }, sharedVariables, bulkRequest: false, innerOf)[0];
         }
 
         // A single Update is the one-row case of an Update batch (see ExecuteCreate). It is ONE execution even when
         // it mixes owner or state fields with standard ones (verified live: one Update per stage, with every field in
         // its Target, contrary to Microsoft Learn's "Behavior of specialized update operations").
-        internal void ExecuteUpdate(Entity entity, ParameterCollection? sharedVariables = null)
+        internal void ExecuteUpdate(Entity entity, ParameterCollection? sharedVariables = null, FakePluginExecutionContext? innerOf = null)
         {
             if (entity == null)
             {
                 throw new ArgumentNullException(nameof(entity));
             }
 
-            ExecuteUpdateMultiple(new[] { entity }, sharedVariables);
-        }
-
-        // A write target addressed by alternate key (Id empty + KeyAttributes) is resolved to the record's id before
-        // any step fires, as Dataverse does: the steps see Target.Id / PrimaryEntityId set to the resolved record, and
-        // a key that matches nothing throws the platform not-found fault. Returns a clone (the caller's entity is not
-        // mutated); a target that already has an id (or no key) is returned unchanged.
-        private Entity ResolveKeyedTarget(Entity entity)
-        {
-            if (entity.Id != Guid.Empty || entity.KeyAttributes == null || entity.KeyAttributes.Count == 0)
-            {
-                return entity;
-            }
-
-            Guid id = _store.ResolveReference(new EntityReference(entity.LogicalName) { KeyAttributes = entity.KeyAttributes });
-            Entity resolved = EntityValues.Clone(entity);
-            resolved.Id = id;
-            resolved.KeyAttributes.Clear();
-            return resolved;
+            ExecuteUpdateMultiple(new[] { entity }, sharedVariables, bulkRequest: false, innerOf);
         }
 
         // SetState, as the platform runs it (verified live): the request fires the SetStateDynamicEntity steps (never
@@ -92,32 +74,24 @@ namespace Vela.Testing
 
         // Assign, as the platform runs it (verified live): Assign PreValidation and PreOperation, then the main
         // operation, an ownerid Update at the same depth firing the Update steps at PreOperation and PostOperation
-        // only, then Assign PostOperation. (An Update of ownerid, conversely, never fires the Assign steps.)
+        // only (their ParentContext is the Assign main operation), then Assign PostOperation. (An Update of ownerid,
+        // conversely, never fires the Assign steps.) The steps work on a copy of the request, and the owner written is
+        // the Assignee as the pre stages left it.
         internal void ExecuteAssign(AssignRequest request, ParameterCollection? sharedVariables = null)
         {
+            _store.DemandAssignable(request.Target.LogicalName);
+            OrganizationRequest inputs = CopyRequest(request);
             RunOperation<object?>(asyncQueue =>
             {
                 EntityReference record = new EntityReference(request.Target.LogicalName, _store.ResolveReference(request.Target));
-                _store.TryGet(record.LogicalName, record.Id, out Entity? pre);
-
-                foreach (PluginStages stage in new[] { PluginStages.PreValidation, PluginStages.PreOperation })
+                FireRecordStages(PluginMessages.Assign, record, inputs.Parameters, () =>
                 {
-                    StageInvocation invocation = GenericInvocation(PluginMessages.Assign, stage, record.LogicalName, record.Id, request.Parameters, null);
-                    invocation.PreState = pre;
-                    FireStage(invocation, asyncQueue);
-                    if (stage == PluginStages.PreValidation)
-                    {
-                        EnterTransaction();
-                    }
-                }
-
-                UpdateBatch(new[] { new Entity(record.LogicalName, record.Id) { ["ownerid"] = request.Assignee } }, platformUpdate: true, asyncQueue);
-
-                _store.TryGet(record.LogicalName, record.Id, out Entity? post);
-                StageInvocation postInvocation = GenericInvocation(PluginMessages.Assign, PluginStages.PostOperation, record.LogicalName, record.Id, request.Parameters, null);
-                postInvocation.PreState = pre;
-                postInvocation.PostState = post;
-                FireStage(postInvocation, asyncQueue);
+                    EntityReference assignee = inputs.Parameters.TryGetValue("Assignee", out object? value) && value is EntityReference reference
+                        ? reference
+                        : throw new InvalidPluginExecutionException("Assign: a pre-stage step left InputParameters[\"Assignee\"] without an EntityReference.");
+                    MarkPlatformUpdate(PluginMessages.Assign, inputs.Parameters);
+                    UpdateBatch(new[] { new Entity(record.LogicalName, record.Id) { ["ownerid"] = assignee } }, platformUpdate: true, asyncQueue);
+                }, asyncQueue);
                 return null;
             }, sharedVariables);
         }
@@ -133,26 +107,49 @@ namespace Vela.Testing
                 ["State"] = state,
                 ["Status"] = status,
             };
-            _store.TryGet(record.LogicalName, record.Id, out Entity? pre);
 
-            foreach (PluginStages stage in new[] { PluginStages.PreValidation, PluginStages.PreOperation })
+            FireRecordStages(PluginMessages.SetStateDynamicEntity, record, inputs, () =>
             {
-                StageInvocation invocation = GenericInvocation(PluginMessages.SetStateDynamicEntity, stage, record.LogicalName, record.Id, inputs, null);
-                invocation.PreState = pre;
-                FireStage(invocation, asyncQueue);
-                if (stage == PluginStages.PreValidation)
+                MarkPlatformUpdate(PluginMessages.SetStateDynamicEntity, inputs);
+                mainOperation(inputs);
+            }, asyncQueue);
+        }
+
+        // The stages of a message on one record (Assign, SetStateDynamicEntity) around its main operation: every stage
+        // gets the record before the operation as its pre-image state, and PostOperation the record after it.
+        private void FireRecordStages(string message, EntityReference record, ParameterCollection inputs, Action mainOperation, List<Action> asyncQueue)
+        {
+            _store.TryGet(record.LogicalName, record.Id, out Entity? pre);
+            RunStages<object?>(
+                stage =>
                 {
-                    EnterTransaction();
-                }
-            }
+                    StageInvocation invocation = GenericInvocation(message, stage, record.LogicalName, record.Id, inputs, null);
+                    invocation.PreState = pre;
+                    FireStage(invocation, asyncQueue);
+                },
+                () =>
+                {
+                    mainOperation();
+                    return null;
+                },
+                _ =>
+                {
+                    _store.TryGet(record.LogicalName, record.Id, out Entity? post);
+                    StageInvocation postInvocation = GenericInvocation(message, PluginStages.PostOperation, record.LogicalName, record.Id, inputs, null);
+                    postInvocation.PreState = pre;
+                    postInvocation.PostState = post;
+                    FireStage(postInvocation, asyncQueue);
+                });
+        }
 
-            mainOperation(inputs);
-
-            _store.TryGet(record.LogicalName, record.Id, out Entity? post);
-            StageInvocation postInvocation = GenericInvocation(PluginMessages.SetStateDynamicEntity, PluginStages.PostOperation, record.LogicalName, record.Id, inputs, null);
-            postInvocation.PreState = pre;
-            postInvocation.PostState = post;
-            FireStage(postInvocation, asyncQueue);
+        // Records that the current operation's main operation is a platform Update: the Update steps it fires get
+        // this message's stage-30 context (with these inputs) as their ParentContext, not an Update one (verified live
+        // for Assign and Merge; SetState follows Assign until probed).
+        private void MarkPlatformUpdate(string message, ParameterCollection inputs)
+        {
+            OperationFrame frame = _frames.Peek();
+            frame.MainMessage = message;
+            frame.MainInputs = inputs;
         }
 
         // The main operation of an Update row. A row that changes statecode runs the state change as the platform
@@ -202,8 +199,9 @@ namespace Vela.Testing
 
         // CreateMultiple as one transaction: at each stage both the bulk CreateMultiple steps (once, with the
         // whole Targets collection) and the single Create steps (once per row) fire, mirroring how Dataverse
-        // merges the two messages. All rows commit between the pre and post stages.
-        internal Guid[] ExecuteCreateMultiple(Entity[] entities, ParameterCollection? sharedVariables = null)
+        // merges the two messages. All rows commit between the pre and post stages. bulkRequest: the request was a
+        // CreateMultiple (not a single Create), which changes the rows' SharedVariables and ParentContext.
+        internal Guid[] ExecuteCreateMultiple(Entity[] entities, ParameterCollection? sharedVariables = null, bool bulkRequest = true, FakePluginExecutionContext? innerOf = null)
         {
             if (entities == null)
             {
@@ -223,45 +221,48 @@ namespace Vela.Testing
                     ChangedAttributes = new HashSet<string>(e.Attributes.Keys, StringComparer.OrdinalIgnoreCase)
                 }).ToList();
 
-                FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PreValidation, entityName, items, asyncQueue);
-                EnterTransaction();
-                FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PreOperation, entityName, items, asyncQueue);
+                return RunStages(
+                    stage => FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, stage, entityName, items, asyncQueue),
+                    () =>
+                    {
+                        Guid[] ids = new Guid[entities.Length];
+                        for (int i = 0; i < entities.Length; i++)
+                        {
+                            // Persist just this record (no deep-insert recursion in the store), then drive the deep insert's
+                            // children back through the pipeline so each child fires its own Create steps + images (and, via
+                            // the same callback, its grandchildren) - instead of the store persisting descendants with no
+                            // plugins. CreateRecordDirect avoids double-persisting the descendants the recursion creates.
+                            ids[i] = _store.CreateRecordDirect(entities[i]);
+                            entities[i].Id = ids[i]; // the post-operation Target carries the created id
+                            _store.CreateRelatedEntities(entities[i], entities[i].LogicalName, ids[i], child => ExecuteCreate(child));
+                            _store.TryGet(entities[i].LogicalName, ids[i], out Entity? post);
+                            items[i].PostState = post;
+                        }
 
-                Guid[] ids = new Guid[entities.Length];
-                for (int i = 0; i < entities.Length; i++)
-                {
-                    // Persist just this record (no deep-insert recursion in the store), then drive the deep insert's
-                    // children back through the pipeline so each child fires its own Create steps + images (and, via
-                    // the same callback, its grandchildren) - instead of the store persisting descendants with no
-                    // plugins. CreateRecordDirect avoids double-persisting the descendants the recursion creates.
-                    ids[i] = _store.CreateRecordDirect(entities[i]);
-                    entities[i].Id = ids[i]; // the post-operation Target carries the created id
-                    _store.CreateRelatedEntities(entities[i], entities[i].LogicalName, ids[i], child => ExecuteCreate(child));
-                    _store.TryGet(entities[i].LogicalName, ids[i], out Entity? post);
-                    items[i].PostState = post;
-                }
-
-                FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue);
-                return ids;
-            }, sharedVariables);
+                        return ids;
+                    },
+                    _ => FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue));
+            }, sharedVariables, bulkRequest ? PluginMessages.CreateMultiple : null, innerOf);
         }
 
         // UpdateMultiple as one transaction (see ExecuteCreateMultiple). Single Update steps fire per row only
         // for rows whose changed attributes match the step filter; a bulk UpdateMultiple step fires once if any
         // row matches.
-        internal void ExecuteUpdateMultiple(Entity[] entities, ParameterCollection? sharedVariables = null)
+        internal void ExecuteUpdateMultiple(Entity[] entities, ParameterCollection? sharedVariables = null, bool bulkRequest = true, FakePluginExecutionContext? innerOf = null)
         {
             if (entities == null)
             {
                 throw new ArgumentNullException(nameof(entities));
             }
 
-            entities = entities.Select(entity => ResolveKeyedTarget(EntityValues.CloneTarget(entity))).ToArray();
+            // A target addressed by alternate key is resolved to the record's id before any step fires, as Dataverse
+            // does: the steps see Target.Id / PrimaryEntityId set to the resolved record.
+            entities = entities.Select(entity => _store.ResolveWriteTarget(EntityValues.CloneTarget(entity))).ToArray();
             RunOperation<object?>(asyncQueue =>
             {
                 UpdateBatch(entities, platformUpdate: false, asyncQueue);
                 return null;
-            }, sharedVariables);
+            }, sharedVariables, bulkRequest ? PluginMessages.UpdateMultiple : null, innerOf);
         }
 
         // The stages of an Update batch inside the current operation. A platform-generated Update (the main operation
@@ -281,27 +282,25 @@ namespace Vela.Testing
                 });
             }
 
-            if (!platformUpdate)
-            {
-                FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PreValidation, entityName, items, asyncQueue);
-            }
+            RunStages<object?>(
+                stage => FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, stage, entityName, items, asyncQueue),
+                () =>
+                {
+                    foreach (Entity entity in entities)
+                    {
+                        WriteUpdateRow(entity, platformUpdate, asyncQueue);
+                    }
 
-            EnterTransaction();
+                    foreach (BatchItem item in items)
+                    {
+                        _store.TryGet(item.Target.LogicalName, item.Target.Id, out Entity? post);
+                        item.PostState = post;
+                    }
 
-            FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PreOperation, entityName, items, asyncQueue);
-
-            foreach (Entity entity in entities)
-            {
-                WriteUpdateRow(entity, platformUpdate, asyncQueue);
-            }
-
-            foreach (BatchItem item in items)
-            {
-                _store.TryGet(item.Target.LogicalName, item.Target.Id, out Entity? post);
-                item.PostState = post;
-            }
-
-            FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue);
+                    return null;
+                },
+                _ => FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue),
+                preValidation: !platformUpdate);
         }
 
         internal void ExecuteDelete(string entityName, Guid id, ParameterCollection? sharedVariables = null)
@@ -311,19 +310,22 @@ namespace Vela.Testing
                 // The deleted record's PreValidation stage runs first, before the transaction opens and before the
                 // privilege check and the cascade (as on the platform); a record that does not exist skips it and
                 // fails with the store's not-found fault.
-                bool rootValidated = false;
                 if (_store.TryGet(entityName, id, out Entity? rootPre))
                 {
                     FireStage(DeleteInvocation(PluginStages.PreValidation, entityName, id, rootPre), asyncQueue);
-                    rootValidated = true;
                 }
 
                 EnterTransaction();
 
+                // The root's stage-30 context exists before the cascade: the children's steps run first and have it as
+                // their ParentContext (verified live).
+                EntityReference rootReference = new EntityReference(entityName, id);
+                MainStageContext(_frames.Peek(), PluginMessages.Delete, entityName, id, () => new ParameterCollection { ["Target"] = rootReference });
+
                 // The store owns the cascade traversal (Restrict/RemoveLink/recursion) but delegates each actual
                 // record removal to us, so the Delete plugins fire for the parent AND every cascaded child.
                 _store.DeleteInternal(entityName, id, (name, recordId) =>
-                    FireDeleteAndRemove(name, recordId, asyncQueue, skipPreValidation: rootValidated && recordId == id));
+                    FireDeleteAndRemove(name, recordId, asyncQueue, cascaded: !(recordId == id && string.Equals(name, entityName, StringComparison.OrdinalIgnoreCase))));
                 return null;
             }, sharedVariables);
         }
@@ -335,17 +337,20 @@ namespace Vela.Testing
             return invocation;
         }
 
-        // Fires one record's Delete pre-stages, removes just that record (the store handles cascade around this),
-        // then fires its post-stages — the same pre/remove/post a top-level Delete runs, applied per cascaded record.
-        private void FireDeleteAndRemove(string entityName, Guid id, List<Action> asyncQueue, bool skipPreValidation)
+        // Fires one record's Delete PreOperation stage, removes just that record (the store handles the cascade around
+        // this), then fires its PostOperation stage. A cascaded child's Delete, as the platform runs it (verified live):
+        // no PreValidation stage, the root's depth and stage-30 context (ParentContext), and its own SharedVariables
+        // shared by its PreOperation and PostOperation steps.
+        private void FireDeleteAndRemove(string entityName, Guid id, List<Action> asyncQueue, bool cascaded)
         {
             _store.TryGet(entityName, id, out Entity? pre);
+            ParameterCollection? childShared = cascaded ? new ParameterCollection() : null;
 
-            StageInvocation Make(PluginStages stage) => DeleteInvocation(stage, entityName, id, pre);
-
-            if (!skipPreValidation)
+            StageInvocation Make(PluginStages stage)
             {
-                FireStage(Make(PluginStages.PreValidation), asyncQueue);
+                StageInvocation invocation = DeleteInvocation(stage, entityName, id, pre);
+                invocation.SharedVariables = childShared;
+                return invocation;
             }
 
             FireStage(Make(PluginStages.PreOperation), asyncQueue);
@@ -365,58 +370,78 @@ namespace Vela.Testing
 
         // Upsert, mirroring Dataverse: the target is matched by its id or alternate key. A match runs the Update
         // pipeline (Update steps fire with the resolved id); no match runs the Create pipeline (Create steps fire; the
-        // key columns become real columns of the new row, and a supplied id is kept). Steps registered on the Upsert
-        // message itself fire around the inner operation, and the response carries RecordCreated and Target.
+        // key columns become real columns of the new row, and a supplied id is kept). The inner Create or Update is the
+        // Upsert's main operation, at its depth (verified live). Steps registered on the Upsert message itself fire
+        // around it, and the response carries RecordCreated and Target.
         private OrganizationResponse ExecuteUpsert(OrganizationRequest request, Entity callerTarget, ParameterCollection shared)
         {
             // The steps work on a copy of the request (the caller's entity is never touched), and the main operation
             // reads the Target the pre stages left, so a step that changes or replaces it is honoured.
             OrganizationRequest inputs = CopyRequest(request);
-            return RunOperation(asyncQueue =>
+            return RunOperation(asyncQueue => RunStages<OrganizationResponse>(
+                stage => FireStage(GenericInvocation("Upsert", stage, callerTarget.LogicalName, callerTarget.Id, inputs.Parameters, null), asyncQueue),
+                () => ExecuteUpsertMain(inputs),
+                response =>
+                {
+                    EntityReference affected = (EntityReference)response.Results["Target"];
+                    FireStage(GenericInvocation("Upsert", PluginStages.PostOperation, affected.LogicalName, affected.Id, inputs.Parameters, response.Results), asyncQueue);
+                }),
+                shared);
+        }
+
+        // The Upsert's main operation: the inner Update (a match) or Create (no match) of the Target the pre stages left.
+        private UpsertResponse ExecuteUpsertMain(OrganizationRequest inputs)
+        {
+            Entity target = inputs.Parameters.TryGetValue("Target", out object? effective) && effective is Entity replaced
+                ? replaced
+                : throw new InvalidPluginExecutionException("Upsert: a pre-stage step left InputParameters[\"Target\"] without an entity.");
+
+            EntityReference key = target.Id != Guid.Empty
+                ? new EntityReference(target.LogicalName, target.Id)
+                : new EntityReference(target.LogicalName) { KeyAttributes = target.KeyAttributes };
+
+            // The inner Create or Update runs at the Upsert's depth, its own stages and SharedVariables included,
+            // with the Upsert main operation (PrimaryEntityName "none") as its ParentContext (verified live).
+            FakePluginExecutionContext upsertMain = PlatformContext(
+                "Upsert",
+                PluginStages.MainOperation,
+                "none",
+                Guid.Empty,
+                _sharedVariables,
+                _contextStack.Count > 0 ? _contextStack.Peek() : null,
+                inputs.Parameters);
+
+            UpsertResponse response = new UpsertResponse();
+            Guid affectedId;
+            if (_store.TryResolveReference(key, out Guid existingId))
             {
-                FireStage(GenericInvocation("Upsert", PluginStages.PreValidation, callerTarget.LogicalName, callerTarget.Id, inputs.Parameters, null), asyncQueue);
-                EnterTransaction();
-                FireStage(GenericInvocation("Upsert", PluginStages.PreOperation, callerTarget.LogicalName, callerTarget.Id, inputs.Parameters, null), asyncQueue);
-
-                Entity target = inputs.Parameters.TryGetValue("Target", out object? effective) && effective is Entity replaced
-                    ? replaced
-                    : throw new InvalidPluginExecutionException("Upsert: a pre-stage step left InputParameters[\"Target\"] without an entity.");
-
-                EntityReference key = target.Id != Guid.Empty
-                    ? new EntityReference(target.LogicalName, target.Id)
-                    : new EntityReference(target.LogicalName) { KeyAttributes = target.KeyAttributes };
-
-                UpsertResponse response = new UpsertResponse();
-                Guid affectedId;
-                if (_store.TryResolveReference(key, out Guid existingId))
+                Entity toUpdate = EntityValues.Clone(target);
+                EntityValues.CarryEarlyBoundType(target, toUpdate);
+                toUpdate.Id = existingId;
+                toUpdate.KeyAttributes.Clear();
+                ExecuteUpdate(toUpdate, innerOf: upsertMain);
+                response.Results["RecordCreated"] = false;
+                affectedId = existingId;
+            }
+            else
+            {
+                Entity toCreate = EntityValues.Clone(target);
+                EntityValues.CarryEarlyBoundType(target, toCreate);
+                foreach (KeyValuePair<string, object> pair in target.KeyAttributes)
                 {
-                    Entity toUpdate = EntityValues.Clone(target);
-                    toUpdate.Id = existingId;
-                    toUpdate.KeyAttributes.Clear();
-                    ExecuteUpdate(toUpdate);
-                    response.Results["RecordCreated"] = false;
-                    affectedId = existingId;
-                }
-                else
-                {
-                    Entity toCreate = EntityValues.Clone(target);
-                    foreach (KeyValuePair<string, object> pair in target.KeyAttributes)
+                    if (!toCreate.Attributes.Contains(pair.Key))
                     {
-                        if (!toCreate.Attributes.Contains(pair.Key))
-                        {
-                            toCreate[pair.Key] = pair.Value;
-                        }
+                        toCreate[pair.Key] = pair.Value;
                     }
-
-                    toCreate.KeyAttributes.Clear();
-                    affectedId = ExecuteCreate(toCreate);
-                    response.Results["RecordCreated"] = true;
                 }
 
-                response.Results["Target"] = new EntityReference(target.LogicalName, affectedId);
-                FireStage(GenericInvocation("Upsert", PluginStages.PostOperation, target.LogicalName, affectedId, inputs.Parameters, response.Results), asyncQueue);
-                return (OrganizationResponse)response;
-            }, shared);
+                toCreate.KeyAttributes.Clear();
+                affectedId = ExecuteCreate(toCreate, innerOf: upsertMain);
+                response.Results["RecordCreated"] = true;
+            }
+
+            response.Results["Target"] = new EntityReference(target.LogicalName, affectedId);
+            return response;
         }
 
         private void RunAssociation(string message, string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities, ParameterCollection? sharedVariables = null)
@@ -437,24 +462,24 @@ namespace Vela.Testing
                     return invocation;
                 }
 
-                FireStage(Make(PluginStages.PreValidation), asyncQueue);
-                EnterTransaction();
-                FireStage(Make(PluginStages.PreOperation), asyncQueue);
+                return RunStages<object?>(
+                    stage => FireStage(Make(stage), asyncQueue),
+                    () =>
+                    {
+                        // Persist the N:N change so the post stage (and later reads) see the intersect rows. The
+                        // surrounding snapshot/rollback (RunOperation) undoes this if a synchronous plugin throws.
+                        if (message == PluginMessages.Associate)
+                        {
+                            _store.Associate(entityName, entityId, relationship, relatedEntities);
+                        }
+                        else
+                        {
+                            _store.Disassociate(entityName, entityId, relationship, relatedEntities);
+                        }
 
-                // Persist the N:N change so the post stage (and later reads) see the intersect rows. The
-                // surrounding snapshot/rollback (RunOperation) undoes this if a synchronous plugin throws.
-                if (message == PluginMessages.Associate)
-                {
-                    _store.Associate(entityName, entityId, relationship, relatedEntities);
-                }
-                else
-                {
-                    _store.Disassociate(entityName, entityId, relationship, relatedEntities);
-                }
-
-                FireStage(Make(PluginStages.PostOperation), asyncQueue);
-
-                return null;
+                        return null;
+                    },
+                    _ => FireStage(Make(PluginStages.PostOperation), asyncQueue));
             }, sharedVariables);
         }
     }

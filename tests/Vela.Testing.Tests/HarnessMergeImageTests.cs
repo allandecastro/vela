@@ -75,8 +75,9 @@ namespace Vela.Testing.Tests
                 {
                     "PreValidation master=Master sub=Dup",
                     "PreOperation dup=Dup:7:True",
-                    // The master had no employee count; the merge fills it from the subordinate.
-                    "PostOperation master=->7 sub state=1 master=True",
+                    // The master had no employee count and keeps none: Merge does not copy the subordinate's columns
+                    // (verified live).
+                    "PostOperation master=-> sub state=1 master=True",
                 },
                 MergeImageRecorder.Seen.ToArray());
         }

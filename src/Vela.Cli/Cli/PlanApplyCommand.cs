@@ -11,9 +11,12 @@ using static Vela.Cli.OutputWriter;
 namespace Vela.Cli;
 
 /// <summary>An open Dataverse connection: the service plus whatever owns it (a <c>ServiceClient</c>).</summary>
-internal sealed class OrganizationConnection(IOrganizationService service, IDisposable? lifetime = null) : IDisposable
+internal sealed class OrganizationConnection(IOrganizationService service, IDisposable? lifetime = null, string? url = null) : IDisposable
 {
     public IOrganizationService Service { get; } = service;
+
+    /// <summary>The organization URL the connection reached, when known; the apply prompt names it.</summary>
+    public string? Url { get; } = url;
 
     public void Dispose() => lifetime?.Dispose();
 }
@@ -34,7 +37,7 @@ internal sealed class PlanApplyHost
     public Func<SharedOptions, OrganizationConnection> Connect { get; init; } = options =>
     {
         Microsoft.PowerPlatform.Dataverse.Client.ServiceClient client = DataverseRegistration.CreateDataverseClient(options);
-        return new OrganizationConnection(client, client);
+        return new OrganizationConnection(client, client, client.ConnectedOrgUriActual?.GetLeftPart(UriPartial.Authority));
     };
 
     public Func<bool> IsInputRedirected { get; init; } = () => Console.IsInputRedirected;
@@ -47,7 +50,7 @@ internal sealed class PlanApplyHost
 /// <summary>
 /// The one orchestration path behind <c>plan</c>, <c>apply</c> and <c>inspect</c>: scan the local packages, open one
 /// connection, read and scope the live state, resolve secure configs, diff, run the live checks the diff cannot express
-/// (package publish, Custom API publisher prefix), gate on <c>--strict</c>, then emit (plan / inspect) or confirm,
+/// (package publish, Custom API publisher prefix, step message and filter), gate on <c>--strict</c>, then emit (plan / inspect) or confirm,
 /// apply and re-read (apply). Exit codes are part of the contract (see <see cref="CliExitCodes"/>).
 /// <para>
 /// Output contract: stdout carries only the result (JSON when piped / <c>--json</c>, or the human summary on a
@@ -60,6 +63,9 @@ internal static class PlanApplyCommand
     internal const string PlanMode = "plan";
     internal const string ApplyMode = "apply";
     internal const string InspectMode = "inspect";
+
+    // The last step of apply, after every write: the environment is read again to check that it converged.
+    internal const string ReadBackOperation = "read the environment back to check that it converged";
 
     public static int Run(string command, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost? host = null)
     {
@@ -90,14 +96,14 @@ internal static class PlanApplyCommand
                 DataverseRegistration.EnsureSolutionIsUnmanaged(service, options.SolutionUniqueName!, options.Environment);
             }
 
-            RegistrationState current = ReadCurrent(service, local, options, jsonOptions, out string[] unmanaged);
+            RegistrationState current = ReadCurrent(service, local, options, jsonOptions, out string[] unmanaged, withRetired: command != InspectMode);
             local = ResolveSecureConfigs(local, current, options, jsonOptions);
 
             return command switch
             {
                 InspectMode => EmitInspect(local, current, unmanaged, options, jsonOptions, host),
-                PlanMode => RunPlan(service, local, current, unmanaged, options, jsonOptions, host, tempDirectories),
-                _ => RunApply(service, local, current, unmanaged, options, jsonOptions, host, tempDirectories),
+                PlanMode => RunPlan(service, local, current, unmanaged, options, jsonOptions, host),
+                _ => RunApply(service, connection.Url, local, current, unmanaged, options, jsonOptions, host),
             };
         }
         catch (Exception ex) when (DataverseConnectionException.IsConnectionFailure(ex))
@@ -118,13 +124,17 @@ internal static class PlanApplyCommand
         }
     }
 
-    // Reads the live state of the local assemblies and scopes it to what Vela owns (OwnershipScope).
-    private static RegistrationState ReadCurrent(IOrganizationService service, RegistrationState local, SharedOptions options, JsonSerializerOptions jsonOptions, out string[] unmanaged)
+    // Reads the live state of the local assemblies and scopes it to what Vela owns (OwnershipScope). plan and apply
+    // also read the retired assemblies of the run's packages (a renamed assembly), whose steps block the package update.
+    private static RegistrationState ReadCurrent(IOrganizationService service, RegistrationState local, SharedOptions options, JsonSerializerOptions jsonOptions, out string[] unmanaged, bool withRetired)
     {
         RegistrationState current = ConsoleStatus.Run(
             "Reading current registrations…",
             report => DataverseRegistration.ReadDataverseState(service, local.SourceAssemblies, options, jsonOptions, DataverseRegistration.ExtractLocalRankSteps(local), report));
-        return OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out unmanaged);
+        RegistrationState scoped = OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out unmanaged);
+        return withRetired
+            ? DataverseRegistration.WithRetiredAssemblies(service, scoped, local, options.SolutionUniqueName, jsonOptions)
+            : scoped;
     }
 
     // Code only names a step's secure configuration; its value comes from --secure-config or VELA_SECURE_CONFIG_<NAME>.
@@ -136,17 +146,26 @@ internal static class PlanApplyCommand
             current,
             SecureConfigResolver.ParseSpecs(options.SecureConfigs ?? [], File.ReadAllText, Console.Error.WriteLine),
             Environment.GetEnvironmentVariable,
-            jsonOptions);
+            jsonOptions,
+            Console.Error.WriteLine);
 
-    // The preview shared by plan and apply: the registration diff plus the two live checks it cannot express.
+    // The preview shared by plan and apply: the registration diff plus the live checks it cannot express.
     //  1. Package publish: a code-only rebuild (unchanged steps/custom APIs, rebuilt assembly) produces no diff item,
     //     yet apply republishes the package - listed as a "package" operation so neither plan nor apply reports "no
     //     changes". The importable-prefix guard runs first, so an unprefixed package without --solution fails before
     //     anything is written rather than mid-apply.
-    //  2. Custom API publisher prefix: applying into a solution rejects a Custom API unique name without the prefix -
-    //     a warning (and a --strict failure). Resolved only when a solution is targeted AND a Custom API is created or
-    //     updated, so a step-only or delete-only run neither pays for nor can fail on the lookup.
-    internal static PlanPreview BuildPreview(string mode, IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, List<string> tempDirectories, out RegistrationDiff diff)
+    //  2. Blocking errors: apply would fail on them after its deletes and the package publish, so the preview refuses
+    //     the run (exit 4) before the confirmation prompt and before any write, listing every one of them:
+    //     - a Custom API unique name without the solution publisher prefix (Dataverse rejects it). Resolved only when a
+    //       solution is targeted AND a Custom API is created or updated, so a step-only or delete-only run neither
+    //       pays for nor can fail on the lookup;
+    //     - an added or changed step whose message, or whose table's message filter, does not exist
+    //       (FindUnregistrableSteps; the message of a Custom API this run creates is exempt);
+    //     - a plugin type the package update removes (its class was deleted or renamed, or its assembly was renamed)
+    //       that still has steps the run does not delete first: Dataverse refuses the update (0x80040265), so a step
+    //       Vela does not manage stops the run here (FindPluginTypeRemovalBlockers). Vela's own steps on that type are
+    //       in the delete phase, which runs before the publish.
+    internal static PlanPreview BuildPreview(string mode, IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, out RegistrationDiff diff)
     {
         diff = BuildDiff(local, current);
 
@@ -155,19 +174,27 @@ internal static class PlanApplyCommand
         if (local.PackagePayloads.Length > 0)
         {
             DataverseRegistration.EnsurePluginPackagesImportable(local.PackagePayloads, options.SolutionUniqueName);
-            packageActions = DataverseRegistration.ComputePackagePublishActions(service, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, info);
+            packageActions = DataverseRegistration.ComputePackagePublishActions(service, local.PackagePayloads, options.SolutionUniqueName, info);
         }
 
-        string[] diagnostics = local.Diagnostics;
+        List<string> blocking = [];
         string[] customApiNames = string.IsNullOrWhiteSpace(options.SolutionUniqueName) ? [] : ExtractCustomApiUniqueNames(diff).ToArray();
         if (customApiNames.Length > 0)
         {
             string solutionPrefix = DataverseRegistration.ResolveSolutionCustomizationPrefix(service, options.SolutionUniqueName!);
-            diagnostics = [.. diagnostics, .. DataverseRegistration.ComputeCustomApiPrefixDiagnostics(solutionPrefix, customApiNames)];
+            blocking.AddRange(DataverseRegistration.FindCustomApiPrefixViolations(solutionPrefix, customApiNames));
+        }
+
+        blocking.AddRange(DataverseRegistration.FindUnregistrableSteps(service, diff));
+        blocking.AddRange(DataverseRegistration.FindPluginTypeRemovalBlockers(service, local, current, diff, packageActions.Any(a => !a.IsCreate)));
+        if (blocking.Count > 0)
+        {
+            throw new InvalidOperationException(BlockingErrorsMessage(blocking));
         }
 
         IReadOnlyList<SolutionMembershipAction> membership = OnlyUnwritten(MissingFromSolution(service, local, options, info), diff, packageActions.Count > 0);
-        return BuildPlanPreview(mode, options.Environment, diff, diagnostics, current.Diagnostics, packageActions, unmanaged, [.. info], membership,
+        string[] currentDiagnostics = [.. current.Diagnostics, .. DataverseRegistration.RetiredSecureConfigWarnings(local, current)];
+        return BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, currentDiagnostics, packageActions, unmanaged, [.. info], membership,
             ReadManagedIdentityLinks(service, local, options, validate: true));
     }
 
@@ -230,9 +257,9 @@ internal static class PlanApplyCommand
         }).ToArray();
     }
 
-    private static int RunPlan(IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host, List<string> tempDirectories)
+    private static int RunPlan(IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host)
     {
-        PlanPreview plan = BuildPreview("plan", service, local, current, unmanaged, options, tempDirectories, out _);
+        PlanPreview plan = BuildPreview("plan", service, local, current, unmanaged, options, out _);
         if (FailsStrict(options, plan.Diagnostics, afterApply: false, out int strictExit))
         {
             return strictExit;
@@ -242,9 +269,9 @@ internal static class PlanApplyCommand
         return options.DetailedExitCode && plan.HasChanges ? ExitChangesPending : ExitSuccess;
     }
 
-    private static int RunApply(IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host, List<string> tempDirectories)
+    private static int RunApply(IOrganizationService service, string? orgUrl, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host)
     {
-        PlanPreview preview = BuildPreview("apply", service, local, current, unmanaged, options, tempDirectories, out RegistrationDiff diff);
+        PlanPreview preview = BuildPreview("apply", service, local, current, unmanaged, options, out RegistrationDiff diff);
         if (FailsStrict(options, preview.Diagnostics, afterApply: false, out int strictExit))
         {
             return strictExit;
@@ -274,10 +301,10 @@ internal static class PlanApplyCommand
         {
             foreach (string name in DataverseRegistration.FindCrossSolutionAssemblyCollisions(service, local.SourceAssemblyPayloads, options.SolutionUniqueName!))
             {
-                Console.Error.WriteLine(
+                Console.Error.WriteLine(EscapeControl(
                     $"Warning: plugin assembly '{name}' already exists in this org and is not part of solution '{options.SolutionUniqueName}'. " +
                     "Applying overwrites its content, modifying an assembly owned by another solution. " +
-                    "Set a unique <AssemblyName> in the plugins project (for example prefix it with the solution name) to avoid the collision.");
+                    "Set a unique <AssemblyName> in the plugins project (for example prefix it with the solution name) to avoid the collision."));
             }
         }
 
@@ -289,7 +316,7 @@ internal static class PlanApplyCommand
             string packageNote = packageNeedsPublish ? " + plugin package (code change)" : string.Empty;
             string linkNote = linksToWrite > 0 ? $" + {linksToWrite} managed identity link(s)" : string.Empty;
             Console.Error.Write(
-                $"Apply {preview.Summary.Added} to create / {preview.Summary.Changed} to update / {preview.Summary.Removed} to delete{packageNote}{linkNote} against {options.Environment ?? "Dataverse"}? Type 'yes' to continue: ");
+                $"Apply {preview.Summary.Added} to create / {preview.Summary.Changed} to update / {preview.Summary.Removed} to delete{packageNote}{linkNote} against {EscapeControl(DescribeTarget(options.Environment, orgUrl))}? Type 'yes' to continue: ");
             return host.ReadLine();
         }))
         {
@@ -303,12 +330,21 @@ internal static class PlanApplyCommand
         }
 
         int addedToSolution;
+        RegistrationState after;
+        RegistrationDiff afterDiff;
+        ManagedIdentityPlan? afterLinks;
+        ApplyRun run = new();
         try
         {
-            DataverseRegistration.ApplyDiff(service, diff, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize, preview.ManagedIdentity);
+            DataverseRegistration.ApplyDiff(service, diff, local.PackagePayloads, options.SolutionUniqueName, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize, preview.ManagedIdentity, run);
 
             // Recomputed after the writes: what apply created or updated is already in the solution, a deleted
             // component is gone, and what remains is the unchanged components to add.
+            if (!string.IsNullOrWhiteSpace(options.SolutionUniqueName))
+            {
+                run.Pending = $"add unchanged components to solution {options.SolutionUniqueName}";
+            }
+
             IReadOnlyList<SolutionMembershipAction> missing = OnlyUnwritten(MissingFromSolution(service, local, options, []), diff, packageNeedsPublish);
             if (missing.Count > 0)
             {
@@ -316,16 +352,39 @@ internal static class PlanApplyCommand
             }
 
             addedToSolution = missing.Count;
+            run.CompletePending();
+
+            // The read-back is part of the run: every write already landed, so a failure here still ends with the
+            // apply-failed document and the partial-apply exit, listing the writes as completed.
+            run.Pending = ReadBackOperation;
+            after = ReadCurrent(service, local, options, jsonOptions, out _, withRetired: true);
+            afterDiff = BuildDiff(local, after);
+            // The managed identity link is read again too: a link the platform did not keep is not a success either.
+            afterLinks = ReadManagedIdentityLinks(service, local, options, validate: false);
         }
         catch (Exception applyEx) when (applyEx is not DataverseConnectionException)
         {
             // Dataverse has no cross-entity transaction, so a mid-run failure may leave the org partially updated.
             // ApplyDiff already wrote the resume report to stderr; add a machine-readable result and a distinct exit
             // code so a partial apply is not confused with a bad-args or connection failure.
+            // The document lists what landed (failure.completed), what failed and what was not attempted, the same lists
+            // as the resume report on stderr.
+            string error = RedactSecrets(applyEx.Message);
+            ApplyFailure outcome = run.ToFailure(error);
+            if (run.Pending != null)
+            {
+                // A failure after ApplyDiff (the solution add or the read-back): ApplyDiff wrote no report for it.
+                foreach (string line in ApplyResumeReport.Build(outcome.Failed, error, outcome.Completed, outcome.NotApplied))
+                {
+                    Console.Error.WriteLine(EscapeControl(line));
+                }
+            }
+
             PlanPreview failure = preview with
             {
                 Mode = "apply-failed",
-                Notes = [.. preview.Notes, "Apply failed mid-run; Dataverse may be left partially updated. Re-run 'apply' to reconcile.", RedactSecrets(applyEx.Message)],
+                Notes = [.. preview.Notes, "Apply failed mid-run; Dataverse may be left partially updated. Re-run 'apply' to reconcile.", error],
+                Failure = outcome,
             };
             if (!WantsHumanOutput(options, host) || !string.IsNullOrWhiteSpace(options.OutPath))
             {
@@ -335,12 +394,8 @@ internal static class PlanApplyCommand
             return Fail($"Apply failed mid-run; Dataverse may be partially updated: {applyEx.Message}", ExitPartialApply, includeUsage: false);
         }
 
-        RegistrationState after = ReadCurrent(service, local, options, jsonOptions, out _);
-        RegistrationDiff afterDiff = BuildDiff(local, after);
         // Every write succeeded, yet the environment can still differ (the platform silently ignored or normalized a
         // value). That is not a success: the next apply would plan the same change again.
-        // The managed identity link is read again too: a link the platform did not keep is not a success either.
-        ManagedIdentityPlan? afterLinks = ReadManagedIdentityLinks(service, local, options, validate: false);
         int linksRemaining = afterLinks?.Pending.Length ?? 0;
         bool converged = afterDiff.Summary.Added == 0 && afterDiff.Summary.Changed == 0 && afterDiff.Summary.Removed == 0 && linksRemaining == 0;
         PlanPreview result = BuildPlanPreview(converged ? "apply-execute" : "apply-not-converged", options.Environment, afterDiff, local.Diagnostics, after.Diagnostics, unmanaged: unmanaged, info: [.. local.Info ?? [], .. after.Info ?? []], managedIdentity: afterLinks) with
@@ -393,6 +448,20 @@ internal static class PlanApplyCommand
                 (linksRemaining > 0 ? $" / {linksRemaining} managed identity link(s)" : string.Empty) + " remain. " +
                 "Dataverse accepted the writes but did not keep them; re-running apply would plan the same changes.",
                 ExitDriftDetected, includeUsage: false);
+    }
+
+    // The target the apply prompt names: the --environment label with the URL the connection reached, so a label (or a
+    // connection string, which leaves no --url) cannot hide which organization is about to be written.
+    internal static string DescribeTarget(string? label, string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return string.IsNullOrWhiteSpace(label) ? "Dataverse" : label!;
+        }
+
+        return string.IsNullOrWhiteSpace(label) || string.Equals(label.TrimEnd('/'), url.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)
+            ? url
+            : $"{label} ({url})";
     }
 
     private static bool FailsStrict(SharedOptions options, string[] diagnostics, bool afterApply, out int exitCode)
@@ -477,6 +546,13 @@ internal static class PlanApplyCommand
     // nor --out. Piped/redirected runs, --json and file output all keep JSON for scripts and agents.
     internal static bool WantsHumanOutput(SharedOptions options, PlanApplyHost host) =>
         !options.Json && string.IsNullOrWhiteSpace(options.OutPath) && !host.IsOutputRedirected();
+
+    // One message for every blocking error of the preview: the first alone, or a count and one line per error.
+    internal static string BlockingErrorsMessage(IReadOnlyList<string> errors) =>
+        errors.Count == 1
+            ? $"{errors[0]} Nothing was written."
+            : $"{errors.Count} problems block this run; nothing was written:{Environment.NewLine}" +
+              string.Join(Environment.NewLine, errors.Select(e => "  - " + e));
 
     // The unique names of the Custom APIs a plan would create or update (removed ones need no prefix), read from the
     // diff's local-side definitions so the publisher-prefix check sees exactly what apply would write.

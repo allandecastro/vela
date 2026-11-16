@@ -197,33 +197,32 @@ internal static partial class DataverseRegistration
 
         if (!definition.UniqueName.StartsWith(solutionPrefix + "_", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException(
-                $"Custom API '{definition.UniqueName}' must start with the solution publisher prefix '{solutionPrefix}_'. " +
-                "Dataverse requires the customization prefix on a Custom API's unique name. Rename it to " +
-                $"'{solutionPrefix}_{definition.UniqueName}' (or match the solution's publisher prefix).");
+            throw new InvalidOperationException(CustomApiPrefixViolationMessage(definition.UniqueName, solutionPrefix!));
         }
     }
 
-    // Plan-time, read-only counterpart of ValidateCustomApiUniqueNamePrefix: returns a warning for every Custom API
-    // unique name that does not carry the solution publisher prefix, so `plan --solution` surfaces the mismatch that
-    // apply hard-fails on (instead of the user discovering it only at apply). Non-fatal by design - it flows through
-    // the plan's diagnostics/warnings channel and only fails the command under --strict, like a rank collision.
-    internal static IReadOnlyList<string> ComputeCustomApiPrefixDiagnostics(string solutionPrefix, IEnumerable<string> customApiUniqueNames)
+    private static string CustomApiPrefixViolationMessage(string uniqueName, string solutionPrefix) =>
+        $"Custom API '{uniqueName}' must start with the solution publisher prefix '{solutionPrefix}_'. " +
+        "Dataverse requires the customization prefix on a Custom API's unique name. Rename it to " +
+        $"'{solutionPrefix}_{uniqueName}' (or match the solution's publisher prefix).";
+
+    // Preview-time, read-only counterpart of ValidateCustomApiUniqueNamePrefix: one error for every Custom API unique
+    // name that does not carry the solution publisher prefix. The preview of plan and apply refuses the run on any
+    // (exit 4), before the confirmation prompt and before any write: apply would otherwise reach the check only after
+    // its deletes and the package publish.
+    internal static IReadOnlyList<string> FindCustomApiPrefixViolations(string solutionPrefix, IEnumerable<string> customApiUniqueNames)
     {
-        List<string> diagnostics = [];
+        List<string> violations = [];
         foreach (string uniqueName in customApiUniqueNames)
         {
             if (!string.IsNullOrWhiteSpace(uniqueName) &&
                 !uniqueName.StartsWith(solutionPrefix + "_", StringComparison.OrdinalIgnoreCase))
             {
-                diagnostics.Add(
-                    $"Custom API '{uniqueName}' does not start with the solution publisher prefix '{solutionPrefix}_'. " +
-                    $"Applying into the solution would reject it; rename it to '{solutionPrefix}_{uniqueName}' " +
-                    "(or match the solution's publisher prefix).");
+                violations.Add(CustomApiPrefixViolationMessage(uniqueName, solutionPrefix));
             }
         }
 
-        return diagnostics;
+        return violations;
     }
 
     // A workflow-enabled Custom API ("Enabled for Workflow") has documented constraints: it must be an action

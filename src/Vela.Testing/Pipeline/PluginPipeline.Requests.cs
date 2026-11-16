@@ -227,9 +227,19 @@ namespace Vela.Testing
             OrganizationResponseCollection responses = RunInOneTransaction(() =>
             {
                 OrganizationResponseCollection collected = new OrganizationResponseCollection();
-                foreach (OrganizationRequest child in request.Requests)
+                for (int index = 0; index < request.Requests.Count; index++)
                 {
-                    OrganizationResponse childResponse = ExecuteRequest(child);
+                    OrganizationResponse childResponse;
+                    try
+                    {
+                        childResponse = ExecuteRequest(request.Requests[index]);
+                    }
+                    catch (Exception ex) when (PlatformFault.ExecuteTransactionFailed(ex, index) is { } wrapped)
+                    {
+                        // Verified live: a failing child surfaces as an ExecuteTransactionFault naming its index.
+                        throw wrapped;
+                    }
+
                     if (request.ReturnResponses == true)
                     {
                         collected.Add(childResponse);
@@ -237,7 +247,7 @@ namespace Vela.Testing
                 }
 
                 return collected;
-            }, eager: true);
+            });
 
             ExecuteTransactionResponse response = new ExecuteTransactionResponse();
             response.Results["Responses"] = responses;
@@ -260,7 +270,8 @@ namespace Vela.Testing
             // WinQuoteRequest) from diverting the request away from the store.
             string message = SdkMessageNames.ToSdkMessage(request);
             (string entityName, Guid entityId) = DerivePrimaryEntity(request);
-            if (!HasSteps(message, entityName))
+            // A Merge always runs here: its main operation fires the Update steps on the master (verified live).
+            if (!(request is MergeRequest) && !HasSteps(message, entityName))
             {
                 return _store.Execute(request);
             }
@@ -275,16 +286,29 @@ namespace Vela.Testing
                 // pre stages and again after the merge (the subordinate's post-image is the deactivated record).
                 MergeStates? merge = request is MergeRequest mergeRequest ? MergeStates.Before(_store, mergeRequest) : null;
 
-                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, request.Parameters, null), merge, post: false), asyncQueue);
-                EnterTransaction();
-                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, request.Parameters, null), merge, post: false), asyncQueue);
+                return RunStages(
+                    stage => FireStage(WithMergeStates(GenericInvocation(message, stage, entityName, entityId, request.Parameters, null), merge, post: false), asyncQueue),
+                    () =>
+                    {
+                        OrganizationResponse response = request is MergeRequest mainMerge
+                            ? ExecuteMergeMain(mainMerge, asyncQueue)
+                            : TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = request.RequestName };
 
-                OrganizationResponse response = TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = request.RequestName };
-
-                merge?.After(_store);
-                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results), merge, post: true), asyncQueue);
-                return response;
+                        merge?.After(_store);
+                        return response;
+                    },
+                    response => FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results), merge, post: true), asyncQueue));
             }, shared);
+        }
+
+        // The main operation of a Merge: the store merges, writing the master's new values through an Update that
+        // fires the Update steps at PreOperation and PostOperation, at the Merge's depth, with the Merge main operation
+        // as their ParentContext (verified live: ParentChain Merge/30). The Update runs only when the master changes.
+        private OrganizationResponse ExecuteMergeMain(MergeRequest request, List<Action> asyncQueue)
+        {
+            MarkPlatformUpdate(PluginMessages.Merge, request.Parameters);
+            _store.Merge(request, master => UpdateBatch(new[] { master }, platformUpdate: true, asyncQueue));
+            return new MergeResponse();
         }
 
         private static StageInvocation WithMergeStates(StageInvocation invocation, MergeStates? merge, bool post)
@@ -335,9 +359,6 @@ namespace Vela.Testing
                 return (master, subordinate);
             }
         }
-
-        private static readonly HashSet<string> NonTransactionalMessages =
-            new HashSet<string>(new[] { "Retrieve", "RetrieveMultiple" }, StringComparer.OrdinalIgnoreCase);
 
         // A copy of the request (same type, so the store still recognises it) with its own parameter collection and
         // its own copies of the mutable SDK values, so a step editing a value in place cannot reach the caller's request.

@@ -19,7 +19,7 @@ _disableBreadcrumb: true
 
 ## See it
 
-Register a plugin step with a strongly-typed handler, preview it, apply it, then test it with no connection and no mocking library:
+Declare a plugin step with a typed handler, preview and apply its registration, then test it in memory with no connection and no mocking library:
 
 [!code-csharp[](samples/Vela.DocSamples/HomePageSample.cs#plugin)]
 
@@ -35,9 +35,9 @@ vela apply --packages-dir ./artifacts --solution ZavaSales --interactive   # ups
 <div class="vela-cards">
   <a class="vela-card" href="guides/plugins.md"><span class="t">Fluent plugins</span><span class="d">Declarative step registration and strongly-typed handlers, with typed target, images, tracing and a TTL cache.</span></a>
   <a class="vela-card" href="guides/custom-apis.md"><span class="t">Custom APIs</span><span class="d">Declarative Custom API definitions and typed request/response parameters.</span></a>
-  <a class="vela-card" href="guides/plan-apply.md"><span class="t">Preview-first CLI</span><span class="d">Idempotent plan then apply of steps, Custom APIs and images against a live environment.</span></a>
-  <a class="vela-card" href="guides/testing.md"><span class="t">No-connection testing</span><span class="d">Run plugins against an in-memory Dataverse - no live connection, no mocking library.</span></a>
-  <a class="vela-card" href="guides/models.md"><span class="t">Early-bound & typed models</span><span class="d">Generate C# entity classes and typed message classes from your environment.</span></a>
+  <a class="vela-card" href="guides/plan-apply.md"><span class="t">Preview-first CLI</span><span class="d">Preview with plan, then apply plugin packages, steps, images and Custom APIs idempotently into your unmanaged solution.</span></a>
+  <a class="vela-card" href="guides/testing.md"><span class="t">No-connection testing</span><span class="d">PluginPipeline simulates the Dataverse pipeline in memory: no live connection, no mocking library.</span></a>
+  <a class="vela-card" href="guides/models.md"><span class="t">Early-bound models (<code>vela models</code>)</span><span class="d">Generate C# entity and message classes from your environment, then read with <code>Retrieve&lt;T&gt;</code> and <code>Query.For&lt;T&gt;()</code>.</span></a>
   <a class="vela-card" href="guides/security-model.md"><span class="t">Opt-in security model</span><span class="d">Roles, privileges, business units, teams, sharing and cascades when a test needs them.</span></a>
 </div>
 
@@ -45,6 +45,6 @@ vela apply --packages-dir ./artifacts --solution ZavaSales --interactive   # ups
 
 <div class="vela-cards">
   <a class="vela-card" href="getting-started/install.md"><span class="t">Install</span><span class="d">Get the vela CLI as a .NET global tool.</span></a>
-  <a class="vela-card" href="getting-started/quickstart.md"><span class="t">Quickstart</span><span class="d">From an empty folder to a registered, tested plugin in five steps.</span></a>
+  <a class="vela-card" href="getting-started/quickstart.md"><span class="t">Quickstart</span><span class="d">From an empty folder to a tested, registered plugin in five steps.</span></a>
   <a class="vela-card" href="getting-started/initialize-a-solution.md"><span class="t">Initialize a solution</span><span class="d">What vela init scaffolds and where to go next.</span></a>
 </div>

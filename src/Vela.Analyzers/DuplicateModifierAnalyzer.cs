@@ -26,20 +26,7 @@ namespace Vela.Analyzers
             category: "Vela.Usage",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            description: "A single-value step modifier (FilterOn or a With... setter) overwrites the earlier value when called twice, silently dropping it. Call each at most once per step.");
-
-        // The single-value modifiers. Disabled() is excluded: it is an idempotent flag toggle, so calling it twice
-        // is a harmless no-op rather than a silent overwrite. Images (WithPreImage/WithPostImage) are excluded too:
-        // multiple image calls are legitimate (distinct aliases).
-        private static readonly ImmutableHashSet<string> SetOnceMethods = ImmutableHashSet.Create(
-            "FilterOn",
-            "WithExecutionOrder",
-            "WithDescription",
-            "WithStepKey",
-            "WithImpersonation",
-            "WithSupportedDeployment",
-            "WithUnsecureConfig",
-            "WithSecureConfigFrom");
+            description: "A single-value step modifier (FilterOn, ForRelationship, SkipWhenDepthAbove or a With... setter) overwrites the earlier value when called twice, silently dropping it. Call each at most once per step.");
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 
@@ -68,7 +55,9 @@ namespace Vela.Analyzers
             }
 
             string name = member.Name.Identifier.ValueText;
-            if (!SetOnceMethods.Contains(name))
+            // The single-value modifiers, the list the runtime builder enforces (shared as source, so the two cannot
+            // drift). Disabled() and the images are not in it: an idempotent toggle, and distinct captures.
+            if (!Vela.Steps.SetOnceModifiers.Contains(name))
             {
                 return;
             }

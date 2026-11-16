@@ -39,7 +39,8 @@ namespace Vela.Testing
         /// each property carrying an <see cref="AttributeLogicalNameAttribute"/> becomes an attribute, its CLR
         /// type maps to an <see cref="AttributeTypeCode"/>, generated option-set enums become picklists, the
         /// conventional <c>{logicalname}id</c> column becomes the primary id, a <c>name</c> column becomes the
-        /// primary name, ownership is inferred from the presence of an <c>ownerid</c> column, and max length, numeric
+        /// primary name, ownership is inferred from the presence of an <c>ownerid</c> column (user-owned with one,
+        /// organization-owned without), and max length, numeric
         /// range, required level and lookup targets are recovered from the generated <c>[StringLength]</c> /
         /// <c>[Range]</c> / <c>[RequiredLevel]</c> / <c>[LookupTargets]</c> annotations. This is the zero-connection,
         /// no-hand-written path. It returns the same builder, so chain <c>On(...)</c> + the facet setters to override
@@ -120,10 +121,9 @@ namespace Vela.Testing
                 ApplyGeneratedFacets(meta, property);
             }
 
-            if (ownerSeen)
-            {
-                meta.Ownership(OwnershipTypes.UserOwned);
-            }
+            // A generated class has an ownerid column only for a user/team-owned table, the same inference the store
+            // makes from an early-bound row.
+            meta.Ownership(ownerSeen ? OwnershipTypes.UserOwned : OwnershipTypes.OrganizationOwned);
 
             return meta;
         }

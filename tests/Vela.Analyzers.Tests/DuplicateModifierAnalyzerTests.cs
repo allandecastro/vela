@@ -20,6 +20,9 @@ namespace Vela.Steps
         IFakeStep WithExecutionOrder(int order);
         IFakeStep WithDescription(string description);
         IFakeStep WithStepKey(string key);
+        IFakeStep ForRelationship(string schemaName);
+        IFakeStep SkipWhenDepthAbove(int maxDepth);
+        IFakeStep Disabled();
         void Handle();
     }
 }
@@ -98,5 +101,21 @@ namespace Demo
             "RegisterStep().WithExecutionOrder(1).Handle();\n" +
             "            RegisterStep().WithExecutionOrder(2).Handle();");
         await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_a_second_ForRelationship_or_SkipWhenDepthAbove()
+    {
+        // Both are set-once in the runtime builder; the analyzer reads the same list (SetOnceModifiers).
+        await Verify.VerifyAnalyzerAsync(
+            InMethod("RegisterStep().ForRelationship(\"a\").{|#0:ForRelationship|}(\"b\").Handle();"), Expected("ForRelationship"));
+        await Verify.VerifyAnalyzerAsync(
+            InMethod("RegisterStep().SkipWhenDepthAbove(1).{|#0:SkipWhenDepthAbove|}(2).Handle();"), Expected("SkipWhenDepthAbove"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_second_Disabled()
+    {
+        await Verify.VerifyAnalyzerAsync(InMethod("RegisterStep().Disabled().Disabled().Handle();"));
     }
 }

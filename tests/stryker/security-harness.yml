@@ -7,7 +7,9 @@ stryker-config:
   solution: ../../Vela.sln
   project: Vela.Testing.csproj
   mutate:
+    - "**/Security/SecurityConfiguration.cs"
     - "**/Security/SecurityModel.cs"
+    - "**/Security/SecurityModel.*.cs"
     - "**/Security/SharingTable.cs"
     - "**/Security/AccessTeamGrants.cs"
     - "**/Fakes/OneToManyRegistry.cs"

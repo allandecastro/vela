@@ -78,7 +78,7 @@ public class BatchReportingTests
         svc.ThrowAfterBatchRuns = true;
 
         string stderr = RunCapturingStderr(() =>
-            DataverseRegistration.ApplyDiff(svc, Added(AddedStep(Account, "a"), AddedStep(Contact, "c")), [], null, [], verbose: false));
+            DataverseRegistration.ApplyDiff(svc, Added(AddedStep(Account, "a"), AddedStep(Contact, "c")), [], null, verbose: false));
 
         Assert.Equal(2, svc.Created.Count(e => e.LogicalName == "sdkmessageprocessingstep"));
         Assert.DoesNotContain("FAILED", stderr);
@@ -95,7 +95,7 @@ public class BatchReportingTests
 
         string stderr = RunCapturingStderr(() =>
         {
-            var ex = Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, Added(AddedStep(Account, "a")), [], null, [], verbose: false));
+            var ex = Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, Added(AddedStep(Account, "a")), [], null, verbose: false));
             Assert.Contains("outcome is unknown", ex.Message);
         });
 
@@ -115,7 +115,7 @@ public class BatchReportingTests
 
         string stderr = RunCapturingStderr(() =>
         {
-            var ex = Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, Added(AddedStep(Account, "a")), [], null, [], verbose: false));
+            var ex = Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, Added(AddedStep(Account, "a")), [], null, verbose: false));
             Assert.Contains("rejected (replayed one by one after the batch request failed: ExecuteMultiple is not supported (simulated).)", ex.Message);
         });
 
@@ -147,7 +147,7 @@ public class BatchReportingTests
             : existing);
 
         string stderr = RunCapturingStderr(() =>
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, Added(AddedStep(Account, "a")), [], null, [], verbose: false)));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, Added(AddedStep(Account, "a")), [], null, verbose: false)));
 
         Assert.Contains($"failed at: create step {Account} (a)", stderr);
     }
@@ -164,7 +164,7 @@ public class BatchReportingTests
 
         string stderr = RunCapturingStderr(() =>
             Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(
-                svc, Added(AddedStep(Account, "bad"), AddedStep(Account, "good"), AddedStep(Contact, "bad")), [], null, [], verbose: false)));
+                svc, Added(AddedStep(Account, "bad"), AddedStep(Account, "good"), AddedStep(Contact, "bad")), [], null, verbose: false)));
 
         Assert.Contains("failed (2):", stderr);
         Assert.Contains($"! create step {Account} (bad)", stderr);
@@ -189,7 +189,7 @@ public class BatchReportingTests
             TextWriter err = Console.Error;
             svc.OnRetrieveMultiple = WrapToDetectEarlyLog(svc.OnRetrieveMultiple, err, () => loggedBeforeFlush = true);
             Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(
-                svc, Added(AddedStep(Account, "good"), AddedStep(Contact, "bad")), [], null, [], verbose: true));
+                svc, Added(AddedStep(Account, "good"), AddedStep(Contact, "bad")), [], null, verbose: true));
         });
 
         Assert.False(loggedBeforeFlush, "a '[step] create' line was written before the batch ran");

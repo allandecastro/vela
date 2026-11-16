@@ -46,9 +46,7 @@ internal static partial class DataverseRegistration
     // production hazard. Fail fast instead. (An intentionally global step leaves EntityLogicalName empty.)
     if (!string.IsNullOrWhiteSpace(definition.EntityLogicalName) && !filterId.HasValue)
     {
-        throw new InvalidOperationException(
-            $"Cannot register step '{BuildStepName(definition)}': no message filter exists for entity '{definition.EntityLogicalName}' on message '{definition.Message}'. " +
-            "Check the entity logical name is correct and that the entity supports this message. Registering it anyway would create an unfiltered step that fires for every entity.");
+        throw new InvalidOperationException(MissingMessageFilterMessage(definition));
     }
 
     int normalizedMode = definition.Mode;
@@ -167,73 +165,43 @@ internal static partial class DataverseRegistration
     }
 }
 
-    // Deletes a removed step, resolved ONLY within the plugin types of the assemblies being applied
-    // (ourPluginTypeIds, see GetPluginTypeIdByNameForAssemblies). A removed step always comes from the live read of
-    // those assemblies, so its type is in the map; a type that is not (renamed or already gone) is not ours to touch
-    // and nothing is deleted. There is no environment-wide name fallback: a same-named type or step in another
-    // assembly is never matched.
-    internal static void DeleteStepByDefinition(IOrganizationService service, JsonElement definitionElement, IReadOnlyDictionary<string, Guid> ourPluginTypeIds)
+    // Deletes a removed step by the row id the live read gave it (RegistrationItem.LiveId), never by a lookup on its
+    // key, trigger or name, which can match another row (several steps can share a trigger, and a name is not unique).
+    // The row is re-read first: it is deleted only while its handler is still a plugin type of the assemblies being
+    // applied (ourPluginTypeIds), so a step moved to another assembly since the read is left alone. A removed step
+    // always comes from the live read, so a missing id is a programming error, not a reason to search.
+    internal static void DeleteRemovedStep(IOrganizationService service, RegistrationItem item, IReadOnlyCollection<Guid> ourPluginTypeIds)
 {
-    StepApplyDefinition definition = ParseStepDefinition(definitionElement);
-    if (!ourPluginTypeIds.TryGetValue(definition.PluginTypeName, out Guid pluginTypeId))
-    {
-        return;
-    }
-
-    // FindStepId matches on the stable step key (or message/entity/stage/mode); the name fallback is scoped to the
-    // same plugin type, so a step of an unrelated plugin type sharing the display name is never deleted.
-    Guid? stepId = FindStepId(service, pluginTypeId, definition);
-    if (stepId.HasValue)
-    {
-        DeleteStep(service, stepId.Value);
-        return;
-    }
-
-    string? stepName = TryGetString(definitionElement, "name");
-    if (!string.IsNullOrWhiteSpace(stepName))
-    {
-        Guid? byName = FindStepByName(service, stepName, pluginTypeId);
-        if (byName.HasValue)
-        {
-            DeleteStep(service, byName.Value);
-        }
-    }
+    Guid stepId = item.LiveId
+        ?? throw new InvalidOperationException($"Cannot delete step '{TryGetString(item.Definition, "name") ?? item.Type}': the live read gave it no id.");
+    DeleteStep(service, stepId, ourPluginTypeIds);
 }
 
     // Deletes a step and then its secure configuration row: Dataverse does not cascade the delete to
     // sdkmessageprocessingstepsecureconfig, so without this the secret would outlive the step as an orphan.
-    private static void DeleteStep(IOrganizationService service, Guid stepId)
+    private static void DeleteStep(IOrganizationService service, Guid stepId, IReadOnlyCollection<Guid> ourPluginTypeIds)
 {
-    EntityReference? secureConfig;
+    Entity step;
     try
     {
-        secureConfig = service.Retrieve("sdkmessageprocessingstep", stepId, new ColumnSet("sdkmessageprocessingstepsecureconfigid"))?
-            .GetAttributeValue<EntityReference>("sdkmessageprocessingstepsecureconfigid");
+        step = service.Retrieve("sdkmessageprocessingstep", stepId, new ColumnSet("eventhandler", "sdkmessageprocessingstepsecureconfigid"));
     }
     catch (FaultException<OrganizationServiceFault> ex) when (ex.Detail?.ErrorCode == ObjectDoesNotExistErrorCode)
     {
         return; // already gone
     }
 
+    if (step.GetAttributeValue<EntityReference>("eventhandler") is not { } handler || !ourPluginTypeIds.Contains(handler.Id))
+    {
+        return; // no longer one of ours
+    }
+
+    EntityReference? secureConfig = step.GetAttributeValue<EntityReference>("sdkmessageprocessingstepsecureconfigid");
     DeleteIfExists(service, "sdkmessageprocessingstep", stepId);
     if (secureConfig != null)
     {
         DeleteIfExists(service, "sdkmessageprocessingstepsecureconfig", secureConfig.Id);
     }
-}
-
-    // Name lookup scoped to a plugin type (eventhandler), so a same-named step of a different plugin type is
-    // never matched.
-    internal static Guid? FindStepByName(IOrganizationService service, string stepName, Guid pluginTypeId)
-{
-    QueryExpression query = new QueryExpression("sdkmessageprocessingstep")
-    {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepid"),
-        TopCount = 1
-    };
-    query.Criteria.AddCondition("name", ConditionOperator.Equal, stepName);
-    query.Criteria.AddCondition("eventhandler", ConditionOperator.Equal, pluginTypeId);
-    return service.RetrieveMultiple(query).Entities.FirstOrDefault()?.Id;
 }
 
     internal static Guid? FindStepId(IOrganizationService service, Guid pluginTypeId, StepApplyDefinition definition)
@@ -313,6 +281,10 @@ internal static partial class DataverseRegistration
 }
 
     internal static Guid ResolveMessageId(IOrganizationService service, string messageName)
+        => FindMessageId(service, messageName) ?? throw new InvalidOperationException(MessageNotFoundMessage(messageName));
+
+    // The sdkmessage id of a message name, or null when the environment has no such message.
+    internal static Guid? FindMessageId(IOrganizationService service, string messageName)
 {
     QueryExpression query = new QueryExpression("sdkmessage")
     {
@@ -320,14 +292,61 @@ internal static partial class DataverseRegistration
         TopCount = 1
     };
     query.Criteria.AddCondition("name", ConditionOperator.Equal, messageName);
-    Entity? row = service.RetrieveMultiple(query).Entities.FirstOrDefault();
-    if (row == null)
-    {
-        throw new InvalidOperationException($"Dataverse message not found: {messageName}");
-    }
-
-    return row.Id;
+    return service.RetrieveMultiple(query).Entities.FirstOrDefault()?.Id;
 }
+
+    private static string MessageNotFoundMessage(string messageName) => $"Dataverse message not found: {messageName}";
+
+    private static string MissingMessageFilterMessage(StepApplyDefinition definition) =>
+        $"Cannot register step '{BuildStepName(definition)}': no message filter exists for entity '{definition.EntityLogicalName}' on message '{definition.Message}'. " +
+        "Check the entity logical name is correct and that the entity supports this message. Registering it anyway would create an unfiltered step that fires for every entity.";
+
+    /// <summary>
+    /// The read-only check behind the preview of plan and apply: resolves the message, and the message filter of a
+    /// step scoped to a table, of every step the diff adds or changes, and returns one problem per step apply could
+    /// not register. It runs before any write, so such a step stops the run before a delete or the package publish
+    /// rather than after them. The message of a Custom API this run creates does not exist yet (Dataverse creates it
+    /// with the Custom API, which apply writes before the steps), so a step on that message is not checked here.
+    /// </summary>
+    internal static IReadOnlyList<string> FindUnregistrableSteps(IOrganizationService service, RegistrationDiff diff)
+    {
+        HashSet<string> createdApiMessages = new(
+            diff.Added.Where(item => !IsStep(item) && !IsWebResource(item))
+                .Select(item => TryGetString(item.Definition, "uniqueName") ?? item.Type),
+            StringComparer.OrdinalIgnoreCase);
+        IEnumerable<JsonElement> written = diff.Added.Where(IsStep).Select(item => item.Definition)
+            .Concat(diff.Changed.Where(change => string.Equals(change.Kind, "step", StringComparison.OrdinalIgnoreCase)).Select(change => change.After));
+
+        Dictionary<string, Guid?> messageIds = new(StringComparer.OrdinalIgnoreCase);
+        StepMetadataCache filters = new StepMetadataCache();
+        List<string> problems = [];
+        foreach (JsonElement element in written)
+        {
+            StepApplyDefinition definition = ParseStepDefinition(element);
+            if (createdApiMessages.Contains(definition.Message))
+            {
+                continue;
+            }
+
+            if (!messageIds.TryGetValue(definition.Message, out Guid? messageId))
+            {
+                messageId = FindMessageId(service, definition.Message);
+                messageIds[definition.Message] = messageId;
+            }
+
+            if (messageId is not Guid id)
+            {
+                problems.Add($"Cannot register step '{BuildStepName(definition)}': {MessageNotFoundMessage(definition.Message)}.");
+            }
+            else if (!string.IsNullOrWhiteSpace(definition.EntityLogicalName)
+                && filters.ResolveMessageFilterId(service, id, definition.EntityLogicalName) is null)
+            {
+                problems.Add(MissingMessageFilterMessage(definition));
+            }
+        }
+
+        return problems;
+    }
 
     internal static Guid? ResolveMessageFilterId(IOrganizationService service, Guid messageId, string entityLogicalName)
 {

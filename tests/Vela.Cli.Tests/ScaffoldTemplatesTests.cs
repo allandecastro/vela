@@ -67,9 +67,9 @@ public class ScaffoldTemplatesTests
     [Fact]
     public void PluginCsproj_KeepsWildcardAssemblyVersion_ButSilencesCS7035()
     {
-        // The 1.0.* assembly version is deliberate (Dataverse caches plugin assemblies by version, so the wildcard
-        // auto-increments to bust the cache). That wildcard makes the compiler emit CS7035; the project suppresses it
-        // so a freshly scaffolded/`vela add`-ed plugin builds warning-free without losing the cache-busting behaviour.
+        // The 1.0.* assembly version auto-increments on every build (informational for a plugin package). That
+        // wildcard makes the compiler emit CS7035; the project suppresses it so a freshly scaffolded/`vela add`-ed
+        // plugin builds warning-free.
         string csproj = ScaffoldTemplates.PluginCsproj("Zava.Plugins", "Zava.Shared", "1.0.0");
 
         Assert.Contains("<AssemblyVersion>1.0.*</AssemblyVersion>", csproj);

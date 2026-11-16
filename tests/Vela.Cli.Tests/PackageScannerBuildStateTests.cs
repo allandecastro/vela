@@ -49,6 +49,11 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         Assert.Null(state.SecureConfigByStepKey);
         // The classic IPlugin in the same assembly is not scanned for registrations, only reported as unmanaged.
         Assert.Equal(new[] { "SamplePluginFixture.LegacyPlugin" }, state.UnmanagedPluginTypes);
+        // Every class Dataverse registers as a plugin type, Vela's and the unmanaged one: a live type missing from this
+        // list is removed by the package update (FindPluginTypeRemovalBlockers).
+        Assert.Contains("SamplePluginFixture.SampleAccountPlugin", state.PluginTypeNames!);
+        Assert.Contains("SamplePluginFixture.SampleCustomApi", state.PluginTypeNames!);
+        Assert.Contains("SamplePluginFixture.LegacyPlugin", state.PluginTypeNames!);
 
         RegistrationItem api = Assert.Single(state.Items, i => i.Kind == "custom-api");
         Assert.Equal("SamplePluginFixture.SampleCustomApi", api.Type);

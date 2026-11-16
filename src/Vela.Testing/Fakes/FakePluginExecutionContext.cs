@@ -93,5 +93,14 @@ namespace Vela.Testing
 
         // --- IPluginExecutionContext7 ---
         public bool IsApplicationUser { get; set; }
+
+        // The context as an operation it issues sees it in ParentContext: a copy whose SharedVariables are frozen as
+        // they are now, so the variables the plugin sets afterwards do not reach it (verified live).
+        internal FakePluginExecutionContext SnapshotForChild()
+        {
+            FakePluginExecutionContext copy = (FakePluginExecutionContext)MemberwiseClone();
+            copy.SharedVariables = PluginPipeline.CopyParameters(SharedVariables);
+            return copy;
+        }
     }
 }

@@ -7,8 +7,9 @@ All notable changes to Vela are documented here. The format is based on
 ## Versioning policy
 
 - Vela ships as **two independent release lines**:
-  - **Framework** - `Vela.Plugins` + `Vela.Testing`, versioned **together** (the test harness reuses the
-    runtime's internals via `InternalsVisibleTo`, so the two must stay in lockstep) and tagged `framework-vX.Y.Z`.
+  - **Framework** - `Vela.Messages` + `Vela.Plugins` + `Vela.Testing`, versioned **together** (the test harness
+    reuses the runtime's internals via `InternalsVisibleTo`, so the packages must stay in lockstep) and tagged
+    `framework-vX.Y.Z`.
   - **CLI** - `Vela.Cli`, versioned on its own cadence and tagged `cli-vX.Y.Z`.
 - **Pre-1.0 (`0.y.z`):** the public API is still settling. A **minor** bump (`0.y`) may contain breaking
   changes; a **patch** bump (`0.y.z`) is reserved for backwards-compatible fixes. Breaking changes are called
@@ -16,10 +17,180 @@ All notable changes to Vela are documented here. The format is based on
 - **From 1.0 onward:** standard SemVer - **major** for breaking changes, **minor** for backwards-compatible
   features, **patch** for backwards-compatible fixes.
 - A line is released by pushing its tag (`framework-vX.Y.Z` or `cli-vX.Y.Z`), which packs and publishes only
-  that line's package(s). The **Unreleased** section below accumulates changes until the next tag, at which
-  point it is renamed to that version with a date.
+  that line's package(s). The **Unreleased** section below accumulates the changes of both lines, each under a
+  heading that names its line (`### Fixed (Framework)`, `### Added (CLI)`, ...). Cutting a release moves that
+  line's entries out of **Unreleased** into a new `## [X.Y.Z] - YYYY-MM-DD (Vela.Cli)` or
+  `## [X.Y.Z] - YYYY-MM-DD (Vela.Messages + Vela.Plugins + Vela.Testing)` section, with the line dropped from the
+  headings; the other line's entries stay under **Unreleased** (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
+
+### Changed (Framework, breaking)
+
+- `Vela.Testing`: with security on, a record's new owner must hold Read on the table, as in Dataverse. A Create with
+  `ownerid`, an Update of `ownerid`, an `AssignRequest`, and a PreOperation plugin that sets `Target["ownerid"]` now
+  fail with `0x80040299` when the owner holds no Read, or `0x80042f0a` on Update and Assign when the owner team has no
+  role; the Update writes nothing. They succeeded before. Owners the security model does not declare, and the caller
+  itself, are not checked. Migration: give the target owner a role with Read on the table (User level is enough).
+- `Vela.Testing`: with security on, an N:N `Associate` or `Disassociate` needs the Append privilege on the records of
+  both tables, whichever side the call is made from, as Learn documents for many-to-many relationships. The harness
+  demanded AppendTo on the calling record and Append on the related ones, so a role granting AppendTo instead of Append
+  on one table now fails with `0x80040220`, and a call from the other side of the same relationship is checked the
+  same way. Grant Append on both tables.
+- `Vela.Testing`: a 1:N `Associate` or `Disassociate` called from the child side is checked only as the Update of the
+  child's lookup (Write and Append on the child, AppendTo on the parent when the lookup is set). It also demanded
+  AppendTo on the child and Append on the parent, which denied calls the platform allows. The parent side is unchanged.
+- `Vela.Testing`: field-level security has a separate Create permission, `FieldPermission(..., create: true)`, as a
+  column security profile does. A Create that sets a secured column now needs it; `update: true` alone no longer
+  allows it, and fails with `0x80040220`. Add `create: true` where a test creates records with a secured column set.
+- `Vela.Testing`: `WithSecurity` fails fast with an `InvalidOperationException` on a configuration that was ignored
+  silently: a user or team in a business unit not declared (once any `BusinessUnit(...)` is declared), a `Manager`,
+  `Position` or `FieldPermission` naming a principal that is not declared, two roles with the same id, and an id
+  declared both as a user and as a team.
+- `Vela.Testing`: `PluginPipeline` gives the steps the `SharedVariables` and `ParentContext` that Dataverse gives
+  them (verified live). Tests that read shared variables across operations or walk `ParentContext` may need updating:
+  - An operation a plugin issues starts with its own `SharedVariables`. It no longer shares the calling plugin's
+    collection, and nothing it sets flows back. The calling plugin's context in its `ParentContext` chain holds the
+    variables as they were when that plugin started. Read the caller's values through `ParentContext`.
+  - A single `Create` or `Update`: its `CreateMultiple`/`UpdateMultiple` PreOperation and PostOperation steps share
+    the `Create`/`Update` steps' collection and `Create/30` (`Update/30`) parent. They used to see the PreValidation
+    collection directly and had no stage-30 parent.
+  - A `CreateMultiple` or `UpdateMultiple` request: each row's `Create`/`Update` steps have their own collections (one
+    at PreValidation, one for PreOperation and PostOperation) and the `CreateMultiple`/`UpdateMultiple` context of the
+    same stage as `ParentContext`, under `CreateMultiple/30` (`UpdateMultiple/30`). They had one per-row `Create/30`
+    parent and shared one collection across rows.
+  - An `Upsert` runs its `Create` or `Update` at the `Upsert`'s depth (it was one deeper), with `Upsert/30`
+    (`PrimaryEntityName` `"none"`) above the inner operation's contexts. A handler that skips depth 2 or more now runs
+    for it.
+  - A cascaded `Delete` child fires no PreValidation step (it did). Its PreOperation and PostOperation steps have the
+    root's `Delete/30` context as `ParentContext` (they had their own) and their own `SharedVariables`.
+- `Vela.Testing`: an asynchronous step that fails keeps the writes it made before failing, and the asynchronous steps
+  those writes queued run, as on Dataverse, where an asynchronous step runs outside any transaction (verified live).
+  The harness rolled them back. The failure is still recorded in `AsyncStepFailures`.
+- `PluginMessages.GlobalMessages` is an `IReadOnlyList<string>` (it was a `string[]`), so no caller can change the
+  shared list every plugin reads. Code that indexed it or enumerated it still compiles; code that assigned it to a
+  `string[]` or wrote into it does not. `PluginMessages.IsGlobalMessage(...)` is unchanged.
+- A step handler whose context does not match its step, and an `OnMessage<TMarker>().Handle<TRequest>(...)` whose
+  request belongs to another message, now fail when the steps are registered (see Fixed). A plugin that registered
+  such a step but never ran it (or caught the error) now fails to load.
+- `Vela.Testing`: `createdon`, `createdby`, `modifiedon`, `modifiedby` and `owningbusinessunit` supplied on a Create
+  or Update are ignored and stamped from the clock, the caller and the owner, as on Dataverse (verified live). They
+  were kept on Create, and `createdon`/`createdby`/`owningbusinessunit` on Update. `overriddencreatedon` still
+  backdates `createdon`, and now holds the actual creation time. Use `Seed(...)` to arrange records with given audit
+  values.
+- `Vela.Testing`: a Create that sets `statecode` without `statuscode` creates an active record (`statecode` 0,
+  `statuscode` 1), as on Dataverse (verified live). It kept the `statecode` before. Set both to create in another
+  state.
+- `Vela.Testing`: `Merge` no longer copies the subordinate's columns into the master: only `UpdateContent` is
+  written, as on Dataverse (verified live). Merging a subordinate that is already inactive faults with `0x80045304`.
+- `Vela.Testing`: an `ExecuteTransaction` whose child raises a platform fault now faults with an
+  `ExecuteTransactionFault` detail carrying the child's `ErrorCode` and message and its `FaultedRequestIndex`
+  (verified live), on `InMemoryOrganizationService` and `PluginPipeline`. The child's own fault surfaced before.
+- `Vela.Testing`: a write through the SYSTEM service (`ctx.SystemService`) is stamped with SYSTEM as `createdby`,
+  `modifiedby` and `ownerid`, the calling user as `createdonbehalfby` and the root business unit as
+  `owningbusinessunit` (verified live). It recorded the calling user before. `WhoAmI` called from inside a plugin
+  returns SYSTEM on every service, as on Dataverse; from the test it still returns the configured user. Read the
+  caller from `ctx.UserId` or `ctx.InitiatingUserId`.
+- `Vela.Testing`: on a table declared organization-owned (`AsOrganizationOwned`) or registered so by its metadata, a
+  Create or Update that sets `ownerid` faults with `0x80041103`, and `Assign` faults with `0x80040800` (verified
+  live). Both succeeded before.
+- `Vela.Testing`: `Associate`/`Disassociate` over a self-referential relationship (N:N or 1:N) without
+  `Relationship.PrimaryEntityRole` fault with `0x80040203` (verified live); with a role, `Referenced` makes the
+  calling record the parent (1:N) or puts it in the second intersect column (N:N). An undeclared relationship name
+  faults with `0x80040216` (verified live) instead of throwing `InvalidOperationException`; the message still says
+  how to declare it.
+
+### Added (Framework)
+
+- `Vela.Testing`: `RoleBuilder.MemberPrivilegeInheritance(TeamPrivilegeInheritance)` sets the member's privilege
+  inheritance on the role, where the platform keeps it (`role.isinherited`). A user who holds a "Team privileges only"
+  role through a team uses its User-level grants only for that team's records, while the team's other roles keep
+  covering the user's own records. `Team(id, businessUnit, TeamPrivilegeInheritance, roles)` still works and applies
+  the setting to that team's roles only.
+- `Vela.Testing`: `WithRelationship`, `WithParentalRelationship` and `WithReferentialRelationship` (on
+  `InMemoryOrganizationService` and `PluginPipeline`) take an optional `schemaName`, the relationship's real schema
+  name. `Associate`, `Disassociate`, a deep insert and a `RelatedEntitiesQuery` find the relationship by it, so two
+  1:N relationships between the same tables can each be addressed. Declaring a schema name that another relationship
+  (1:N or N:N) already uses throws. Without one, the relationship keeps its `{referenced}_{referencing}` name.
+- `Vela.Testing`: `PluginPipeline.WithEnvironmentId(...)`, `WithTenantId(...)` and `AsApplicationUser()` set the
+  `EnvironmentId`, `TenantId` and `IsApplicationUser` of every step's context, as `PluginContextBuilder` does for one
+  plugin.
+
+### Fixed (Framework)
+
+- `Vela.Testing`: a row created through `PluginPipeline` from an early-bound class without an `OwnerId` property is
+  organization-owned, as it already was through `InMemoryOrganizationService`. It got `ownerid`, `owninguser` and
+  `owningbusinessunit` before, because the pipeline's copy of the target lost its type. The `OwnershipType` of
+  metadata registered with `WithEntityMetadata` now decides the ownership too (it was ignored), after an
+  `AsOrganizationOwned`/`AsUserOwned`/`AsVirtual`/`AsElastic` declaration and before the early-bound type, and
+  `FakeEntityMetadata.From<T>()` sets `OrganizationOwned` for a class without an `ownerid` column (it left
+  `OwnershipType` unset).
+- `Vela.Testing`: `InMemoryOrganizationService.Update`, `UpdateMultipleRequest` and `AssignRequest` resolve a target
+  addressed by alternate key (`KeyAttributes`). They threw a not-found fault for the empty id before; only
+  `UpdateRequest` and `PluginPipeline` resolved the key.
+- `Vela.Testing`: a delete that a Restrict relationship blocks deeper in the cascade (on a grandchild) leaves the store
+  unchanged. Children already deleted or unlinked by the cascade stayed deleted or unlinked before.
+- `Vela.Testing`: a null link column no longer matches in a join or an Any/All filter. A row with an empty column was
+  joined to every row whose linked column was empty too.
+- `Vela.Testing`: an N:N `Associate` faults with `0x80040203` when the record or a related record is not one of the
+  relationship's two tables. It wrote an intersect row before.
+- `Vela.Testing`: a deep insert that matches several 1:N relationships names the new `schemaName` parameter in its
+  error, and `MessageNotModelledException` lists every message the store handles (Upsert, Merge, WhoAmI, the sharing
+  and record-team messages were missing).
+- A lightweight Custom API registered with a handler delegate, `RegisterCustomApi("name", ctx => ...)`, now runs that
+  delegate. Only a lambda capturing `this` or a method of the plug-in itself worked before: a lambda capturing nothing
+  or only locals, and a method of another object, threw `InvalidPluginExecutionException: handler
+  '<RegisterCustomApi>b__...' was not found` on every call.
+- `Vela.Testing`: a write made by an asynchronous step keeps the `CorrelationId` of the operation that queued the step,
+  as on Dataverse (verified live). It got a new id before.
+- `Vela.Testing`: each record gets its own stage-30 `ParentContext`. The root of a cascaded `Delete` saw a child
+  record's context there, and rows 2 and later of a `CreateMultiple` or `UpdateMultiple` saw row 1's.
+- `Vela.Testing`: the Update steps fired inside an `AssignRequest` have `Assign/30` as `ParentContext` (verified live),
+  and inside a `SetStateRequest` `SetStateDynamicEntity/30`. Both saw an `Update/30` context before.
+- `Vela.Testing`: a `MergeRequest` fires the Update steps on the master, under `Merge/30` (verified live). It fired no
+  Update step before.
+- `Vela.Testing`: the steps of an `AssignRequest` work on a copy of the request, like the other messages, and a pre
+  step that replaces the `Assignee` changes the owner written. Steps could change the caller's request before.
+- `Vela.Testing`: `PluginPipeline.Register` throws for a type already registered (by an earlier `Register` or by
+  `FromAssembly`). Its steps fired twice before.
+- `Vela.Testing`: `PluginContext.Execute<TPlugin>()` passes `null` as the unsecure and secure configuration, as
+  `PluginPipeline` does for a step with no configuration. It passed empty strings before.
+- `Vela.Testing`: a bulk step's image collections no longer hold the images of a disabled step of the same plugin.
+- The `Vela.Testing` package depends on exactly the `Vela.Plugins` version of its release (`[X.Y.Z]`) instead of that
+  version or later. `Vela.Testing` uses `Vela.Plugins` internals, so a newer `Vela.Plugins` with an older
+  `Vela.Testing` could fail at run time with `MissingMethodException` or `TypeLoadException`; NuGet now reports the
+  mismatch at restore (NU1608). Reference the same version of both packages.
+- A step handler whose context does not match its step now fails when the steps are registered, with an
+  `InvalidPluginExecutionException` naming the handler, the step and the context the step passes (for example
+  `This step passes IAssignPostContext<Account>`). Through the permissive `Handle(Delegate)` overload, an `OnAssign()`
+  step bound to an `IUpdatePostContext<T>` handler (and the same mismatch on every typed trigger but Create, Update and
+  Delete) compiled and threw a raw `ArgumentException` on every execution. The check covers the generated
+  `{Handler}Context`, a generic message context on a modelled message, and a post-operation context at a pre-stage.
+- `OnMessage<TMarker>().Handle<TRequest>(...)` checks `TRequest` against the step's message when the steps are
+  registered: a request whose `RequestName` (or `[CustomMessage]` / `[SdkMessage]`) names another message is rejected,
+  since `ctx.Request` would read the parameters of a message it does not describe. A request that names no message
+  is still accepted as a typed view.
+- VELA015 checks the handler context of every typed `On{Message}()` trigger (`OnAssign()`, `OnSendEmail()`, ...), not
+  only `OnCreate()`, `OnUpdate()` and `OnDelete()`.
+- VELA003 flags a second `ForRelationship(...)` or `SkipWhenDepthAbove(...)`, which the builder already rejected. The
+  analyzer and the builder now read one list of set-once modifiers.
+- VELA008 compares every typed `On{Message}()` trigger (it knew 11), keyed by the sdkmessage it registers on, and
+  treats an `OnAsyncOnly<TRequest>()` step as asynchronous.
+- VELA019 also flags `new StreamReader(path)` / `new StreamWriter(path)` and `File` / `Directory` calls imported with
+  `using static System.IO.File;`. A reader or writer over a `Stream` is not flagged.
+- The VELA012 code fix binds each argument to its constructor parameter: `new ArgumentNullException(nameof(x))` no
+  longer becomes an exception whose message is the parameter name, named arguments (`paramName:`, `innerException:`)
+  no longer produce code that does not compile, and an inner exception alone gives `(inner.Message, inner)` (no fix
+  when that inner exception is an expression it would evaluate twice).
+- The VELA004 code fix is offered only for a handler named without a qualifier and declared in the registering class
+  or one of its base classes, from a non-static member of a non-static class. It used to edit a same-named static
+  method of the file when the handler belonged to another class, or make a static helper class's method an instance
+  method that no longer compiled.
+- A typed request or response property read (`Get<T>()` on `TypedRequest` / `TypedResponse`) whose parameter holds
+  another type throws `InvalidPluginExecutionException` (it threw `InvalidCastException`), so the caller sees the
+  message naming the parameter. The base `Entity` to early-bound conversion is bound once per type instead of through
+  reflection on every read.
+- `RetryPolicy` rethrows the last fault with its original stack trace when a wait overran the time budget.
 
 ### Added (CLI)
 
@@ -31,16 +202,107 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (CLI)
 
+- An empty `VELA_SECURE_CONFIG_<NAME>` environment variable, or an empty `--secure-config NAME=@file`, no longer
+  clears the live step secure configuration. In GitHub Actions an undefined secret expands to an empty string, so under
+  `--auto-approve` `apply` used to unlink and delete the `sdkmessageprocessingstepsecureconfig` row. An empty variable
+  or file now counts as no value (the live configuration is kept) and prints a warning naming it; only an explicit
+  inline `--secure-config NAME=` clears it.
+- The interactive (`--interactive`) and ambient Azure credential (`--url` alone) connections no longer use a single
+  token for the whole run. The token was acquired once before the package scan, so a cached token close to expiry, a
+  long scan, a wait at the apply prompt or a long apply could end in a 401 mid-apply (exit `7`). Vela now renews it
+  when it is within five minutes of expiry (MSAL `AcquireTokenSilent`, or the Azure credential's `GetToken`). The
+  connection-string and client-secret paths are unchanged: the SDK renews their token.
 - `vela add plugin`, `add step`, `add test`, `add service` and `add customapi` accept the table logical name in
   `--entity` (`--entity account`), as `--filtering-attributes` accepts a column logical name: it resolves to the
   generated model's class through its `EntityLogicalNameValue` (a wrong-case class name is corrected too), so the
   generated code names `Account`. They emitted the value as given, e.g. `EntityPluginBase<account>`, which did not
   compile. With no generated model to map it, an all-lower-case `--entity` is refused with the invalid-arguments exit
   code; a class name is still used as given.
+- `vela apply` with a signed plugin package that must be renamed for the solution publisher prefix no longer suggests
+  applying without `--solution`, which is now required; it says to build and sign the package already named with the
+  prefix.
+- `vela help --json` describes exit code `5` as drift from `models --verify` or an apply that did not converge, as the
+  text help does.
+- The plugin project that `vela init` and `vela add` scaffold no longer claims, in its comments, that Dataverse caches
+  plugin assemblies by version or that `vela apply` fails fast on a new plugin type without a version bump. The
+  comments now say that the package version stays fixed and that the assembly version is informational for a plugin
+  package; the properties are unchanged.
+- The `vela init` next steps, the scaffolded README and the scaffolded `AGENTS.md` show the `vela models` command of
+  the quickstart (`--entities account --out src/<Prefix>.Shared/Models/Generated --namespace
+  <Prefix>.Shared.Models.Generated --interactive`) instead of the `--project src/<Prefix>.Shared/<Prefix>.Shared.csproj`
+  form. Both write to the same folder and namespace.
+- `vela apply` registers a step on the message of a Custom API created by the same run. It wrote the Custom APIs and
+  the steps in one batch, and looked up the step's message before anything was sent, so the lookup failed
+  (`Dataverse message not found`), neither the Custom API nor the step was created, and every run stopped with exit
+  `7` after its deletes and the package publish. `apply` now writes the Custom APIs (with their parameters and
+  response properties) first, then the steps. When a Custom API fails, the run stops before the steps.
+- `vela plan` and `vela apply` exit `4` before any write, and `apply` before its confirmation prompt, when a Custom API
+  the run would create or update has a unique name without the `--solution` publisher prefix. This was a warning in
+  `diagnostics` (an error only with `--strict`), and `apply` failed on it with exit `7` after deleting the removed
+  steps and Custom APIs and publishing the package. The message lists every such Custom API; no JSON document is
+  written, and `diagnostics` no longer carries this warning.
+- `vela plan` and `vela apply` also exit `4` before any write when a step the run would create or update names a
+  message the environment does not have (`Dataverse message not found`) or a table that message has no filter for
+  (`no message filter exists for entity ...`). `apply` failed on these with exit `7` after its deletes and the package
+  publish. A step on the message of a Custom API that the same run creates is not checked against the environment.
+- `vela init` no longer scaffolds against an unlisted framework version, nor a framework minor newer than the one the
+  CLI was released with. It resolved the highest version on nuget.org, unlisted ones included, so a withdrawn release
+  or a framework minor that changed the API the scaffold generates could give a solution that did not build. It now
+  takes the newest listed stable `Vela.Plugins` with the same minor as its built-in framework version (the same major
+  from 1.0), and uses that built-in version when nuget.org is unreachable or lists none. `--core-version` still pins
+  any version.
+- `vela plan` and `vela apply` stop with exit `4`, before any write, when the plugin package update would remove a
+  plugin type (its class was deleted or renamed, or its assembly was renamed) that still has steps Vela does not
+  delete in the same run. Dataverse refuses that update, even for a disabled step (`0x80040265` "Unable to delete
+  '<type>' plugintype due to N step(s)", verified live), so `apply` used to fail with exit `7` after its deletes. The
+  message names each plugin type and its steps. Vela's own steps on such a type are deleted before the package update,
+  as before.
+- `vela apply` handles a renamed plugin assembly (the project's `<AssemblyName>` changed, the package id did not). It
+  read only the assemblies the local package builds, so it did not see the steps of the old assembly: the package
+  update failed on them (exit `7`), or would have left them running the old code. `plan` and `apply` now read the old
+  assembly through its plugin package: its Vela steps are deleted before the package update and created again on the
+  new assembly's plugin types, and its Custom APIs are moved to the new plugin types. A moved step loses its secure
+  configuration unless the run supplies the value, which `plan` reports as a warning. Whether Dataverse deletes the
+  old assembly with the package update is not verified live.
+- `vela apply` deletes a removed step by the id read from the environment. It looked the step up again by step key,
+  trigger or name, and took the first match, which could be another step sharing that trigger or name.
+- When `vela apply` fails partway (exit `7`), the `apply-failed` JSON document carries a `failure` object: the
+  `error`, and every planned operation under `completed`, `failed` or `notApplied`, as in the resume report on stderr.
+  It held only the plan and a note before, so a script could not tell what had been written.
+- The package scan extracts packages into a new private temp directory per run (`vela-pkg-*` and `vela-scan-*`,
+  readable only by the current user on Linux and macOS) instead of a shared, predictable `<temp>/vela-tools` folder,
+  where another local user could plant or swap the assemblies the scan loads and runs.
+- `vela plan`, `vela apply` and `vela logs` escape control characters (ANSI escape sequences, carriage returns and
+  other control codes) in the values they print from the environment: step and plugin type names, Dataverse error
+  messages, plug-in trace text. A value could recolor the terminal, rewrite earlier lines or set the window title.
+  The JSON output was already escaped.
+- The CLI's parsed options no longer print the connection string or inline `--secure-config` values when formatted as
+  text (record `ToString`); no current output did, but any log of the options would have leaked them.
+- `vela apply` reads the environment back after its writes inside the failure handling. A failure of that read used
+  to end with a generic error (exit `4`), with no resume report and no `apply-failed` document; it now exits `7` with
+  both, listing every write as completed and the read-back as failed. A failure while adding unchanged components to
+  the solution now prints the resume report on stderr too.
+- The `vela apply` confirmation prompt names the URL of the organization the connection reached, next to the
+  `--environment` label (`against production (https://contoso.crm.dynamics.com)?`). It showed only the label, which is
+  free text, or `Dataverse` for a connection string, so the prompt did not say which environment would be written.
+- `vela plan` and `vela apply` with `--solution` read the solution's publisher prefix once per connection. Each phase
+  (package actions, retired assemblies, solution membership, the publish, the read-back) queried the solution and
+  retrieved its publisher again, up to six times per apply.
 
 ### Docs
 
+- The documentation was reviewed page by page against the code and the CLI: examples compile from
+  `docs/samples/Vela.DocSamples`, the navigation and titles are consistent, and factual errors are fixed, among them
+  the token cache path, certificate authentication through `--connection-string`, `Associate` support for 1:N
+  relationships, and "The plug-in type could not be found" in the first seconds after a deployment (run the operation
+  again after a few seconds; bumping the assembly version does not change it).
 - [`vela add`](docs/guides/add.md) says `--entity` takes the class name or the table logical name.
+- The README lists the typed reads (`Retrieve<T>`, `RetrieveByKey`, `Query.For<T>()`) and `vela logs`, says `--solution`
+  names an unmanaged solution, and links the security policy.
+- The README follows the documentation conventions and matches the current packages, commands and analyzer range;
+  every external link and anchor in the documentation was checked; and the page list of
+  [`docs/llms.txt`](docs/llms.txt) is generated from the tables of contents, with each page's description in its
+  front matter (also the page's meta description).
 
 ## [0.31.0] - 2026-11-15 (Vela.Cli)
 

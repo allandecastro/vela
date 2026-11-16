@@ -73,15 +73,16 @@ $$"""
     <RootNamespace>{{projectName}}</RootNamespace>
     <AssemblyName>{{projectName}}</AssemblyName>
     <PackageId>{{packageId ?? projectName}}</PackageId>
+    <!-- The package version stays fixed: Dataverse keeps the version a plugin package was created with and cannot
+         change it afterwards, and a fixed version keeps the package path in artifacts/ stable for vela plan/apply. -->
     <Version>1.0.0</Version>
-    <!-- Auto-increment the assembly version on every build. Dataverse caches plugin assemblies by version, so
-         re-deploying changed code under the SAME version can serve a stale assembly and fail at runtime with
-         "The plug-in type could not be found in the plug-in assembly". The 1.0.* wildcard needs a
-         non-deterministic build. (vela apply also fails fast if you add a new plugin type without bumping this.) -->
+    <!-- The assembly version auto-increments on every build (the 1.0.* wildcard needs a non-deterministic build).
+         For a plugin package it is informational: Dataverse does not use the package or assembly version to decide
+         how to upgrade the package. -->
     <Deterministic>false</Deterministic>
     <AssemblyVersion>1.0.*</AssemblyVersion>
-    <!-- The 1.0.* wildcard is deliberate (see above), so silence CS7035 ("version string not in the recommended
-         major.minor.build.revision format") - the compiler's nag about the wildcard form, not a real problem. -->
+    <!-- The 1.0.* wildcard makes the compiler emit CS7035 ("version string not in the recommended
+         major.minor.build.revision format"), a note about the wildcard form, not a real problem: silence it. -->
     <NoWarn>$(NoWarn);CS7035</NoWarn>
     <!-- Emit the XML documentation file and check the comments: a public type or member without a <summary> is a
          CS1591 warning (kept a warning, not an error). -->

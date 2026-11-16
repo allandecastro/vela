@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - "CHANGELOG.md" # published on the site, and indexed by llms.txt
+      - "README.md"
+      - "global.json"
+      - ".config/dotnet-tools.json"
       - ".github/workflows/docs.yml"
   # A pull request builds the site (warnings are errors) without deploying it, so a broken link, anchor or
   # snippet include fails the PR instead of the deployment. The snippets themselves (docs/samples) compile and run
@@ -12,6 +16,10 @@ on:
   pull_request:
     paths:
       - "docs/**"
+      - "CHANGELOG.md"
+      - "README.md"
+      - "global.json"
+      - ".config/dotnet-tools.json"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -43,17 +51,27 @@ jobs:
       DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/.dotnet', github.workspace) || '' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
-      - name: Install DocFX
-        run: dotnet tool update -g docfx
+          global-json-file: global.json # the SDK pinned in global.json (rollForward: latestPatch)
+      # The page list of llms.txt is generated from the toc.yml files and each page's _description front matter.
+      # Regenerate it, and fail when the committed file differs.
+      - name: Check that llms.txt matches the tables of contents
+        shell: bash
+        run: |
+          dotnet run docs/tools/UpdateLlmsTxt.cs
+          git diff --exit-code -- docs/llms.txt || { echo "::error file=docs/llms.txt::docs/llms.txt is out of date. Run 'dotnet run docs/tools/UpdateLlmsTxt.cs' and commit the result."; exit 1; }
+      - name: Install DocFX (pinned in .config/dotnet-tools.json)
+        run: dotnet tool restore
       - name: Build the docs site
-        run: docfx docs/docfx.json --warningsAsErrors
+        run: dotnet tool run docfx docs/docfx.json --warningsAsErrors
 
   build-deploy:
     if: github.event_name != 'pull_request'
     runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"windows-latest"') }}
+    timeout-minutes: 20
     permissions:
       contents: read
       pages: write # deploy-pages publishes the site
@@ -68,13 +86,15 @@ jobs:
       DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/.dotnet', github.workspace) || '' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
-      - name: Install DocFX
-        run: dotnet tool update -g docfx
+          global-json-file: global.json # the SDK pinned in global.json (rollForward: latestPatch)
+      - name: Install DocFX (pinned in .config/dotnet-tools.json)
+        run: dotnet tool restore
       - name: Build the docs site
-        run: docfx docs/docfx.json --warningsAsErrors
+        run: dotnet tool run docfx docs/docfx.json --warningsAsErrors
       # llms.txt (copied as a resource) indexes the pages by their Markdown URL on this site rather than on
       # raw.githubusercontent.com (which returned 404 while the repository was private). Each listed page is
       # published next to its .html, and llms-full.txt is every page it lists, concatenated in that order, for

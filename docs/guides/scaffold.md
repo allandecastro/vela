@@ -1,4 +1,12 @@
-# Scaffold a new solution (vela init)
+---
+_description: "Every vela init option, the generated layout, the optional projects, samples and PROJECT.md"
+---
+
+# Scaffold a solution (`vela init`)
+
+This guide is the reference for `vela init`: the layout it generates, the `PROJECT.md` it records, the samples, the
+namespace convention, every flag, and how to regenerate with `--force`. For a shorter overview, see
+[Initialize a solution](../getting-started/initialize-a-solution.md).
 
 Generate a build-ready plugin solution in one step:
 
@@ -8,6 +16,8 @@ vela init --name ZavaSales --prefix Zava --publisher-prefix zava --solution Zava
 vela init --interactive
 ```
 
+## The generated layout
+
 By default the scaffold is **minimal**: the structure and nothing to delete. It creates `ZavaSales/` with the
 `.sln` at the root and sibling `src/` and `tests/` folders:
 
@@ -15,14 +25,14 @@ By default the scaffold is **minimal**: the structure and nothing to delete. It 
 ZavaSales/
   ZavaSales.sln
   src/
-    Zava.Shared/            # early-bound models + shared services (net48;net10.0); empty until `vela models`
-    Zava.Plugins/           # plugin package -> builds a Dataverse plugin-package .nupkg; no plugin until `vela add`
+    Zava.Shared/            # early-bound models and shared services (net48;net10.0); empty until `vela models`
+    Zava.Plugins/           # the plugin package project: builds a Dataverse plugin package .nupkg; no plugin until `vela add`
       ProjectServices.cs    #   the assembly's service registrar, empty
       Messages.cs           #   the project's message keys and their source, empty
     Zava.Integrations/      # opt-in second plugin package, same two files (add with --integrations)
     Zava.WebResources/      # opt-in TypeScript web resources, preview (add with --web-resources)
   tests/
-    Zava.Plugins.Tests/     # xunit + Vela.Testing, no connection (omit with --no-tests); empty until `vela add test`
+    Zava.Plugins.Tests/     # xUnit tests with Vela.Testing, no connection (omit with --no-tests); empty until `vela add test`
     Zava.Integrations.Tests/ # with --integrations (omit with --no-tests); empty until `vela add test`
   .vela/scaffold-manifest.json  # what init wrote, so `--force` never touches your code (commit it)
   PROJECT.md                   # the publisher prefix and the solution of each package (never read by the CLI)
@@ -39,11 +49,11 @@ changes, and no demo step is ever deployed.
 
 Each plugin project starts with two assembly-wide files, generated in both modes:
 
-- `ProjectServices.cs` - an empty [`IServiceRegistrar`](dependency-injection.md#share-services-across-the-assembly),
+- `ProjectServices.cs`: an empty [`IServiceRegistrar`](dependency-injection.md#share-services-across-the-assembly),
   declared with `[assembly: Vela.DI.VelaServiceRegistrar(typeof(Zava.Plugins.ProjectServices))]`. The services and
   message sources it registers apply to every plugin and Custom API of the assembly, before each one's own
   `ConfigureServices`. It registers nothing until you uncomment or add a line.
-- `Messages.cs` - an empty `ProjectMessages` class for the message key constants and the `DictionaryMessageSource`
+- `Messages.cs`: an empty `ProjectMessages` class for the message key constants and the `DictionaryMessageSource`
   that holds their texts; register its `Source` in `ProjectServices` once it has a key
   ([Localized messages](localization.md)).
 
@@ -52,18 +62,20 @@ member without a `<summary>` is a CS1591 warning; the generated code and the fil
 `Zava.Shared` generates its documentation file too, for the IntelliSense of the models, but silences CS1591: the
 models `vela models` writes there do not document every member. The test projects do not generate one.
 
-Fill it in:
+## Fill it in
+
+`vela models` and `vela plan` connect to your environment; the other commands work offline:
 
 ```powershell
-vela models --entities account --out src/Zava.Shared/Models/Generated --namespace Zava.Shared.Models.Generated
+vela models --entities account --out src/Zava.Shared/Models/Generated --namespace Zava.Shared.Models.Generated --interactive
 vela add plugin AccountValidator --entity Account --filtering-attributes Name --project src/Zava.Plugins
 vela add test AccountValidator --entity Account --project tests/Zava.Plugins.Tests
 dotnet build ZavaSales.sln -c Release
-dotnet test tests/Zava.Plugins.Tests -c Release
+dotnet test tests/Zava.Plugins.Tests -c Release   # on Windows; with Mono elsewhere (see Install)
 vela plan --packages-dir artifacts --solution ZavaSales --interactive
 ```
 
-### PROJECT.md
+## PROJECT.md
 
 `PROJECT.md` holds the values the commands take as flags, so the people and agents working in the solution don't have
 to ask for them. Its YAML front matter records the publisher prefix (`--publisher-prefix`) and maps every generated
@@ -99,13 +111,13 @@ it only at `vela init`, and no command adds a package to it; `init --force` rewr
 from what Vela generated (it is in the scaffold manifest), so everything you add below the front matter is kept. The
 environment URL is per user and never goes in it.
 
-### Samples (`--samples`)
+## Samples (`--samples`)
 
 Pass **`--samples`** to see every pattern working instead. It adds, to the same layout:
 
 ```text
   src/
-    Zava.Shared/            # + hand-written Account/Contact models, a cross-table GreetingService
+    Zava.Shared/            # + hand-written Account and Contact models, a cross-table GreetingService
     Zava.Plugins/
       Account/                 #   organised by table: Plugins/ Services/ CustomApis/
       Contact/
@@ -113,18 +125,20 @@ Pass **`--samples`** to see every pattern working instead. It adds, to the same 
     Zava.Integrations/      # second plugin package (omit with --no-integrations)
     Zava.ConsoleApp/        # .NET 10 interactive browser login (omit with --no-console)
   tests/
-    Zava.Plugins.Tests/      # + tests for every sample
-    Zava.Integrations.Tests/ # xunit tests for the Integrations package
+    Zava.Plugins.Tests/      # + tests for the samples, and a security model example
+    Zava.Integrations.Tests/ # xUnit tests for the Integrations Custom APIs
 ```
 
 `Zava.Plugins` then ships working examples: two single-step plugins (one schedules a follow-up task, one counts an
-account's contacts with a typed aggregate query), a multi-step router plugin, table-**bound** and **global** Custom APIs, a cross-table shared service, two **table-scoped** services (one
-write, one read) and `AccountMessageReference`, a cheat-sheet with one step per typed message. The cheat-sheet is an
-`abstract` class: it compiles, but neither `vela apply` nor Dataverse registers it, so it is never deployed. `Zava.Plugins.Tests` runs those plugins and Custom APIs
-with [`Vela.Testing`](testing.md), no Dataverse connection: `dotnet test tests/Zava.Plugins.Tests`. Each file's
-namespace matches its folder. Generate a samples solution next to your real one to copy from it.
+account's contacts with a typed aggregate query), a multi-step router plugin, table-**bound** and **global** Custom
+APIs, a cross-table shared service, two **table-scoped** services (one write, one read) and `AccountMessageReference`,
+a cheat sheet with one step per typed message. The cheat sheet is an `abstract` class: it compiles, but neither
+`vela apply` nor Dataverse registers it, so it is never deployed. `Zava.Plugins.Tests` runs those plugins and Custom
+APIs with [`Vela.Testing`](testing.md), with no Dataverse connection, and shows the opt-in
+[security model](security-model.md) in `Security/SecurityExampleTests.cs`. Each file's namespace matches its folder.
+Generate a samples solution next to your real one to copy from it.
 
-### Namespaces and usings
+## Namespaces and usings
 
 A file's namespace follows its folder: `src/Zava.Plugins/Account/Plugins/` is `Zava.Plugins.Account.Plugins`, and its
 test is in `Zava.Plugins.Tests.Account.Plugins`. That puts a namespace named `Account` next to the `Account` model
@@ -148,10 +162,11 @@ adds usings inside, and `Directory.Build.props` sets `EnforceCodeStyleInBuild`, 
 placed outside as warning IDE0065. See
 [Microsoft's IDE0065 reference](https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0065).
 
-### Flags
+## Flags
 
-- `--prefix` (default: derived from the name) - the .NET namespace / assembly prefix.
-- `--publisher-prefix` - the Dataverse publisher prefix of your solution (2-8 characters, letter first,
+- `--name <SolutionName>` (or the first positional argument): the solution name, and the folder it is created in.
+- `--prefix` (default: derived from the name): the .NET namespace and assembly prefix.
+- `--publisher-prefix`: the Dataverse publisher prefix of your solution (2-8 characters, letter first,
   alphanumeric). It names the sample Custom APIs (`<publisherprefix>_<Name>`) and is recorded in `PROJECT.md`, as
   the value to pass to `vela add customapi --prefix`. It also prefixes the plugin package ids
   (`zava_Zava.Plugins`, `zava_Zava.Integrations`), as Dataverse requires to import a package, so `vela apply`
@@ -160,33 +175,35 @@ placed outside as warning IDE0065. See
   prefix is refused, and a valid one prefixes the package ids the same way. A minimal scaffold without
   `--publisher-prefix` keeps unprefixed package ids (`Zava.Plugins`): `vela apply --solution` adds the solution's
   prefix.
-- `--solution <uniquename>` - the unique name of the Dataverse solution every generated package deploys into
+- `--solution <uniquename>`: the unique name of the Dataverse solution every generated package deploys into
   (letters, digits and `_`, not starting with a digit). It is recorded in `PROJECT.md` only; `vela plan` and
   `vela apply` still take `--solution`.
-- `--samples` - add the demo code and the Integrations / ConsoleApp projects (see above). `--minimal` /
+- `--samples`: add the demo code and the Integrations and ConsoleApp projects (see above). `--minimal` and
   `--no-demos` are accepted aliases of the default.
-- `--integrations` - add the `Zava.Integrations` plugin project (and `Zava.Integrations.Tests` unless `--no-tests`)
+- `--integrations`: add the `Zava.Integrations` plugin project (and `Zava.Integrations.Tests` unless `--no-tests`)
   without `--samples`: a second, empty plugin package with the same build setup as `Zava.Plugins`. With `--samples`
   it is included, with its demo code, unless `--no-integrations`; `--integrations` with `--no-integrations` is refused.
-- `--managed-identity` / `--mi` - wire an opt-in package-signing step into the Integrations project (see
+- `--managed-identity` (or `--mi`): wire an opt-in package-signing step into the Integrations project (see
   [Sign the plugin package](signing.md)). It implies `--integrations`, and is refused with `--no-integrations`. The
   Integrations package id gets the publisher prefix (`zava_Zava.Integrations`), so a signed package needs no rename
   at `vela apply --solution`; pass `--publisher-prefix` when the one derived from `--prefix` is not valid.
-- `--output <dir>` (default: `.`) - the parent folder: the solution is created in `<dir>/<SolutionName>`, so
+- `--output <dir>` (or `-o`, default: `.`): the parent folder: the solution is created in `<dir>/<SolutionName>`, so
   `--output ~/Desktop --name ZavaDemo` gives `~/Desktop/ZavaDemo`.
 - `--no-tests`; with `--samples`: `--no-integrations`, `--no-console`.
-- `--core-version` (also `--core-version=X`) - the `Vela.Plugins` / `Vela.Testing` version the projects reference;
-  default: the latest published framework version, resolved from nuget.org.
-- `--web-resources` - also scaffold the TypeScript web-resources project (see below); `--web-resources-namespace`
+- `--core-version <ver>` (also `--core-version=X`): the `Vela.Plugins` and `Vela.Testing` version the projects
+  reference. Default: the newest listed framework release on nuget.org that this CLI is compatible with (the same
+  minor as the framework version the CLI was released with); when none can be resolved, that framework version.
+- `--web-resources` (or `--webresources`, preview): also scaffold the TypeScript web-resources project (see below); `--web-resources-namespace`
   and `--web-resources-folder` set its global name and build folder (they warn and are ignored without
   `--web-resources`).
-- `--force` - regenerate into an existing folder (see below). `--verbose` prints a failure's details, `--json` a
-  machine-readable report.
+- `--force`: regenerate into an existing folder (see below).
+- `--interactive` (or `-i`): the guided wizard. `--verbose` prints a failure's details, `--json` a machine-readable
+  report.
 
-The generated solution references `Vela.Plugins` as a NuGet package, then follows the `dotnet build -c Release` →
-`vela plan` → `vela apply` loop from the [Quickstart](../getting-started/quickstart.md).
+The generated solution references `Vela.Plugins` as a NuGet package and follows the build, plan and apply loop of
+the [Quickstart](../getting-started/quickstart.md): `dotnet build -c Release`, `vela plan`, then `vela apply`.
 
-### Regenerate with `--force`
+## Regenerate with `--force`
 
 `vela init` records every file it writes, with a content hash, in `.vela/scaffold-manifest.json`. Run it again with
 `--force` (for example to add `--samples` or `--web-resources`, or to change `--core-version`) and it:
@@ -205,7 +222,7 @@ solution restores and builds out of the box with no `nuget.config`. Add your own
 ## Web resources project (opt-in)
 
 > [!NOTE]
-> Preview / work in progress. This is part of the new client-side initiative and may change.
+> Preview, work in progress. This is part of the new client-side initiative and may change.
 
 Pass `--web-resources` (or answer the interactive prompt) to also scaffold a TypeScript project for
 model-driven **form scripting**, sitting next to the plugin projects in the same solution:

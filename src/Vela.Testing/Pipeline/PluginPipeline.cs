@@ -65,9 +65,9 @@ namespace Vela.Testing
         // plugin fired by another plugin's write.
         private readonly Stack<FakePluginExecutionContext> _contextStack = new Stack<FakePluginExecutionContext>();
 
-        // Shared variables for the operation currently running. Seeded from the request 'tag' (or other
-        // shared variables) at the top level, shared across every stage/plugin of the operation, and inherited
-        // by cascaded (nested) writes — mirroring how Dataverse surfaces them (and ParentContext.SharedVariables).
+        // The PreValidation shared variables of the operation currently running (its later stages get their own: see
+        // CaptureOperationContext). Seeded from the request 'tag' (or other shared variables). An operation a plugin
+        // issues starts its own; the calling plugin's reach it only through ParentContext (verified live).
         private ParameterCollection _sharedVariables = new ParameterCollection();
 
         // Bypass directives for the operation currently running, read from the request (BypassCustomPluginExecution
@@ -97,6 +97,13 @@ namespace Vela.Testing
             new KeyValuePair<Type, string>(typeof(IOrganizationServiceFactory), "Plugins call the pipeline's in-memory store; seed it with Seed and configure it with the pipeline's With... methods."),
             new KeyValuePair<Type, string>(typeof(IExecutionContext), "The pipeline builds each step's execution context from the request it runs."),
         };
+
+        // The context values the test sets for every step (WithEnvironmentId, WithTenantId, AsApplicationUser).
+        private string _environmentId = string.Empty;
+
+        private Guid _tenantId;
+
+        private bool _isApplicationUser;
 
         // The managed-identity service handed to every plugin the pipeline runs (WithManagedIdentityService); null
         // leaves it out of the provider, as on an environment without one.
@@ -196,12 +203,24 @@ namespace Vela.Testing
             return Register(typeof(TPlugin));
         }
 
-        /// <summary>Registers a single plugin (or Custom API) type explicitly.</summary>
+        /// <summary>
+        /// Registers a single plugin (or Custom API) type explicitly. A type already registered (by an earlier
+        /// <c>Register</c>, or by <see cref="FromAssembly"/>) throws an <see cref="InvalidOperationException"/>: its
+        /// steps would otherwise fire twice.
+        /// </summary>
         public PluginPipeline Register(Type pluginType)
         {
             if (pluginType == null)
             {
                 throw new ArgumentNullException(nameof(pluginType));
+            }
+
+            if (_registrations.Any(registration => registration.PluginType == pluginType) || _customApis.ContainsValue(pluginType))
+            {
+                throw new InvalidOperationException(
+                    $"Plugin '{pluginType.FullName}' is already registered on this pipeline (by FromAssembly or an earlier Register), " +
+                    "so registering it again would fire each of its steps twice. Register it once, or start from PluginPipeline.Empty() " +
+                    "to name the plugins of the test.");
             }
 
             ConstructorInfo constructor = PluginActivator.RequireConfigurationConstructor(pluginType, "to be registered");

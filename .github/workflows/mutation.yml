@@ -63,7 +63,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          # A full clone also fetches every branch as origin/<branch>, the base branch included.
           fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+          persist-credentials: false
       - name: Select areas
         id: select
         env:
@@ -71,8 +73,6 @@ jobs:
           ONLY_AREAS: ${{ github.event.inputs.areas }}
         run: |
           if ('${{ github.event_name }}' -eq 'pull_request') {
-            git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             $changed = Join-Path $env:RUNNER_TEMP 'changed.txt'
             # -Value, not a pipeline: an empty diff (the PR already merged when the run starts) still writes the file.
             Set-Content -Path $changed -Value @(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
@@ -103,14 +103,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # --since:main diffs against main, so a pull request run needs the history back to it.
+          # --since:main diffs against main, so a pull request run needs the history back to it. A full clone also
+          # fetches every branch as origin/<branch>, so the base branch is there without another fetch.
           fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
+          persist-credentials: false
       - name: Make the base branch available as main
         if: github.event_name == 'pull_request'
-        run: git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/heads/main"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git branch --force main "origin/$env:BASE_REF"
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json # the SDK pinned in global.json (rollForward: latestPatch)
       - name: Install x64 .NET runtime for the VsTest test host
         # On an arm64 runner (the self-hosted one), Stryker's VsTest spawns an x64 test host; install the x64 runtime so
         # it can start and expose it via DOTNET_ROOT_X64 (the arch-specific lookup the x64 apphost uses).

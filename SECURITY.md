@@ -7,8 +7,8 @@ Vela is pre-1.0 and ships as two release lines (see [`RELEASING.md`](RELEASING.m
 
 | Line | Packages | Supported |
 | --- | --- | --- |
-| Framework | `Vela.Messages`, `Vela.Plugins`, `Vela.Testing` | latest release (`0.42.x` at the time of writing) |
-| CLI | `Vela.Cli` | latest release (`0.29.x` at the time of writing) |
+| Framework | `Vela.Messages`, `Vela.Plugins`, `Vela.Testing` | the latest release of the line |
+| CLI | `Vela.Cli` | the latest release of the line |
 
 Upgrade to the latest release of a line before reporting, when you can, to check the issue is still there.
 

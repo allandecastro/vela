@@ -1,4 +1,4 @@
-// The sample of the docs home page (docs/index.md) and the quickstart. Edit the regions, not the pages.
+// The sample of the docs home page (docs/index.md). Edit the regions, not the page.
 namespace Vela.DocSamples
 {
     using System;

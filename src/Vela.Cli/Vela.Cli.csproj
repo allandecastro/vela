@@ -11,7 +11,7 @@
     <!-- Let the net10.0 tool roll forward onto any newer installed runtime instead of requiring 10.x exactly. -->
     <RollForward>Major</RollForward>
     <PackageId>Vela.Cli</PackageId>
-    <Version>1.0.0</Version>
+    <Version>0.0.0-local</Version>
     <Title>Vela CLI — Build Dataverse with confidence</Title>
     <Description>Vela command-line tool (command: vela). Plan/apply, scaffolding and package signing for Microsoft Dataverse plugins and Custom APIs.</Description>
   </PropertyGroup>

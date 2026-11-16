@@ -169,8 +169,8 @@ internal static class IsolatedPackageScan
 
     private static RegistrationState RunInChild(ScanRequest request, (string FileName, string[] PrefixArgs) command)
     {
-        string workDir = Path.Combine(Path.GetTempPath(), "vela-tools", "scan-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(workDir);
+        // Private to this run (see PackageScanner.CreatePrivateTempDirectory): the child reads its request from here.
+        string workDir = PackageScanner.CreatePrivateTempDirectory("vela-scan-");
         try
         {
             string requestPath = Path.Combine(workDir, "request.json");

@@ -53,6 +53,11 @@ namespace Vela.Testing
         public Entity? PreState;
         public Entity? PostState;
         public ISet<string>? ChangedAttributes;
+
+        // Under a CreateMultiple/UpdateMultiple request, the row's own SharedVariables for its Create/Update steps:
+        // one at PreValidation (dropped afterwards), one shared by PreOperation and PostOperation (verified live).
+        public ParameterCollection? ValidationShared;
+        public ParameterCollection? MainShared;
     }
 
     // One stage firing of one operation: what the selected steps' execution contexts are built from.
@@ -69,7 +74,6 @@ namespace Vela.Testing
         public Entity? SubordinatePreState;
         public Entity? SubordinatePostState;
         public IDictionary<string, object>? ExtraInputs;
-        public ISet<string>? ChangedAttributes;
         // For a generic modelled message (no dedicated data simulation): the whole request parameter set to
         // expose as InputParameters, and the response Results to expose as OutputParameters (Post stage).
         public ParameterCollection? AllInputs;
@@ -109,27 +113,31 @@ namespace Vela.Testing
         public bool FromSandbox { get; set; }
 
         // Create/Update/Delete: the shared variables of the PreOperation/PostOperation steps (those set at
-        // PreValidation are not in them) and the stage-30 context that exposes the PreValidation ones as their
-        // ParentContext. Created on first use.
+        // PreValidation are not in them), created on first use, and the stage-30 context that exposes the PreValidation
+        // ones as their ParentContext. There is one stage-30 context per operation: a cascaded child's Delete steps get
+        // the root's (verified live).
         public ParameterCollection? MainStageShared { get; set; }
 
         public FakePluginExecutionContext? MainStageContext { get; set; }
 
+        // A CreateMultiple/UpdateMultiple request (not a single Create/Update): its message, and the CreateMultiple /
+        // UpdateMultiple stage contexts (by stage) its rows' Create/Update steps get as ParentContext (verified live).
+        public string? BulkMessage { get; set; }
+
+        public Dictionary<int, FakePluginExecutionContext> BulkStageContexts { get; } = new Dictionary<int, FakePluginExecutionContext>();
+
+        // The context the operation's own contexts have as ParentContext when it is not the calling plugin's: the
+        // Upsert main operation for the Create or Update an Upsert runs (verified live).
+        public FakePluginExecutionContext? ParentContext { get; set; }
+
+        // Set when the operation's main operation is a platform Update (Assign, SetState, Merge): the Update steps'
+        // stage-30 ParentContext is then this message's main operation, with these inputs (verified live for Assign
+        // and Merge).
+        public string? MainMessage { get; set; }
+
+        public ParameterCollection? MainInputs { get; set; }
+
         // The operation's shared variables as they were before its PreValidation stage ran.
         public ParameterCollection? InitialShared { get; set; }
-    }
-
-    // A transaction scope spanning several operations started at Depth; it owns the transaction its first direct
-    // operation opens (see PluginPipeline.RunInOneTransaction).
-    internal sealed class TransactionClaim
-    {
-        public TransactionClaim(int depth)
-        {
-            Depth = depth;
-        }
-
-        public int Depth { get; }
-
-        public PipelineTransaction? Transaction { get; set; }
     }
 }

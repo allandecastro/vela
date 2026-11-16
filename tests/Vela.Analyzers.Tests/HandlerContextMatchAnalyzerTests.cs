@@ -20,6 +20,9 @@ namespace Vela.Context
     public interface ICreatePostContext<TEntity> : ILocalPluginContext { }
     public interface IUpdatePreContext<TEntity> : ILocalPluginContext { }
     public interface IDeletePreContext<TEntity> : ILocalPluginContext { }
+    public interface IAssignPostContext<TEntity> : ILocalPluginContext { }
+    public interface IAssignPreContext<TEntity> : ILocalPluginContext { }
+    public interface ISendEmailPostContext<TEntity> : ILocalPluginContext { }
 }
 
 namespace Vela.Steps
@@ -31,6 +34,9 @@ namespace Vela.Steps
         IStepConfig<TEntity> OnCreate();
         IStepConfig<TEntity> OnUpdate();
         IStepConfig<TEntity> OnDelete();
+        IStepConfig<TEntity> OnAssign();
+        IStepConfig<TEntity> OnSendEmail();
+        IStepConfig<TEntity> OnFoo();
         IStepConfig<TEntity> PreValidation();
         IStepConfig<TEntity> PreOperation();
         IStepConfig<TEntity> PostOperation();
@@ -75,6 +81,9 @@ namespace Demo
         private void OnGenerated(GenCtx ctx) { }
         private void OnPre(IUpdatePreContext<Account> ctx) { }
         private void OnDeletePre(IDeletePreContext<Account> ctx) { }
+        private void OnAssigned(IAssignPostContext<Account> ctx) { }
+        private void OnAssignedPre(IAssignPreContext<Account> ctx) { }
+        private void OnSent(ISendEmailPostContext<Account> ctx) { }
         private void OnTwo(IUpdatePostContext<Account> ctx, int extra) { }
         private bool OnReturns(IUpdatePostContext<Account> ctx) => true;
     }
@@ -292,4 +301,37 @@ namespace Demo
     }
 }
 ");
+
+    // Every typed On{Message}() trigger is checked, not only Create/Update/Delete: the message comes from the
+    // method name, against the TypedTriggers list the runtime shares.
+    [Fact]
+    public async Task Flags_an_update_context_bound_to_an_assign_step()
+        => await Verify.VerifyAnalyzerAsync(
+            InPlugin("RegisterStep().OnAssign().PostOperation().Sync().Handle({|#0:OnGood|});"),
+            Expected("OnGood", "Assign post-operation", "IAssignPostContext"));
+
+    [Fact]
+    public async Task Flags_a_post_context_bound_to_a_pre_operation_assign_step()
+        => await Verify.VerifyAnalyzerAsync(
+            InPlugin("RegisterStep().OnAssign().PreOperation().Sync().Handle({|#0:OnAssigned|});"),
+            Expected("OnAssigned", "Assign pre-operation", "IAssignPreContext"));
+
+    [Fact]
+    public async Task Flags_a_context_of_another_message_on_a_send_email_step()
+        => await Verify.VerifyAnalyzerAsync(
+            InPlugin("RegisterStep().OnSendEmail().PostOperation().Sync().Handle({|#0:OnAssigned|});"),
+            Expected("OnAssigned", "SendEmail post-operation", "ISendEmailPostContext"));
+
+    [Fact]
+    public async Task Does_not_flag_the_matching_context_of_any_typed_trigger()
+        => await Verify.VerifyAnalyzerAsync(InPlugin(
+            "RegisterStep().OnAssign().PostOperation().Sync().Handle(OnAssigned);\n" +
+            "            RegisterStep().OnAssign().PreValidation().Sync().Handle(OnAssignedPre);\n" +
+            "            RegisterStep().OnSendEmail().PostOperation().Sync().Handle(OnSent);\n" +
+            "            RegisterStep().OnSendEmail().PostOperation().Sync().Handle(OnPlain);"));
+
+    [Fact]
+    public async Task Does_not_read_an_On_method_that_is_not_a_typed_trigger()
+        // OnFoo() stands for a generated extension of a message Vela does not model: its context is not derivable.
+        => await Verify.VerifyAnalyzerAsync(InPlugin("RegisterStep().OnFoo().PostOperation().Sync().Handle(OnWrong);"));
 }

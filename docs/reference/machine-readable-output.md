@@ -1,7 +1,15 @@
+---
+_description: "The versioned JSON contract of plan, apply and inspect, and the exit codes"
+---
+
 # Machine-readable output
 
-`vela plan`, `vela apply` and `vela inspect` write a JSON document that scripts, CI pipelines and coding agents can
-rely on. This page is the contract: the fields, what they mean, and the exit codes.
+`vela plan`, `vela apply` and `vela inspect` write a versioned JSON document that scripts, CI pipelines and coding
+agents can rely on. This page is that contract: when you get JSON, what each field means, the command table of
+`vela help --json`, and the exit codes of every command.
+
+`init`, `add`, `models`, `logs`, `solution show` and `sign` also accept `--json` and print a JSON report, but those
+reports carry no `schemaVersion` and are not part of this contract; `vela <command> --help` describes them.
 
 ## When you get JSON
 
@@ -15,14 +23,14 @@ rely on. This page is the contract: the fields, what they mean, and the exit cod
 
 stdout never carries anything but the result. Warnings (for example `--client-secret` on the command line), progress
 lines, the confirmation prompt, the resume report of a failed apply and update notices all go to stderr. `--verbose`
-adds detail on stderr and never removes the JSON. `vela init --json` follows the same rule.
+adds detail on stderr and never removes the JSON.
 
 ## Versioning
 
 Every document starts with `"schemaVersion": 1`. The version changes only when an existing field changes meaning or
 shape, or is removed. A new field is added without a version change, so read the fields you need and ignore the rest.
 
-## plan and apply
+## `plan` and `apply`
 
 ```json
 {
@@ -32,24 +40,24 @@ shape, or is removed. A new field is added without a version change, so read the
   "hasChanges": true,
   "summary": { "added": 1, "removed": 0, "changed": 0 },
   "operations": [
-    { "action": "create", "kind": "step", "type": "Zava.Plugins.AccountPlugin", "reason": "Exists locally but not in Dataverse." },
-    { "action": "update", "kind": "package", "type": "zava_Plugins", "reason": "Plugin package version or content differs from Dataverse; apply will republish it." },
-    { "action": "add-to-solution", "kind": "custom-api", "type": "zava_DoThing", "reason": "Exists in Dataverse but is not in the target solution; apply will add it." }
+    { "action": "add-to-solution", "kind": "custom-api", "type": "zava_DoThing", "reason": "Exists in Dataverse but is not in the target solution; apply will add it." },
+    { "action": "update", "kind": "package", "type": "zava_Zava.Plugins", "reason": "Plugin package version or content differs from Dataverse; apply will republish it." },
+    { "action": "create", "kind": "step", "type": "Zava.Plugins.AccountPlugin", "reason": "Exists locally but not in Dataverse." }
   ],
   "diff": {
     "localAssemblies": ["Zava.Plugins"],
     "currentAssemblies": ["Zava.Plugins"],
     "added": [ { "kind": "step", "type": "Zava.Plugins.AccountPlugin", "definition": { } } ],
     "removed": [],
-    "changed": [ { "kind": "custom-api", "type": "Zava.Plugins.MyApi", "before": { }, "after": { } } ],
+    "changed": [],
     "localItems": [],
     "currentItems": [],
-    "summary": { "added": 1, "removed": 0, "changed": 1 }
+    "summary": { "added": 1, "removed": 0, "changed": 0 }
   },
   "diagnostics": [],
   "notes": ["Compared local .nupkg plugin metadata with live Dataverse state.", "This is a preview; nothing was written to Dataverse."],
   "unmanaged": [],
-  "info": ["Plugin assembly 'Zava.Plugins' not found in Dataverse (first deployment)."]
+  "info": []
 }
 ```
 
@@ -61,8 +69,8 @@ shape, or is removed. A new field is added without a version change, so read the
 | `hasChanges` | `true` when apply would write anything: a registration change, a package publish, or a component to add to `--solution`. Use this, not `summary`, to decide whether to apply. |
 | `summary` | Counts of the registration diff (steps, Custom APIs, and web resources on a `--webresources` run): the same numbers as `diff.summary` and the human `summary: +N -N ~N` line. It deliberately excludes the `package` operations, every `add-to-solution` operation and the managed-identity `link` operations, so it can be lower than the number of `operations[]` (above, `added` is 1 for three operations), and it can be all zero while `hasChanges` is `true` (a code-only rebuild, a pending link). Count `operations[]` by `action` and `kind` for every write. After a successful apply it is what remains (normally all zero), which is how `apply-not-converged` is decided. |
 | `operations[]` | Every write apply would perform. `action` is `create`, `update`, `delete`, `add-to-solution` or `link` (a `package` linked to `--managed-identity`); `kind` is `step`, `custom-api`, `web-resource`, `package`, `assembly`, `custom-api-parameter` or `custom-api-response-property`; `type` is the plugin type, unique name or package name. |
-| `diff` | The full before/after definitions. `added` / `removed` items carry `definition`; `changed` items carry `before` and `after`. Secure configuration values appear only as a keyed digest, never in clear. A local step scoped with `ForRelationship(...)` carries `relationships` (the relationship schema names). It is absent from live definitions and from steps without a scope, and it is not compared (see [Plan & Apply](../guides/plan-apply.md)). |
-| `diagnostics[]` | Warnings: rank collisions, a declared secure configuration without a value, a Custom API name without the solution's publisher prefix. `--strict` fails (exit 4) when this array is not empty. |
+| `diff` | The full before/after definitions. `added` / `removed` items carry `definition`; `changed` items carry `before` and `after`. Secure configuration values appear only as a keyed digest, never in clear. A local step scoped with `ForRelationship(...)` carries `relationships` (the relationship schema names). It is absent from live definitions and from steps without a scope, and it is not compared (see [Plan and apply](../guides/plan-apply.md)). |
+| `diagnostics[]` | Warnings: rank collisions, a declared secure configuration without a value. `--strict` fails (exit 4) when this array is not empty. A problem that would make `apply` fail (a Custom API name without the solution's publisher prefix, a step whose message or table filter does not exist, a plugin type the package update removes while steps Vela does not manage are registered on it) is not a diagnostic: `plan` and `apply` exit 4 without a JSON document (see [Plan and apply](../guides/plan-apply.md#errors-that-stop-the-preview)). |
 | `info[]` | Information that is not a problem, such as an assembly not yet in Dataverse on a first deployment. Never fails `--strict`. |
 | `unmanaged[]` | Plugin types in the deployed assembly that Vela does not own (classic `IPlugin` / `CodeActivity`); their registrations are left untouched. Information, not a warning. |
 | `notes[]` | Free text for humans. Do not parse it. |
@@ -92,10 +100,25 @@ shape, or is removed. A new field is added without a version change, so read the
 }
 ```
 
-On `apply-failed`, the document is the pre-apply plan with mode `apply-failed` and the failure in `notes`. The
-per-operation report (completed / failed / not applied) is on stderr; re-run `apply` to converge.
+On `apply-failed`, the document is the pre-apply plan with mode `apply-failed`, plus a `failure` object: the `error`
+message and every planned operation under exactly one of `completed` (written), `failed` and `notApplied` (not
+attempted). The same report is on stderr. A failure after the last registration write (adding unchanged components
+to the solution, or reading the environment back to check that it converged) is reported the same way, with every
+write under `completed`. Re-run `apply` to converge.
 
-## inspect
+```json
+"failure": {
+  "error": "Dataverse message not found: zava_Missing",
+  "completed": ["delete step dv-old", "publish plugin package(s) and resolve plugin types"],
+  "failed": ["create step Zava.Plugins.AccountPlugin (main)"],
+  "notApplied": ["update step Zava.Plugins.AccountPlugin (other)"]
+}
+```
+
+The operations are labels for people, in the order apply runs them; do not parse their text. Count them, or match
+them against `operations[]` by `kind` and `type` when you need more.
+
+## `inspect`
 
 ```json
 {
@@ -112,24 +135,31 @@ per-operation report (completed / failed / not applied) is on stderr; re-run `ap
 
 ## The command table
 
-`vela help --json` describes every command, its options (name, aliases, `kind`: `flag`, `value` or
-`optional-value`, value name, description) and the exit codes. It is generated from the same table that validates
-the options, so an agent can discover the CLI without parsing help text.
+`vela help --json` describes the CLI for agents and completion scripts, without parsing help text:
+
+- `schemaVersion`, `tool` and `version`;
+- `commands[]`: `name`, `aliases`, `summary`, `usage` and `options[]`, where each option has `name`, `aliases`,
+  `kind` (`flag`, `value` or `optional-value`), `value` (the value placeholder) and `description`;
+- `exitCodes`: each code with a short description.
+
+It is generated from the same table that validates the options, so it lists exactly what each command accepts.
 
 ## Exit codes
 
+Every `vela` command returns one of these codes. This table is the reference; other pages summarize it.
+
 | Code | Meaning |
 | --- | --- |
-| `0` | Success (for `plan`, also "changes found" unless `--detailed-exitcode`) |
-| `2` | Invalid arguments (unknown option, missing value, option of another command, `plan`/`apply` without `--solution`, `add customapi` without `--prefix`) |
-| `3` | File not found (package, folder, secure-config file) |
-| `4` | Error, including a `--strict` failure, a refused non-interactive `apply` without `--auto-approve`, and a `plan`/`apply` `--solution` that is missing or managed in the target environment |
-| `5` | Drift detected (`vela models --verify`), or `apply` did not converge (mode `apply-not-converged`) |
-| `6` | Dataverse connection failure |
-| `7` | Partial apply: the run stopped mid-way; Dataverse may be partly updated. Re-run `apply`. |
-| `8` | `vela plan --detailed-exitcode` only: the plan found changes to apply |
+| `0` | Success. For `plan`, also when it finds changes, unless `--detailed-exitcode` is set. For `apply`, also when you answer anything but `yes` at the prompt (`Apply cancelled.`). |
+| `2` | Invalid arguments: an unknown option, an option of another command, a missing value, missing authentication options, a `--url` that is not an absolute `https` URL, `plan` or `apply` without `--solution`, `add customapi` without `--prefix`. |
+| `3` | A file or folder was not found: a package, a packages folder, a web resources folder, a `--secure-config` file, the package or PFX to sign. |
+| `4` | Error: a `--strict` failure; an `apply` refused because stdin is not a terminal and `--auto-approve` is missing; a `plan` or `apply` `--solution` that is missing or managed in the target environment; a `plan` or `apply` stopped in the preview, before any write, by a Custom API name without the publisher prefix, a step whose message or table filter does not exist, or a plugin type the package update would remove while steps Vela does not manage are registered on it; a failed `dotnet nuget sign`; any other unexpected failure. |
+| `5` | Drift detected: `vela models --verify` found the model on disk out of date, or `apply` wrote every change but the environment still differs (mode `apply-not-converged`). |
+| `6` | Dataverse connection failure: authentication, the endpoint, or a network error (DNS, socket, HTTP, timeout) on any call, including while reading the live state. |
+| `7` | Partial apply: the run stopped partway (mode `apply-failed`) and Dataverse may be partly updated. Fix the cause and run `apply` again. |
+| `8` | `vela plan --detailed-exitcode` only: the plan found changes to apply. |
 
-A typical CI gate:
+A typical CI gate, with the connection taken from `DATAVERSE_CONNECTION_STRING`:
 
 ```bash
 vela plan --packages-dir artifacts --solution ZavaSales --strict --json --detailed-exitcode > plan.json

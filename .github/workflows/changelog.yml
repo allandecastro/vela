@@ -1,9 +1,10 @@
 name: Changelog
 
 # A pull request that changes what users get (src/: the packages, the CLI, the analyzers; docs/: the documentation
-# site) must add an entry to CHANGELOG.md under `## [Unreleased]`, unless a maintainer labels it `no-changelog` (CI,
-# tests, internal refactors, editorial docs passes). Dependency bumps only touch Directory.Packages.props, so they pass
-# unless they also change src/. See CONTRIBUTING.md#changelog.
+# site; Directory.Packages.props and Directory.Build.props: the dependencies and build settings of every package;
+# NUGET.md files: the package readmes) must add an entry to CHANGELOG.md, an added `- ` line inside `## [Unreleased]`,
+# unless a maintainer labels it `no-changelog` (CI, tests, internal refactors, editorial docs passes, a dependency bump
+# that changes nothing users get). See CONTRIBUTING.md#changelog.
 #
 # Adding or removing the label re-runs the check (`labeled` / `unlabeled`). It runs on `pull_request`, never
 # `pull_request_target`: fork PRs get a read-only token and no secrets, and the check needs neither.
@@ -50,16 +51,38 @@ jobs:
           $changed = @(git diff --name-only "$($env:BASE_SHA)...$($env:HEAD_SHA)")
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Case-sensitive, as git paths are.
-          $shipped = @($changed | Where-Object { $_ -cmatch '^(src|docs)/' })
+          $shipped = @($changed | Where-Object { $_ -cmatch '^(src|docs)/|^Directory\.(Packages|Build)\.props$|(^|/)NUGET\.md$' })
           if ($shipped.Count -eq 0) {
-            Write-Host 'No change under src/ or docs/: no entry required.'
+            Write-Host 'No shipped file changed: no entry required.'
             exit 0
           }
-          if ($changed -ccontains 'CHANGELOG.md') {
-            Write-Host 'CHANGELOG.md is updated.'
+          # The line range of `## [Unreleased]` in the PR head, up to the next `## [` heading.
+          $lines = @(git show "$($env:HEAD_SHA):CHANGELOG.md" 2>$null)
+          $from = 0; $to = 0
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($from -eq 0) { if ($lines[$i] -cmatch '^## \[Unreleased\]') { $from = $i + 1 } }
+            elseif ($lines[$i] -cmatch '^## \[') { $to = $i; break }
+          }
+          if ($from -gt 0 -and $to -eq 0) { $to = $lines.Count }
+          $added = 0
+          if ($from -gt 0) {
+            # Count the added `- ` lines of the diff that land in that range (new-file line numbers, from the -U0
+            # hunk headers).
+            $line = 0
+            foreach ($d in @(git diff -U0 "$($env:BASE_SHA)...$($env:HEAD_SHA)" -- CHANGELOG.md)) {
+              if ($d -cmatch '^@@ -\S+ \+(\d+)') { $line = [int]$Matches[1]; continue }
+              if ($d.StartsWith('+++')) { continue }
+              if ($d.StartsWith('+')) {
+                if ($line -ge $from -and $line -le $to -and $d.Length -ge 3 -and $d.Substring(1, 2) -ceq '- ') { $added++ }
+                $line++
+              }
+            }
+          }
+          if ($added -gt 0) {
+            Write-Host "CHANGELOG.md adds $added entry line(s) under ## [Unreleased]."
             exit 0
           }
-          Write-Host 'Shipped files changed without a CHANGELOG.md entry:'
+          Write-Host 'Shipped files changed without a new entry under ## [Unreleased] in CHANGELOG.md:'
           foreach ($file in $shipped) { Write-Host "  $file" }
-          Write-Host "::error title=CHANGELOG.md not updated::This pull request changes src/ or docs/ but not CHANGELOG.md. Add one entry under '## [Unreleased]', in the existing heading of its kind (e.g. '### Fixed (CLI)'); see CONTRIBUTING.md#changelog. If the change is not user-visible (CI, tests, an internal refactor), a maintainer adds the 'no-changelog' label instead."
+          Write-Host "::error title=CHANGELOG.md not updated::This pull request changes shipped files (src/, docs/, Directory.*.props, NUGET.md) but adds no '- ' line under '## [Unreleased]' in CHANGELOG.md. Add one entry there, in the existing heading of its kind (e.g. '### Fixed (CLI)'); see CONTRIBUTING.md#changelog. If the change is not user-visible (CI, tests, an internal refactor), a maintainer adds the 'no-changelog' label instead."
           exit 1

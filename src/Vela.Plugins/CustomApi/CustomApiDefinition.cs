@@ -1,3 +1,5 @@
+using System;
+using Vela.Context;
 using Vela.Steps;
 
 namespace Vela.CustomApi;
@@ -96,6 +98,13 @@ public sealed class CustomApiDefinition
     /// Gets or sets the handler method used to execute the Custom API.
     /// </summary>
     public string HandlerMethodName { get; set; } = string.Empty;
+
+    // The handler delegate registered with Handler(Action<ILocalPluginContext>), invoked as is. A lambda compiles to a
+    // method on a compiler-generated class (or a display class when it captures locals), so its name cannot be
+    // resolved on the plug-in type; HandlerMethodName stays the delegate's method name for telemetry and traces.
+    // Null when the handler was named with Handler(string). Set once while the definition is built under the
+    // plug-in's initialization lock, then only read.
+    internal Action<ILocalPluginContext>? RuntimeHandler { get; set; }
 
     // The main-operation step that runs the Custom API, derived from the definition's plugin type, unique name and
     // handler. The one place it is built (builders and both Custom API bases).

@@ -324,7 +324,7 @@ public class CommandLineOptionsTests
         string[] args = ["--url", "http://zava.crm.dynamics.com"];
 
         bool ok = CommandLineOptions.TryResolveConnection(
-            args, interactive: false, out _, out _, out string? token, out _, out int exitCode);
+            args, interactive: false, out _, out _, out DataverseTokenProvider? token, out _, out int exitCode);
 
         Assert.False(ok);
         Assert.Null(token);

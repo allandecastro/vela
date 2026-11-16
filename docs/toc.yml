@@ -1,3 +1,5 @@
+# Top navigation, in learning order: get started, build and test (Guides), connect the CLI (Configuration), look things
+# up (Reference), then the material about Vela itself (Advanced, Contributing).
 - name: Getting started
   href: getting-started/
 - name: Guides
@@ -6,11 +8,11 @@
 - name: Configuration
   href: configuration/
   topicHref: configuration/index.md
-- name: Advanced
-  href: advanced/
-  topicHref: advanced/index.md
 - name: Reference
   href: reference/
   topicHref: reference/index.md
+- name: Advanced
+  href: advanced/
+  topicHref: advanced/index.md
 - name: Contributing
   href: contributing/
