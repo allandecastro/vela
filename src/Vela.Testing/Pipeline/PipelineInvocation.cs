@@ -53,6 +53,11 @@ namespace Vela.Testing
         public Entity? PreState;
         public Entity? PostState;
         public ISet<string>? ChangedAttributes;
+
+        // Under a CreateMultiple/UpdateMultiple request, the row's own SharedVariables for its Create/Update steps:
+        // one at PreValidation (dropped afterwards), one shared by PreOperation and PostOperation (verified live).
+        public ParameterCollection? ValidationShared;
+        public ParameterCollection? MainShared;
     }
 
     // One stage firing of one operation: what the selected steps' execution contexts are built from.
@@ -81,8 +86,6 @@ namespace Vela.Testing
         public bool OutsideTransaction;
         public ParameterCollection? SharedVariables;
         public FakePluginExecutionContext? ParentContext;
-        // The record whose stage-30 context the steps get as ParentContext (a batch row); null = the primary record.
-        public object? RecordKey;
     }
 
     // The simulated database transaction: the store snapshot to restore on rollback, the asynchronous steps queued
@@ -111,11 +114,21 @@ namespace Vela.Testing
 
         // Create/Update/Delete: the shared variables of the PreOperation/PostOperation steps (those set at
         // PreValidation are not in them), created on first use, and the stage-30 context that exposes the PreValidation
-        // ones as their ParentContext. There is one stage-30 context per record (StageInvocation.RecordKey): a Delete
-        // cascade or a batch does not lend one record's context to another.
+        // ones as their ParentContext. There is one stage-30 context per operation: a cascaded child's Delete steps get
+        // the root's (verified live).
         public ParameterCollection? MainStageShared { get; set; }
 
-        public Dictionary<object, FakePluginExecutionContext> MainStageContexts { get; } = new Dictionary<object, FakePluginExecutionContext>();
+        public FakePluginExecutionContext? MainStageContext { get; set; }
+
+        // A CreateMultiple/UpdateMultiple request (not a single Create/Update): its message, and the CreateMultiple /
+        // UpdateMultiple stage contexts (by stage) its rows' Create/Update steps get as ParentContext (verified live).
+        public string? BulkMessage { get; set; }
+
+        public Dictionary<int, FakePluginExecutionContext> BulkStageContexts { get; } = new Dictionary<int, FakePluginExecutionContext>();
+
+        // The context the operation's own contexts have as ParentContext when it is not the calling plugin's: the
+        // Upsert main operation for the Create or Update an Upsert runs (verified live).
+        public FakePluginExecutionContext? ParentContext { get; set; }
 
         // Set when the operation's main operation is a platform Update (Assign, SetState, Merge): the Update steps'
         // stage-30 ParentContext is then this message's main operation, with these inputs (verified live for Assign

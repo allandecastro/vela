@@ -432,21 +432,22 @@ namespace Vela.Testing.Tests
         // ---- The asynchronous drain -----------------------------------------------------------------------------
 
         [Fact]
-        public void A_failed_async_step_undoes_its_writes()
+        public void A_failed_async_step_keeps_its_writes()
         {
             PluginPipeline pipeline = PluginPipeline.Empty().Register<PmAsyncWriteThenThrow>();
 
             pipeline.Service.Create(new FakeAccount { Name = "Zava" });
 
+            // Verified live: no transaction around an async step, so its write before the failure stays.
             Assert.Single(pipeline.AsyncStepFailures);
-            Assert.Empty(pipeline.GetAll("annotation"));
+            Assert.Single(pipeline.GetAll("annotation"));
             Assert.Single(pipeline.GetAll("account"));
         }
 
-        // A failed async step drops only the async steps its own writes queued: the one queued before it still runs,
-        // exactly once.
+        // A failed async step keeps its writes, so the async steps they queued run too, and the async step queued
+        // before it still runs, exactly once.
         [Fact]
-        public void A_failed_async_step_drops_the_async_steps_it_queued_but_keeps_the_earlier_ones()
+        public void A_failed_async_step_keeps_the_async_steps_its_writes_queued()
         {
             PluginPipeline pipeline = PluginPipeline.Empty().Register<PmAsyncPair>().Register<PmAsyncOnTask>();
 
@@ -454,8 +455,8 @@ namespace Vela.Testing.Tests
 
             Assert.Single(pipeline.AsyncStepFailures);
             Assert.Single(PmRecorder.Seen, s => s.Tag == "async-second");
-            Assert.DoesNotContain(PmRecorder.Seen, s => s.Tag == "task-async");
-            Assert.Empty(pipeline.GetAll("task"));
+            Assert.Single(PmRecorder.Seen, s => s.Tag == "task-async");
+            Assert.Single(pipeline.GetAll("task"));
         }
 
         // The committed async steps run one after the other: a write inside one async step does not start the next

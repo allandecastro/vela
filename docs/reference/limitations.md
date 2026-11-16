@@ -189,7 +189,12 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
 - **The execution context identity is the configured caller.** `ctx.UserId`, `InitiatingUserId`, `BusinessUnitId`
   and `OrganizationId` come from `WithCurrentUser`, `WithCurrentBusinessUnit` and `WithOrganizationId`. A cascaded
   plugin finds its caller's context through `ParentContext`: one level up for PreValidation, two for the later
-  stages of Create, Update and Delete, whose direct parent is the operation's stage-30 context.
+  stages of Create, Update and Delete, whose direct parent is the operation's stage-30 context. The caller's context
+  there holds the shared variables it had when it started, not those it set afterwards.
+- **The order of single and bulk steps follows the execution order.** At each stage of a `Create`, `Update`,
+  `CreateMultiple` or `UpdateMultiple`, the `Create`/`Update` steps and the `CreateMultiple`/`UpdateMultiple` steps
+  run in one sequence sorted by execution order, then registration order. Give the steps explicit execution orders
+  when a test depends on which runs first.
 - **Steps on a global Custom API.** A global API's main operation sees `PrimaryEntityName` = `"none"`. A step on its
   message is declared through `EntityPluginBase<TEntity>` and so carries a table; the harness gives that step's
   context the step's table so the runtime still matches it.

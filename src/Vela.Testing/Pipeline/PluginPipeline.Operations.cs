@@ -21,27 +21,27 @@ namespace Vela.Testing
     {
         // A single Create is the one-row case of a Create batch. Routing it through the batch path means
         // CreateMultiple-registered steps also fire for a single Create (Dataverse merges the two messages).
-        internal Guid ExecuteCreate(Entity entity, ParameterCollection? sharedVariables = null)
+        internal Guid ExecuteCreate(Entity entity, ParameterCollection? sharedVariables = null, FakePluginExecutionContext? innerOf = null)
         {
             if (entity == null)
             {
                 throw new ArgumentNullException(nameof(entity));
             }
 
-            return ExecuteCreateMultiple(new[] { entity }, sharedVariables)[0];
+            return ExecuteCreateMultiple(new[] { entity }, sharedVariables, bulkRequest: false, innerOf)[0];
         }
 
         // A single Update is the one-row case of an Update batch (see ExecuteCreate). It is ONE execution even when
         // it mixes owner or state fields with standard ones (verified live: one Update per stage, with every field in
         // its Target, contrary to Microsoft Learn's "Behavior of specialized update operations").
-        internal void ExecuteUpdate(Entity entity, ParameterCollection? sharedVariables = null)
+        internal void ExecuteUpdate(Entity entity, ParameterCollection? sharedVariables = null, FakePluginExecutionContext? innerOf = null)
         {
             if (entity == null)
             {
                 throw new ArgumentNullException(nameof(entity));
             }
 
-            ExecuteUpdateMultiple(new[] { entity }, sharedVariables);
+            ExecuteUpdateMultiple(new[] { entity }, sharedVariables, bulkRequest: false, innerOf);
         }
 
         // SetState, as the platform runs it (verified live): the request fires the SetStateDynamicEntity steps (never
@@ -202,8 +202,9 @@ namespace Vela.Testing
 
         // CreateMultiple as one transaction: at each stage both the bulk CreateMultiple steps (once, with the
         // whole Targets collection) and the single Create steps (once per row) fire, mirroring how Dataverse
-        // merges the two messages. All rows commit between the pre and post stages.
-        internal Guid[] ExecuteCreateMultiple(Entity[] entities, ParameterCollection? sharedVariables = null)
+        // merges the two messages. All rows commit between the pre and post stages. bulkRequest: the request was a
+        // CreateMultiple (not a single Create), which changes the rows' SharedVariables and ParentContext.
+        internal Guid[] ExecuteCreateMultiple(Entity[] entities, ParameterCollection? sharedVariables = null, bool bulkRequest = true, FakePluginExecutionContext? innerOf = null)
         {
             if (entities == null)
             {
@@ -243,13 +244,13 @@ namespace Vela.Testing
 
                 FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue);
                 return ids;
-            }, sharedVariables);
+            }, sharedVariables, bulkRequest ? PluginMessages.CreateMultiple : null, innerOf);
         }
 
         // UpdateMultiple as one transaction (see ExecuteCreateMultiple). Single Update steps fire per row only
         // for rows whose changed attributes match the step filter; a bulk UpdateMultiple step fires once if any
         // row matches.
-        internal void ExecuteUpdateMultiple(Entity[] entities, ParameterCollection? sharedVariables = null)
+        internal void ExecuteUpdateMultiple(Entity[] entities, ParameterCollection? sharedVariables = null, bool bulkRequest = true, FakePluginExecutionContext? innerOf = null)
         {
             if (entities == null)
             {
@@ -263,7 +264,7 @@ namespace Vela.Testing
             {
                 UpdateBatch(entities, platformUpdate: false, asyncQueue);
                 return null;
-            }, sharedVariables);
+            }, sharedVariables, bulkRequest ? PluginMessages.UpdateMultiple : null, innerOf);
         }
 
         // The stages of an Update batch inside the current operation. A platform-generated Update (the main operation
@@ -313,19 +314,22 @@ namespace Vela.Testing
                 // The deleted record's PreValidation stage runs first, before the transaction opens and before the
                 // privilege check and the cascade (as on the platform); a record that does not exist skips it and
                 // fails with the store's not-found fault.
-                bool rootValidated = false;
                 if (_store.TryGet(entityName, id, out Entity? rootPre))
                 {
                     FireStage(DeleteInvocation(PluginStages.PreValidation, entityName, id, rootPre), asyncQueue);
-                    rootValidated = true;
                 }
 
                 EnterTransaction();
 
+                // The root's stage-30 context exists before the cascade: the children's steps run first and have it as
+                // their ParentContext (verified live).
+                EntityReference rootReference = new EntityReference(entityName, id);
+                MainStageContext(_frames.Peek(), PluginMessages.Delete, entityName, id, () => new ParameterCollection { ["Target"] = rootReference });
+
                 // The store owns the cascade traversal (Restrict/RemoveLink/recursion) but delegates each actual
                 // record removal to us, so the Delete plugins fire for the parent AND every cascaded child.
                 _store.DeleteInternal(entityName, id, (name, recordId) =>
-                    FireDeleteAndRemove(name, recordId, asyncQueue, skipPreValidation: rootValidated && recordId == id));
+                    FireDeleteAndRemove(name, recordId, asyncQueue, cascaded: !(recordId == id && string.Equals(name, entityName, StringComparison.OrdinalIgnoreCase))));
                 return null;
             }, sharedVariables);
         }
@@ -337,17 +341,20 @@ namespace Vela.Testing
             return invocation;
         }
 
-        // Fires one record's Delete pre-stages, removes just that record (the store handles cascade around this),
-        // then fires its post-stages — the same pre/remove/post a top-level Delete runs, applied per cascaded record.
-        private void FireDeleteAndRemove(string entityName, Guid id, List<Action> asyncQueue, bool skipPreValidation)
+        // Fires one record's Delete PreOperation stage, removes just that record (the store handles the cascade around
+        // this), then fires its PostOperation stage. A cascaded child's Delete, as the platform runs it (verified live):
+        // no PreValidation stage, the root's depth and stage-30 context (ParentContext), and its own SharedVariables
+        // shared by its PreOperation and PostOperation steps.
+        private void FireDeleteAndRemove(string entityName, Guid id, List<Action> asyncQueue, bool cascaded)
         {
             _store.TryGet(entityName, id, out Entity? pre);
+            ParameterCollection? childShared = cascaded ? new ParameterCollection() : null;
 
-            StageInvocation Make(PluginStages stage) => DeleteInvocation(stage, entityName, id, pre);
-
-            if (!skipPreValidation)
+            StageInvocation Make(PluginStages stage)
             {
-                FireStage(Make(PluginStages.PreValidation), asyncQueue);
+                StageInvocation invocation = DeleteInvocation(stage, entityName, id, pre);
+                invocation.SharedVariables = childShared;
+                return invocation;
             }
 
             FireStage(Make(PluginStages.PreOperation), asyncQueue);
@@ -367,8 +374,9 @@ namespace Vela.Testing
 
         // Upsert, mirroring Dataverse: the target is matched by its id or alternate key. A match runs the Update
         // pipeline (Update steps fire with the resolved id); no match runs the Create pipeline (Create steps fire; the
-        // key columns become real columns of the new row, and a supplied id is kept). Steps registered on the Upsert
-        // message itself fire around the inner operation, and the response carries RecordCreated and Target.
+        // key columns become real columns of the new row, and a supplied id is kept). The inner Create or Update is the
+        // Upsert's main operation, at its depth (verified live). Steps registered on the Upsert message itself fire
+        // around it, and the response carries RecordCreated and Target.
         private OrganizationResponse ExecuteUpsert(OrganizationRequest request, Entity callerTarget, ParameterCollection shared)
         {
             // The steps work on a copy of the request (the caller's entity is never touched), and the main operation
@@ -388,6 +396,17 @@ namespace Vela.Testing
                     ? new EntityReference(target.LogicalName, target.Id)
                     : new EntityReference(target.LogicalName) { KeyAttributes = target.KeyAttributes };
 
+                // The inner Create or Update runs at the Upsert's depth, its own stages and SharedVariables included,
+                // with the Upsert main operation (PrimaryEntityName "none") as its ParentContext (verified live).
+                FakePluginExecutionContext upsertMain = PlatformContext(
+                    "Upsert",
+                    PluginStages.MainOperation,
+                    "none",
+                    Guid.Empty,
+                    _sharedVariables,
+                    _contextStack.Count > 0 ? _contextStack.Peek() : null,
+                    inputs.Parameters);
+
                 UpsertResponse response = new UpsertResponse();
                 Guid affectedId;
                 if (_store.TryResolveReference(key, out Guid existingId))
@@ -396,7 +415,7 @@ namespace Vela.Testing
                     EntityValues.CarryEarlyBoundType(target, toUpdate);
                     toUpdate.Id = existingId;
                     toUpdate.KeyAttributes.Clear();
-                    ExecuteUpdate(toUpdate);
+                    ExecuteUpdate(toUpdate, innerOf: upsertMain);
                     response.Results["RecordCreated"] = false;
                     affectedId = existingId;
                 }
@@ -413,7 +432,7 @@ namespace Vela.Testing
                     }
 
                     toCreate.KeyAttributes.Clear();
-                    affectedId = ExecuteCreate(toCreate);
+                    affectedId = ExecuteCreate(toCreate, innerOf: upsertMain);
                     response.Results["RecordCreated"] = true;
                 }
 
