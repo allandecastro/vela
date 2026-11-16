@@ -40,7 +40,7 @@ Instructions for AI coding agents in this Dataverse solution, scaffolded by `vel
 
 ```bash
 dotnet build {{options.SolutionName}}.sln -c Release   # build, analyzers, and the plugin package in artifacts/
-{{testCommand}}vela models --entities account,contact --project src/{{prefix}}.Shared/{{prefix}}.Shared.csproj --interactive
+{{testCommand}}vela models --entities account --out src/{{prefix}}.Shared/Models/Generated --namespace {{prefix}}.Shared.Models.Generated --interactive
 vela add plugin AccountGuard --entity Account --message Update --stage PreOperation --filtering-attributes Name --project src/{{prefix}}.Plugins/{{prefix}}.Plugins.csproj
 vela add customapi EstimateValue --global --function --prefix <publisherPrefix> --project src/{{prefix}}.Plugins/{{prefix}}.Plugins.csproj
 vela plan  --packages-dir artifacts --solution <solution> --json   # read-only; JSON with "schemaVersion": 1

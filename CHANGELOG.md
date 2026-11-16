@@ -55,6 +55,10 @@ All notable changes to Vela are documented here. The format is based on
   plugin assemblies by version or that `vela apply` fails fast on a new plugin type without a version bump. The
   comments now say that the package version stays fixed and that the assembly version is informational for a plugin
   package; the properties are unchanged.
+- The `vela init` next steps, the scaffolded README and the scaffolded `AGENTS.md` show the `vela models` command of
+  the quickstart (`--entities account --out src/<Prefix>.Shared/Models/Generated --namespace
+  <Prefix>.Shared.Models.Generated --interactive`) instead of the `--project src/<Prefix>.Shared/<Prefix>.Shared.csproj`
+  form. Both write to the same folder and namespace.
 
 ### Docs
 

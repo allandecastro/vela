@@ -91,7 +91,7 @@ internal static class ProjectScaffolder
         Console.WriteLine("Next steps:");
         if (!options.IncludeSamples)
         {
-            Console.WriteLine($"  vela models --entities account,contact --project src/{prefix}.Shared/{prefix}.Shared.csproj --interactive");
+            Console.WriteLine($"  vela models --entities account --out src/{prefix}.Shared/Models/Generated --namespace {prefix}.Shared.Models.Generated --interactive");
             Console.WriteLine($"  vela add plugin MyPlugin --entity Account --filtering-attributes Name --project src/{prefix}.Plugins");
         }
 
