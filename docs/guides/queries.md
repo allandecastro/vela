@@ -116,6 +116,28 @@ column `decimal?` (the amount). All read back `null` when nothing matches. For *
 (`GroupBy(...)` + multiple aggregates) author with the alias API (`.Sum(col, "alias")`) and read the rows -
 see the aggregate builders above.
 
+## Reading one record by id
+
+When you already know the record's id, `service.Retrieve<TEntity>(id, columns...)` (namespace `Vela.Context`) reads
+it early-bound, with the table taken from `TEntity` and the columns from typed selectors:
+
+```csharp
+using Vela.Context;
+
+Account account = service.Retrieve<Account>(id, a => a.Name, a => a.Telephone1);
+```
+
+It sends a real Retrieve, not a query: the steps registered on Retrieve run, and a missing record faults as it does
+with the SDK `Retrieve`. At least one column is required; there is no all-columns form.
+
+One way to read each shape of request:
+
+| You have | Use |
+| --- | --- |
+| The id | `service.Retrieve<Account>(id, a => a.Name)` |
+| An alternate key | `service.RetrieveByKey<Account>(Account.ByAccountNumberKey("A-001"), a => a.Name)` ([Models](models.md)) |
+| Criteria | `Query.For<Account>().Where(...).Select(...)` with `FirstOrDefault` / `ToList` (above) |
+
 ## See also
 
 - [Write a plugin](plugins.md) - where these queries run.

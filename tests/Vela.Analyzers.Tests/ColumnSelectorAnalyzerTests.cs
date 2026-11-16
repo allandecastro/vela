@@ -1,4 +1,11 @@
+using System;
+using System.Collections.Immutable;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Testing;
 using Xunit;
 using Verify = Microsoft.CodeAnalysis.CSharp.Testing.XUnit.AnalyzerVerifier<Vela.Analyzers.ColumnSelectorAnalyzer>;
@@ -28,11 +35,20 @@ namespace Microsoft.Xrm.Sdk
     }
 }
 
-namespace Microsoft.Xrm.Sdk.Client
+// As in the SDK: AttributeLogicalNameAttribute lives in Microsoft.Xrm.Sdk (EntityLogicalNameAttribute in .Client).
+namespace Microsoft.Xrm.Sdk
 {
     public sealed class AttributeLogicalNameAttribute : Attribute
     {
         public AttributeLogicalNameAttribute(string logicalName) { }
+    }
+}
+
+namespace Microsoft.Xrm.Sdk.Client
+{
+    public sealed class EntityLogicalNameAttribute : Attribute
+    {
+        public EntityLogicalNameAttribute(string logicalName) { }
     }
 }
 
@@ -68,7 +84,7 @@ namespace Demo
     // As `vela models` emits it now (and the SDK generator does): the override names the primary key column.
     public class Contact : Entity
     {
-        [Microsoft.Xrm.Sdk.Client.AttributeLogicalName(""contactid"")]
+        [Microsoft.Xrm.Sdk.AttributeLogicalName(""contactid"")]
         public override Guid Id { get; set; }
     }
 
@@ -156,7 +172,7 @@ namespace Demo
         await Verify.VerifyAnalyzerAsync(
             code,
             new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error).WithLocation(0).WithArguments("Id"),
-            // A look-alike attribute (not Microsoft.Xrm.Sdk.Client's) does not name the column the runtime reads.
+            // A look-alike attribute (not Microsoft.Xrm.Sdk's) does not name the column the runtime reads.
             new DiagnosticResult(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, Microsoft.CodeAnalysis.DiagnosticSeverity.Error).WithLocation(1).WithArguments("Id"));
     }
 
@@ -296,5 +312,119 @@ namespace Demo
 }
 ";
         await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    // The models a plugin or test project selects from are compiled into another assembly (the shared project), so
+    // the selector's entity comes from metadata: the generated Id override must still be read as the primary key.
+    private const string MetadataModels = @"
+using System;
+
+namespace Microsoft.Xrm.Sdk
+{
+    public class Entity
+    {
+        public string LogicalName { get; set; }
+        public virtual Guid Id { get; set; }
+        public void SetAttributeValue(string name, object value) { }
+    }
+}
+
+// As in the SDK: AttributeLogicalNameAttribute lives in Microsoft.Xrm.Sdk (EntityLogicalNameAttribute in .Client).
+namespace Microsoft.Xrm.Sdk
+{
+    public sealed class AttributeLogicalNameAttribute : Attribute
+    {
+        public AttributeLogicalNameAttribute(string logicalName) { }
+    }
+}
+
+namespace Microsoft.Xrm.Sdk.Client
+{
+    public sealed class EntityLogicalNameAttribute : Attribute
+    {
+        public EntityLogicalNameAttribute(string logicalName) { }
+    }
+}
+
+namespace Models
+{
+    using Microsoft.Xrm.Sdk;
+    using Microsoft.Xrm.Sdk.Client;
+
+    // As `vela models` writes it.
+    [EntityLogicalName(""account"")]
+    public sealed class Account : Entity
+    {
+        [AttributeLogicalName(""accountid"")]
+        public override Guid Id
+        {
+            get => base.Id;
+            set { base.Id = value; SetAttributeValue(""accountid"", value); }
+        }
+    }
+
+    public sealed class Lead : Entity
+    {
+        public override Guid Id { get; set; }
+    }
+}
+";
+
+    private static readonly MetadataReference[] Platform = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
+        .Split(Path.PathSeparator)
+        .Where(p => p.Length > 0)
+        .Select(p => (MetadataReference)MetadataReference.CreateFromFile(p))
+        .ToArray();
+
+    private static MetadataReference EmitModels()
+    {
+        CSharpCompilation compilation = CSharpCompilation.Create(
+            "Models",
+            [CSharpSyntaxTree.ParseText(MetadataModels)],
+            Platform,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        using MemoryStream stream = new();
+        Assert.True(compilation.Emit(stream).Success);
+        return MetadataReference.CreateFromImage(stream.ToArray());
+    }
+
+    [Fact]
+    public async Task Accepts_the_Id_override_of_a_model_compiled_in_another_assembly()
+    {
+        const string code = @"
+using System;
+using System.Linq.Expressions;
+
+namespace Demo
+{
+    public static class Steps
+    {
+        public static void Filtering<TEntity>(params Expression<Func<TEntity, object>>[] columns) where TEntity : Microsoft.Xrm.Sdk.Entity { }
+    }
+
+    public class Use
+    {
+        public void Account() => Steps.Filtering<Models.Account>(x => x.Id);
+        public void Lead() => Steps.Filtering<Models.Lead>(x => x.Id);
+        public void Base() => Steps.Filtering<Models.Account>(x => x.LogicalName);
+    }
+}
+";
+        CSharpCompilation compilation = CSharpCompilation.Create(
+            "consumer",
+            [CSharpSyntaxTree.ParseText(code)],
+            [.. Platform, EmitModels()],
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        Assert.Empty(compilation.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+
+        ImmutableArray<Diagnostic> diagnostics = await compilation
+            .WithAnalyzers(ImmutableArray.Create<DiagnosticAnalyzer>(new Vela.Analyzers.ColumnSelectorAnalyzer()))
+            .GetAnalyzerDiagnosticsAsync();
+
+        // The Account override names its column; Lead's does not, and LogicalName is Entity's own member.
+        Assert.Equal(
+            new[] { "'Id' is not", "'LogicalName' is not" },
+            diagnostics.OrderBy(d => d.Location.SourceSpan.Start).Select(d => d.GetMessage().Substring(0, d.GetMessage().IndexOf(" a ", StringComparison.Ordinal))).ToArray());
+        Assert.All(diagnostics, d => Assert.Equal(Vela.Analyzers.ColumnSelectorAnalyzer.DiagnosticId, d.Id));
     }
 }

@@ -117,8 +117,10 @@ namespace Vela.Analyzers
                 return true;
             }
 
+            // The SDK declares AttributeLogicalNameAttribute in Microsoft.Xrm.Sdk (EntityLogicalNameAttribute is the one in
+            // Microsoft.Xrm.Sdk.Client); matching the .Client name rejected the generated `Id` override.
             if (symbol is not IPropertySymbol property
-                || property.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "Microsoft.Xrm.Sdk.Client.AttributeLogicalNameAttribute"))
+                || property.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "Microsoft.Xrm.Sdk.AttributeLogicalNameAttribute"))
             {
                 return false;
             }

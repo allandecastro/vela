@@ -171,4 +171,85 @@ namespace Demo
         string code = InQueryMethod("Query.For<Acme.Account>().Select(c => c.Name, c => c.City);");
         await Verify.VerifyAnalyzerAsync(code);
     }
+
+    // Typed-read surface: service.Retrieve<T>(id, ...) and service.RetrieveByKey<T>(key, ...), recognised by their
+    // Vela.Context namespace; a same-named Retrieve elsewhere (the SDK service shape) is ignored.
+    private const string ReadHarness = @"
+using System;
+using System.Linq.Expressions;
+
+namespace Vela.Steps
+{
+    public interface IFluentStep { }
+}
+
+namespace Acme
+{
+    public interface IService
+    {
+        object Retrieve(string table, Guid id, params Expression<Func<Account, object>>[] columns);
+    }
+
+    public class Account
+    {
+        public string Name { get; set; }
+        public string City { get; set; }
+    }
+}
+
+namespace Vela.Context
+{
+    public static class RetrieveExtensions
+    {
+        public static T Retrieve<T>(this Acme.IService service, Guid id, Expression<Func<T, object>> column, params Expression<Func<T, object>>[] columns) => default!;
+    }
+
+    public static class AlternateKeyExtensions
+    {
+        public static T RetrieveByKey<T>(this Acme.IService service, string key, params Expression<Func<T, object>>[] columns) => default!;
+    }
+}
+";
+
+    private static string InReadMethod(string body) => ReadHarness + @"
+namespace Demo
+{
+    using Vela.Context;
+    public class Use
+    {
+        public void M(Acme.IService service)
+        {
+            " + body + @"
+        }
+    }
+}
+";
+
+    [Fact]
+    public async Task Flags_a_duplicate_column_in_a_typed_Retrieve()
+    {
+        string code = InReadMethod("service.Retrieve<Acme.Account>(Guid.NewGuid(), a => a.Name, a => a.City, {|#0:a => a.Name|});");
+        await Verify.VerifyAnalyzerAsync(code, Expected("Name"));
+    }
+
+    [Fact]
+    public async Task Flags_a_duplicate_column_in_RetrieveByKey()
+    {
+        string code = InReadMethod("service.RetrieveByKey<Acme.Account>(\"k\", a => a.Name, {|#0:a => a.Name|});");
+        await Verify.VerifyAnalyzerAsync(code, Expected("Name"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_distinct_columns_in_a_typed_Retrieve()
+    {
+        string code = InReadMethod("service.Retrieve<Acme.Account>(Guid.NewGuid(), a => a.Name, a => a.City);");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Ignores_a_Retrieve_that_is_not_Velas()
+    {
+        string code = InReadMethod("service.Retrieve(\"account\", Guid.NewGuid(), a => a.Name, a => a.Name);");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
 }

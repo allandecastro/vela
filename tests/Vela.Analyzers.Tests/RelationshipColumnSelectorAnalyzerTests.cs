@@ -51,6 +51,19 @@ namespace Vela.Querying
     }
 }
 
+namespace Vela.Context
+{
+    public static class RetrieveExtensions
+    {
+        public static T Retrieve<T>(this object service, Guid id, Expression<Func<T, object>> column, params Expression<Func<T, object>>[] columns) => default!;
+    }
+
+    public static class AlternateKeyExtensions
+    {
+        public static T RetrieveByKey<T>(this object service, string key, params Expression<Func<T, object>>[] columns) => default!;
+    }
+}
+
 namespace Demo
 {
     using Vela.Steps;
@@ -101,6 +114,20 @@ namespace Demo
     {
         string code = InMethod("Query().Select(a => {|#0:a.Contacts|});");
         await Verify.VerifyAnalyzerAsync(code, Expected("Contacts", "Select"));
+    }
+
+    [Fact]
+    public async Task Flags_a_relationship_nav_in_a_typed_Retrieve()
+    {
+        string code = InMethod("Vela.Context.RetrieveExtensions.Retrieve<Acme.Account>(this, Guid.NewGuid(), a => a.Name, a => {|#0:a.Contacts|});");
+        await Verify.VerifyAnalyzerAsync(code, Expected("Contacts", "Retrieve"));
+    }
+
+    [Fact]
+    public async Task Flags_a_relationship_nav_in_RetrieveByKey()
+    {
+        string code = InMethod("Vela.Context.AlternateKeyExtensions.RetrieveByKey<Acme.Account>(this, \"k\", a => {|#0:a.Contacts|});");
+        await Verify.VerifyAnalyzerAsync(code, Expected("Contacts", "RetrieveByKey"));
     }
 
     [Fact]
