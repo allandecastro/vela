@@ -670,14 +670,14 @@ internal static partial class DataverseRegistration
     // repacking. That repack changes the archive content, which invalidates any NuGet author signature: Dataverse
     // then rejects the upload with 0x80040265 "the package is signed but its signature does not cover the package
     // content". Detect a signed package up front and fail with an actionable message instead of a cryptic
-    // platform error. (The package must be named with the prefix BEFORE signing, or applied without --solution.)
+    // platform error. (The package must be named with the prefix BEFORE signing.)
     if (IsPackageSigned(packagePath))
     {
         throw new InvalidOperationException(
             $"Plugin package '{originalPackageName}' is signed, but applying it with a solution requires renaming it " +
             $"to '{desiredPackageName}' (to add the publisher prefix), which would invalidate the signature and be " +
             "rejected by Dataverse (0x80040265). Build/sign the package already named with the solution publisher " +
-            $"prefix ('{desiredPackageName}'), or apply without --solution.");
+            $"prefix ('{desiredPackageName}').");
     }
 
     return RepackWithPackageId(File.ReadAllBytes(packagePath), packagePath, desiredPackageName);

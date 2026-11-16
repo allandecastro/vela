@@ -433,7 +433,7 @@ internal static class CliCommands
             ["2"] = "invalid arguments",
             ["3"] = "file not found",
             ["4"] = "error (including a --strict failure)",
-            ["5"] = "drift detected (models --verify)",
+            ["5"] = "drift detected (models --verify, apply not converged)",
             ["6"] = "Dataverse connection failure",
             ["7"] = "partial apply",
             ["8"] = "changes pending (plan --detailed-exitcode)",

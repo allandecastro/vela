@@ -239,6 +239,7 @@ public sealed class CliCommandsTests
         Assert.Contains(models.GetProperty("options").EnumerateArray(), o => o.GetProperty("kind").GetString() == "optional-value");
         Assert.Contains(plan.GetProperty("options").EnumerateArray(), o => o.GetProperty("kind").GetString() == "flag");
         Assert.Equal("changes pending (plan --detailed-exitcode)", root.GetProperty("exitCodes").GetProperty("8").GetString());
+        Assert.Equal("drift detected (models --verify, apply not converged)", root.GetProperty("exitCodes").GetProperty("5").GetString());
         Assert.Contains("<file.nupkg>", output); // readable, not <-escaped
     }
 
