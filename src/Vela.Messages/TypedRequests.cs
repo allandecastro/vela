@@ -183,8 +183,6 @@ namespace Vela.Messages
     // The shared read behind TypedRequest.Get / TypedResponse.Get.
     internal static class TypedValue
     {
-        private static readonly System.Reflection.MethodInfo ToEntity = typeof(Entity).GetMethod(nameof(Entity.ToEntity))!;
-
         // The typed requests' Target getter: the same conversion and the same error as ctx.GetTarget<T>().
         internal static TEntity ReadTarget<TEntity>(ParameterCollection parameters)
             where TEntity : Entity =>
@@ -205,13 +203,33 @@ namespace Vela.Messages
             }
 
             // Dataverse hands entities over as the base Entity: convert to the declared early-bound type.
-            if (value is Entity entity && typeof(Entity).IsAssignableFrom(typeof(T)))
+            if (value is Entity entity && EntityConverter<T>.Convert is { } convert)
             {
-                return (T)ToEntity.MakeGenericMethod(typeof(T)).Invoke(entity, null)!;
+                return convert(entity);
             }
 
-            throw new System.InvalidCastException(
+            // InvalidPluginExecutionException, like every other read error of a typed request: the caller sees the
+            // message rather than a generic error.
+            throw new InvalidPluginExecutionException(
                 $"Parameter '{name}' holds a {value.GetType().FullName}, not the {typeof(T).FullName} its property declares. Declare the property with the type Dataverse sends.");
+        }
+
+        // Entity.ToEntity<T>() bound once per T (null when T is not an entity type), so a read does not resolve and
+        // invoke the generic method by reflection on every access.
+        private static class EntityConverter<T>
+        {
+            internal static readonly System.Func<Entity, T>? Convert = Create();
+
+            private static System.Func<Entity, T>? Create()
+            {
+                if (!typeof(Entity).IsAssignableFrom(typeof(T)) || typeof(T).IsAbstract)
+                {
+                    return null;
+                }
+
+                System.Reflection.MethodInfo toEntity = typeof(Entity).GetMethod(nameof(Entity.ToEntity))!.MakeGenericMethod(typeof(T));
+                return (System.Func<Entity, T>)System.Delegate.CreateDelegate(typeof(System.Func<Entity, T>), toEntity);
+            }
         }
     }
 }

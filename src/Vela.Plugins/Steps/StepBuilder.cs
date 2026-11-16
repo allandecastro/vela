@@ -27,38 +27,30 @@ public sealed partial class StepBuilder<TEntity>
     private readonly List<ImageDefinition> _postImages = new();
     private ImageDefinition? _currentImage;
     private bool _isPreImage;
-    private SetOnceModifier _setOnce;
+    private int _setOnce;
     private string[] _requiredEntities = [];
 
-    // The single-value modifiers on the fluent chain: each is a "last wins" overwrite if called twice, which
-    // silently drops the earlier value. They may be set at most once per step; a second call throws (and the
-    // VELA003 analyzer flags it in the editor / at build). FilterOn is included because a second FilterOn(...)
-    // replaces the earlier attributes rather than adding to them.
-    [Flags]
-    private enum SetOnceModifier
+    // The single-value modifiers on the fluent chain (SetOnceModifiers.Methods, shared with VELA003): each is a
+    // "last wins" overwrite if called twice, which silently drops the earlier value, so a second call throws. FilterOn
+    // is included because a second FilterOn(...) replaces the earlier attributes rather than adding to them. One bit
+    // per method, at its index in the shared list; a name missing from it fails the first registration that sets it,
+    // so a new set-once modifier cannot skip VELA003.
+    private void MarkSetOnce(string method)
     {
-        None = 0,
-        Filtering = 1,
-        ExecutionOrder = 2,
-        Description = 4,
-        StepKey = 8,
-        Impersonation = 16,
-        SupportedDeployment = 32,
-        UnsecureConfig = 64,
-        SecureConfig = 128,
-        Relationship = 256,
-        SkipDepth = 512,
-    }
+        int index = System.Array.IndexOf(SetOnceModifiers.Methods, method);
+        if (index < 0)
+        {
+            throw new InvalidOperationException($"{method} is not in SetOnceModifiers.Methods, the list VELA003 shares.");
+        }
 
-    private void MarkSetOnce(SetOnceModifier modifier, string method)
-    {
-        if ((_setOnce & modifier) != 0)
+        int bit = 1 << index;
+        if ((_setOnce & bit) != 0)
         {
             throw new InvalidOperationException(
                 $"{method}(...) is already set on this step; call it at most once.");
         }
 
-        _setOnce |= modifier;
+        _setOnce |= bit;
     }
 
     /// <summary>
@@ -172,7 +164,7 @@ public sealed partial class StepBuilder<TEntity>
             throw new ArgumentNullException(nameof(attribute));
         }
 
-        MarkSetOnce(SetOnceModifier.Filtering, "FilterOn");
+        MarkSetOnce("FilterOn");
 
         List<Expression<Func<TEntity, object?>>> all = new() { attribute };
         if (additionalAttributes != null)
@@ -200,7 +192,7 @@ public sealed partial class StepBuilder<TEntity>
                 nameof(stepKey));
         }
 
-        MarkSetOnce(SetOnceModifier.StepKey, "WithStepKey");
+        MarkSetOnce("WithStepKey");
         _definition.StepKey = key;
     }
 
@@ -286,7 +278,7 @@ public sealed partial class StepBuilder<TEntity>
     // implementation is just `Set...(value); return this;`).
     private void SetExecutionOrder(int order)
     {
-        MarkSetOnce(SetOnceModifier.ExecutionOrder, "WithExecutionOrder");
+        MarkSetOnce("WithExecutionOrder");
         _definition.ExecutionOrder = order;
     }
 
@@ -298,7 +290,7 @@ public sealed partial class StepBuilder<TEntity>
 
     private void SetSkipWhenDepthAbove(int maxDepth)
     {
-        MarkSetOnce(SetOnceModifier.SkipDepth, "SkipWhenDepthAbove");
+        MarkSetOnce("SkipWhenDepthAbove");
         if (maxDepth < 1)
         {
             throw new ArgumentOutOfRangeException(nameof(maxDepth), maxDepth, "SkipWhenDepthAbove requires a depth of at least 1.");
@@ -309,7 +301,7 @@ public sealed partial class StepBuilder<TEntity>
 
     private void SetRelationships(string schemaName, string[] additionalSchemaNames)
     {
-        MarkSetOnce(SetOnceModifier.Relationship, "ForRelationship");
+        MarkSetOnce("ForRelationship");
         List<string> names = new() { schemaName };
         if (additionalSchemaNames != null)
         {
@@ -329,13 +321,13 @@ public sealed partial class StepBuilder<TEntity>
 
     private void SetDescription(string description)
     {
-        MarkSetOnce(SetOnceModifier.Description, "WithDescription");
+        MarkSetOnce("WithDescription");
         _definition.Description = description ?? string.Empty;
     }
 
     private void SetImpersonationUser(System.Guid systemUserId)
     {
-        MarkSetOnce(SetOnceModifier.Impersonation, "WithImpersonation");
+        MarkSetOnce("WithImpersonation");
         if (systemUserId == System.Guid.Empty)
         {
             throw new System.ArgumentException("WithImpersonation requires a non-empty systemuser id.", nameof(systemUserId));
@@ -346,7 +338,7 @@ public sealed partial class StepBuilder<TEntity>
 
     private void SetSupportedDeployment(SupportedDeployment deployment)
     {
-        MarkSetOnce(SetOnceModifier.SupportedDeployment, "WithSupportedDeployment");
+        MarkSetOnce("WithSupportedDeployment");
         _definition.SupportedDeployment = deployment;
     }
 
@@ -355,13 +347,13 @@ public sealed partial class StepBuilder<TEntity>
 
     private void SetUnsecureConfig(string configuration)
     {
-        MarkSetOnce(SetOnceModifier.UnsecureConfig, "WithUnsecureConfig");
+        MarkSetOnce("WithUnsecureConfig");
         _definition.UnsecureConfig = configuration ?? string.Empty;
     }
 
     private void SetSecureConfigName(string name)
     {
-        MarkSetOnce(SetOnceModifier.SecureConfig, "WithSecureConfigFrom");
+        MarkSetOnce("WithSecureConfigFrom");
         // The name only identifies the secret: its value is supplied to `vela apply` (--secure-config NAME=... or
         // the VELA_SECURE_CONFIG_NAME environment variable) and never compiled into the assembly. Restricting it to
         // an identifier keeps it usable as an environment variable suffix.

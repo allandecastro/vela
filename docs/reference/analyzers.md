@@ -94,9 +94,10 @@ a handler, so the step has nothing to run.
 
 **Duplicate step modifier.** Error. Code fix.
 
-**Flags.** A second call, on the same step, to `FilterOn(...)`, `WithExecutionOrder`, `WithDescription`,
-`WithStepKey`, `WithImpersonation`, `WithSupportedDeployment`, `WithUnsecureConfig` or `WithSecureConfigFrom`.
-`Disabled()` is exempt: it is an idempotent flag.
+**Flags.** A second call, on the same step, to `FilterOn(...)`, `ForRelationship(...)`, `SkipWhenDepthAbove`,
+`WithExecutionOrder`, `WithDescription`, `WithStepKey`, `WithImpersonation`, `WithSupportedDeployment`,
+`WithUnsecureConfig` or `WithSecureConfigFrom`. `Disabled()` is exempt: it is an idempotent flag. The analyzer and
+the runtime builder read one list of these modifiers.
 
 **Why.** Each of these sets a single value. A second call overwrites the first and silently drops it. The runtime
 builder also throws on the second call, so a chain split across locals still fails at registration.
@@ -116,7 +117,11 @@ lambdas (`.Handle(ctx => ...)`) are fine.
 dependency injection, the step's unsecure and secure configuration, and any other instance member. A static method
 cannot, and it does not fit the framework's instance-bound handler dispatch.
 
-**Fix.** Remove `static` from the handler (the code fix does this), or use a lambda.
+**Fix.** Remove `static` from the handler, or use a lambda. The code fix removes `static` when the handler is named
+without a qualifier (`.Handle(OnCreate)`), is declared in the class that registers the step or one of its base
+classes, and neither that class nor the registering member is static. It is not offered for a handler of another
+class (`.Handle(Handlers.OnCreate)`, or one imported with `using static`): make that one an instance method by hand,
+or call it from a lambda.
 
 ## VELA005
 
@@ -174,8 +179,9 @@ code fix removes the call.
   `ForRelationship(...)` scope, and carry no `WithStepKey(...)`.
 - The same `WithStepKey(...)` value used twice in one plugin (compared case-insensitively), whatever the triggers.
 
-The execution order (`WithExecutionOrder`) does not tell steps apart. A type-stated trigger is compared under the
-sdkmessage it registers on: `On<SendEmailRequest>()` and `On<SendFaxRequest>()` both register on `Send`.
+The execution order (`WithExecutionOrder`) does not tell steps apart. Every typed `On{Message}()` trigger is read,
+and every trigger is compared under the sdkmessage it registers on: `OnSendEmail()`, `On<SendEmailRequest>()` and
+`On<SendFaxRequest>()` all register on `Send`. An `OnAsyncOnly<TRequest>()` step is asynchronous.
 
 Only complete chains whose message, stage, filters, images, relationship and step key are statically readable are
 compared. A chain whose `FilterOn` or image takes something other than a literal column selector, or whose
@@ -289,7 +295,10 @@ thrown from a plugin on a Vela base reaches the caller as the generic
 **Fix.** Throw `InvalidPluginExecutionException` for a user-facing failure. Use `PluginBusinessException` for
 business semantics or a localizable message, in a plugin that derives from a Vela base. In a helper class that may
 run under any entry point, throw `InvalidPluginExecutionException`. The code fix changes the thrown type and keeps
-the arguments.
+the message and the inner exception, each bound to its constructor parameter: a parameter name
+(`new ArgumentNullException(nameof(x))`) is not taken as the message, and named arguments are passed by position.
+An inner exception without a message gives `(inner.Message, inner)`; the fix is not offered when that inner
+exception is an expression it would evaluate twice (`new WrapException(new Exception(...))`).
 
 ## VELA013
 
@@ -328,13 +337,17 @@ struct or record. Without this rule the build fails later with an obscure `CS026
 
 **Flags.** Two cases:
 
-- On the guided `Create`, `Update` and `Delete` path, a handler whose context is for a different message or stage,
-  or an unrelated type. The handler must take the step's message context (for example `IUpdatePostContext<T>`), its
-  generated typed step context (a subclass of it), or the plain `ILocalPluginContext`.
+- On every typed `On{Message}()` trigger (`OnUpdate()`, `OnAssign()`, `OnSendEmail()`, ...), a handler whose context
+  is for a different message or stage, or an unrelated type. The handler must take the step's message context (for
+  example `IAssignPostContext<T>` on `OnAssign().PostOperation()`), its generated typed step context (a subclass of
+  it), or the plain `ILocalPluginContext`.
 - On every path, a handler that does not take exactly one parameter or does not return `void`.
 
 **Why.** The `Handle(Delegate)` overload, which lets a method group bind the generated context, compiles any method
-group. The step builder rejects these handlers at registration; the rule reports them at build.
+group. The step builder rejects these handlers at registration, naming the context the step passes; the rule reports
+them at build. On `On<TRequest>()` and `OnMessage<TMarker>()` the registration check alone applies: a context of a
+modelled message, a post-operation context at a pre-stage, or a `.Handle<TRequest>(...)` whose request belongs to
+another message is rejected there.
 
 **Fix.** Give the handler the step's context or its generated `{Handler}Context`. The code fix corrects the type,
 written as short as the file's `using` directives allow.
@@ -422,9 +435,11 @@ Target there is neither written to the database nor seen by any later step. See
 
 **Filesystem access in a plugin.** Warning.
 
-**Flags.** In a plugin or Custom API type: calls to `System.IO.File` and `Directory`, and `new FileStream`,
-`FileInfo`, `DirectoryInfo`, `DriveInfo` or `FileSystemWatcher`. The check matches type identity. Not flagged:
-in-memory types (`MemoryStream`, `StringReader` / `StringWriter`, `BinaryReader` / `BinaryWriter`), the string
+**Flags.** In a plugin or Custom API type: calls to `System.IO.File` and `Directory` (also through
+`using static System.IO.File;`), `new FileStream`, `FileInfo`, `DirectoryInfo`, `DriveInfo` or `FileSystemWatcher`,
+and a `new StreamReader(path)` / `new StreamWriter(path)` built from a path. The check matches type identity. Not
+flagged: in-memory types (`MemoryStream`, `StringReader` / `StringWriter`, `BinaryReader` / `BinaryWriter`, a
+`StreamReader` / `StreamWriter` over a `Stream`), the string
 helpers of `System.IO.Path` (`Path.Combine`, `Path.GetExtension`, ...), and
 `Assembly.GetManifestResourceStream(...)`. Filesystem use in an unrelated helper class is not analyzed.
 

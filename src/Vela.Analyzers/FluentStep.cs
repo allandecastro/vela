@@ -116,6 +116,22 @@ namespace Vela.Analyzers
             return null;
         }
 
+        /// <summary>
+        /// The request name of a typed trigger call, read from its method name (<c>OnAssign</c> -> <c>Assign</c>,
+        /// <c>OnSendEmail</c> -> <c>SendEmail</c>), or null when the name is not one of the generated
+        /// <c>On{Message}()</c> triggers (<c>TypedTriggers.Messages</c>, shared with the runtime).
+        /// </summary>
+        public static string? TypedTriggerMessage(string methodName)
+        {
+            if (methodName.Length <= 2 || !methodName.StartsWith("On", System.StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            string message = methodName.Substring(2);
+            return System.Array.IndexOf(Vela.Steps.TypedTriggers.Messages, message) >= 0 ? message : null;
+        }
+
         private static IEnumerable<ITypeSymbol> SelfAndInterfaces(ITypeSymbol type)
         {
             yield return type;

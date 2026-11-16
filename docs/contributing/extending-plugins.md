@@ -69,9 +69,9 @@ Make these changes in this order.
 
    Do not edit the generated files by hand. The next run overwrites them, and CI runs the generator with
    `-- --check`, which fails when the committed files differ from its output.
-4. **`src/Vela.Plugins/Plugin/PluginBaseOfTEntity.cs`.** Add a case to `BuildTypedContext`, keyed by the step's
-   request name, that builds `<Message>PostContext` for a PostOperation step and `<Message>PreContext` otherwise.
-   The runtime then hands the handler the stage-correct typed context.
+4. **`src/Vela.Plugins/Plugin/PluginBaseOfTEntity.cs`.** Add an entry to the `TypedContexts` table, keyed by the
+   step's request name, that builds `<Message>PreContext` and `<Message>PostContext`. The runtime then hands the
+   handler the stage-correct typed context, and the registration check rejects a handler that cannot take it.
 5. **`src/Vela.Plugins/Constants/PluginMessages.cs`.** Add the message-name constant (the request name) if it does
    not exist yet.
 6. **`vela add` needs no change.** `AddCommand.KnownMessages` is the generated `TypedTriggers.Messages`, so

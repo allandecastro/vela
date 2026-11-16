@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Composition;
 using System.Linq;
@@ -22,7 +23,8 @@ namespace Vela.CodeFixes
         public override async Task RegisterCodeFixesAsync(CodeFixContext context)
         {
             SyntaxNode? root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
-            if (root == null)
+            SemanticModel? model = await context.Document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
+            if (root == null || model == null)
             {
                 return;
             }
@@ -31,7 +33,7 @@ namespace Vela.CodeFixes
             {
                 ObjectCreationExpressionSyntax? creation = root.FindNode(diagnostic.Location.SourceSpan)
                     .FirstAncestorOrSelf<ObjectCreationExpressionSyntax>();
-                if (creation == null)
+                if (creation == null || Arguments(creation, model, context.CancellationToken) is not { } arguments)
                 {
                     continue;
                 }
@@ -39,44 +41,110 @@ namespace Vela.CodeFixes
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         "Throw InvalidPluginExecutionException",
-                        ct => ReplaceAsync(context.Document, creation, ct),
+                        ct => ReplaceAsync(context.Document, creation, arguments, ct),
                         equivalenceKey: "ThrowInvalidPluginExecutionException"),
                     diagnostic);
             }
         }
 
-        private static async Task<Document> ReplaceAsync(Document document, ObjectCreationExpressionSyntax creation, CancellationToken cancellationToken)
+        // The arguments of the InvalidPluginExecutionException that replaces the creation, for its (), (string message)
+        // or (string message, Exception inner) constructor, positional. Each original argument is bound to its
+        // constructor parameter (by name for a named argument), so only the real message is kept: a paramName
+        // (new ArgumentNullException(nameof(x))) is not a message. An inner exception alone becomes
+        // (inner.Message, inner). Null when no fix is offered: an inner exception that is not a plain variable or member,
+        // which (inner.Message, inner) would evaluate twice.
+        private static IReadOnlyList<ExpressionSyntax>? Arguments(ObjectCreationExpressionSyntax creation, SemanticModel model, CancellationToken cancellationToken)
         {
-            SyntaxNode root = (await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false))!;
-            SemanticModel? model = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
-
-            // Keep only arguments that map to a real InvalidPluginExecutionException constructor: (string message)
-            // and/or a trailing (Exception inner). Anything else (e.g. ArgumentException's paramName) is dropped so
-            // the result always compiles - the ctors used are (), (string) and (string, Exception).
-            ArgumentSyntax? messageArg = null;
-            ArgumentSyntax? innerArg = null;
-            if (model != null)
+            ExpressionSyntax? message = null;
+            ExpressionSyntax? inner = null;
+            SymbolInfo info = model.GetSymbolInfo(creation, cancellationToken);
+            if ((info.Symbol ?? (info.CandidateSymbols.Length == 1 ? info.CandidateSymbols[0] : null)) is IMethodSymbol constructor)
             {
-                foreach (ArgumentSyntax arg in creation.ArgumentList?.Arguments ?? default)
+                SeparatedSyntaxList<ArgumentSyntax> arguments = creation.ArgumentList?.Arguments ?? default;
+                for (int i = 0; i < arguments.Count; i++)
                 {
-                    ITypeSymbol? type = model.GetTypeInfo(arg.Expression, cancellationToken).Type;
-                    if (messageArg == null && type?.SpecialType == SpecialType.System_String)
+                    IParameterSymbol? parameter = ParameterOf(constructor, arguments[i], i);
+                    if (parameter == null)
                     {
-                        messageArg = arg;
+                        continue;
                     }
-                    else if (innerArg == null && IsException(type))
+
+                    if (message == null && IsMessage(parameter))
                     {
-                        innerArg = arg;
+                        message = arguments[i].Expression;
+                    }
+                    else if (inner == null && IsException(parameter.Type))
+                    {
+                        inner = arguments[i].Expression;
                     }
                 }
             }
 
+            if (message != null)
+            {
+                return inner != null ? new[] { message, inner } : new[] { message };
+            }
+
+            if (inner == null)
+            {
+                return new ExpressionSyntax[0];
+            }
+
+            if (!IsPlainReference(inner))
+            {
+                return null;
+            }
+
+            ExpressionSyntax innerMessage = SyntaxFactory.MemberAccessExpression(
+                SyntaxKind.SimpleMemberAccessExpression, inner.WithoutTrivia(), SyntaxFactory.IdentifierName("Message"));
+            return new[] { innerMessage, inner };
+        }
+
+        private static IParameterSymbol? ParameterOf(IMethodSymbol constructor, ArgumentSyntax argument, int position)
+        {
+            if (argument.NameColon is { } nameColon)
+            {
+                string name = nameColon.Name.Identifier.ValueText;
+                return constructor.Parameters.FirstOrDefault(p => p.Name == name);
+            }
+
+            if (position < constructor.Parameters.Length)
+            {
+                return constructor.Parameters[position];
+            }
+
+            return constructor.Parameters.Length > 0 && constructor.Parameters[constructor.Parameters.Length - 1].IsParams
+                ? constructor.Parameters[constructor.Parameters.Length - 1]
+                : null;
+        }
+
+        // The message is the string parameter named for it (message, errorMessage, ...); a paramName, a fileName or any
+        // other string is not.
+        private static bool IsMessage(IParameterSymbol parameter)
+            => parameter.Type.SpecialType == SpecialType.System_String
+                && parameter.Name.IndexOf("message", System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+        // A variable, parameter, field or property read (ex, this.inner, state.Error): safe to read twice.
+        private static bool IsPlainReference(ExpressionSyntax expression) => expression switch
+        {
+            IdentifierNameSyntax => true,
+            ThisExpressionSyntax => true,
+            MemberAccessExpressionSyntax member when member.IsKind(SyntaxKind.SimpleMemberAccessExpression) => IsPlainReference(member.Expression),
+            ParenthesizedExpressionSyntax parenthesized => IsPlainReference(parenthesized.Expression),
+            _ => false,
+        };
+
+        private static async Task<Document> ReplaceAsync(Document document, ObjectCreationExpressionSyntax creation, IReadOnlyList<ExpressionSyntax> arguments, CancellationToken cancellationToken)
+        {
+            SyntaxNode root = (await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false))!;
+
+            // Positional arguments only: the original names (paramName:, innerException:) need not exist on the new type.
             ArgumentListSyntax argumentList = SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(
-                new[] { messageArg, innerArg }.Where(a => a != null).Select(a => a!)));
+                arguments.Select(a => SyntaxFactory.Argument(a.WithoutTrivia()))));
 
             ObjectCreationExpressionSyntax replacement = creation
                 .WithType(SyntaxFactory.ParseTypeName("global::Microsoft.Xrm.Sdk.InvalidPluginExecutionException").WithTriviaFrom(creation.Type))
-                .WithArgumentList(argumentList)
+                .WithArgumentList(argumentList.WithTriviaFrom(creation.ArgumentList ?? argumentList))
                 .WithInitializer(null);
 
             return document.WithSyntaxRoot(root.ReplaceNode(creation, replacement));

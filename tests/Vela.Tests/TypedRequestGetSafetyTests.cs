@@ -25,12 +25,12 @@ namespace Vela.Tests
         }
 
         [Fact]
-        public void Get_Throws_WhenStoredValueTypeDiffers()
+        public void Get_ThrowsAnInvalidPluginExecutionException_WhenStoredValueTypeDiffers()
         {
             SampleRequest request = new SampleRequest();
             request.Parameters["Count"] = "not-an-int"; // wrong type in the bag
 
-            System.InvalidCastException ex = Assert.Throws<System.InvalidCastException>(() => request.Count);
+            Microsoft.Xrm.Sdk.InvalidPluginExecutionException ex = Assert.Throws<Microsoft.Xrm.Sdk.InvalidPluginExecutionException>(() => request.Count);
             Assert.Contains("'Count'", ex.Message);
         }
 
@@ -46,6 +46,26 @@ namespace Vela.Tests
             request.Parameters["Account"] = new Microsoft.Xrm.Sdk.Entity("account") { ["name"] = "Zava" }; // as Dataverse sends it
 
             Assert.Equal("Zava", request.Account!.Name);
+        }
+
+        private sealed class EntityResponse : TypedResponse
+        {
+            public Vela.Tests.TestSupport.TestAccount? Account => Get<Vela.Tests.TestSupport.TestAccount?>();
+
+            public Microsoft.Xrm.Sdk.Entity? Raw => Get<Microsoft.Xrm.Sdk.Entity?>();
+        }
+
+        [Fact]
+        public void Get_ConvertsABaseEntityOnEveryRead_AndKeepsABaseEntityDeclaredAsSuch()
+        {
+            EntityResponse response = new EntityResponse();
+            response.Results["Account"] = new Microsoft.Xrm.Sdk.Entity("account") { ["name"] = "First" };
+            response.Results["Raw"] = new Microsoft.Xrm.Sdk.Entity("contact");
+
+            Assert.Equal("First", response.Account!.Name);
+            response.Results["Account"] = new Microsoft.Xrm.Sdk.Entity("account") { ["name"] = "Second" };
+            Assert.Equal("Second", response.Account!.Name); // the cached converter serves the next read
+            Assert.Equal("contact", response.Raw!.LogicalName);
         }
     }
 }

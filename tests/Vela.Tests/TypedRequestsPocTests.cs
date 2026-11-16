@@ -11,10 +11,9 @@ using Xunit;
 
 namespace Vela.Tests
 {
-    // Typed-requests design: a Vela-owned generic request
-    // (Vela.Messages.CreateRequest<TEntity>) exposes an early-bound ctx.Request.Target end-to-end through the
-    // in-memory pipeline - the single typed accessor for the primary record. It rides the existing
-    // OnMessage<TMessage>().Handler<TRequest>() path.
+    // Typed-requests design: a Vela-owned request (a TypedRequest) exposes an early-bound ctx.Request.Target
+    // end-to-end through the in-memory pipeline - the single typed accessor for the primary record. It rides the
+    // OnMessage<TMessage>().Handle<TRequest>() path, whose request names the marker's message.
     public sealed class TypedRequestsPocTests
     {
         private const string Message = "vela_TypedReqPoc";
@@ -24,6 +23,13 @@ namespace Vela.Tests
         {
         }
 
+        private sealed class TypedReqPocRequest : TypedRequest
+        {
+            public TypedReqPocRequest() => RequestName = Message;
+
+            public TestAccount Target { get => Get<TestAccount>(); set => Set(value); }
+        }
+
         private sealed class Probe : EntityPluginBase<TestAccount>
         {
             public string? TargetName;
@@ -31,9 +37,9 @@ namespace Vela.Tests
             public Probe() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
-                => RegisterStep().OnMessage<TypedReqPocMessage>().PostOperation().Sync().Handle<CreateRequest<TestAccount>>(OnMessageReceived);
+                => RegisterStep().OnMessage<TypedReqPocMessage>().PostOperation().Sync().Handle<TypedReqPocRequest>(OnMessageReceived);
 
-            private void OnMessageReceived(IMessagePostContext<CreateRequest<TestAccount>> ctx)
+            private void OnMessageReceived(IMessagePostContext<TypedReqPocRequest> ctx)
                 => TargetName = ctx.Request.Target.Name;   // typed Request.Target
         }
 
