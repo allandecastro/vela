@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 
@@ -72,7 +73,29 @@ internal static partial class DataverseRegistration
         }
     }
 
+    // The publisher prefix of each solution, per connection: plan and apply need it in the preview (package actions,
+    // retired assemblies, solution membership, Custom API names), the publish and the read-back, and it does not change
+    // during a run. Keyed by the connection (a solution-scoped wrapper shares its inner service's entry), so a new
+    // connection reads it again. A failed lookup is not cached.
+    private static readonly ConditionalWeakTable<IOrganizationService, Dictionary<string, string>> SolutionPrefixes = new();
+
     internal static string ResolveSolutionCustomizationPrefix(IOrganizationService service, string solutionUniqueName)
+    {
+        IOrganizationService connection = service is SolutionScopedOrganizationService scoped ? scoped.Inner : service;
+        Dictionary<string, string> prefixes = SolutionPrefixes.GetValue(connection, _ => new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+        lock (prefixes)
+        {
+            if (!prefixes.TryGetValue(solutionUniqueName, out string? prefix))
+            {
+                prefix = ReadSolutionCustomizationPrefix(connection, solutionUniqueName);
+                prefixes[solutionUniqueName] = prefix;
+            }
+
+            return prefix;
+        }
+    }
+
+    private static string ReadSolutionCustomizationPrefix(IOrganizationService service, string solutionUniqueName)
 {
     QueryExpression query = new QueryExpression("solution")
     {

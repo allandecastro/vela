@@ -288,6 +288,9 @@ All notable changes to Vela are documented here. The format is based on
 - `vela sign` opens a password-protected PFX with an ephemeral key set (except on macOS, which has none), so on
   Windows the private key is no longer written to the user's key store while the passwordless copy is made, where a
   crash would have left the key file behind.
+- `vela plan` and `vela apply` with `--solution` read the solution's publisher prefix once per connection. Each phase
+  (package actions, retired assemblies, solution membership, the publish, the read-back) queried the solution and
+  retrieved its publisher again, up to six times per apply.
 
 ### Docs
 

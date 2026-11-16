@@ -732,6 +732,35 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Contains(org.Executed.OfType<Microsoft.Crm.Sdk.Messages.AddSolutionComponentRequest>(), r => r.ComponentId == packageId);
     }
 
+    // The publisher prefix of the --solution is read once per run. The preview (package actions, retired assemblies,
+    // solution membership), the publish and the read-back each needed it, and each used to query the solution and
+    // retrieve its publisher again.
+    [Fact]
+    public void An_apply_with_a_solution_resolves_its_publisher_prefix_once()
+    {
+        string package = WritePackage("zava_Plugins");
+        FakeOrgService org = Org();
+        Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
+        org.OnRetrieveMultiple = q => q.EntityName switch
+        {
+            "solution" => FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["publisherid"] = new EntityReference("publisher", Guid.NewGuid()) }),
+            _ => inner(q),
+        };
+        int publisherReads = 0;
+        org.OnRetrieve = (e, id, _) =>
+        {
+            publisherReads += e == "publisher" ? 1 : 0;
+            return new Entity(e, id) { ["customizationprefix"] = "zava" };
+        };
+        RegistrationState local = Local([LocalStep()], packages: [new PluginPackagePayload("zava_Plugins", "1.0.0", package)]);
+
+        int exit = Run("apply", Options(solution: "ZavaSales", autoApprove: true), Host(org, local));
+
+        Assert.Equal(CliExitCodes.ExitSuccess, exit);
+        Assert.Contains(org.Created, e => e.LogicalName == "pluginpackage");
+        Assert.Equal(1, publisherReads);
+    }
+
     [Fact]
     public void OnlyUnwritten_drops_the_components_apply_writes_or_deletes()
     {
