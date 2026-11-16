@@ -1,13 +1,20 @@
-# Mutation area: the in-memory store core (InMemoryOrganizationService.cs, #448): CRUD, Execute dispatch, versioning,
-# seeding and relationships. Its security partial is the security-enforcement area and its query engine the
-# harness-query area. Run from tests/Vela.Testing.Tests. net462: Windows only. First Windows measurement (2026-10,
-# Stryker 4.16): ~68.9%; the #448 mutation tests target those survivors.
+# Mutation area: the in-memory store core (InMemoryOrganizationService.cs and its message-family partials, #448): CRUD,
+# Execute dispatch, versioning, seeding, relationships, Assign/SetState/Merge, transactions and file blocks. Its security
+# partial is the security-enforcement area and its query engine the harness-query area. Run from tests/Vela.Testing.Tests.
+# net462: Windows only. First Windows measurement (2026-10, Stryker 4.16): ~68.9%; the #448 mutation tests
+# target those survivors.
 # Full run on the self-hosted Windows runner (2026-10-11, Stryker 4.15): 89.93%; break ratcheted to 87 (~2 pts below).
 stryker-config:
   solution: ../../Vela.sln
   project: Vela.Testing.csproj
   mutate:
     - "**/Fakes/InMemoryOrganizationService.cs"
+    - "**/Fakes/InMemoryOrganizationService.Crud.cs"
+    - "**/Fakes/InMemoryOrganizationService.Queries.cs"
+    - "**/Fakes/InMemoryOrganizationService.Relationships.cs"
+    - "**/Fakes/InMemoryOrganizationService.AssignStateMerge.cs"
+    - "**/Fakes/InMemoryOrganizationService.Transactions.cs"
+    - "**/Fakes/InMemoryOrganizationService.Files.cs"
   reporters: [cleartext, markdown, html, json]
   thresholds:
     high: 90

@@ -52,6 +52,27 @@ namespace Vela.Testing
             }
         }
 
+        // The stage sequence of one message: PreValidation, then the transaction opens (a read stays out of it),
+        // PreOperation, the main operation, and PostOperation, which sees the main operation's result. firePre fires
+        // one pre stage; a platform-generated Update (the main operation of Assign or SetState) has no PreValidation.
+        private T RunStages<T>(Action<PluginStages> firePre, Func<T> mainOperation, Action<T> firePost, bool transactional = true, bool preValidation = true)
+        {
+            if (preValidation)
+            {
+                firePre(PluginStages.PreValidation);
+            }
+
+            if (transactional)
+            {
+                EnterTransaction();
+            }
+
+            firePre(PluginStages.PreOperation);
+            T result = mainOperation();
+            firePost(result);
+            return result;
+        }
+
         // Fires one stage of a Create/Update batch. The two registration messages are merged: a bulk step
         // (CreateMultiple/UpdateMultiple) fires once with the whole Targets collection; a single step
         // (Create/Update) fires once per row. Both are ordered by execution order and filtered by FilterOn.

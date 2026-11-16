@@ -94,7 +94,7 @@ of its files), unless noted.
 | `diff-engine` | `DiffEngine` and `DefinitionNormalizer` | 87.0% | 85 |
 | `harness-query` | `InMemoryQueryEngine`, `FetchXmlParser`, `EntityValues` | 94.1% | 92 |
 | `security-enforcement` | `InMemoryOrganizationService.Security.cs` | 83.8% | 82 |
-| `security-harness` | `Security/SecurityModel.cs`, `SharingTable.cs`, `AccessTeamGrants.cs`, `Fakes/OneToManyRegistry.cs` | 89.9% | 87 |
+| `security-harness` | `Security/SecurityModel.cs` and its partials, `SecurityConfiguration.cs`, `SharingTable.cs`, `AccessTeamGrants.cs`, `Fakes/OneToManyRegistry.cs` | 89.9% | 87 |
 | `cli-apply` | `DataverseRegistration.Apply.cs`, its `Apply.*.cs` partials and `PluginTypeRemoval.cs` (web resources excluded) | 83.8% (before the split; the partials and `PluginTypeRemoval.cs` not measured yet) | 81 |
 | `cli-customapi` | `DataverseRegistration.CustomApi.cs` | about 82.7% (earlier run) | 80 |
 | `cli-reader` | `DataverseRegistration.cs` | 86.9% | 84 |
@@ -106,7 +106,7 @@ of its files), unless noted.
 | `plugins-context` | `Vela.Plugins/Context` | 91.9% | 89 |
 | `plugins-services` | `Vela.Plugins/DI`, `Caching`, `Localization` | 86.2% | 84 |
 | `plugins-runtime` | `Vela.Plugins/Plugin` (`PluginBase`, `EntityPluginBase`, handler invocation) and `Retry` | 90.7% | 88 |
-| `harness-store` | `InMemoryOrganizationService.cs` (the store core) | 89.9% | 87 |
+| `harness-store` | `InMemoryOrganizationService.cs` and its message-family partials (the store core; not `.Security.cs` or `.ReadShape.cs`) | 89.9% | 87 |
 | `harness-pipeline` | `PluginPipeline.cs`, `.Stages.cs`, `.Execution.cs` | 95.2% | 93 |
 
 Notes on the scores:
