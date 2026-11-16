@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Metadata;
@@ -63,6 +64,10 @@ namespace Vela.Testing
         private const string Team = "team";
         private const string BusinessUnit = "businessunit";
         private const string Organization = "organization";
+
+        // Whether an early-bound type exposes an OwnerId property, per type: a type's members never change, and the
+        // ownership inference reads it on every write of a typed record.
+        private static readonly ConcurrentDictionary<Type, bool> EarlyBoundOwnable = new ConcurrentDictionary<Type, bool>();
 
         private readonly Dictionary<string, OwnershipKind> _declared =
             new Dictionary<string, OwnershipKind>(StringComparer.OrdinalIgnoreCase);
@@ -246,7 +251,7 @@ namespace Vela.Testing
             Type? earlyBound = source == null ? null : EntityValues.EarlyBoundType(source);
             if (earlyBound != null)
             {
-                return earlyBound.GetProperty(nameof(OwnerId)) != null
+                return EarlyBoundOwnable.GetOrAdd(earlyBound, type => type.GetProperty(nameof(OwnerId)) != null)
                     ? OwnershipKind.UserOwned
                     : OwnershipKind.OrganizationOwned;
             }
