@@ -51,6 +51,9 @@ All notable changes to Vela are documented here. The format is based on
   name. `Associate`, `Disassociate`, a deep insert and a `RelatedEntitiesQuery` find the relationship by it, so two
   1:N relationships between the same tables can each be addressed. Declaring a schema name that another relationship
   (1:N or N:N) already uses throws. Without one, the relationship keeps its `{referenced}_{referencing}` name.
+- `Vela.Testing`: `PluginPipeline.WithEnvironmentId(...)`, `WithTenantId(...)` and `AsApplicationUser()` set the
+  `EnvironmentId`, `TenantId` and `IsApplicationUser` of every step's context, as `PluginContextBuilder` does for one
+  plugin.
 
 ### Fixed (Framework)
 
@@ -99,12 +102,6 @@ All notable changes to Vela are documented here. The format is based on
 - `Vela.Testing`: `PluginContext.Execute<TPlugin>()` passes `null` as the unsecure and secure configuration, as
   `PluginPipeline` does for a step with no configuration. It passed empty strings before.
 - `Vela.Testing`: a bulk step's image collections no longer hold the images of a disabled step of the same plugin.
-
-### Added (Framework)
-
-- `Vela.Testing`: `PluginPipeline.WithEnvironmentId(...)`, `WithTenantId(...)` and `AsApplicationUser()` set the
-  `EnvironmentId`, `TenantId` and `IsApplicationUser` of every step's context, as `PluginContextBuilder` does for one
-  plugin.
 
 ### Added (CLI)
 
