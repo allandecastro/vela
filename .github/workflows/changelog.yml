@@ -18,10 +18,19 @@ concurrency:
 permissions:
   contents: read
 
+# Runner: GitHub-hosted ubuntu-latest unless the WINDOWS_RUNNER repository variable names another runner as a JSON
+# label array (as in ci.yml), e.g. `gh variable set WINDOWS_RUNNER --body '["self-hosted","Windows"]'`. The check is
+# Windows PowerShell 5.1-compatible, so the same script runs under pwsh on ubuntu and under powershell on the Windows
+# runner (whose service account can't execute pwsh). While the variable is set, a fork pull request is skipped, so fork
+# code never runs on that machine.
 jobs:
   changelog:
-    runs-on: ubuntu-latest
+    if: ${{ !vars.WINDOWS_RUNNER || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 5
+    defaults:
+      run:
+        shell: ${{ vars.WINDOWS_RUNNER && 'powershell' || 'pwsh' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -33,22 +42,24 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           NO_CHANGELOG: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
         run: |
-          if [ "$NO_CHANGELOG" = "true" ]; then
-            echo "Labelled no-changelog: no entry required."
+          if ($env:NO_CHANGELOG -eq 'true') {
+            Write-Host 'Labelled no-changelog: no entry required.'
             exit 0
-          fi
+          }
           # Three dots: the changes of the PR since it branched, whatever has landed on the base branch since.
-          changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
-          shipped=$(printf '%s\n' "$changed" | grep -E '^(src|docs)/' || true)
-          if [ -z "$shipped" ]; then
-            echo "No change under src/ or docs/: no entry required."
+          $changed = @(git diff --name-only "$($env:BASE_SHA)...$($env:HEAD_SHA)")
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Case-sensitive, as git paths are.
+          $shipped = @($changed | Where-Object { $_ -cmatch '^(src|docs)/' })
+          if ($shipped.Count -eq 0) {
+            Write-Host 'No change under src/ or docs/: no entry required.'
             exit 0
-          fi
-          if printf '%s\n' "$changed" | grep -qx 'CHANGELOG.md'; then
-            echo "CHANGELOG.md is updated."
+          }
+          if ($changed -ccontains 'CHANGELOG.md') {
+            Write-Host 'CHANGELOG.md is updated.'
             exit 0
-          fi
-          echo "Shipped files changed without a CHANGELOG.md entry:"
-          printf '%s\n' "$shipped" | sed 's/^/  /'
-          echo "::error title=CHANGELOG.md not updated::This pull request changes src/ or docs/ but not CHANGELOG.md. Add one entry under '## [Unreleased]', in the existing heading of its kind (e.g. '### Fixed (CLI)'); see CONTRIBUTING.md#changelog. If the change is not user-visible (CI, tests, an internal refactor), a maintainer adds the 'no-changelog' label instead."
+          }
+          Write-Host 'Shipped files changed without a CHANGELOG.md entry:'
+          foreach ($file in $shipped) { Write-Host "  $file" }
+          Write-Host "::error title=CHANGELOG.md not updated::This pull request changes src/ or docs/ but not CHANGELOG.md. Add one entry under '## [Unreleased]', in the existing heading of its kind (e.g. '### Fixed (CLI)'); see CONTRIBUTING.md#changelog. If the change is not user-visible (CI, tests, an internal refactor), a maintainer adds the 'no-changelog' label instead."
           exit 1

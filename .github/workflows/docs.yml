@@ -19,6 +19,10 @@ on:
 permissions:
   contents: read
 
+# Runner: the Windows jobs run on GitHub-hosted windows-latest unless the WINDOWS_RUNNER repository variable names
+# another runner as a JSON label array, e.g. `gh variable set WINDOWS_RUNNER --body '["self-hosted","Windows"]'`.
+# While it is set, a pull request from a fork is skipped, so fork code never runs on that machine.
+
 # Only one Pages deployment at a time; a newer push cancels an in-flight build. A pull request has its own group,
 # so it never cancels a deployment.
 concurrency:
@@ -27,10 +31,16 @@ concurrency:
 
 jobs:
   check:
-    # Every pull request, forks included (GitHub-hosted runner, read-only token, no secrets).
-    if: github.event_name == 'pull_request'
-    runs-on: windows-latest
+    # Every pull request, forks included on the hosted runner (read-only token, no secrets); fork pull requests are
+    # skipped when WINDOWS_RUNNER names a self-hosted runner.
+    if: github.event_name == 'pull_request' && (!vars.WINDOWS_RUNNER || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"windows-latest"') }}
     timeout-minutes: 15
+    env:
+      # Self-hosted only (empty on a hosted runner, which leaves setup-dotnet on its default): the runner's service
+      # account can't write to 'C:\Program Files\dotnet', so setup-dotnet installs into the workspace instead (it adds
+      # this to PATH for the run steps).
+      DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/.dotnet', github.workspace) || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -43,7 +53,7 @@ jobs:
 
   build-deploy:
     if: github.event_name != 'pull_request'
-    runs-on: windows-latest
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"windows-latest"') }}
     permissions:
       contents: read
       pages: write # deploy-pages publishes the site
@@ -51,6 +61,11 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      # Self-hosted only (empty on a hosted runner, which leaves setup-dotnet on its default): the runner's service
+      # account can't write to 'C:\Program Files\dotnet', so setup-dotnet installs into the workspace instead (it adds
+      # this to PATH for the run steps).
+      DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/.dotnet', github.workspace) || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6

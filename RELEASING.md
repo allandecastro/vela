@@ -3,7 +3,8 @@
 Vela ships as two independent release lines, each cut by pushing a git tag. The
 [`release.yml`](.github/workflows/release.yml) workflow does the rest: build, test, pack, publish to
 NuGet.org via Trusted Publishing (OIDC, no stored API key), and create a GitHub Release. It runs on a
-GitHub-hosted `windows-latest` runner (the net462 harness only builds on Windows), like `ci.yml`.
+GitHub-hosted `windows-latest` runner (the net462 harness only builds on Windows), like `ci.yml`, unless the
+`WINDOWS_RUNNER` repository variable names another runner (e.g. a self-hosted one).
 
 | Line | Tag | Packages |
 | --- | --- | --- |

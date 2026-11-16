@@ -13,8 +13,12 @@ name: Mutation Testing
 #   floor rather than at the area's ratcheted threshold.
 #
 # Stryker is pinned in .config/dotnet-tools.json (`dotnet tool restore`), so a Stryker release cannot move the scores
-# on its own. Every job runs on a GitHub-hosted Windows runner, like ci.yml: the net462 projects only build on
-# Windows. Each area is its own job, so the areas run in parallel.
+# on its own. Every job runs on a Windows runner, like ci.yml: the net462 projects only build on Windows. Each area is
+# its own job, so the areas run in parallel on hosted runners (one after another on a single self-hosted machine).
+#
+# Runner: the Windows jobs run on GitHub-hosted windows-latest unless the WINDOWS_RUNNER repository variable names
+# another runner as a JSON label array, e.g. `gh variable set WINDOWS_RUNNER --body '["self-hosted","Windows"]'`.
+# While it is set, a pull request from a fork is skipped, so fork code never runs on that machine.
 on:
   workflow_dispatch:
     inputs:
@@ -41,7 +45,8 @@ concurrency:
 permissions:
   contents: read
 
-# Windows PowerShell 5.1 is always present on the Windows runner; it is the default shell for run steps.
+# Windows PowerShell 5.1 is always present on the Windows runner (on the self-hosted runner, pwsh is the WindowsApps
+# stub, which the service account can't execute); it is the default shell for run steps.
 defaults:
   run:
     shell: powershell
@@ -49,7 +54,9 @@ defaults:
 jobs:
   # Picks the areas to run: all of them, or on a pull request those whose files it changes.
   plan:
-    runs-on: windows-latest
+    # Fork pull requests are skipped on a self-hosted runner (and so is the mutation job, which needs this one).
+    if: ${{ !vars.WINDOWS_RUNNER || github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"windows-latest"') }}
     timeout-minutes: 5
     outputs:
       areas: ${{ steps.select.outputs.areas }}
@@ -82,12 +89,17 @@ jobs:
     name: ${{ matrix.area }}
     needs: plan
     if: needs.plan.outputs.areas != '[]'
-    runs-on: windows-latest
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"windows-latest"') }}
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.areas) }}
+    env:
+      # Self-hosted only (empty on a hosted runner, which leaves setup-dotnet on its default): the runner's service
+      # account can't write to 'C:\Program Files\dotnet', so setup-dotnet installs into the workspace instead (it adds
+      # this to PATH for the run steps).
+      DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/.dotnet', github.workspace) || '' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -99,6 +111,14 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
+      - name: Install x64 .NET runtime for the VsTest test host
+        # On an arm64 runner (the self-hosted one), Stryker's VsTest spawns an x64 test host; install the x64 runtime so
+        # it can start and expose it via DOTNET_ROOT_X64 (the arch-specific lookup the x64 apphost uses).
+        if: runner.arch == 'ARM64'
+        run: |
+          $dir = "$env:RUNNER_TEMP\dotnet-x64"
+          & ([scriptblock]::Create((Invoke-RestMethod https://dot.net/v1/dotnet-install.ps1))) -Channel 10.0 -Runtime dotnet -Architecture x64 -InstallDir $dir
+          "DOTNET_ROOT_X64=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Install Stryker (pinned in .config/dotnet-tools.json)
         run: dotnet tool restore
 
@@ -112,7 +132,7 @@ jobs:
         run: dotnet tool run dotnet-stryker --config-file ../stryker/${{ matrix.area }}.yml --since:main --break-at 80
 
       # Dumps every survivor so the next round can keep killing rather than lowering the gate. The newest report is
-      # read, in case a workspace holds more than one.
+      # read: a self-hosted runner's workspace persists between runs.
       - name: List surviving mutants
         if: always()
         run: |

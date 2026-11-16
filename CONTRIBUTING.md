@@ -11,7 +11,8 @@ vulnerability? Do not open an issue: report it privately as described in [SECURI
 
 A pull request runs `ci.yml` (and `docs.yml` / `mutation.yml` when it touches their paths) on GitHub-hosted Windows
 runners, forks included, plus the [changelog check](#changelog); the [pull request template](.github/pull_request_template.md) lists what a change needs
-before review.
+before review. The Windows jobs run on `windows-latest` unless the `WINDOWS_RUNNER` repository variable names another
+runner (e.g. a self-hosted one, as a JSON label array); pull requests from forks are then skipped.
 
 ## Solution layout
 

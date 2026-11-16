@@ -82,7 +82,8 @@ To add an area, add its `tests/stryker/<area>.yml` and its row in
 `tests/stryker/areas.json`, then measure it before choosing its `break`.
 
 In CI every job runs on a GitHub-hosted Windows runner (`windows-latest`, like `ci.yml`), one job per area, so the
-areas run in parallel.
+areas run in parallel. When the `WINDOWS_RUNNER` repository variable names another runner (e.g. a self-hosted one),
+the jobs run there instead and pull requests from forks are skipped.
 
 ## Gated cores and scores
 

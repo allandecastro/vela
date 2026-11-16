@@ -76,6 +76,9 @@ A new typed message touches more files: [docs/contributing/extending-plugins.md]
   fixture and the golden file together.
 - Policy: every gated core stays at **80% or more** on both coverage and mutation score. A threshold may be
   ratcheted up, never lowered below 80. If a run dips, kill the surviving mutant or add the missing test.
+- Runners: the Windows jobs (`ci.yml`, `mutation.yml`, `docs.yml`, `release.yml`) run on `windows-latest` unless the
+  `WINDOWS_RUNNER` repository variable names another runner as a JSON label array (e.g. `["self-hosted","Windows"]`);
+  pull requests from forks are then skipped, and `changelog.yml` moves from `ubuntu-latest` to that runner too.
 - `docs.yml`: docfx with `--warningsAsErrors` on pull requests that touch `docs/`, deployment from `main`.
 
 ## Conventions

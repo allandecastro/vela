@@ -17,6 +17,10 @@ concurrency:
 permissions:
   contents: read
 
+# Runner: the Windows jobs run on GitHub-hosted windows-latest unless the WINDOWS_RUNNER repository variable names
+# another runner as a JSON label array, e.g. `gh variable set WINDOWS_RUNNER --body '["self-hosted","Windows"]'`.
+# While it is set, a pull request from a fork is skipped, so fork code never runs on that machine.
+
 # Windows PowerShell 5.1 is always present on the Windows runner; use it as the default shell for run steps.
 defaults:
   run:
@@ -24,10 +28,17 @@ defaults:
 
 jobs:
   build-test-pack:
-    # GitHub-hosted Windows runner: net462 (the harness) only builds on Windows, so CI must run on Windows. Pull
-    # requests from forks run too: the hosted runner is ephemeral and the token is read-only.
-    runs-on: windows-latest
+    # Windows runner (see the note above): net462 (the harness) only builds on Windows, so CI must run on Windows. On
+    # the hosted runner, pull requests from forks run too: it is ephemeral and the token is read-only. On a
+    # self-hosted runner (WINDOWS_RUNNER set), they are skipped.
+    if: ${{ !vars.WINDOWS_RUNNER || github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"windows-latest"') }}
     timeout-minutes: 20 # build+test is fast; cap a hung run
+    env:
+      # Self-hosted only (empty on a hosted runner, which leaves setup-dotnet on its default): the runner's service
+      # account can't write to 'C:\Program Files\dotnet', so setup-dotnet installs into the workspace instead (it adds
+      # this to PATH for the run steps).
+      DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/.dotnet', github.workspace) || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -47,8 +58,8 @@ jobs:
       # The only check that compiles what `vela init` generates: scaffold a solution, pack the repo's
       # Vela.Plugins / Vela.Testing / Vela.Messages into a local feed, then restore + build it. Opt-in locally
       # (skipped without VELA_BUILD_SMOKE=1), always on in CI. The packs are version 1.0.0, and a 1.0.0 left in the
-      # global NuGet cache would shadow the fresh local feed, so evict it first (a no-op on a fresh hosted runner,
-      # kept so the step matches the local recipe in CONTRIBUTING.md).
+      # global NuGet cache would shadow the fresh local feed, so evict it first (a no-op on a fresh hosted runner; a
+      # self-hosted runner's cache persists between runs).
       - name: Scaffold build smoke
         env:
           VELA_BUILD_SMOKE: '1'
