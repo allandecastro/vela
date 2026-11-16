@@ -217,7 +217,9 @@ namespace Vela.Constants
         /// The single source of truth shared by the step builder, the runtime step resolution, the in-memory test
         /// pipeline and the CLI (which links this file).
         /// </summary>
-        public static readonly string[] GlobalMessages = { Associate, Disassociate, UnlockSalesOrderPricing, UnlockInvoicePricing, RemoveProductFromKit };
+        /// <remarks>Read-only: a shared static list that one caller could otherwise change for every plugin.</remarks>
+        public static readonly System.Collections.Generic.IReadOnlyList<string> GlobalMessages =
+            new System.Collections.ObjectModel.ReadOnlyCollection<string>(new[] { Associate, Disassociate, UnlockSalesOrderPricing, UnlockInvoicePricing, RemoveProductFromKit });
 
         /// <summary>
         /// Whether <paramref name="message"/> is one of the <see cref="GlobalMessages"/> (compared case-insensitively),

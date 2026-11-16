@@ -14,7 +14,10 @@ namespace Vela.Analyzers.Tests;
 // drifts from the documentation, or whose text goes missing, fails here.
 public sealed class DiagnosticCatalogTests
 {
-    private static readonly Regex Row = new Regex(@"^\|\s*\[(VELA\d{3})\]\(#vela\d{3}\)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|", RegexOptions.Multiline);
+    // A row of the "Rules at a glance" table: | [VELAnnn](#velannn) | Title | Category | Severity | Code fix |. The
+    // category is written without its "Vela." prefix. A retired rule's row has empty cells ("| Retired | | | |"): the
+    // captures start on a non-blank character so such a row is not read as a shipped rule.
+    private static readonly Regex Row = new Regex(@"^\|\s*\[(VELA\d{3})\]\(#vela\d{3}\)\s*\|[^|]*\|\s*([^|\s][^|]*?)\s*\|\s*([^|\s][^|]*?)\s*\|", RegexOptions.Multiline);
 
     private static string RepoFile(params string[] parts)
     {
@@ -56,7 +59,7 @@ public sealed class DiagnosticCatalogTests
         foreach (DiagnosticDescriptor rule in rules)
         {
             (string category, string severity) = documented[rule.Id];
-            Assert.True(category == rule.Category, $"{rule.Id}: category {rule.Category}, documented {category}");
+            Assert.True("Vela." + category == rule.Category, $"{rule.Id}: category {rule.Category}, documented {category}");
             Assert.True(severity == rule.DefaultSeverity.ToString(), $"{rule.Id}: severity {rule.DefaultSeverity}, documented {severity}");
         }
     }

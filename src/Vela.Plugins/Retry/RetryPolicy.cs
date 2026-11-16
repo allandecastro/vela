@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
+using System.Runtime.ExceptionServices;
 using System.ServiceModel;
 using System.Threading;
 using Microsoft.Xrm.Sdk;
@@ -101,7 +102,7 @@ namespace Vela.Retry
             }
 
             Stopwatch elapsed = Stopwatch.StartNew();
-            Exception? lastException = null;
+            ExceptionDispatchInfo? lastException = null;
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 try
@@ -113,7 +114,7 @@ namespace Vela.Retry
                     && TryComputeDelay(ex, attempt, initialDelayMs, out TimeSpan delay)
                     && (!maxElapsed.HasValue || elapsed.Elapsed + delay <= maxElapsed.Value))
                 {
-                    lastException = ex;
+                    lastException = ExceptionDispatchInfo.Capture(ex);
                     sleep(delay);
 
                     // A sleep can overrun (scheduling, a GC pause): when the wait actually ended past the budget, no
@@ -125,7 +126,9 @@ namespace Vela.Retry
                 }
             }
 
-            throw lastException ?? new InvalidPluginExecutionException("Retry policy failed without exception detail.");
+            // Rethrown with its original stack trace (the operation's frames), not one that starts here.
+            lastException?.Throw();
+            throw new InvalidPluginExecutionException("Retry policy failed without exception detail.");
         }
 
         /// <summary>

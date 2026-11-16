@@ -33,7 +33,7 @@ sets `RequestName` / `ResponseName`.
 - **Back each property with `Get` / `Set`.** A plain auto-property (`{ get; set; }`) on the request would never
   receive the input, so the API throws when an input matches one.
 - **Reading values.** An absent parameter reads as `default`. A value of another type throws an
-  `InvalidCastException` that names the parameter. A base `Entity` (what Dataverse sends) is converted to the
+  `InvalidPluginExecutionException` that names the parameter. A base `Entity` (what Dataverse sends) is converted to the
   declared early-bound type, such as `Account`.
 - **Only declared properties become parameters.** Inherited members (`RequestName`, `Parameters`, `Results`, ...)
   never do. A read-only response property is fine: `public int Score => Get<int>();`.
