@@ -136,7 +136,8 @@ internal static class PlanApplyCommand
             current,
             SecureConfigResolver.ParseSpecs(options.SecureConfigs ?? [], File.ReadAllText, Console.Error.WriteLine),
             Environment.GetEnvironmentVariable,
-            jsonOptions);
+            jsonOptions,
+            Console.Error.WriteLine);
 
     // The preview shared by plan and apply: the registration diff plus the two live checks it cannot express.
     //  1. Package publish: a code-only rebuild (unchanged steps/custom APIs, rebuilt assembly) produces no diff item,

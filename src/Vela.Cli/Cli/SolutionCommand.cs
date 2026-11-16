@@ -53,7 +53,7 @@ internal static class SolutionCommand
         bool json = HasFlag(rest, "--json");
         bool verbose = HasFlag(rest, "--verbose") || HasFlag(rest, "-v");
 
-        if (!TryResolveConnection(rest, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
+        if (!TryResolveConnection(rest, interactive, out string? connectionString, out string? oauthUrl, out DataverseTokenProvider? oauthToken, out string? url, out int exitCode))
         {
             return exitCode;
         }

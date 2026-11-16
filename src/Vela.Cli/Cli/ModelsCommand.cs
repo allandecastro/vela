@@ -219,7 +219,7 @@ internal static class ModelsCommand
             }
         }
 
-        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
+        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out DataverseTokenProvider? oauthToken, out string? url, out int exitCode))
         {
             return exitCode;
         }
@@ -449,7 +449,7 @@ internal static class ModelsCommand
             Console.Error.WriteLine("Warning: --verify checks the C# early-bound entity model and the Roles class only; --custom-apis / --messages are ignored.");
         }
 
-        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
+        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out DataverseTokenProvider? oauthToken, out string? url, out int exitCode))
         {
             return exitCode;
         }
@@ -800,7 +800,7 @@ internal static class ModelsCommand
     // barrel covers everything. Shares the connection/write plumbing with the C# path; needs no namespace.
     private static int RunTsModels(string[] args, bool forms, bool tables, string? solution, string[] entities, string outDir, bool overwrite, bool interactive, bool json)
     {
-        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out string? oauthToken, out string? url, out int exitCode))
+        if (!TryResolveConnection(args, interactive, out string? connectionString, out string? oauthUrl, out DataverseTokenProvider? oauthToken, out string? url, out int exitCode))
         {
             return exitCode;
         }

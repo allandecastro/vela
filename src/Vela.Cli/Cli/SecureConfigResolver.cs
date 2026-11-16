@@ -13,6 +13,11 @@ namespace Vela.Cli;
 /// live digest, so the diff reports no change and apply never writes, unlinks or deletes it (whether the step
 /// declares no name, or declares one whose value was not supplied).
 /// </para>
+/// <para>
+/// An empty source is not a value: an empty <c>VELA_SECURE_CONFIG_NAME</c> variable (what a CI system substitutes for
+/// a secret that is not defined) or an empty <c>NAME=@file</c> counts as unset, with a warning naming it, so a missing
+/// secret can never clear the live secure configuration. Only an explicit inline <c>--secure-config NAME=</c> clears it.
+/// </para>
 /// </summary>
 internal static class SecureConfigResolver
 {
@@ -23,10 +28,16 @@ internal static class SecureConfigResolver
     /// trailing line ending (<c>"\r\n"</c> or <c>"\n"</c>), the one <c>echo secret &gt; file</c> adds; nothing else
     /// is trimmed. Messages name the configuration, never its value. An inline <c>NAME=VALUE</c> sits in shell history and the process listing, so
     /// it is honored but reported through <paramref name="warn"/>, as <c>--client-secret</c> is.
+    /// <para>
+    /// A file that is empty (or holds only that line ending) supplies no value: the name is left out, as if it were not
+    /// given, and <paramref name="warn"/> reports it. Only an inline <c>NAME=</c> maps to the empty string, the explicit
+    /// request to clear the live secure configuration.
+    /// </para>
     /// </summary>
     internal static Dictionary<string, string> ParseSpecs(IEnumerable<string> specs, Func<string, string> readFile, Action<string>? warn = null)
     {
         Dictionary<string, string> values = new(StringComparer.Ordinal);
+        HashSet<string> seen = new(StringComparer.Ordinal);
         foreach (string spec in specs)
         {
             int eq = spec.IndexOf('=');
@@ -35,6 +46,11 @@ internal static class SecureConfigResolver
             {
                 // Never echo the argument: a mistyped flag (a bare secret, a missing '=') would leak it to stderr/CI logs.
                 throw new ArgumentException("Invalid --secure-config: expected NAME=VALUE or NAME=@path, where NAME is the name given to WithSecureConfigFrom (letters, digits, '_').");
+            }
+
+            if (!seen.Add(name))
+            {
+                throw new ArgumentException($"--secure-config '{name}' is given more than once.");
             }
 
             string value = spec[(eq + 1)..];
@@ -49,16 +65,20 @@ internal static class SecureConfigResolver
                 {
                     throw new FileNotFoundException($"Cannot read the secure configuration '{name}' from '{path}': {ex.Message}", path, ex);
                 }
+
+                if (value.Length == 0)
+                {
+                    // An empty file is a missing secret (an unset CI variable written to disk), not a request to clear.
+                    warn?.Invoke($"Warning: --secure-config {name}=@{path}: the file is empty, so no value is supplied for '{name}' and its live secure configuration is left as it is. To clear it, pass --secure-config {name}= explicitly.");
+                    continue;
+                }
             }
             else
             {
                 warn?.Invoke($"Warning: --secure-config {name}=VALUE on the command line is exposed to shell history and process listings. Prefer --secure-config {name}=@file or the {EnvironmentVariablePrefix}{name} environment variable.");
             }
 
-            if (!values.TryAdd(name, value))
-            {
-                throw new ArgumentException($"--secure-config '{name}' is given more than once.");
-            }
+            values[name] = value;
         }
 
         return values;
@@ -68,13 +88,16 @@ internal static class SecureConfigResolver
     /// Rewrites each local step's <c>secureConfig</c> digest: the digest of the supplied value when Vela manages
     /// it, otherwise the live step's digest (no diff, never written). Returns the local state with the raw values to
     /// write, keyed by full step key, and a diagnostic for each declared configuration that has no value anywhere.
+    /// An empty <c>VELA_SECURE_CONFIG_NAME</c> variable counts as unset and is reported once through
+    /// <paramref name="warn"/>: in CI an undefined secret substitutes an empty string, which must not clear the live value.
     /// </summary>
     internal static RegistrationState Resolve(
         RegistrationState local,
         RegistrationState current,
         IReadOnlyDictionary<string, string> suppliedValues,
         Func<string, string?> readEnvironment,
-        JsonSerializerOptions jsonOptions)
+        JsonSerializerOptions jsonOptions,
+        Action<string>? warn = null)
     {
         IReadOnlyDictionary<string, string> namesByStepKey = local.SecureConfigNameByStepKey ?? new Dictionary<string, string>();
 
@@ -95,6 +118,7 @@ internal static class SecureConfigResolver
         Dictionary<string, string> valuesByStepKey = new(StringComparer.Ordinal);
         List<string> diagnostics = [.. local.Diagnostics];
         List<RegistrationItem> items = [];
+        HashSet<string> warnedEmpty = new(StringComparer.Ordinal);
         foreach (RegistrationItem item in local.Items)
         {
             if (!DiffEngine.IsStep(item))
@@ -107,7 +131,7 @@ internal static class SecureConfigResolver
             string digest = liveDigest.TryGetValue(item, out string? live) ? live : string.Empty;
             if (namesByStepKey.TryGetValue(key, out string? name))
             {
-                string? value = suppliedValues.TryGetValue(name, out string? supplied) ? supplied : readEnvironment(EnvironmentVariablePrefix + name);
+                string? value = suppliedValues.TryGetValue(name, out string? supplied) ? supplied : ReadEnvironmentValue(name, readEnvironment, warnedEmpty, warn);
                 if (value != null)
                 {
                     valuesByStepKey[key] = value;
@@ -123,6 +147,25 @@ internal static class SecureConfigResolver
         }
 
         return local with { Items = [.. items], Diagnostics = [.. diagnostics], SecureConfigByStepKey = valuesByStepKey };
+    }
+
+    // An empty variable is unset: GitHub Actions substitutes "" for an undefined secret (secrets.X), and that
+    // must not reach apply as an explicit clear. Warned once per name, however many steps share it.
+    private static string? ReadEnvironmentValue(string name, Func<string, string?> readEnvironment, HashSet<string> warnedEmpty, Action<string>? warn)
+    {
+        string variable = EnvironmentVariablePrefix + name;
+        string? value = readEnvironment(variable);
+        if (value is not { Length: 0 })
+        {
+            return value;
+        }
+
+        if (warnedEmpty.Add(name))
+        {
+            warn?.Invoke($"Warning: the environment variable {variable} is set but empty, so no value is supplied for '{name}' and its live secure configuration is left as it is. To clear it, pass --secure-config {name}= explicitly.");
+        }
+
+        return null;
     }
 
     // Only the single line ending an editor or `echo` appends: a value that genuinely ends in a newline keeps the rest.

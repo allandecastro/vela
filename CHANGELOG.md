@@ -44,6 +44,17 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (CLI)
 
+- An empty `VELA_SECURE_CONFIG_<NAME>` environment variable, or an empty `--secure-config NAME=@file`, no longer
+  clears the live step secure configuration. In GitHub Actions an undefined secret expands to an empty string, so under
+  `--auto-approve` `apply` used to unlink and delete the `sdkmessageprocessingstepsecureconfig` row. An empty variable
+  or file now counts as no value (the live configuration is kept) and prints a warning naming it; only an explicit
+  inline `--secure-config NAME=` clears it.
+- The interactive (`--interactive`) and ambient Azure credential (`--url` alone) connections no longer use a single
+  token for the whole run. The token was acquired once before the package scan, so a cached token close to expiry, a
+  long scan, a wait at the apply prompt or a long apply could end in a 401 mid-apply (exit `7`). Vela now renews it
+  when it is within five minutes of expiry (MSAL `AcquireTokenSilent`, or the Azure credential's `GetToken`). The
+  connection-string and client-secret paths are unchanged: the SDK renews their token.
+
 - `vela add plugin`, `add step`, `add test`, `add service` and `add customapi` accept the table logical name in
   `--entity` (`--entity account`), as `--filtering-attributes` accepts a column logical name: it resolves to the
   generated model's class through its `EntityLogicalNameValue` (a wrong-case class name is corrected too), so the

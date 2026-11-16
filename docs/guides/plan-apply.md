@@ -243,8 +243,11 @@ A step's secure configuration value is supplied at `plan` or `apply` time, never
 - `VELA_SECURE_CONFIG_<NAME>` supplies it from the environment.
 - `--secure-config NAME=VALUE` works but warns, because the value is visible in shell history and process listings.
 
-Without a value, the environment keeps its own secure configuration and `apply` does not touch it. Deleting a step
-also deletes its secure configuration row. See
+Without a value, the environment keeps its own secure configuration and `apply` does not touch it. An empty
+`VELA_SECURE_CONFIG_<NAME>` variable, or a file that is empty after that trim, counts as no value and prints a warning
+naming it: a pipeline that substitutes an empty string for an undefined secret leaves the live value in place. To
+clear a secure configuration, pass an empty inline value, `--secure-config NAME=`. Deleting a step also deletes its
+secure configuration row. See
 [Description, state and configuration](plugins.md#description-state-and-configuration).
 
 ## Link a managed identity
