@@ -1,27 +1,37 @@
 # Typed queries
 
-Use typed extensions on `QueryExpression` to avoid string literals:
+Vela builds and runs Dataverse queries from your [early-bound models](models.md), so a table or column typo is a
+build error instead of a runtime `FaultException`. This page covers the typed query builder (`Query.For<T>()`),
+FetchXML output, running a query, and the typed reads of one record. The query types are in the `Vela.Querying`
+namespace.
+
+## Build a query
+
+`Query.For<TEntity>()` returns a typed builder: the table comes from the type's `[EntityLogicalName]`, every column
+from a selector, and the builder converts implicitly to `QueryExpression`:
 
 ```csharp
+using Microsoft.Xrm.Sdk.Query;
 using Vela.Querying;
 using Zava.Shared.Models.Generated;
-using Microsoft.Xrm.Sdk.Query;
 
-QueryExpression query = new QueryExpression(Account.EntityLogicalNameValue)
-    .Select<Account>(x => x.AccountId, x => x.Name)
-    .Where<Account>(x => x.Name, ConditionOperator.NotNull);
-```
-
-`Query.For<TEntity>()` returns a typed builder so the whole chain is typed **without repeating the entity type** (the entity name comes from `[EntityLogicalName]`), and it converts implicitly to `QueryExpression`:
-
-```csharp
 QueryExpression query = Query.For<Account>()
     .Select(a => a.AccountId, a => a.Name)
     .Where(a => a.Name, ConditionOperator.NotNull)
     .OrderBy(a => a.Name);
 ```
 
-Links are typed too - give the target type once and configure the join (columns, criteria, nested links) through a typed action:
+To add typed parts to an existing `QueryExpression`, use the extensions on it:
+
+```csharp
+QueryExpression query = new QueryExpression(Account.EntityLogicalNameValue)
+    .Select<Account>(x => x.AccountId, x => x.Name)
+    .Where<Account>(x => x.Name, ConditionOperator.NotNull);
+```
+
+### Links
+
+Give the target type once, then configure the join (columns, criteria, nested links) through a typed action:
 
 ```csharp
 QueryExpression query = Query.For<Contact>()
@@ -29,12 +39,13 @@ QueryExpression query = Query.For<Contact>()
     .Link<Account>(c => c.ParentCustomerId, a => a.AccountId, JoinOperator.Inner, "acct",
         acct => acct.Select(a => a.Name)
                     .Where(a => a.StateCode, ConditionOperator.Equal, 0));
-// crm.RetrieveMultiple(query) - the in-memory engine and Dataverse both accept it
 ```
 
-For an `In`/`NotIn` over an existing collection, use `WhereIn(column, values)` / `WhereNotIn(column, values)`
+### Conditions over a collection
+
+For an `In` or `NotIn` over an existing collection, use `WhereIn(column, values)` or `WhereNotIn(column, values)`
 (and `ConditionIn`/`ConditionNotIn` inside a `WhereAll`/`WhereAny` filter). They take an `IEnumerable<T>`, so a
-`Guid[]` or `List<Guid>` passes directly - each element becomes a distinct condition value:
+`Guid[]` or a `List<Guid>` passes directly, and each element becomes a separate condition value:
 
 ```csharp
 Guid[] ids = GetIds();
@@ -43,14 +54,26 @@ QueryExpression query = Query.For<Account>()
     .WhereIn(a => a.AccountId, ids);   // not .Where(a => a.AccountId, ConditionOperator.In, ids)
 ```
 
-Also available on the builder: `Distinct()`, `Page(n, count)`, `WithTotalRecordCount()`, `WhereColumns(a, op, b)`
-(compare two columns), `WhereLink<TLinked>(alias, …)` (conditions on a join, e.g. records-not-in-a-set),
-`WhereRelated<TTo>(…, JoinOperator.Any/All/NotAny/NotAll, …)` (several calls combine with AND), and aggregates
-`GroupBy(…)/Count/Sum/Average/Min/Max(…, alias)`.
+### Other builder methods
 
-Need **FetchXML** (for the messages/tools that require the string - Rollup, saved queries, pasting from FetchXML
-Builder)? Author it typed and emit it with `ToFetchXml()` - the same query, checked at compile time, no IDE
-extension needed:
+| Method | Purpose |
+| --- | --- |
+| `SelectAll()` | Every column. |
+| `OrderByDescending(column)` | Descending order. |
+| `Top(n)` | At most `n` rows. |
+| `Distinct()` | Distinct rows. |
+| `Page(n, count)` | One page of `count` rows. |
+| `WithTotalRecordCount()` | Return the total record count. |
+| `WhereColumns(a, op, b)` | Compare two columns. |
+| `WhereAll(...)` / `WhereAny(...)` | A nested AND / OR filter. |
+| `WhereLink<TLinked>(alias, ...)` | A condition on a linked table (for example, records not in a set). |
+| `WhereRelated<TTo>(..., JoinOperator.Any/All/NotAny/NotAll, ...)` | A condition on related rows; several calls combine with AND. |
+| `GroupBy(column, alias)`, `Count`, `Sum`, `Average`, `Min`, `Max(column, alias)` | Aggregates. |
+
+## Emit FetchXML
+
+Some messages and tools need a FetchXML string (rollups, saved queries, FetchXML Builder). Build the query typed
+and emit it with `ToFetchXml()`:
 
 ```csharp
 string fetchXml = Query.For<Contact>()
@@ -58,68 +81,75 @@ string fetchXml = Query.For<Contact>()
     .Where(c => c.ParentCustomerId, ConditionOperator.Equal, accountId)
     .OrderBy(c => c.FullName)
     .ToFetchXml();
-// FetchXML-only extras QueryExpression can't hold (emit-only): .LateMaterialize(), .AggregateLimit(n),
-// .CountColumnDistinct(col, alias), .OrderByAggregate(alias), .UtcDateGrouping(), .RowAggregate(...),
-// .RawChoiceOrder(), .FromRetainedData(), .SqlOptions("…")
 ```
 
-`ToFetchXml()` is also an extension on a plain `QueryExpression`. A table/column typo is a build error, not a
-runtime `FaultException`. In tests, the in-memory harness runs the emitted FetchXML through the same engine path as
-the `QueryExpression`, so both return the same rows; the FetchXML it supports (and rejects) is listed in
-[Testing](testing.md#queries).
+`ToFetchXml()` is also an extension on a plain `QueryExpression`. The builder has FetchXML-only options that a
+`QueryExpression` cannot hold, so they appear only in the emitted FetchXML: `.LateMaterialize()`,
+`.AggregateLimit(n)`, `.CountColumnDistinct(column, alias)`, `.OrderByAggregate(alias)`, `.UtcDateGrouping()`,
+`.RowAggregate(...)`, `.RawChoiceOrder()`, `.FromRetainedData()` and `.SqlOptions("...")`.
 
-Condition values that are Dataverse types (`OptionSetValue`, `Money`, `EntityReference`) emit their underlying
-value - the choice integer, the money decimal, the lookup GUID - and a query's `NoLock` is carried through as
-`no-lock='true'`. An early-bound choice enum passed to a typed `Where`/`WhereIn`/`Condition` becomes its integer
-in the `QueryExpression` too. A UTC `DateTime` is written with milliseconds and a `Z` (a local one is converted
-to UTC first); an `Unspecified` one carries no zone, so Dataverse reads it in the user's time zone.
+Values are written as Dataverse expects them:
 
-## Running a typed query
+- `OptionSetValue`, `Money` and `EntityReference` values emit their underlying value: the choice integer, the money
+  decimal, the lookup GUID. An early-bound choice enum passed to a typed `Where`, `WhereIn` or `Condition` becomes
+  its integer in the `QueryExpression` too.
+- A UTC `DateTime` is written with milliseconds and a `Z` (a local one is converted to UTC first). An `Unspecified`
+  one carries no zone, so Dataverse reads it in the user's time zone.
+- A query's `NoLock` is carried through as `no-lock='true'`.
 
-Execute the builder directly against an `IOrganizationService` - no `.Build()`, no hand-rolled paging:
+In tests, the in-memory harness runs the emitted FetchXML through the same engine as the `QueryExpression`, so both
+return the same rows. The FetchXML it supports and rejects is listed in [Testing](testing.md#queries).
+
+## Run a query
+
+Run the builder directly against an `IOrganizationService`, without `.Build()` or hand-written paging:
 
 ```csharp
-// every match, auto-paged (follows MoreRecords to the end)
+// Every match, paged automatically (follows MoreRecords to the end).
 List<Account> all = Query.For<Account>().Select(a => a.Name).ToList(service);
 
-// the first match, or null - a single retrieve (caps Top at 1)
+// The first match, or null: one retrieve, with Top set to 1.
 Account? one = Query.For<Account>()
     .Where(a => a.Name, ConditionOperator.Equal, "Contoso")
     .FirstOrDefault(service);
 
-// service-first form, equivalent to ToList
+// Service-first form, equivalent to ToList.
 List<Account> same = service.RetrieveAll(Query.For<Account>().SelectAll());
 ```
 
-All three return the early-bound `TEntity` (via `ToEntity<T>()`); you never touch `.Build()` or `AliasedValue`
-for a plain read. None of them leaves the query changed: `ToList`/`RetrieveAll` page with their own paging and restore
-the query's `PageInfo`, and `FirstOrDefault` restores its `TopCount`, so the same `TypedQuery` can be run again.
+All three return the early-bound `TEntity` (through `ToEntity<T>()`). None of them changes the query:
+`ToList`/`RetrieveAll` page with their own paging and restore the query's `PageInfo`, and `FirstOrDefault` restores
+its `TopCount`, so the same `TypedQuery` can run again. A query with `Top(n)` is read in one retrieve, without
+paging.
 
-**Scalar aggregates** run and read back in one typed call - no alias string to repeat, no `AliasedValue` to
-unwrap:
+### Scalar aggregates
+
+A scalar aggregate runs and reads back in one typed call, with no alias string and no `AliasedValue` to unwrap:
 
 ```csharp
 int     count = Query.For<Account>().Where(a => a.StateCode, ConditionOperator.Equal, 0)
-                     .CountScalar(service, a => a.AccountId);       // matching rows
-decimal? total = Query.For<SalesOrder>().SumScalar(service, o => o.TotalAmount);  // null when none match
+                     .CountScalar(service, a => a.AccountId);                    // matching rows
+decimal? total = Query.For<SalesOrder>().SumScalar(service, o => o.TotalAmount);    // null when none match
 decimal? avg   = Query.For<SalesOrder>().AverageScalar(service, o => o.TotalAmount);
 
-DateTime? earliest = Query.For<Task>().MinScalar(service, t => t.ScheduledStart); // DateTime? column -> DateTime?
+DateTime? earliest = Query.For<Task>().MinScalar(service, t => t.ScheduledStart);   // DateTime? column: DateTime?
 int?      largest  = Query.For<Account>().MaxScalar(service, a => a.NumberOfEmployees);
-decimal?  topDeal  = Query.For<SalesOrder>().MaxScalar(service, o => o.TotalAmount); // Money column -> decimal?
+decimal?  topDeal  = Query.For<SalesOrder>().MaxScalar(service, o => o.TotalAmount); // Money column: decimal?
 ```
 
-`SumScalar`/`AverageScalar` return `decimal?` (`null` distinguishes "no rows" from a real `0`); `CountScalar`
-returns `int`. `MinScalar`/`MaxScalar` return the **column's own type**, inferred from the selector, so there
-is no cast at the call site: a `DateTime?` column hands back `DateTime?`, an `int?` column `int?`, and a money
-column `decimal?` (the amount). All read back `null` when nothing matches. For **grouped** aggregates
-(`GroupBy(...)` + multiple aggregates) author with the alias API (`.Sum(col, "alias")`) and read the rows -
-see the aggregate builders above.
+- `CountScalar` returns `int`.
+- `SumScalar` and `AverageScalar` return `decimal?`: `null` tells "no rows" apart from a real `0`.
+- `MinScalar` and `MaxScalar` return the **column's own type**, inferred from the selector: `DateTime?` for a
+  `DateTime?` column, `int?` for an `int?` column, `decimal?` (the amount) for a money column.
+- All return `null` when nothing matches.
 
-## Reading one record by id
+For **grouped** aggregates (`GroupBy(...)` with several aggregates), use the alias methods (`.Sum(column, "alias")`)
+and read the rows.
 
-When you already know the record's id, `service.Retrieve<TEntity>(id, columns...)` (namespace `Vela.Context`) reads
-it early-bound, with the table taken from `TEntity` and the columns from typed selectors:
+## Read one record
+
+When you know the record's id, `service.Retrieve<TEntity>(id, columns...)` (namespace `Vela.Context`) reads it
+early-bound, with the table taken from `TEntity` and the columns from typed selectors:
 
 ```csharp
 using Vela.Context;
@@ -127,18 +157,18 @@ using Vela.Context;
 Account account = service.Retrieve<Account>(id, a => a.Name, a => a.Telephone1);
 ```
 
-It sends a real Retrieve, not a query: the steps registered on Retrieve run, and a missing record faults as it does
-with the SDK `Retrieve`. At least one column is required; there is no all-columns form.
+It sends a real `Retrieve`, not a query: the steps registered on `Retrieve` run, and a missing record faults as it
+does with the SDK `Retrieve`. At least one column is required; there is no all-columns form.
 
-One way to read each shape of request:
+Choose the read by what you have:
 
 | You have | Use |
 | --- | --- |
 | The id | `service.Retrieve<Account>(id, a => a.Name)` |
-| An alternate key | `service.RetrieveByKey<Account>(Account.ByAccountNumberKey("A-001"), a => a.Name)` ([Models](models.md)) |
-| Criteria | `Query.For<Account>().Where(...).Select(...)` with `FirstOrDefault` / `ToList` (above) |
+| An alternate key | `service.RetrieveByKey<Account>(Account.ByAccountNumberKey("A-001"), a => a.Name)` (the key factory is generated, see [Models](models.md); with no column, every column is returned) |
+| Criteria | `Query.For<Account>().Where(...).Select(...)` with `FirstOrDefault` or `ToList` (above) |
 
 ## See also
 
-- [Write a plugin](plugins.md) - where these queries run.
-- [Testing with Vela.Testing](testing.md) - the in-memory service executes the same queries.
+- [Write a plugin](plugins.md): where these queries run.
+- [Testing with Vela.Testing](testing.md): the in-memory service runs the same queries.

@@ -1,8 +1,9 @@
 # Managed identity
 
-Acquire a token for an external API from inside a plugin using the environment's **managed identity**, so you call
-downstream services without storing a secret. The token is obtained through the built-in `IManagedIdentityService`,
-surfaced on the context as `ctx.AcquireManagedIdentityToken(...)`.
+Acquire a token for an external API from inside a plugin with the environment's **managed identity**, so you call
+downstream services without storing a secret. This page covers acquiring the token, linking the plugin package to
+the managed identity at deployment, and testing. The token comes from the platform's `IManagedIdentityService`,
+which the context exposes as `ctx.AcquireManagedIdentityToken(...)`.
 
 ```csharp
 // Token for the default application user, for the requested scopes.
@@ -14,7 +15,7 @@ string userToken = ctx.AcquireManagedIdentityToken(applicationUserId, new[] { "h
 
 Use the token as a bearer credential when calling the external API (for example on an `HttpClient` request).
 
-`AcquireManagedIdentityToken` throws an `InvalidPluginExecutionException` when the plug-in is served no
+`AcquireManagedIdentityToken` throws an `InvalidPluginExecutionException` when the platform serves the plugin no
 managed-identity service (the package is not linked to a managed identity). Scaffold a solution with
 `vela init --managed-identity` (it adds the Integrations project and the signing step of its package), then
 configure the managed identity and its federated credential on the environment (below).
@@ -49,12 +50,21 @@ vela apply --package ./artifacts/zava_Zava.Integrations.1.0.0.nupkg --solution Z
 
 Only the plugin packages of the run are linked; Vela deploys packages, not standalone plugin assemblies. The JSON
 fields are in [Machine-readable output](../reference/machine-readable-output.md); the option is described with the other
-plan/apply options in [Plan & Apply](plan-apply.md).
+plan/apply options in [Plan and apply](plan-apply.md).
 
 ## Testing
 
-Provide a fake managed-identity service on the context so a handler under test can acquire a token without a real
-environment:
+Give the harness a fake `IManagedIdentityService` (your own class or a mock) so a handler under test acquires a
+token without a real environment. In a [`PluginPipeline`](testing.md) test, `WithManagedIdentityService(fake)` hands
+it to every plugin and Custom API the pipeline runs, nested executions included:
+
+```csharp
+PluginPipeline pipeline = PluginPipeline.Empty()
+    .Register<AccountSyncPlugin>()
+    .WithManagedIdentityService(fake);
+```
+
+`PluginContext` takes it the same way:
 
 ```csharp
 ILocalPluginContext ctx = PluginContext.For<Account>()
@@ -63,21 +73,13 @@ ILocalPluginContext ctx = PluginContext.For<Account>()
     .Build();
 ```
 
-In a pipeline test, `PluginPipeline.WithManagedIdentityService(fake)` hands the fake to every plugin and Custom API
-the pipeline runs, nested executions included:
-
-```csharp
-PluginPipeline pipeline = PluginPipeline.Empty()
-    .Register<AccountSyncPlugin>()
-    .WithManagedIdentityService(fake);
-```
-
 Without it, neither harness serves a managed-identity service, so `AcquireManagedIdentityToken` throws an
-`InvalidPluginExecutionException` as it does on an environment without one; the message names
-`WithManagedIdentityService(...)` for a test and links the Learn page on linking a managed identity for Dataverse. `WithService<IManagedIdentityService>(...)` is rejected: use `WithManagedIdentityService`.
+`InvalidPluginExecutionException`, as it does on an environment without one. The message names
+`WithManagedIdentityService(...)` for a test and links the Learn page on setting up a managed identity for Dataverse.
+`WithService<IManagedIdentityService>(...)` is rejected: use `WithManagedIdentityService`.
 
 ## See also
 
-- [Caching](caching.md) and [Environment variables](environment-variables.md) - the other built-in context services.
-- [Authentication](../configuration/authentication.md) - managed identity for the CLI's own Dataverse connection (a separate concern).
-- [Write a plugin](plugins.md) - the context helpers available in a handler.
+- [Caching](caching.md) and [Environment variables](environment-variables.md): the other built-in context services.
+- [Authentication](../configuration/authentication.md): managed identity for the CLI's own Dataverse connection (a separate concern).
+- [Write a plugin](plugins.md): the context helpers available in a handler.
