@@ -41,6 +41,8 @@ All notable changes to Vela are documented here. The format is based on
 ### Docs
 
 - [`vela add`](docs/guides/add.md) says `--entity` takes the class name or the table logical name.
+- The README lists the typed reads (`Retrieve<T>`, `RetrieveByKey`, `Query.For<T>()`) and `vela logs`, says `--solution`
+  names an unmanaged solution, and links the security policy.
 
 ## [0.31.0] - 2026-11-15 (Vela.Cli)
 

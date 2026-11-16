@@ -46,8 +46,11 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 
 - **Fluent base types** - declarative step registration and strongly-typed handlers for plugins and Custom APIs.
 - **Typed context helpers** - strongly-typed target/images, framework tracing, lightweight DI, and a TTL cache.
+- **Typed reads** - read one record by id (`service.Retrieve<Account>(id, a => a.Name)`), by alternate key, or query by
+  criteria (`Query.For<Account>()`) with early-bound column selectors instead of column-name strings.
 - **Analyzers, code fixes and source generators** - bundled Roslyn analyzers (VELA001-VELA028) catch invalid step/column usage and plugin pitfalls at build time, several with an IDE code fix, and a source generator emits typed image projections and typed step contexts (`ctx.PreImage` / `ctx.PostImage`). Shipped inside `Vela.Plugins` - no extra reference or setup.
-- **`vela` CLI** - preview-first `plan` → `apply` of registrations, scaffolding (`vela init` / `vela add`), early-bound generation (`vela models`), and package signing.
+- **`vela` CLI** - preview-first `plan` → `apply` of registrations, scaffolding (`vela init` / `vela add`), early-bound generation (`vela models`), package signing (`vela sign`)
+  and plug-in trace logs (`vela logs`).
 - **Idempotent apply** - safe upsert/delete of steps, Custom APIs, and images against a live environment.
 - **No-connection testing** - run plugins against an in-memory Dataverse with no live connection and no mocking-library dependency, with an **opt-in security model** (roles, privileges, business units, teams, sharing and relationship cascades) when you need it.
 
@@ -88,7 +91,8 @@ vela plan  --packages-dir artifacts --solution ZavaSales --interactive  # read-o
 vela apply --packages-dir artifacts --solution ZavaSales --interactive  # asks before writing
 ```
 
-`--solution` (required by `plan` and `apply`) names the existing Dataverse solution the components are added to.
+`--solution` (required by `plan` and `apply`) names the existing unmanaged Dataverse solution the components are added
+to; `plan` and `apply` stop before writing anything when it is managed in the target environment.
 `--publisher-prefix` names the package `zava_Zava.Plugins`, as Dataverse requires; without it, `plan` and `apply` add
 the solution's publisher prefix. `vela init` records both values in the project's `PROJECT.md` for people and
 agents; the CLI never reads it, so the commands take them as flags. The
@@ -107,7 +111,8 @@ faithful-but-partial test double). What is intentionally out of scope is collect
 
 Want to build or contribute to the Vela framework itself (not just use it)? See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the repository layout, architecture rules, and how to build and
-test from source ([`AGENTS.md`](AGENTS.md) for AI coding agents working on this repository).
+test from source ([`AGENTS.md`](AGENTS.md) for AI coding agents working on this repository). Report a security issue
+as described in [`SECURITY.md`](SECURITY.md).
 
 ## Acknowledgments
 
