@@ -24,9 +24,13 @@ vela add step AccountRouterPlugin --entity Account --message Update --filtering-
 vela add --interactive
 ```
 
-- `--entity <ModelType>` is the early-bound class name (e.g. `Account`); it sets the `EntityPluginBase<T>`
-  type and the `<Table>/` folder. Required for a plugin and a step; optional for a service (without it, a service
-  shared by several tables) and a Custom API (without it, a global one).
+- `--entity <ModelType>` is the early-bound class name (e.g. `Account`) or the table logical name (e.g. `account`);
+  it sets the `EntityPluginBase<T>` type and the `<Table>/` folder. A logical name (or a wrong-case class name) is
+  resolved to the generated model's class through its `EntityLogicalNameValue`, so `--entity account` writes
+  `Account/Plugins/AccountPlugin.cs` typed on `Account`. When no generated model matches, a value with no upper-case
+  letter is refused (run [`vela models`](models.md) first, or pass the class name); a class name is used as given.
+  Required for a plugin and a step; optional for a service (without it, a service shared by several tables) and a
+  Custom API (without it, a global one).
 - **Plugin name** (`add plugin`): `<Name>` is optional and defaults to `<Entity>Plugin` (`--entity Account` writes
   `Account/Plugins/AccountPlugin.cs`). Every other kind requires its name.
 - **An existing plugin file is never edited by `add plugin`.** When `<Table>/Plugins/<Name>.cs` exists and `--force`

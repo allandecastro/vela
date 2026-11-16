@@ -171,7 +171,7 @@ internal static class CliCommands
             ["vela add (plugin|service|customapi|test|step|form-script|ribbon-script) <Name> [options]", "vela add plugin [<Name>] --entity <ModelType> [options]", "vela add --interactive"],
             [
                 ("Options", [
-                    new("--entity", CliOptionKind.Value, "Table model type (plugin/step; optional for service and customapi).", "ModelType", ["-e"]),
+                    new("--entity", CliOptionKind.Value, "Table model type: the early-bound class (Account) or the table logical name (account), resolved to its generated model (plugin/step; optional for service and customapi).", "ModelType", ["-e"]),
                     new("--message", CliOptionKind.Value, "SDK message (plugin/step/test).", "Message"),
                     new("--stage", CliOptionKind.Value, "PreValidation | PreOperation | PostOperation.", "stage"),
                     new("--mode", CliOptionKind.Value, "Sync | Async.", "mode"),

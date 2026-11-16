@@ -1125,8 +1125,9 @@ public class ProjectScaffolderTests
                 ["plugin", "AccountUnlinked", "--entity", "Account", "--message", "Disassociate"],
                 ["plugin", "AccountRead", "--entity", "Account", "--message", "Retrieve"],
                 ["plugin", "AccountSearch", "--entity", "Account", "--message", "RetrieveMultiple"],
-                // A column logical name resolves to its early-bound property through the model.
-                ["plugin", "AccountImported", "--entity", "Account", "--message", "CreateMultiple", "--filtering-attributes", "name"],
+                // A table logical name resolves to its early-bound class, and a column logical name to its property,
+                // through the model.
+                ["plugin", "AccountImported", "--entity", "account", "--message", "CreateMultiple", "--filtering-attributes", "name"],
                 ["plugin", "AccountState", "--entity", "Account", "--message", "SetState"],
                 ["service", "AccountScoring", "--entity", "Account"],
                 ["customapi", "Recalculate", "--global", "--prefix", "zava"],

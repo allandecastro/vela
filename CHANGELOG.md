@@ -29,6 +29,19 @@ All notable changes to Vela are documented here. The format is based on
   the connection points at a test or production environment. A solution that does not exist fails at the same point
   ("Solution not found"), instead of mid-apply. `vela inspect` is unchanged.
 
+### Fixed (CLI)
+
+- `vela add plugin`, `add step`, `add test`, `add service` and `add customapi` accept the table logical name in
+  `--entity` (`--entity account`), as `--filtering-attributes` accepts a column logical name: it resolves to the
+  generated model's class through its `EntityLogicalNameValue` (a wrong-case class name is corrected too), so the
+  generated code names `Account`. They emitted the value as given, e.g. `EntityPluginBase<account>`, which did not
+  compile. With no generated model to map it, an all-lower-case `--entity` is refused with the invalid-arguments exit
+  code; a class name is still used as given.
+
+### Docs
+
+- [`vela add`](docs/guides/add.md) says `--entity` takes the class name or the table logical name.
+
 ## [0.31.0] - 2026-11-15 (Vela.Cli)
 
 ### Changed
