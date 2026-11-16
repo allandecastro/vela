@@ -69,9 +69,16 @@ The `.nupkg` may be stale: an incremental build does not always re-run `Generate
 
 ## `apply` fails with `Plugin type not found in Dataverse after the plugin package publish`
 
-Dataverse did not expose the plugin type from the published package. Dataverse caches plugin assemblies by version,
-so changed code under the same assembly version can keep serving the old assembly: bump the assembly version and
-rebuild. Projects scaffolded by `vela init` use `AssemblyVersion` `1.0.*` for this reason.
+After it publishes the plugin package, `apply` waits up to 60 seconds for Dataverse to expose every plugin type the
+planned steps and Custom APIs need. When a type is still missing, it stops with this message, which names the missing
+types, before registering any step or Custom API on them.
+
+- Check that each named type is a class of the package's assembly, under that full name. A stale package can miss a
+  class you just added: rebuild cleanly (`dotnet clean`, then `dotnet build -c Release`) and run `plan` again.
+- Run `apply` again: every operation is idempotent, and a type that Dataverse exposed after the wait is then found.
+
+For how Dataverse imports and updates a plugin package, see
+[plugin packages on Microsoft Learn](https://learn.microsoft.com/power-platform/developer/howto/cli-create-package).
 
 ## `apply` fails partway (exit 7)
 
