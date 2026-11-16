@@ -90,7 +90,7 @@ internal static class PlanApplyCommand
                 DataverseRegistration.EnsureSolutionIsUnmanaged(service, options.SolutionUniqueName!, options.Environment);
             }
 
-            RegistrationState current = ReadCurrent(service, local, options, jsonOptions, out string[] unmanaged);
+            RegistrationState current = ReadCurrent(service, local, options, jsonOptions, out string[] unmanaged, withRetired: command != InspectMode);
             local = ResolveSecureConfigs(local, current, options, jsonOptions);
 
             return command switch
@@ -118,13 +118,17 @@ internal static class PlanApplyCommand
         }
     }
 
-    // Reads the live state of the local assemblies and scopes it to what Vela owns (OwnershipScope).
-    private static RegistrationState ReadCurrent(IOrganizationService service, RegistrationState local, SharedOptions options, JsonSerializerOptions jsonOptions, out string[] unmanaged)
+    // Reads the live state of the local assemblies and scopes it to what Vela owns (OwnershipScope). plan and apply
+    // also read the retired assemblies of the run's packages (a renamed assembly), whose steps block the package update.
+    private static RegistrationState ReadCurrent(IOrganizationService service, RegistrationState local, SharedOptions options, JsonSerializerOptions jsonOptions, out string[] unmanaged, bool withRetired)
     {
         RegistrationState current = ConsoleStatus.Run(
             "Reading current registrations…",
             report => DataverseRegistration.ReadDataverseState(service, local.SourceAssemblies, options, jsonOptions, DataverseRegistration.ExtractLocalRankSteps(local), report));
-        return OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out unmanaged);
+        RegistrationState scoped = OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out unmanaged);
+        return withRetired
+            ? DataverseRegistration.WithRetiredAssemblies(service, scoped, local, options.SolutionUniqueName, jsonOptions)
+            : scoped;
     }
 
     // Code only names a step's secure configuration; its value comes from --secure-config or VELA_SECURE_CONFIG_<NAME>.
@@ -150,7 +154,11 @@ internal static class PlanApplyCommand
     //       solution is targeted AND a Custom API is created or updated, so a step-only or delete-only run neither
     //       pays for nor can fail on the lookup;
     //     - an added or changed step whose message, or whose table's message filter, does not exist
-    //       (FindUnregistrableSteps; the message of a Custom API this run creates is exempt).
+    //       (FindUnregistrableSteps; the message of a Custom API this run creates is exempt);
+    //     - a plugin type the package update removes (its class was deleted or renamed, or its assembly was renamed)
+    //       that still has steps the run does not delete first: Dataverse refuses the update (0x80040265), so a step
+    //       Vela does not manage stops the run here (FindPluginTypeRemovalBlockers). Vela's own steps on that type are
+    //       in the delete phase, which runs before the publish.
     internal static PlanPreview BuildPreview(string mode, IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, List<string> tempDirectories, out RegistrationDiff diff)
     {
         diff = BuildDiff(local, current);
@@ -172,13 +180,15 @@ internal static class PlanApplyCommand
         }
 
         blocking.AddRange(DataverseRegistration.FindUnregistrableSteps(service, diff));
+        blocking.AddRange(DataverseRegistration.FindPluginTypeRemovalBlockers(service, local, current, diff, packageActions.Any(a => !a.IsCreate)));
         if (blocking.Count > 0)
         {
             throw new InvalidOperationException(BlockingErrorsMessage(blocking));
         }
 
         IReadOnlyList<SolutionMembershipAction> membership = OnlyUnwritten(MissingFromSolution(service, local, options, info), diff, packageActions.Count > 0);
-        return BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, current.Diagnostics, packageActions, unmanaged, [.. info], membership,
+        string[] currentDiagnostics = [.. current.Diagnostics, .. DataverseRegistration.RetiredSecureConfigWarnings(local, current)];
+        return BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, currentDiagnostics, packageActions, unmanaged, [.. info], membership,
             ReadManagedIdentityLinks(service, local, options, validate: true));
     }
 
@@ -285,10 +295,10 @@ internal static class PlanApplyCommand
         {
             foreach (string name in DataverseRegistration.FindCrossSolutionAssemblyCollisions(service, local.SourceAssemblyPayloads, options.SolutionUniqueName!))
             {
-                Console.Error.WriteLine(
+                Console.Error.WriteLine(EscapeControl(
                     $"Warning: plugin assembly '{name}' already exists in this org and is not part of solution '{options.SolutionUniqueName}'. " +
                     "Applying overwrites its content, modifying an assembly owned by another solution. " +
-                    "Set a unique <AssemblyName> in the plugins project (for example prefix it with the solution name) to avoid the collision.");
+                    "Set a unique <AssemblyName> in the plugins project (for example prefix it with the solution name) to avoid the collision."));
             }
         }
 
@@ -314,12 +324,18 @@ internal static class PlanApplyCommand
         }
 
         int addedToSolution;
+        ApplyRun run = new();
         try
         {
-            DataverseRegistration.ApplyDiff(service, diff, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize, preview.ManagedIdentity);
+            DataverseRegistration.ApplyDiff(service, diff, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize, preview.ManagedIdentity, run);
 
             // Recomputed after the writes: what apply created or updated is already in the solution, a deleted
             // component is gone, and what remains is the unchanged components to add.
+            if (!string.IsNullOrWhiteSpace(options.SolutionUniqueName))
+            {
+                run.Pending = $"add unchanged components to solution {options.SolutionUniqueName}";
+            }
+
             IReadOnlyList<SolutionMembershipAction> missing = OnlyUnwritten(MissingFromSolution(service, local, options, []), diff, packageNeedsPublish);
             if (missing.Count > 0)
             {
@@ -333,10 +349,14 @@ internal static class PlanApplyCommand
             // Dataverse has no cross-entity transaction, so a mid-run failure may leave the org partially updated.
             // ApplyDiff already wrote the resume report to stderr; add a machine-readable result and a distinct exit
             // code so a partial apply is not confused with a bad-args or connection failure.
+            // The document lists what landed (failure.completed), what failed and what was not attempted, the same lists
+            // as the resume report on stderr.
+            string error = RedactSecrets(applyEx.Message);
             PlanPreview failure = preview with
             {
                 Mode = "apply-failed",
-                Notes = [.. preview.Notes, "Apply failed mid-run; Dataverse may be left partially updated. Re-run 'apply' to reconcile.", RedactSecrets(applyEx.Message)],
+                Notes = [.. preview.Notes, "Apply failed mid-run; Dataverse may be left partially updated. Re-run 'apply' to reconcile.", error],
+                Failure = run.ToFailure(error),
             };
             if (!WantsHumanOutput(options, host) || !string.IsNullOrWhiteSpace(options.OutPath))
             {
@@ -346,7 +366,7 @@ internal static class PlanApplyCommand
             return Fail($"Apply failed mid-run; Dataverse may be partially updated: {applyEx.Message}", ExitPartialApply, includeUsage: false);
         }
 
-        RegistrationState after = ReadCurrent(service, local, options, jsonOptions, out _);
+        RegistrationState after = ReadCurrent(service, local, options, jsonOptions, out _, withRetired: true);
         RegistrationDiff afterDiff = BuildDiff(local, after);
         // Every write succeeded, yet the environment can still differ (the platform silently ignored or normalized a
         // value). That is not a success: the next apply would plan the same change again.

@@ -251,6 +251,33 @@ All notable changes to Vela are documented here. The format is based on
   takes the newest listed stable `Vela.Plugins` with the same minor as its built-in framework version (the same major
   from 1.0), and uses that built-in version when nuget.org is unreachable or lists none. `--core-version` still pins
   any version.
+- `vela plan` and `vela apply` stop with exit `4`, before any write, when the plugin package update would remove a
+  plugin type (its class was deleted or renamed, or its assembly was renamed) that still has steps Vela does not
+  delete in the same run. Dataverse refuses that update, even for a disabled step (`0x80040265` "Unable to delete
+  '<type>' plugintype due to N step(s)", verified live), so `apply` used to fail with exit `7` after its deletes. The
+  message names each plugin type and its steps. Vela's own steps on such a type are deleted before the package update,
+  as before.
+- `vela apply` handles a renamed plugin assembly (the project's `<AssemblyName>` changed, the package id did not). It
+  read only the assemblies the local package builds, so it did not see the steps of the old assembly: the package
+  update failed on them (exit `7`), or would have left them running the old code. `plan` and `apply` now read the old
+  assembly through its plugin package: its Vela steps are deleted before the package update and created again on the
+  new assembly's plugin types, and its Custom APIs are moved to the new plugin types. A moved step loses its secure
+  configuration unless the run supplies the value, which `plan` reports as a warning. Whether Dataverse deletes the
+  old assembly with the package update is not verified live.
+- `vela apply` deletes a removed step by the id read from the environment. It looked the step up again by step key,
+  trigger or name, and took the first match, which could be another step sharing that trigger or name.
+- When `vela apply` fails partway (exit `7`), the `apply-failed` JSON document carries a `failure` object: the
+  `error`, and every planned operation under `completed`, `failed` or `notApplied`, as in the resume report on stderr.
+  It held only the plan and a note before, so a script could not tell what had been written.
+- The package scan extracts packages into a new private temp directory per run (`vela-pkg-*` and `vela-scan-*`,
+  readable only by the current user on Linux and macOS) instead of a shared, predictable `<temp>/vela-tools` folder,
+  where another local user could plant or swap the assemblies the scan loads and runs.
+- `vela plan`, `vela apply` and `vela logs` escape control characters (ANSI escape sequences, carriage returns and
+  other control codes) in the values they print from the environment: step and plugin type names, Dataverse error
+  messages, plug-in trace text. A value could recolor the terminal, rewrite earlier lines or set the window title.
+  The JSON output was already escaped.
+- The CLI's parsed options no longer print the connection string or inline `--secure-config` values when formatted as
+  text (record `ToString`); no current output did, but any log of the options would have leaked them.
 
 ### Docs
 

@@ -277,7 +277,7 @@ internal static class LogsCommand
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
-    private static void PrintHuman(List<Entity> rows, bool jobs, bool full)
+    internal static void PrintHuman(List<Entity> rows, bool jobs, bool full)
     {
         if (rows.Count == 0)
         {
@@ -292,7 +292,7 @@ internal static class LogsCommand
             if (jobs)
             {
                 string? error = NullIfEmpty(row.GetAttributeValue<string>("friendlymessage")) ?? NullIfEmpty(row.GetAttributeValue<string>("message"));
-                Console.WriteLine($"{Stamp(row)}  {row.GetAttributeValue<string>("name")}  {row.GetAttributeValue<string>("messagename")}");
+                Console.WriteLine(OutputWriter.EscapeControl($"{Stamp(row)}  {row.GetAttributeValue<string>("name")}  {row.GetAttributeValue<string>("messagename")}"));
                 if (error != null)
                 {
                     Console.WriteLine($"  ERROR  {Trim(error, full)}");
@@ -301,7 +301,7 @@ internal static class LogsCommand
             else
             {
                 int? ms = row.GetAttributeValue<int?>("performanceexecutionduration");
-                Console.WriteLine($"{Stamp(row)}  {row.GetAttributeValue<string>("typename")}  {row.GetAttributeValue<string>("messagename")} {row.GetAttributeValue<string>("primaryentity")}  (depth {row.GetAttributeValue<int?>("depth")}, {ms}ms)");
+                Console.WriteLine(OutputWriter.EscapeControl($"{Stamp(row)}  {row.GetAttributeValue<string>("typename")}  {row.GetAttributeValue<string>("messagename")} {row.GetAttributeValue<string>("primaryentity")}  (depth {row.GetAttributeValue<int?>("depth")}, {ms}ms)"));
                 string? exception = NullIfEmpty(row.GetAttributeValue<string>("exceptiondetails"));
                 if (exception != null)
                 {
@@ -322,7 +322,8 @@ internal static class LogsCommand
 
     private static string Trim(string value, bool full)
     {
-        value = value.Replace("\r\n", " ").Replace('\n', ' ').Trim();
+        // Trace text is written by plugin code: escape its control characters so it cannot drive the terminal.
+        value = OutputWriter.EscapeControl(value.Replace("\r\n", " ").Replace('\n', ' ').Trim());
         return full || value.Length <= 300 ? value : value[..300] + "… (--full for the rest)";
     }
 

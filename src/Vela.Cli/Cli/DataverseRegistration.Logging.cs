@@ -30,7 +30,7 @@ internal static partial class DataverseRegistration
 
         string prefix = indent ? "  " : string.Empty;
         string suffix = string.IsNullOrEmpty(details) ? string.Empty : $" {details}";
-        string line = $"{prefix}[{tag}] {action} {name}{suffix}";
+        string line = OutputWriter.EscapeControl($"{prefix}[{tag}] {action} {name}{suffix}");
         if (LogSink != null)
         {
             LogSink(line);

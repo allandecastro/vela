@@ -44,7 +44,7 @@ internal static class OutputWriter
     /// </summary>
     public static void WritePlanSummary(PlanPreview preview, TextWriter writer, bool color)
     {
-        writer.WriteLine(ConsoleTheme.Heading($"{preview.Mode} {preview.Environment}", color));
+        writer.WriteLine(ConsoleTheme.Heading($"{preview.Mode} {EscapeControl(preview.Environment)}", color));
         string added = ConsoleTheme.Added($"+{preview.Summary.Added}", color);
         string removed = ConsoleTheme.Removed($"-{preview.Summary.Removed}", color);
         string changed = ConsoleTheme.Changed($"~{preview.Summary.Changed}", color);
@@ -58,7 +58,7 @@ internal static class OutputWriter
             writer.WriteLine(ConsoleTheme.Muted("operations:", color));
             foreach (ApplyOperation operation in preview.Operations)
             {
-                writer.WriteLine($"  - {ColorAction(operation.Action, color)} {operation.Kind}: {operation.Type}");
+                writer.WriteLine($"  - {ColorAction(operation.Action, color)} {operation.Kind}: {EscapeControl(operation.Type)}");
             }
         }
 
@@ -67,7 +67,7 @@ internal static class OutputWriter
             writer.WriteLine(ConsoleTheme.Added("added:", color));
             foreach (RegistrationItem item in preview.Diff.Added)
             {
-                writer.WriteLine(ConsoleTheme.Added($"  + {item.Kind}: {DescribeItem(item)}", color));
+                writer.WriteLine(ConsoleTheme.Added($"  + {item.Kind}: {EscapeControl(DescribeItem(item))}", color));
             }
         }
 
@@ -76,7 +76,7 @@ internal static class OutputWriter
             writer.WriteLine(ConsoleTheme.Removed("removed:", color));
             foreach (RegistrationItem item in preview.Diff.Removed)
             {
-                writer.WriteLine(ConsoleTheme.Removed($"  - {item.Kind}: {DescribeItem(item)}", color));
+                writer.WriteLine(ConsoleTheme.Removed($"  - {item.Kind}: {EscapeControl(DescribeItem(item))}", color));
             }
         }
 
@@ -85,7 +85,7 @@ internal static class OutputWriter
             writer.WriteLine(ConsoleTheme.Changed("changes:", color));
             foreach (RegistrationChange change in preview.Diff.Changed)
             {
-                writer.WriteLine(ConsoleTheme.Changed($"  ~ {change.Kind}: {change.Type}", color));
+                writer.WriteLine(ConsoleTheme.Changed($"  ~ {change.Kind}: {EscapeControl(change.Type)}", color));
 
                 // For a Custom API, show which request/response parameters were added, removed, or retyped rather
                 // than dumping the whole before/after object - the parameter list is where changes almost always
@@ -98,14 +98,14 @@ internal static class OutputWriter
                 {
                     foreach (string line in paramChanges)
                     {
-                        writer.WriteLine(ColorParamChange(line, color));
+                        writer.WriteLine(ColorParamChange(EscapeControl(line), color));
                     }
 
                     continue;
                 }
 
-                string before = DescribeDefinition(change.Before);
-                string after = DescribeDefinition(change.After);
+                string before = EscapeControl(DescribeDefinition(change.Before));
+                string after = EscapeControl(DescribeDefinition(change.After));
                 writer.WriteLine($"    before: {ConsoleTheme.Removed(before, color)}");
                 writer.WriteLine($"    after : {ConsoleTheme.Added(after, color)}");
             }
@@ -133,9 +133,9 @@ internal static class OutputWriter
         {
             writer.WriteLine(link.Status switch
             {
-                ManagedIdentityPackageLink.Linked => ConsoleTheme.Muted($"  = package: {link.Package} (already linked)", color),
-                ManagedIdentityPackageLink.Change => ConsoleTheme.Changed($"  ~ package: {link.Package} (will change from {link.CurrentManagedIdentityId})", color),
-                _ => ConsoleTheme.Added($"  + package: {link.Package} (will link)", color),
+                ManagedIdentityPackageLink.Linked => ConsoleTheme.Muted($"  = package: {EscapeControl(link.Package)} (already linked)", color),
+                ManagedIdentityPackageLink.Change => ConsoleTheme.Changed($"  ~ package: {EscapeControl(link.Package)} (will change from {link.CurrentManagedIdentityId})", color),
+                _ => ConsoleTheme.Added($"  + package: {EscapeControl(link.Package)} (will link)", color),
             });
         }
     }
@@ -155,7 +155,7 @@ internal static class OutputWriter
         writer.WriteLine(ConsoleTheme.Changed($"warnings ({diagnostics.Count}):", color));
         foreach (string diagnostic in diagnostics)
         {
-            writer.WriteLine(ConsoleTheme.Changed($"  {ConsoleTheme.Bullet} {diagnostic}", color));
+            writer.WriteLine(ConsoleTheme.Changed($"  {ConsoleTheme.Bullet} {EscapeControl(diagnostic)}", color));
         }
     }
 
@@ -287,7 +287,7 @@ internal static class OutputWriter
         writer.WriteLine(ConsoleTheme.Muted("unmanaged (left untouched):", color));
         foreach (string line in unmanaged)
         {
-            writer.WriteLine(ConsoleTheme.Muted($"  {ConsoleTheme.Bullet} {line}", color));
+            writer.WriteLine(ConsoleTheme.Muted($"  {ConsoleTheme.Bullet} {EscapeControl(line)}", color));
         }
     }
 
@@ -303,13 +303,13 @@ internal static class OutputWriter
         writer.WriteLine(ConsoleTheme.Muted("info:", color));
         foreach (string line in info)
         {
-            writer.WriteLine(ConsoleTheme.Muted($"  {ConsoleTheme.Bullet} {line}", color));
+            writer.WriteLine(ConsoleTheme.Muted($"  {ConsoleTheme.Bullet} {EscapeControl(line)}", color));
         }
     }
 
     public static void WriteStateSummary(string label, RegistrationState state, TextWriter writer, bool color)
     {
-        writer.WriteLine($"{ConsoleTheme.Accent(label, color)} assemblies: {string.Join(", ", state.SourceAssemblies)}");
+        writer.WriteLine($"{ConsoleTheme.Accent(label, color)} assemblies: {EscapeControl(string.Join(", ", state.SourceAssemblies))}");
 
         RegistrationItem[] steps = state.Items.Where(IsStep).OrderBy(x => x.Type, StringComparer.Ordinal).ToArray();
         RegistrationItem[] customApis = state.Items.Where(x => !IsStep(x)).OrderBy(x => x.Type, StringComparer.Ordinal).ToArray();
@@ -317,13 +317,13 @@ internal static class OutputWriter
         writer.WriteLine($"{ConsoleTheme.Accent(label, color)} steps: {ConsoleTheme.Bold(steps.Length.ToString(), color)}");
         foreach (RegistrationItem item in steps)
         {
-            writer.WriteLine($"  {ConsoleTheme.Muted("-", color)} {DescribeItem(item)}");
+            writer.WriteLine($"  {ConsoleTheme.Muted("-", color)} {EscapeControl(DescribeItem(item))}");
         }
 
         writer.WriteLine($"{ConsoleTheme.Accent(label, color)} custom-apis: {ConsoleTheme.Bold(customApis.Length.ToString(), color)}");
         foreach (RegistrationItem item in customApis)
         {
-            writer.WriteLine($"  {ConsoleTheme.Muted("-", color)} {DescribeItem(item)}");
+            writer.WriteLine($"  {ConsoleTheme.Muted("-", color)} {EscapeControl(DescribeItem(item))}");
         }
     }
 
@@ -451,9 +451,43 @@ internal static class OutputWriter
     internal static string RedactSecrets(string? text) =>
         string.IsNullOrEmpty(text) ? (text ?? string.Empty) : SecretPattern.Replace(text, "$1=***");
 
+    /// <summary>
+    /// Makes text read from the environment (names, descriptions, Dataverse error messages, trace logs) safe to print on
+    /// a terminal: every control character, including ESC (the start of an ANSI escape sequence), a carriage return and
+    /// the C1 controls, is written as a visible <c>\uXXXX</c> escape, so a value cannot recolor, move the cursor, rewrite
+    /// earlier lines or set the window title. With <paramref name="keepNewlines"/>, line breaks (<c>\n</c>, and
+    /// <c>\r\n</c>) are kept for multi-line messages. Tabs are kept. The JSON output needs none of this: the serializer
+    /// escapes control characters itself.
+    /// </summary>
+    internal static string EscapeControl(string? text, bool keepNewlines = false)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text ?? string.Empty;
+        }
+
+        System.Text.StringBuilder? builder = null;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            bool keep = !char.IsControl(c) || c == '\t'
+                || (keepNewlines && (c == '\n' || (c == '\r' && i + 1 < text.Length && text[i + 1] == '\n')));
+            if (keep)
+            {
+                builder?.Append(c);
+                continue;
+            }
+
+            builder ??= new System.Text.StringBuilder(text, 0, i, text.Length + 16);
+            builder.Append("\\u").Append(((int)c).ToString("x4", System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        return builder?.ToString() ?? text;
+    }
+
     public static int Fail(string message, int exitCode, bool includeUsage = true)
     {
-        message = RedactSecrets(message);
+        message = EscapeControl(RedactSecrets(message), keepNewlines: true);
 
         // On a real terminal, prefix failures with a red "Error:" so they stand out; when stderr is
         // redirected (pipes, CI, tests) keep the bare message so scripted/asserted output is unchanged.
