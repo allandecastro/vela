@@ -136,9 +136,10 @@ internal static partial class DataverseRegistration
         // Shared across every step in this run so message/filter ids are queried once, not per step.
         StepMetadataCache metadataCache = new StepMetadataCache();
 
-        // Custom APIs and steps are written via chunked ExecuteMultiple, dependency-tiered so a child never precedes
-        // its just-created parent: tier 1 upserts the step/custom-API rows (and disables a just-created step, see
-        // ApplyUpsertsBatched), tier 2 writes their images, parameters, response properties and secure config.
+        // Custom APIs and steps are written via chunked ExecuteMultiple: first the Custom APIs, then the steps (a step
+        // can register on the message of a Custom API this run creates). Each is dependency-tiered so a child never
+        // precedes its just-created parent: tier 1 upserts the step/custom-API rows (and disables a just-created step,
+        // see ApplyUpsertsBatched), tier 2 writes their images, parameters, response properties and secure config.
         ApplyUpsertsBatched(service, solutionUniqueName, pluginTypeIds, addedApis, changedApis, addedSteps, changedSteps,
             customApiSolutionPrefix, secureConfigByStepKey, metadataCache, verbose, batchChunkSize, progress);
 

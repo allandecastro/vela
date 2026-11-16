@@ -22,9 +22,9 @@ public sealed class DataverseRegistrationCustomApiTests
     private const string Plugin = "Zava.Plugins.MyApi";
 
     [Fact]
-    public void ComputeCustomApiPrefixDiagnostics_warns_for_each_unprefixed_unique_name()
+    public void FindCustomApiPrefixViolations_reports_each_unprefixed_unique_name()
     {
-        IReadOnlyList<string> diagnostics = DataverseRegistration.ComputeCustomApiPrefixDiagnostics(
+        IReadOnlyList<string> diagnostics = DataverseRegistration.FindCustomApiPrefixViolations(
             "acme",
             new[] { "acme_DoThing", "DoOtherThing", "wrong_Api" });
 
@@ -34,15 +34,15 @@ public sealed class DataverseRegistrationCustomApiTests
     }
 
     [Fact]
-    public void ComputeCustomApiPrefixDiagnostics_matches_the_prefix_case_insensitively()
+    public void FindCustomApiPrefixViolations_matches_the_prefix_case_insensitively()
     {
-        Assert.Empty(DataverseRegistration.ComputeCustomApiPrefixDiagnostics("acme", new[] { "ACME_DoThing" }));
+        Assert.Empty(DataverseRegistration.FindCustomApiPrefixViolations("acme", new[] { "ACME_DoThing" }));
     }
 
     [Fact]
-    public void ComputeCustomApiPrefixDiagnostics_is_empty_when_all_names_carry_the_prefix()
+    public void FindCustomApiPrefixViolations_is_empty_when_all_names_carry_the_prefix()
     {
-        Assert.Empty(DataverseRegistration.ComputeCustomApiPrefixDiagnostics("acme", new[] { "acme_One", "acme_Two" }));
+        Assert.Empty(DataverseRegistration.FindCustomApiPrefixViolations("acme", new[] { "acme_One", "acme_Two" }));
     }
 
     private static (TestSupport.FakeOrgService svc, Dictionary<string, Guid> types) NewService(Entity? existingApi = null)

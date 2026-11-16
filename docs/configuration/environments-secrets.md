@@ -45,9 +45,11 @@ and writes nothing.
 
 ## Fail the build on warnings (`--strict`)
 
-Add `--strict` to make `plan` or `apply` exit `4` when `diagnostics` holds any warning: rank collisions, a declared
-secure configuration without a value, or a Custom API name without the publisher prefix. Information, such as an
-assembly that is not in Dataverse yet on a first deployment, goes to `info` and never fails `--strict`.
+Add `--strict` to make `plan` or `apply` exit `4` when `diagnostics` holds any warning: rank collisions, or a declared
+secure configuration without a value. Information, such as an assembly that is not in Dataverse yet on a first
+deployment, goes to `info` and never fails `--strict`. Errors that would make `apply` fail, such as a Custom API name
+without the publisher prefix, stop `plan` and `apply` with exit `4` with or without `--strict` (see
+[Plan and apply](../guides/plan-apply.md#errors-that-stop-the-preview)).
 
 Add `--detailed-exitcode` to `plan` to get exit `8` when there are changes to apply, and `0` when there is nothing to
 do:

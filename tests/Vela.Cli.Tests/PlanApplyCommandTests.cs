@@ -67,7 +67,7 @@ public sealed class PlanApplyCommandTests : IDisposable
 
     // An org where the assembly and plugin type exist (assemblyExists) with no steps, messages resolvable. The steps
     // apply creates read back (keepsWrites), so an apply converges; without it, every write is silently dropped.
-    private static FakeOrgService Org(bool assemblyExists = true, bool messageResolves = true, bool keepsWrites = true)
+    private static FakeOrgService Org(bool assemblyExists = true, bool keepsWrites = true)
     {
         Guid assemblyId = Guid.NewGuid();
         Guid pluginTypeId = Guid.NewGuid();
@@ -78,9 +78,7 @@ public sealed class PlanApplyCommandTests : IDisposable
             "pluginassembly" => assemblyExists ? FakeOrgService.Collection(new Entity("pluginassembly", assemblyId) { ["name"] = "Zava.Plugins" }) : new EntityCollection(),
             "plugintype" => FakeOrgService.Collection(new Entity("plugintype", pluginTypeId) { ["typename"] = Plugin }),
             "solution" => FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["ismanaged"] = false }),
-            "sdkmessage" => messageResolves
-                ? FakeOrgService.Collection(new Entity("sdkmessage", MessageId((string)q.Criteria.Conditions[0].Values[0])))
-                : throw new InvalidOperationException("message lookup failed"),
+            "sdkmessage" => FakeOrgService.Collection(new Entity("sdkmessage", MessageId((string)q.Criteria.Conditions[0].Values[0]))),
             "sdkmessageprocessingstep" when keepsWrites => FakeOrgService.Collection(org.Created
                 .Where(e => e.LogicalName == "sdkmessageprocessingstep")
                 .Select(ReadBack)
@@ -518,8 +516,15 @@ public sealed class PlanApplyCommandTests : IDisposable
     [Fact]
     public void A_mid_run_failure_exits_7_with_an_apply_failed_document()
     {
-        // The step's message cannot be resolved while the write is captured: the run fails after the publish phase.
-        int exit = Run("apply", Options(autoApprove: true), Host(Org(messageResolves: false), Local([LocalStep()])));
+        // The preview resolves the step's message, then the lookup fails while the write is captured: the run fails
+        // after the publish phase.
+        FakeOrgService org = Org();
+        Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
+        int messageLookups = 0;
+        org.OnRetrieveMultiple = q => q.EntityName == "sdkmessage" && ++messageLookups > 1
+            ? throw new InvalidOperationException("message lookup failed")
+            : inner(q);
+        int exit = Run("apply", Options(autoApprove: true), Host(org, Local([LocalStep()])));
 
         Assert.Equal(CliExitCodes.ExitPartialApply, exit);
         JsonElement json = StdoutJson();

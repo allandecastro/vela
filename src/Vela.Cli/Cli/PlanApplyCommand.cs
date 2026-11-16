@@ -47,7 +47,7 @@ internal sealed class PlanApplyHost
 /// <summary>
 /// The one orchestration path behind <c>plan</c>, <c>apply</c> and <c>inspect</c>: scan the local packages, open one
 /// connection, read and scope the live state, resolve secure configs, diff, run the live checks the diff cannot express
-/// (package publish, Custom API publisher prefix), gate on <c>--strict</c>, then emit (plan / inspect) or confirm,
+/// (package publish, Custom API publisher prefix, step message and filter), gate on <c>--strict</c>, then emit (plan / inspect) or confirm,
 /// apply and re-read (apply). Exit codes are part of the contract (see <see cref="CliExitCodes"/>).
 /// <para>
 /// Output contract: stdout carries only the result (JSON when piped / <c>--json</c>, or the human summary on a
@@ -138,14 +138,18 @@ internal static class PlanApplyCommand
             Environment.GetEnvironmentVariable,
             jsonOptions);
 
-    // The preview shared by plan and apply: the registration diff plus the two live checks it cannot express.
+    // The preview shared by plan and apply: the registration diff plus the live checks it cannot express.
     //  1. Package publish: a code-only rebuild (unchanged steps/custom APIs, rebuilt assembly) produces no diff item,
     //     yet apply republishes the package - listed as a "package" operation so neither plan nor apply reports "no
     //     changes". The importable-prefix guard runs first, so an unprefixed package without --solution fails before
     //     anything is written rather than mid-apply.
-    //  2. Custom API publisher prefix: applying into a solution rejects a Custom API unique name without the prefix -
-    //     a warning (and a --strict failure). Resolved only when a solution is targeted AND a Custom API is created or
-    //     updated, so a step-only or delete-only run neither pays for nor can fail on the lookup.
+    //  2. Blocking errors: apply would fail on them after its deletes and the package publish, so the preview refuses
+    //     the run (exit 4) before the confirmation prompt and before any write, listing every one of them:
+    //     - a Custom API unique name without the solution publisher prefix (Dataverse rejects it). Resolved only when a
+    //       solution is targeted AND a Custom API is created or updated, so a step-only or delete-only run neither
+    //       pays for nor can fail on the lookup;
+    //     - an added or changed step whose message, or whose table's message filter, does not exist
+    //       (FindUnregistrableSteps; the message of a Custom API this run creates is exempt).
     internal static PlanPreview BuildPreview(string mode, IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, List<string> tempDirectories, out RegistrationDiff diff)
     {
         diff = BuildDiff(local, current);
@@ -158,16 +162,22 @@ internal static class PlanApplyCommand
             packageActions = DataverseRegistration.ComputePackagePublishActions(service, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, info);
         }
 
-        string[] diagnostics = local.Diagnostics;
+        List<string> blocking = [];
         string[] customApiNames = string.IsNullOrWhiteSpace(options.SolutionUniqueName) ? [] : ExtractCustomApiUniqueNames(diff).ToArray();
         if (customApiNames.Length > 0)
         {
             string solutionPrefix = DataverseRegistration.ResolveSolutionCustomizationPrefix(service, options.SolutionUniqueName!);
-            diagnostics = [.. diagnostics, .. DataverseRegistration.ComputeCustomApiPrefixDiagnostics(solutionPrefix, customApiNames)];
+            blocking.AddRange(DataverseRegistration.FindCustomApiPrefixViolations(solutionPrefix, customApiNames));
+        }
+
+        blocking.AddRange(DataverseRegistration.FindUnregistrableSteps(service, diff));
+        if (blocking.Count > 0)
+        {
+            throw new InvalidOperationException(BlockingErrorsMessage(blocking));
         }
 
         IReadOnlyList<SolutionMembershipAction> membership = OnlyUnwritten(MissingFromSolution(service, local, options, info), diff, packageActions.Count > 0);
-        return BuildPlanPreview(mode, options.Environment, diff, diagnostics, current.Diagnostics, packageActions, unmanaged, [.. info], membership,
+        return BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, current.Diagnostics, packageActions, unmanaged, [.. info], membership,
             ReadManagedIdentityLinks(service, local, options, validate: true));
     }
 
@@ -477,6 +487,13 @@ internal static class PlanApplyCommand
     // nor --out. Piped/redirected runs, --json and file output all keep JSON for scripts and agents.
     internal static bool WantsHumanOutput(SharedOptions options, PlanApplyHost host) =>
         !options.Json && string.IsNullOrWhiteSpace(options.OutPath) && !host.IsOutputRedirected();
+
+    // One message for every blocking error of the preview: the first alone, or a count and one line per error.
+    internal static string BlockingErrorsMessage(IReadOnlyList<string> errors) =>
+        errors.Count == 1
+            ? $"{errors[0]} Nothing was written."
+            : $"{errors.Count} problems block this run; nothing was written:{Environment.NewLine}" +
+              string.Join(Environment.NewLine, errors.Select(e => "  - " + e));
 
     // The unique names of the Custom APIs a plan would create or update (removed ones need no prefix), read from the
     // diff's local-side definitions so the publisher-prefix check sees exactly what apply would write.

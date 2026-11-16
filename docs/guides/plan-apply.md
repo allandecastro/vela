@@ -106,17 +106,26 @@ there is nothing to do.
 
 ### Warnings and `--strict`
 
-`diagnostics` holds warnings: rank collisions, a declared secure configuration without a value, and a Custom API name
-without the solution's publisher prefix. `--strict` turns any warning into exit `4`, which makes `plan --strict` a
-useful gate in CI.
+`diagnostics` holds warnings: rank collisions and a declared secure configuration without a value. `--strict` turns
+any warning into exit `4`, which makes `plan --strict` a useful gate in CI.
 
 Information that is not a problem goes to `info` and never fails `--strict`. The most common case is a plugin
 assembly that is not in Dataverse yet, on a first deployment.
 
-**Publisher-prefix check.** Dataverse requires a Custom API unique name to carry the publisher prefix of its
-solution. `plan` resolves the prefix of the `--solution` solution and warns for every Custom API it would create or
-update without it (for example `DoThing` under prefix `acme`: rename it `acme_DoThing`). You see the problem in the
-preview instead of at `apply`.
+### Errors that stop the preview
+
+Some problems would make `apply` fail. `plan` and `apply` check for them while they build the preview, before the
+`apply` confirmation prompt and before any write, with or without `--strict`. When one is found, the command exits `4`
+with every problem on stderr, writes no JSON document, and writes nothing to Dataverse:
+
+- **Publisher prefix.** Dataverse requires a Custom API unique name to carry the publisher prefix of its solution.
+  Vela resolves the prefix of the `--solution` solution and reports every Custom API the run would create or update
+  without it (for example `DoThing` under prefix `acme`: rename it `acme_DoThing`).
+- **Step message and table.** For every step the run would create or update, Vela looks up its message, and for a
+  step on a table the message filter of that table. A message that does not exist (`Dataverse message not found`) or a
+  table the message has no filter for (`no message filter exists for entity ...`) is reported. A step on the message
+  of a Custom API that the same run creates is not checked here, since that Custom API is not in the environment yet:
+  `apply` writes the Custom APIs before the steps (see [Batched writes](#batched-writes)).
 
 ### What the plan contains
 
@@ -183,10 +192,11 @@ environment still differs, the mode is `apply-not-converged` and the exit code i
 
 ### Batched writes
 
-`apply` sends its writes in batches. It groups the operations into dependency tiers (first the step and Custom API
-rows, then their images, parameters, secure configuration and state) and sends each tier as `ExecuteMultiple`
-requests of up to 100 operations. Set the size with `--batch-size <1-1000>`. Deletes run in reverse order, children
-before parents.
+`apply` sends its writes in batches. It writes the Custom APIs first, then the steps, so a step can register on the
+message of a Custom API created by the same run. Within each, it groups the operations into dependency tiers (first
+the step or Custom API rows, then their images, parameters, secure configuration and state) and sends each tier as
+`ExecuteMultiple` requests of up to 100 operations. Set the size with `--batch-size <1-1000>`. When a Custom API
+fails, the run stops before the steps. Deletes run in reverse order, children before parents.
 
 - Results are still reported per plugin and per Custom API. The `--verbose` progress lines (`[step] create ...`) are
   printed once a batch has run, and a failed one ends with `(not applied)`.
