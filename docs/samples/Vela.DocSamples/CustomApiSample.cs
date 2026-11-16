@@ -128,4 +128,35 @@ namespace Vela.DocSamples
             return response.Score;
         }
     }
+
+    public sealed class CustomApiSampleTests
+    {
+        [Xunit.Fact]
+        public void Lightweight_lambda_handler_runs()
+        {
+            Vela.Testing.PluginPipeline pipeline = Vela.Testing.PluginPipeline.Empty().Register<CreateContactLight>();
+
+            OrganizationResponse response = pipeline.Service.Execute(new OrganizationRequest("zava_CreateContactLight")
+            {
+                ["Owner"] = new EntityReference("systemuser", Guid.NewGuid()),
+            });
+
+            Xunit.Assert.True(response.Results.ContainsKey("Created"));
+            Xunit.Assert.Null(response["Created"]);
+            Xunit.Assert.True(Xunit.Assert.Single(pipeline.ExecutionLog).HandlerInvoked);
+        }
+
+        [Xunit.Fact]
+        public void Lightweight_method_group_handler_runs()
+        {
+            Vela.Testing.PluginPipeline pipeline = Vela.Testing.PluginPipeline.Empty().Register<CalculateAccountScoreLight>();
+
+            OrganizationResponse response = pipeline.Service.Execute(new OrganizationRequest("zava_CalculateAccountScore")
+            {
+                ["AccountId"] = Guid.NewGuid(),
+            });
+
+            Xunit.Assert.Equal(42, response["Score"]);
+        }
+    }
 }

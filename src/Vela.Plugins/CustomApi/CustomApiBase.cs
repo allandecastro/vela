@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Reflection;
 using Vela.Constants;
 using Vela.Context;
@@ -98,7 +99,8 @@ namespace Vela.CustomApi
                 throw new ArgumentNullException(nameof(ctx));
             }
 
-            string methodName = GetCustomApiDefinition().HandlerMethodName;
+            CustomApiDefinition definition = GetCustomApiDefinition();
+            string methodName = definition.HandlerMethodName;
             if (string.IsNullOrWhiteSpace(methodName))
             {
                 throw new InvalidPluginExecutionException(
@@ -106,6 +108,13 @@ namespace Vela.CustomApi
             }
 
             EnterHandler(ctx, methodName);
+            Action<ILocalPluginContext>? runtimeHandler = definition.RuntimeHandler;
+            if (runtimeHandler != null)
+            {
+                runtimeHandler(ctx);
+                return;
+            }
+
             HandlerInvoker.ResolveAndInvoke(
                 this,
                 methodName,
@@ -118,8 +127,14 @@ namespace Vela.CustomApi
 
         // Vela's dispatch (ExecuteRegisteredHandler) reports the handler call itself, unless the plug-in overrides
         // ExecuteDataversePlugin, whose override is then the handler.
+        // The answer depends only on the plug-in type, so it is looked up once per type instead of on every execution.
         private protected override bool DispatchesToHandler
-            => GetType().GetMethod(nameof(ExecuteDataversePlugin), BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(ILocalPluginContext)], null)?.DeclaringType == typeof(CustomApiBase);
+            => DispatchesToHandlerByType.GetOrAdd(GetType(), ComputeDispatchesToHandler);
+
+        private static readonly ConcurrentDictionary<Type, bool> DispatchesToHandlerByType = new ConcurrentDictionary<Type, bool>();
+
+        private static bool ComputeDispatchesToHandler(Type pluginType)
+            => pluginType.GetMethod(nameof(ExecuteDataversePlugin), BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(ILocalPluginContext)], null)?.DeclaringType == typeof(CustomApiBase);
 
         /// <summary>
         /// Executes the lightweight Custom API by dispatching to the registered handler.

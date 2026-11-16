@@ -29,6 +29,10 @@ All notable changes to Vela are documented here. The format is based on
   role; the Update writes nothing. They succeeded before. Owners the security model does not declare, and the caller
   itself, are not checked. Tests that hand records to a declared user or team with no Read on the table need a role
   that grants it (User level is enough).
+- A lightweight Custom API registered with a handler delegate, `RegisterCustomApi("name", ctx => ...)`, now runs that
+  delegate. Only a lambda capturing `this` or a method of the plug-in itself worked before: a lambda capturing nothing
+  or only locals, and a method of another object, threw `InvalidPluginExecutionException: handler
+  '<RegisterCustomApi>b__...' was not found` on every call.
 
 ### Added (CLI)
 
