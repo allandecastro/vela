@@ -322,7 +322,7 @@ public class SecureConfigResolverTests
         };
         var diff = new RegistrationDiff(["Zava.Plugins"], ["Zava.Plugins"], [], [Step(PluginA)], [], [], []);
 
-        Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
+        Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false));
 
         Assert.DoesNotContain(svc.Deleted, d => d.Entity == "sdkmessageprocessingstepsecureconfig");
     }

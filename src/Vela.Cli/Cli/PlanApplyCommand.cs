@@ -102,8 +102,8 @@ internal static class PlanApplyCommand
             return command switch
             {
                 InspectMode => EmitInspect(local, current, unmanaged, options, jsonOptions, host),
-                PlanMode => RunPlan(service, local, current, unmanaged, options, jsonOptions, host, tempDirectories),
-                _ => RunApply(service, connection.Url, local, current, unmanaged, options, jsonOptions, host, tempDirectories),
+                PlanMode => RunPlan(service, local, current, unmanaged, options, jsonOptions, host),
+                _ => RunApply(service, connection.Url, local, current, unmanaged, options, jsonOptions, host),
             };
         }
         catch (Exception ex) when (DataverseConnectionException.IsConnectionFailure(ex))
@@ -165,7 +165,7 @@ internal static class PlanApplyCommand
     //       that still has steps the run does not delete first: Dataverse refuses the update (0x80040265), so a step
     //       Vela does not manage stops the run here (FindPluginTypeRemovalBlockers). Vela's own steps on that type are
     //       in the delete phase, which runs before the publish.
-    internal static PlanPreview BuildPreview(string mode, IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, List<string> tempDirectories, out RegistrationDiff diff)
+    internal static PlanPreview BuildPreview(string mode, IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, out RegistrationDiff diff)
     {
         diff = BuildDiff(local, current);
 
@@ -174,7 +174,7 @@ internal static class PlanApplyCommand
         if (local.PackagePayloads.Length > 0)
         {
             DataverseRegistration.EnsurePluginPackagesImportable(local.PackagePayloads, options.SolutionUniqueName);
-            packageActions = DataverseRegistration.ComputePackagePublishActions(service, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, info);
+            packageActions = DataverseRegistration.ComputePackagePublishActions(service, local.PackagePayloads, options.SolutionUniqueName, info);
         }
 
         List<string> blocking = [];
@@ -257,9 +257,9 @@ internal static class PlanApplyCommand
         }).ToArray();
     }
 
-    private static int RunPlan(IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host, List<string> tempDirectories)
+    private static int RunPlan(IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host)
     {
-        PlanPreview plan = BuildPreview("plan", service, local, current, unmanaged, options, tempDirectories, out _);
+        PlanPreview plan = BuildPreview("plan", service, local, current, unmanaged, options, out _);
         if (FailsStrict(options, plan.Diagnostics, afterApply: false, out int strictExit))
         {
             return strictExit;
@@ -269,9 +269,9 @@ internal static class PlanApplyCommand
         return options.DetailedExitCode && plan.HasChanges ? ExitChangesPending : ExitSuccess;
     }
 
-    private static int RunApply(IOrganizationService service, string? orgUrl, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host, List<string> tempDirectories)
+    private static int RunApply(IOrganizationService service, string? orgUrl, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host)
     {
-        PlanPreview preview = BuildPreview("apply", service, local, current, unmanaged, options, tempDirectories, out RegistrationDiff diff);
+        PlanPreview preview = BuildPreview("apply", service, local, current, unmanaged, options, out RegistrationDiff diff);
         if (FailsStrict(options, preview.Diagnostics, afterApply: false, out int strictExit))
         {
             return strictExit;
@@ -336,7 +336,7 @@ internal static class PlanApplyCommand
         ApplyRun run = new();
         try
         {
-            DataverseRegistration.ApplyDiff(service, diff, local.PackagePayloads, options.SolutionUniqueName, tempDirectories, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize, preview.ManagedIdentity, run);
+            DataverseRegistration.ApplyDiff(service, diff, local.PackagePayloads, options.SolutionUniqueName, options.Verbose, local.SecureConfigByStepKey, options.BatchChunkSize ?? DataverseRegistration.DefaultBatchChunkSize, preview.ManagedIdentity, run);
 
             // Recomputed after the writes: what apply created or updated is already in the solution, a deleted
             // component is gone, and what remains is the unchanged components to add.

@@ -16,7 +16,7 @@ namespace Vela.Cli;
 /// <summary> The plugin package publish: the create/update/skip decision shared by plan and apply, the prefix repack and the stored-file compare. </summary>
 internal static partial class DataverseRegistration
 {
-    internal static void EnsurePluginPackages(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose)
+    internal static void EnsurePluginPackages(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, bool verbose)
 {
     // Nothing to publish (a web-resource-only run, or a run that only fixes solution membership): no prefix lookup.
     if (packagePayloads.Length == 0)
@@ -34,62 +34,77 @@ internal static partial class DataverseRegistration
     // parameter); the prefix only shapes the package name.
     foreach (PluginPackagePayload package in packagePayloads)
     {
-        UpsertPluginPackage(service, package, solutionPrefix, tempDirectories, verbose);
+        UpsertPluginPackage(service, package, solutionPrefix, verbose);
     }
 }
 
-    internal static Guid UpsertPluginPackage(IOrganizationService service, PluginPackagePayload package, string? solutionPrefix, List<string> tempDirectories, bool verbose)
-{
-    if (!File.Exists(package.PackagePath))
+    // What publishing one package means against the environment: skip it (absent and nothing to register), create it,
+    // update it (the stored file differs) or leave it (the stored file is already these bytes).
+    private enum PackagePublishDecision { Skip, Create, Update, Unchanged }
+
+    private readonly record struct PackagePublishPlan(string Name, byte[] Bytes, Entity? Existing, PackagePublishDecision Decision);
+
+    // The one create/update/skip decision behind both plan (ComputePackagePublishActions) and apply
+    // (UpsertPluginPackage), so they never disagree: same prefixed name, same import bytes, same stored-file compare, and
+    // the same FileNotFoundException for a missing package file (plan fails with apply's message instead of advertising
+    // an operation apply cannot perform).
+    private static PackagePublishPlan DecidePackagePublish(IOrganizationService service, PluginPackagePayload package, string? solutionPrefix)
     {
-        throw new FileNotFoundException($"Plugin package file not found: {package.PackagePath}", package.PackagePath);
+        if (!File.Exists(package.PackagePath))
+        {
+            throw new FileNotFoundException($"Plugin package file not found: {package.PackagePath}", package.PackagePath);
+        }
+
+        string name = NormalizePackageNameWithPrefix(package.PackageName, solutionPrefix);
+        byte[] bytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, name);
+        Entity? existing = GetPluginPackage(service, name);
+        PackagePublishDecision decision = existing == null
+            // Nothing to register yet (an empty scaffolded project): creating the package would only add an empty
+            // component to Dataverse.
+            ? package.HasRegistrations ? PackagePublishDecision.Create : PackagePublishDecision.Skip
+            // Skip a no-op Update: if the stored package is already this one, updating would only bump modifiedon (Last
+            // Modified) and re-import the package on every apply, making it look churned when nothing changed.
+            : PluginPackageMatches(service, existing, bytes) ? PackagePublishDecision.Unchanged : PackagePublishDecision.Update;
+        return new PackagePublishPlan(name, bytes, existing, decision);
     }
 
-    string desiredPackageName = NormalizePackageNameWithPrefix(package.PackageName, solutionPrefix);
-    byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName);
-    string packageContent = Convert.ToBase64String(packageBytes);
-    Entity? existing = GetPluginPackage(service, desiredPackageName);
-    if (existing == null && !package.HasRegistrations)
+    internal static Guid UpsertPluginPackage(IOrganizationService service, PluginPackagePayload package, string? solutionPrefix, bool verbose)
     {
-        // Nothing to register yet (an empty scaffolded project): creating the package would only add an empty
-        // component to Dataverse. Same decision as ComputePackagePublishActions; Guid.Empty means "not written".
-        LogOperation("package", "skip", desiredPackageName, "no plugin or Custom API", verbose);
-        return Guid.Empty;
-    }
+        PackagePublishPlan plan = DecidePackagePublish(service, package, solutionPrefix);
+        switch (plan.Decision)
+        {
+            case PackagePublishDecision.Skip:
+                // Guid.Empty means "not written".
+                LogOperation("package", "skip", plan.Name, "no plugin or Custom API", verbose);
+                return Guid.Empty;
+            case PackagePublishDecision.Unchanged:
+                LogOperation("package", "unchanged", plan.Name, $"v{package.Version}", verbose);
+                return plan.Existing!.Id;
+            case PackagePublishDecision.Create:
+                LogOperation("package", "create", plan.Name, $"v{package.Version}", verbose);
+                Entity create = new Entity("pluginpackage");
+                create["name"] = plan.Name;
+                create["version"] = package.Version;
+                create["content"] = Convert.ToBase64String(plan.Bytes);
+                return WithPackageFrameworkHint(package, plan.Name, () => service.Create(create));
+        }
 
-    if (existing == null)
-    {
-        LogOperation("package", "create", desiredPackageName, $"v{package.Version}", verbose);
-        Entity create = new Entity("pluginpackage");
-        create["name"] = desiredPackageName;
-        create["version"] = package.Version;
-        create["content"] = packageContent;
-        return WithPackageFrameworkHint(package, desiredPackageName, () => service.Create(create));
+        LogOperation("package", "update", plan.Name, $"v{package.Version}", verbose);
+        Guid existingId = plan.Existing!.Id;
+        Entity update = new Entity("pluginpackage")
+        {
+            Id = existingId
+        };
+        // Only write content: an Update that sets content and a version other than the stored one fails with
+        // "PluginPackage version cannot be updated" (verified live), which used to fail apply mid-run whenever the
+        // package version was bumped. The stored version therefore keeps its first value (see PluginPackageMatches).
+        update["content"] = Convert.ToBase64String(plan.Bytes);
+        return WithPackageFrameworkHint(package, plan.Name, () =>
+        {
+            service.Update(update);
+            return existingId;
+        });
     }
-
-    // Skip a no-op Update: if the stored package is already this one, updating would only bump modifiedon (Last
-    // Modified) and re-import the package on every apply, making it look churned when nothing changed.
-    if (PluginPackageMatches(service, existing, packageBytes))
-    {
-        LogOperation("package", "unchanged", desiredPackageName, $"v{package.Version}", verbose);
-        return existing.Id;
-    }
-
-    LogOperation("package", "update", desiredPackageName, $"v{package.Version}", verbose);
-    Entity update = new Entity("pluginpackage")
-    {
-        Id = existing.Id
-    };
-    // Only write content: an Update that sets content and a version other than the stored one fails with
-    // "PluginPackage version cannot be updated" (verified live), which used to fail apply mid-run whenever the
-    // package version was bumped. The stored version therefore keeps its first value (see PluginPackageMatches).
-    update["content"] = packageContent;
-    return WithPackageFrameworkHint(package, desiredPackageName, () =>
-    {
-        service.Update(update);
-        return existing.Id;
-    });
-}
 
     // Dataverse supports plug-ins up to .NET Framework 4.8, and its error for a package above that (net481) does not
     // name the target framework. When the package targets above net48, say so and give the way out. ServiceClient
@@ -127,21 +142,19 @@ internal static partial class DataverseRegistration
     // Read-only counterpart of EnsurePluginPackages: true if any plugin package would be created or republished.
     // The registration diff only covers steps/custom APIs, so a code-only change (same step and custom-API
     // definitions, but a rebuilt assembly) is otherwise invisible and apply would report "no changes" and deploy
-    // nothing. Mirrors UpsertPluginPackage's create/skip decision exactly (same prefix, same import bytes, same
-    // stored-file compare) without writing.
-    internal static bool PluginPackagesNeedPublish(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories)
-        => ComputePackagePublishActions(service, packagePayloads, solutionUniqueName, tempDirectories).Count > 0;
+    // nothing. Same decision as UpsertPluginPackage (DecidePackagePublish), without writing.
+    internal static bool PluginPackagesNeedPublish(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName)
+        => ComputePackagePublishActions(service, packagePayloads, solutionUniqueName).Count > 0;
 
     // Per-package detail behind PluginPackagesNeedPublish: one action for every package that would be created
     // (absent from Dataverse) or republished (stored file differs); packages whose stored file already matches are
-    // omitted. Lets plan list the package operation and flag HasChanges for a
-    // code-only rebuild. Mirrors UpsertPluginPackage exactly so plan and apply never disagree: same create/skip
-    // decision, same missing-file FileNotFoundException. The importable-prefix guard (EnsurePluginPackagesImportable)
+    // omitted. Lets plan list the package operation and flag HasChanges for a code-only rebuild. The decision is
+    // DecidePackagePublish, shared with UpsertPluginPackage. The importable-prefix guard (EnsurePluginPackagesImportable)
     // runs separately in both paths, so an unprefixed package without --solution never reaches here as a "create".
     // A package without registrations that is absent from Dataverse is neither listed nor created; it is named in
     // `info` instead. One that already exists is compared and republished as usual (removing its last plugin still
     // updates it).
-    internal static IReadOnlyList<PackagePublishAction> ComputePackagePublishActions(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, List<string>? info = null)
+    internal static IReadOnlyList<PackagePublishAction> ComputePackagePublishActions(IOrganizationService service, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string>? info = null)
 {
     if (packagePayloads.Length == 0)
     {
@@ -155,34 +168,18 @@ internal static partial class DataverseRegistration
     List<PackagePublishAction> actions = [];
     foreach (PluginPackagePayload package in packagePayloads)
     {
-        string desiredPackageName = NormalizePackageNameWithPrefix(package.PackageName, solutionPrefix);
-
-        if (!File.Exists(package.PackagePath))
+        PackagePublishPlan plan = DecidePackagePublish(service, package, solutionPrefix);
+        switch (plan.Decision)
         {
-            // Match UpsertPluginPackage: a missing package file is an error, not a silent "no change". Throwing
-            // here keeps plan and apply in step (plan fails with the same message instead of advertising an
-            // operation apply cannot perform).
-            throw new FileNotFoundException($"Plugin package file not found: {package.PackagePath}", package.PackagePath);
-        }
-
-        byte[] packageBytes = ReadPackageBytesForImport(package.PackagePath, package.PackageName, desiredPackageName);
-        Entity? existing = GetPluginPackage(service, desiredPackageName);
-        if (existing == null && !package.HasRegistrations)
-        {
-            info?.Add($"Plugin package '{desiredPackageName}' contains no plugin or Custom API; it is not created in Dataverse until it does.");
-            continue;
-        }
-
-        if (existing == null)
-        {
-            actions.Add(new PackagePublishAction(desiredPackageName, IsCreate: true));
-            continue;
-        }
-
-        // Same decision as UpsertPluginPackage: update unless the stored package is already this one.
-        if (!PluginPackageMatches(service, existing, packageBytes))
-        {
-            actions.Add(new PackagePublishAction(desiredPackageName, IsCreate: false));
+            case PackagePublishDecision.Skip:
+                info?.Add($"Plugin package '{plan.Name}' contains no plugin or Custom API; it is not created in Dataverse until it does.");
+                break;
+            case PackagePublishDecision.Create:
+                actions.Add(new PackagePublishAction(plan.Name, IsCreate: true));
+                break;
+            case PackagePublishDecision.Update:
+                actions.Add(new PackagePublishAction(plan.Name, IsCreate: false));
+                break;
         }
     }
 

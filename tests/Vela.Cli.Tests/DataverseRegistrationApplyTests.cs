@@ -374,7 +374,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         };
 
         var payload = new PluginPackagePayload("acme_Pkg", "2.3.4", path);
-        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false);
+        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, verbose: false);
 
         Assert.Equal(newId, result);
         Entity created = Assert.Single(svc.Created);
@@ -394,7 +394,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         string path = NewTempFile(Encoding.UTF8.GetBytes("pkg-empty"));
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => new EntityCollection() };
 
-        Guid result = DataverseRegistration.UpsertPluginPackage(svc, new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false), solutionPrefix: null, new List<string>(), verbose: false);
+        Guid result = DataverseRegistration.UpsertPluginPackage(svc, new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false), solutionPrefix: null, verbose: false);
 
         Assert.Equal(Guid.Empty, result);
         Assert.Empty(svc.Created);
@@ -409,7 +409,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var existingId = Guid.NewGuid();
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("pluginpackage", existingId)) };
 
-        Guid result = DataverseRegistration.UpsertPluginPackage(svc, new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false), solutionPrefix: null, new List<string>(), verbose: false);
+        Guid result = DataverseRegistration.UpsertPluginPackage(svc, new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false), solutionPrefix: null, verbose: false);
 
         Assert.Equal(existingId, result);
         Assert.Equal(existingId, Assert.Single(svc.Updated).Id);
@@ -428,7 +428,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         };
 
         var payload = new PluginPackagePayload("acme_Pkg", "9.9.9", path);
-        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false);
+        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, verbose: false);
 
         Assert.Equal(existingId, result);
         Entity updated = Assert.Single(svc.Updated);
@@ -457,7 +457,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
 
         var payload = new PluginPackagePayload("acme_Pkg", "9.9.9", path);
-        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false);
+        Guid result = DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, verbose: false);
 
         Assert.Equal(existingId, result);
         // Unchanged content + version -> no Update (which would otherwise bump modifiedon on every apply).
@@ -475,7 +475,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
         svc.PackageFiles.Store(existing.Id, bytes);
 
-        DataverseRegistration.UpsertPluginPackage(svc, new PluginPackagePayload("acme_Pkg", "1.0.1", path), solutionPrefix: null, new List<string>(), verbose: false);
+        DataverseRegistration.UpsertPluginPackage(svc, new PluginPackagePayload("acme_Pkg", "1.0.1", path), solutionPrefix: null, verbose: false);
 
         Assert.Empty(svc.Updated);
         Assert.Empty(svc.Created);
@@ -495,7 +495,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
 
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", BuildPluginNupkg("net481"));
         var ex = Assert.Throws<InvalidOperationException>(
-            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false));
+            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, verbose: false));
 
         Assert.Contains("'acme_Pkg', which targets net481: Import failed.", ex.Message);
         Assert.Contains("<TargetFramework>net48</TargetFramework>", ex.Message);
@@ -514,7 +514,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
 
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", BuildPluginNupkg("net481"));
         var ex = Assert.Throws<InvalidOperationException>(
-            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false));
+            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, verbose: false));
 
         Assert.Contains("'acme_Pkg', which targets net481: Import failed.", ex.Message);
         Assert.Contains("Dataverse supports plug-ins up to .NET Framework 4.8 (net48)", ex.Message);
@@ -534,7 +534,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
 
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", BuildPluginNupkg("net481"));
         Assert.Same(error, Assert.Throws<TimeoutException>(
-            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false)));
+            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, verbose: false)));
     }
 
     [Fact]
@@ -549,7 +549,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
 
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", BuildPluginNupkg("net48"));
         var ex = Assert.Throws<FaultException<OrganizationServiceFault>>(
-            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false));
+            () => DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, verbose: false));
 
         Assert.Same(fault, ex);
     }
@@ -570,7 +570,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         svc.PackageFiles.Store(existing.Id, oldBytes); // the stored .nupkg (content reads back empty)
 
         var payload = new PluginPackagePayload("acme_Pkg", "9.9.9", path);
-        DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, new List<string>(), verbose: false);
+        DataverseRegistration.UpsertPluginPackage(svc, payload, solutionPrefix: null, verbose: false);
 
         Entity updated = Assert.Single(svc.Updated);
         Assert.Equal(Convert.ToBase64String(newBytes), updated.GetAttributeValue<string>("content"));
@@ -583,7 +583,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection() };
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
 
-        Assert.True(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+        Assert.True(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null));
     }
 
     [Fact]
@@ -595,7 +595,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         svc.PackageFiles.Store(existing.Id, Encoding.UTF8.GetBytes("pkg-old")); // the stored .nupkg (content reads back empty)
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
 
-        Assert.True(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+        Assert.True(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null));
     }
 
     [Fact]
@@ -609,7 +609,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
 
-        Assert.False(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+        Assert.False(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null));
     }
 
     [Fact]
@@ -625,7 +625,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.1", path);
 
-        Assert.False(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+        Assert.False(DataverseRegistration.PluginPackagesNeedPublish(svc, new[] { payload }, solutionUniqueName: null));
     }
 
     [Fact]
@@ -636,7 +636,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", Path.Combine(Path.GetTempPath(), $"vela-missing-{Guid.NewGuid():N}.nupkg"));
 
         Assert.Throws<FileNotFoundException>(() =>
-            DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+            DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null));
     }
 
     [Fact]
@@ -661,7 +661,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     [Fact]
     public void PluginPackagesNeedPublish_false_when_no_payloads()
     {
-        Assert.False(DataverseRegistration.PluginPackagesNeedPublish(new TestSupport.FakeOrgService(), Array.Empty<PluginPackagePayload>(), solutionUniqueName: null, new List<string>()));
+        Assert.False(DataverseRegistration.PluginPackagesNeedPublish(new TestSupport.FakeOrgService(), Array.Empty<PluginPackagePayload>(), solutionUniqueName: null));
     }
 
     [Fact]
@@ -671,7 +671,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection() };
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
 
-        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null));
         Assert.Equal("acme_Pkg", action.PackageName);
         Assert.True(action.IsCreate);
     }
@@ -683,7 +683,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection() };
         List<string> info = [];
 
-        Assert.Empty(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false) }, solutionUniqueName: null, new List<string>(), info));
+        Assert.Empty(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false) }, solutionUniqueName: null, info));
         Assert.Equal("Plugin package 'acme_Pkg' contains no plugin or Custom API; it is not created in Dataverse until it does.", Assert.Single(info));
     }
 
@@ -696,7 +696,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         svc.PackageFiles.Store(existing.Id, Encoding.UTF8.GetBytes("pkg-old"));
         List<string> info = [];
 
-        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false) }, solutionUniqueName: null, new List<string>(), info));
+        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path, HasRegistrations: false) }, solutionUniqueName: null, info));
         Assert.False(action.IsCreate);
         Assert.Empty(info);
     }
@@ -717,7 +717,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         svc.PackageFiles.Store(existing.Id, Encoding.UTF8.GetBytes("pkg-old")); // the stored .nupkg (content reads back empty)
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
 
-        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null));
         Assert.False(action.IsCreate);
     }
 
@@ -731,7 +731,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
         svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
 
-        Assert.Empty(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.1", path) }, solutionUniqueName: null, new List<string>()));
+        Assert.Empty(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.1", path) }, solutionUniqueName: null));
     }
 
     [Fact]
@@ -760,7 +760,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         svc.PackageFiles.Store(existing.Id, bytes); // the stored .nupkg (content reads back empty)
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", path);
 
-        Assert.Empty(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null, new List<string>()));
+        Assert.Empty(DataverseRegistration.ComputePackagePublishActions(svc, new[] { payload }, solutionUniqueName: null));
     }
 
     [Fact]   // #492
@@ -771,7 +771,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var existing = new Entity("pluginpackage", Guid.NewGuid()) { ["version"] = "1.0.0" };
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
 
-        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null, new List<string>()));
+        PackagePublishAction action = Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null));
         Assert.False(action.IsCreate);
     }
 
@@ -783,7 +783,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
         svc.PackageFiles.Store(existing.Id, Encoding.UTF8.GetBytes("pkg-old"));
 
-        Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null, new List<string>()));
+        Assert.Single(DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null));
         Assert.Empty(svc.PackageFiles.BlockDownloads);
     }
 
@@ -806,7 +806,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var svc = new TestSupport.FakeOrgService { OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(existing) };
         svc.PackageFiles.Store(existing.Id, stored);
 
-        IReadOnlyList<PackagePublishAction> actions = DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null, new List<string>());
+        IReadOnlyList<PackagePublishAction> actions = DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null);
 
         Assert.Equal(lastByteDiffers, actions.Count == 1);
         Assert.Equal(new long[] { 0, 4L * 1024 * 1024, 8L * 1024 * 1024 }, svc.PackageFiles.BlockDownloads.Select(b => b.Offset));
@@ -833,7 +833,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         svc.PackageFiles.ChunkingSupported = false;
         svc.PackageFiles.Store(existing.Id, stored);
 
-        IReadOnlyList<PackagePublishAction> actions = DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null, new List<string>());
+        IReadOnlyList<PackagePublishAction> actions = DataverseRegistration.ComputePackagePublishActions(svc, new[] { new PluginPackagePayload("acme_Pkg", "1.0.0", path) }, solutionUniqueName: null);
 
         Assert.Equal(lastByteDiffers, actions.Count == 1);
         Assert.Equal([(0L, local.LongLength)], svc.PackageFiles.BlockDownloads);
@@ -845,7 +845,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         var svc = new TestSupport.FakeOrgService();
         var payload = new PluginPackagePayload("acme_Pkg", "1.0.0", Path.Combine(Path.GetTempPath(), "does-not-exist-" + Guid.NewGuid().ToString("N") + ".nupkg"));
         var ex = Assert.Throws<FileNotFoundException>(
-            () => DataverseRegistration.UpsertPluginPackage(svc, payload, null, new List<string>(), verbose: false));
+            () => DataverseRegistration.UpsertPluginPackage(svc, payload, null, verbose: false));
         Assert.Contains("Plugin package file not found", ex.Message);
     }
 
@@ -861,7 +861,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         };
 
         DataverseRegistration.EnsurePluginPackages(
-            svc, [new PluginPackagePayload("acme_Pkg", "1.0.0", path)], solutionUniqueName: null, new List<string>(), verbose: false);
+            svc, [new PluginPackagePayload("acme_Pkg", "1.0.0", path)], solutionUniqueName: null, verbose: false);
 
         Entity created = Assert.Single(svc.Created);
         Assert.Equal("pluginpackage", created.LogicalName);
@@ -877,7 +877,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // so an unknown/irrelevant solution cannot fail the publish phase.
         var svc = new TestSupport.FakeOrgService();
 
-        DataverseRegistration.EnsurePluginPackages(svc, [], "acme_solution", new List<string>(), verbose: false);
+        DataverseRegistration.EnsurePluginPackages(svc, [], "acme_solution", verbose: false);
 
         Assert.Empty(svc.Queries);
         Assert.Empty(svc.Created);
@@ -892,7 +892,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
 
         InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
             DataverseRegistration.EnsurePluginPackages(
-                svc, [new PluginPackagePayload("Zava.Plugins", "1.0.0", "unused.nupkg")], solutionUniqueName: null, new List<string>(), verbose: false));
+                svc, [new PluginPackagePayload("Zava.Plugins", "1.0.0", "unused.nupkg")], solutionUniqueName: null, verbose: false));
 
         Assert.Contains("solution publisher prefix", ex.Message);
         Assert.Contains("--solution", ex.Message);
@@ -916,7 +916,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         };
 
         DataverseRegistration.EnsurePluginPackages(
-            svc, [new PluginPackagePayload("Pkg", "1.0.0", path)], solutionUniqueName: "acme_solution", new List<string>(), verbose: false);
+            svc, [new PluginPackagePayload("Pkg", "1.0.0", path)], solutionUniqueName: "acme_solution", verbose: false);
 
         Entity created = Assert.Single(svc.Created);
         Assert.Equal("new_Pkg", created.GetAttributeValue<string>("name")); // prefix applied
@@ -941,7 +941,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         };
         var diff = new RegistrationDiff(["Pkg"], ["Pkg"], [], [], [], [], []);
 
-        DataverseRegistration.ApplyDiff(svc, diff, [new PluginPackagePayload("Pkg", "1.0.0", path)], "acme_solution", new List<string>(), verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, [new PluginPackagePayload("Pkg", "1.0.0", path)], "acme_solution", verbose: false);
 
         CreateRequest create = Assert.Single(svc.Executed.OfType<CreateRequest>(), r => r.Target.LogicalName == "pluginpackage");
         Assert.Equal("acme_solution", create["SolutionUniqueName"]);
@@ -988,7 +988,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         try
         {
             var ex = Assert.ThrowsAny<Exception>(
-                () => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
+                () => DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false));
             Assert.Contains("Plugin type not found in Dataverse after the plugin package publish", ex.Message);
             // Ordinal sort: "AnotherMissing" precedes "Missing".
             int a = ex.Message.IndexOf("Ghost.Plugins.AnotherMissing", StringComparison.Ordinal);
@@ -1040,7 +1040,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false));
         }
         finally
         {
@@ -1094,7 +1094,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
             LocalItems: [],
             CurrentItems: []);
 
-        DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false);
 
         // Removed API deleted through the seam.
         Assert.Contains(("customapi", removedApiId), svc.Deleted);
@@ -1140,7 +1140,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false));
         }
         finally
         {
@@ -1186,7 +1186,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false); // must NOT throw
+            DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false); // must NOT throw
         }
         finally
         {
@@ -1221,7 +1221,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false); // must NOT throw
+            DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false); // must NOT throw
         }
         finally
         {
@@ -1276,7 +1276,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false));
         }
         finally
         {
@@ -1336,7 +1336,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // EnsurePluginPackages_with_solution_resolves_prefix_and_id).
         var packages = new[] { new PluginPackagePayload("acme_ZavaPlugins", "1.0.0", nupkg) };
 
-        DataverseRegistration.ApplyDiff(svc, diff, packages, solutionUniqueName: null, new List<string>(), verbose: false);
+        DataverseRegistration.ApplyDiff(svc, diff, packages, solutionUniqueName: null, verbose: false);
 
         // The package was published with its name/version/content...
         Entity pkg = svc.Created.Single(e => e.LogicalName == "pluginpackage");
@@ -1394,7 +1394,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false));
         }
         finally
         {
@@ -1445,7 +1445,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false));
+            Assert.ThrowsAny<Exception>(() => DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false));
         }
         finally
         {
@@ -1494,7 +1494,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Console.SetError(captured);
         try
         {
-            DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false); // must NOT throw
+            DataverseRegistration.ApplyDiff(svc, diff, [], null, verbose: false); // must NOT throw
         }
         finally
         {
