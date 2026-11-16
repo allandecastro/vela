@@ -33,21 +33,6 @@ namespace Vela.Analyzers
             isEnabledByDefault: true,
             description: "Several steps may share a trigger (message + stage + mode + entity) when their filtering attributes, images, relationship scope or step key tell them apart. Two RegisterStep() chains on one trigger that differ in none of these resolve to the same step key and fail at registration. The rank (WithExecutionOrder) does not tell steps apart. Give one a WithStepKey(\"...\"), or keep one step and branch in the handler.");
 
-        private static readonly ImmutableDictionary<string, string> TypedTriggerMessage = new Dictionary<string, string>
-        {
-            ["OnCreate"] = "create",
-            ["OnUpdate"] = "update",
-            ["OnDelete"] = "delete",
-            ["OnCreateMultiple"] = "createmultiple",
-            ["OnUpdateMultiple"] = "updatemultiple",
-            ["OnRetrieve"] = "retrieve",
-            ["OnRetrieveMultiple"] = "retrievemultiple",
-            ["OnAssociate"] = "associate",
-            ["OnDisassociate"] = "disassociate",
-            ["OnAssign"] = "assign",
-            ["OnMerge"] = "merge",
-        }.ToImmutableDictionary();
-
         private static readonly ImmutableDictionary<string, string> StageMethods = new Dictionary<string, string>
         {
             ["PreValidation"] = "prevalidation",
@@ -158,9 +143,11 @@ namespace Vela.Analyzers
             foreach (ChainCall call in FluentStep.Spine(receiver))
             {
                 string called = call.MethodName;
-                if (message.Length == 0 && TypedTriggerMessage.TryGetValue(called, out string? typed))
+                if (message.Length == 0 && call.Name is not GenericNameSyntax && FluentStep.TypedTriggerMessage(called) is { } typed)
                 {
-                    message = typed!;
+                    // Every typed On{Message}() trigger, keyed by the sdkmessage it registers on, as the builder does
+                    // (OnSendEmail() and OnSendFax() both register on Send).
+                    message = Vela.Steps.SdkMessageNames.ToSdkMessage(typed).ToLowerInvariant();
                     location = call.Name.GetLocation();
                 }
                 else if (message.Length == 0 && FluentStep.TypeStatedSdkMessage(call, model, cancellationToken) is { } typeStated)
@@ -173,6 +160,12 @@ namespace Vela.Analyzers
                     stage = stageValue!;
                 }
                 else if (called == "Async")
+                {
+                    mode = "async";
+                }
+
+                // OnAsyncOnly<TRequest>() has no mode call: its steps run asynchronously.
+                if (called == "OnAsyncOnly")
                 {
                     mode = "async";
                 }

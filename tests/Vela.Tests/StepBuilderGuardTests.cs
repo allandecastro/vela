@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Vela.Context;
 using Vela.Plugin;
 using Vela.Steps;
@@ -48,6 +49,21 @@ public sealed class StepBuilderGuardTests
         Assert.Equal(AlreadySet("WithUnsecureConfig"), Error(s => s.OnDelete().PostOperation().Sync().WithUnsecureConfig("a").WithUnsecureConfig("b").Handle(_ => { })).Message);
         Assert.Equal(AlreadySet("WithSecureConfigFrom"), Error(s => s.OnDelete().PostOperation().Sync().WithSecureConfigFrom("A").WithSecureConfigFrom("B").Handle(_ => { })).Message);
         Assert.Equal(AlreadySet("WithExecutionOrder"), Error(s => s.OnDelete().PostOperation().Sync().WithExecutionOrder(1).WithExecutionOrder(2).Handle(_ => { })).Message);
+
+        // The list VELA003 shares is exactly the modifiers checked above.
+        Assert.Equal(
+            new[] { "FilterOn", "ForRelationship", "SkipWhenDepthAbove", "WithDescription", "WithExecutionOrder", "WithImpersonation", "WithSecureConfigFrom", "WithStepKey", "WithSupportedDeployment", "WithUnsecureConfig" },
+            SetOnceModifiers.Methods.OrderBy(m => m, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void The_global_message_list_cannot_be_changed_by_a_caller()
+    {
+        System.Collections.Generic.IReadOnlyList<string> globals = Vela.Constants.PluginMessages.GlobalMessages;
+
+        Assert.Throws<NotSupportedException>(() => ((System.Collections.Generic.IList<string>)globals)[0] = "Create");
+        Assert.Equal(Vela.Constants.PluginMessages.Associate, globals[0]);
+        Assert.False(Vela.Constants.PluginMessages.IsGlobalMessage("Create"));
     }
 
     // Markers for OnMessage<TMessage>(): a custom request name whose [SdkMessage] registers the step on a modelled

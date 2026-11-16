@@ -122,32 +122,35 @@ internal static class ExpressionHelper
     /// <typeparam name="TMessage">The message type (a request type, or a marker type).</typeparam>
     /// <returns>The message name.</returns>
     public static string GetMessageName<TMessage>() where TMessage : class
+        => TryGetMessageName(typeof(TMessage)) ?? throw new InvalidOperationException(
+            $"Cannot resolve the message for '{DisplayName(typeof(TMessage))}': it is neither an OrganizationRequest with a parameterless constructor that sets RequestName nor a type marked [CustomMessage(\"...\")] or [SdkMessage(\"...\")]. "
+            + "Generate a typed request with 'vela models --messages <name>' (or '--custom-apis <name>') and use On<XxxRequest>(), or mark the type with [CustomMessage].");
+
+    /// <summary>
+    /// The message a request or marker type names (see <see cref="GetMessageName{TMessage}"/>), or null when it names
+    /// none: an <c>OrganizationRequest</c> that leaves <c>RequestName</c> empty and carries no attribute.
+    /// </summary>
+    public static string? TryGetMessageName(Type type)
     {
-        if (typeof(OrganizationRequest).IsAssignableFrom(typeof(TMessage))
-            && typeof(TMessage).GetConstructor(Type.EmptyTypes) != null)
+        if (typeof(OrganizationRequest).IsAssignableFrom(type)
+            && !type.IsAbstract
+            && type.GetConstructor(Type.EmptyTypes) != null)
         {
-            var request = (OrganizationRequest)Activator.CreateInstance(typeof(TMessage))!;
+            var request = (OrganizationRequest)Activator.CreateInstance(type)!;
             if (!string.IsNullOrWhiteSpace(request.RequestName))
             {
                 return request.RequestName;
             }
         }
 
-        var attribute = typeof(TMessage).GetCustomAttribute<CustomMessageAttribute>();
+        var attribute = type.GetCustomAttribute<CustomMessageAttribute>();
         if (attribute != null)
         {
             return attribute.MessageName;
         }
 
-        var sdkMessage = typeof(TMessage).GetCustomAttribute<Vela.Messages.SdkMessageAttribute>(inherit: true);
-        if (sdkMessage != null)
-        {
-            return sdkMessage.MessageName;
-        }
-
-        throw new InvalidOperationException(
-            $"Cannot resolve the message for '{DisplayName(typeof(TMessage))}': it is neither an OrganizationRequest with a parameterless constructor that sets RequestName nor a type marked [CustomMessage(\"...\")] or [SdkMessage(\"...\")]. "
-            + "Generate a typed request with 'vela models --messages <name>' (or '--custom-apis <name>') and use On<XxxRequest>(), or mark the type with [CustomMessage].");
+        var sdkMessage = type.GetCustomAttribute<Vela.Messages.SdkMessageAttribute>(inherit: true);
+        return sdkMessage?.MessageName;
     }
 
     private static PropertyInfo MostDerived(Type entityType, PropertyInfo property)

@@ -87,6 +87,38 @@ namespace Vela.Plugin
     }
 
     /// <summary>
+    /// The pre- and post-stage typed context of one modelled message: their types (checked against a handler's
+    /// parameter when the steps are registered) and how to build each over the live pipeline context (no reflection
+    /// per execution).
+    /// </summary>
+    internal sealed class TypedContextFactory
+    {
+        private readonly Func<ILocalPluginContext, object> _pre;
+        private readonly Func<ILocalPluginContext, object> _post;
+
+        private TypedContextFactory(Type preType, Func<ILocalPluginContext, object> pre, Type postType, Func<ILocalPluginContext, object> post)
+        {
+            PreType = preType;
+            PostType = postType;
+            _pre = pre;
+            _post = post;
+        }
+
+        /// <summary>The context built at PreValidation / PreOperation.</summary>
+        public Type PreType { get; }
+
+        /// <summary>The context built at PostOperation.</summary>
+        public Type PostType { get; }
+
+        public static TypedContextFactory Of<TPre, TPost>(Func<ILocalPluginContext, TPre> pre, Func<ILocalPluginContext, TPost> post)
+            where TPre : class
+            where TPost : class
+            => new TypedContextFactory(typeof(TPre), pre, typeof(TPost), post);
+
+        public object Build(bool post, ILocalPluginContext ctx) => post ? _post(ctx) : _pre(ctx);
+    }
+
+    /// <summary>
     /// Generic plugin base class with fluent step configuration and strongly-typed entity access.
     /// </summary>
     /// <typeparam name="TEntity">The early-bound entity type this plugin operates on.</typeparam>
@@ -152,6 +184,7 @@ namespace Vela.Plugin
                     definitions.Add(built);
                     if (step.RuntimeHandler != null)
                     {
+                        EnsureHandlerAcceptsContext(built, step.RuntimeHandler);
                         handlersByDefinition[built] = step.RuntimeHandler;
                     }
                 }
@@ -401,74 +434,193 @@ namespace Vela.Plugin
             }
         }
 
+        // The permissive Handle(Delegate) overload compiles any one-parameter method, so a handler typed for another
+        // message or stage (an OnAssign() step bound to an IUpdatePostContext<T> handler) would otherwise fail on
+        // every execution with a raw cast error. Check once, when the steps are registered, that the context the
+        // dispatch builds for this step fits the handler's parameter, and name the one it expects.
+        private void EnsureHandlerAcceptsContext(StepDefinition definition, Delegate handler)
+        {
+            Type parameterType = handler.Method.GetParameters()[0].ParameterType;
+            string message = TypedMessageOf(definition);
+            bool post = definition.Stage == PluginStages.PostOperation;
+            Type? modelled = ExpectedContextType(message, definition.Stage);
+            string? problem = HandlerContextProblem(parameterType, definition, post, modelled);
+            if (problem == null)
+            {
+                return;
+            }
+
+            string expected = modelled != null
+                ? $"{ExpressionHelper.DisplayName(ContextInterfaceOf(modelled))} (or its generated context, or ILocalPluginContext)"
+                : $"ILocalPluginContext, or IMessage{(post ? "Post" : "Pre")}Context<TRequest> for the {message} request";
+            throw new InvalidPluginExecutionException(
+                $"Plugin '{GetType().FullName}': handler '{handler.Method.Name}' is bound to the {message} {definition.Stage} step " +
+                $"but takes '{ExpressionHelper.DisplayName(parameterType)}'; {problem}. This step passes {expected}.");
+        }
+
+        // Why the context the dispatch builds for this step does not fit the handler's parameter, or null when it does.
+        // Mirrors the dispatch order: a derived (generated) step context, then a generic message context, then the
+        // modelled context or the plain ILocalPluginContext.
+        private static string? HandlerContextProblem(Type parameterType, StepDefinition definition, bool post, Type? modelled)
+        {
+            Type? requestType;
+            bool postContext;
+            if (StepContextFactory.Resolve(parameterType).Kind != StepContextKind.NotApplicable)
+            {
+                if (modelled != null)
+                {
+                    return modelled.IsAssignableFrom(parameterType) ? null : "it is a context for another message or stage";
+                }
+
+                if (!TryGetGenericMessageContext(parameterType, isInterface: false, out requestType, out postContext))
+                {
+                    return "it is a context for a modelled message, not this one";
+                }
+            }
+            else if (TryGetGenericMessageContext(parameterType, isInterface: true, out requestType, out postContext))
+            {
+                if (modelled != null)
+                {
+                    return "a generic message context is for a message without a typed trigger";
+                }
+            }
+            else
+            {
+                Type built = modelled ?? typeof(ILocalPluginContext);
+                return parameterType.IsAssignableFrom(built) ? null : "it is a context for another message or stage";
+            }
+
+            if (postContext && !post)
+            {
+                return "a post-operation context has no response before the main operation";
+            }
+
+            // OnMessage<TMessage>().Handle<TRequest>(...) states the message twice: the request read must be the
+            // message's own, or ctx.Request reads the parameters of another message.
+            string? requestMessage = ExpressionHelper.TryGetMessageName(requestType!);
+            if (requestMessage != null
+                && !string.Equals(requestMessage, definition.RequestName, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(requestMessage, definition.Message, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"its request {ExpressionHelper.DisplayName(requestType!)} is the {requestMessage} message's, not this step's";
+            }
+
+            return null;
+        }
+
+        // Whether the type is a generic message context (IMessagePre/PostContext<TRequest[, TEntity]> when isInterface,
+        // else a class deriving from MessagePre/PostContext<TRequest[, TEntity]>), with its request type and stage side.
+        private static bool TryGetGenericMessageContext(Type type, bool isInterface, out Type? requestType, out bool post)
+        {
+            requestType = null;
+            post = false;
+            for (Type? t = type; t != null && t != typeof(object); t = isInterface ? null : t.BaseType)
+            {
+                if (!t.IsGenericType)
+                {
+                    continue;
+                }
+
+                Type definition = t.GetGenericTypeDefinition();
+                bool pre = isInterface
+                    ? definition == typeof(IMessagePreContext<>) || definition == typeof(IMessagePreContext<,>)
+                    : definition == typeof(MessagePreContext<>) || definition == typeof(MessagePreContext<,>);
+                post = isInterface
+                    ? definition == typeof(IMessagePostContext<>) || definition == typeof(IMessagePostContext<,>)
+                    : definition == typeof(MessagePostContext<>) || definition == typeof(MessagePostContext<,>);
+                if (pre || post)
+                {
+                    requestType = t.GetGenericArguments()[0];
+                    return true;
+                }
+            }
+
+            post = false;
+            return false;
+        }
+
+        // The I{Message}{Pre|Post}Context<TEntity> interface a modelled context implements: what a handler declares.
+        private static Type ContextInterfaceOf(Type context)
+            => context.GetInterfaces().FirstOrDefault(i => i.Name == "I" + context.Name) ?? context;
+
         // The request name the step was declared with picks its typed context: one sdkmessage can serve several
         // requests (Win is WinOpportunity on opportunity and WinQuote on quote).
         private static string TypedMessageOf(StepDefinition definition)
             => string.IsNullOrEmpty(definition.RequestName) ? definition.Message : definition.RequestName;
 
-        // Messages Vela models with a typed context: build the per-message context so its handler receives a
-        // single strongly-typed argument (e.g. IMergeContext<TEntity>). Returns null for a permissive
-        // OnMessage<TMessage>() step that Vela does not model, so its handler receives the plain ILocalPluginContext.
-        private static object? BuildTypedContext(string? message, PluginStages stage, ILocalPluginContext ctx)
-        {
-            bool post = stage == PluginStages.PostOperation;
-            return message switch
+        // Messages Vela models with a typed context: the per-message context built for each stage, so its handler
+        // receives a single strongly-typed argument (e.g. IMergePostContext<TEntity>). One table serves the dispatch
+        // (BuildTypedContext) and the registration check that the handler accepts that context (ExpectedContextType).
+        // Keyed by the request name the step was declared with (ordinal, as the step builder records it).
+        private static readonly Dictionary<string, TypedContextFactory> TypedContexts =
+            new Dictionary<string, TypedContextFactory>(StringComparer.Ordinal)
             {
-                PluginMessages.Create => post ? (object)new CreatePostContext<TEntity>(ctx) : new CreatePreContext<TEntity>(ctx),
-                PluginMessages.Update => post ? (object)new UpdatePostContext<TEntity>(ctx) : new UpdatePreContext<TEntity>(ctx),
-                PluginMessages.Delete => post ? (object)new DeletePostContext<TEntity>(ctx) : new DeletePreContext<TEntity>(ctx),
-                PluginMessages.CreateMultiple => post ? (object)new CreateMultiplePostContext<TEntity>(ctx) : new CreateMultiplePreContext<TEntity>(ctx),
-                PluginMessages.UpdateMultiple => post ? (object)new UpdateMultiplePostContext<TEntity>(ctx) : new UpdateMultiplePreContext<TEntity>(ctx),
-                PluginMessages.Retrieve => post ? (object)new RetrievePostContext<TEntity>(ctx) : new RetrievePreContext<TEntity>(ctx),
-                PluginMessages.RetrieveMultiple => post ? (object)new RetrieveMultiplePostContext<TEntity>(ctx) : new RetrieveMultiplePreContext<TEntity>(ctx),
-                PluginMessages.Associate => post ? (object)new AssociatePostContext<TEntity>(ctx) : new AssociatePreContext<TEntity>(ctx),
-                PluginMessages.Disassociate => post ? (object)new DisassociatePostContext<TEntity>(ctx) : new DisassociatePreContext<TEntity>(ctx),
-                PluginMessages.Merge => post ? (object)new MergePostContext<TEntity>(ctx) : new MergePreContext<TEntity>(ctx),
-                PluginMessages.GrantAccess => post ? (object)new GrantAccessPostContext<TEntity>(ctx) : new GrantAccessPreContext<TEntity>(ctx),
-                PluginMessages.Assign => post ? (object)new AssignPostContext<TEntity>(ctx) : new AssignPreContext<TEntity>(ctx),
-                PluginMessages.ModifyAccess => post ? (object)new ModifyAccessPostContext<TEntity>(ctx) : new ModifyAccessPreContext<TEntity>(ctx),
-                PluginMessages.RevokeAccess => post ? (object)new RevokeAccessPostContext<TEntity>(ctx) : new RevokeAccessPreContext<TEntity>(ctx),
-                PluginMessages.QualifyLead => post ? (object)new QualifyLeadPostContext<TEntity>(ctx) : new QualifyLeadPreContext<TEntity>(ctx),
-                PluginMessages.WinOpportunity => post ? (object)new WinOpportunityPostContext<TEntity>(ctx) : new WinOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.LoseOpportunity => post ? (object)new LoseOpportunityPostContext<TEntity>(ctx) : new LoseOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.ConvertSalesOrderToInvoice => post ? (object)new ConvertSalesOrderToInvoicePostContext<TEntity>(ctx) : new ConvertSalesOrderToInvoicePreContext<TEntity>(ctx),
-                PluginMessages.GenerateQuoteFromOpportunity => post ? (object)new GenerateQuoteFromOpportunityPostContext<TEntity>(ctx) : new GenerateQuoteFromOpportunityPreContext<TEntity>(ctx),
-                PluginMessages.AddToQueue => post ? (object)new AddToQueuePostContext<TEntity>(ctx) : new AddToQueuePreContext<TEntity>(ctx),
-                PluginMessages.RemoveFromQueue => post ? (object)new RemoveFromQueuePostContext<TEntity>(ctx) : new RemoveFromQueuePreContext<TEntity>(ctx),
-                PluginMessages.PickFromQueue => post ? (object)new PickFromQueuePostContext<TEntity>(ctx) : new PickFromQueuePreContext<TEntity>(ctx),
-                PluginMessages.RouteTo => post ? (object)new RouteToPostContext<TEntity>(ctx) : new RouteToPreContext<TEntity>(ctx),
-                PluginMessages.ReleaseToQueue => post ? (object)new ReleaseToQueuePostContext<TEntity>(ctx) : new ReleaseToQueuePreContext<TEntity>(ctx),
-                PluginMessages.SendEmail => post ? (object)new SendEmailPostContext<TEntity>(ctx) : new SendEmailPreContext<TEntity>(ctx),
-                PluginMessages.SendEmailFromTemplate => post ? (object)new SendEmailFromTemplatePostContext<TEntity>(ctx) : new SendEmailFromTemplatePreContext<TEntity>(ctx),
-                PluginMessages.DeliverIncomingEmail => post ? (object)new DeliverIncomingEmailPostContext<TEntity>(ctx) : new DeliverIncomingEmailPreContext<TEntity>(ctx),
-                PluginMessages.DeliverPromoteEmail => post ? (object)new DeliverPromoteEmailPostContext<TEntity>(ctx) : new DeliverPromoteEmailPreContext<TEntity>(ctx),
-                PluginMessages.AddMembersTeam => post ? (object)new AddMembersTeamPostContext<TEntity>(ctx) : new AddMembersTeamPreContext<TEntity>(ctx),
-                PluginMessages.RemoveMembersTeam => post ? (object)new RemoveMembersTeamPostContext<TEntity>(ctx) : new RemoveMembersTeamPreContext<TEntity>(ctx),
-                PluginMessages.AddListMembersList => post ? (object)new AddListMembersListPostContext<TEntity>(ctx) : new AddListMembersListPreContext<TEntity>(ctx),
-                PluginMessages.AddMemberList => post ? (object)new AddMemberListPostContext<TEntity>(ctx) : new AddMemberListPreContext<TEntity>(ctx),
-                PluginMessages.RemoveMemberList => post ? (object)new RemoveMemberListPostContext<TEntity>(ctx) : new RemoveMemberListPreContext<TEntity>(ctx),
-                PluginMessages.CloseIncident => post ? (object)new CloseIncidentPostContext<TEntity>(ctx) : new CloseIncidentPreContext<TEntity>(ctx),
-                PluginMessages.CancelContract => post ? (object)new CancelContractPostContext<TEntity>(ctx) : new CancelContractPreContext<TEntity>(ctx),
-                PluginMessages.CloneContract => post ? (object)new CloneContractPostContext<TEntity>(ctx) : new CloneContractPreContext<TEntity>(ctx),
-                PluginMessages.RetrievePrincipalAccess => post ? (object)new RetrievePrincipalAccessPostContext<TEntity>(ctx) : new RetrievePrincipalAccessPreContext<TEntity>(ctx),
-                PluginMessages.RetrieveSharedPrincipalsAndAccess => post ? (object)new RetrieveSharedPrincipalsAndAccessPostContext<TEntity>(ctx) : new RetrieveSharedPrincipalsAndAccessPreContext<TEntity>(ctx),
-                PluginMessages.WinQuote => post ? (object)new WinQuotePostContext<TEntity>(ctx) : new WinQuotePreContext<TEntity>(ctx),
-                PluginMessages.AddItemCampaign => post ? (object)new AddItemCampaignPostContext<TEntity>(ctx) : new AddItemCampaignPreContext<TEntity>(ctx),
-                PluginMessages.RemoveItemCampaign => post ? (object)new RemoveItemCampaignPostContext<TEntity>(ctx) : new RemoveItemCampaignPreContext<TEntity>(ctx),
-                PluginMessages.Recalculate => post ? (object)new RecalculatePostContext<TEntity>(ctx) : new RecalculatePreContext<TEntity>(ctx),
-                PluginMessages.LockSalesOrderPricing => post ? (object)new LockSalesOrderPricingPostContext<TEntity>(ctx) : new LockSalesOrderPricingPreContext<TEntity>(ctx),
-                PluginMessages.UnlockSalesOrderPricing => post ? (object)new UnlockSalesOrderPricingPostContext<TEntity>(ctx) : new UnlockSalesOrderPricingPreContext<TEntity>(ctx),
-                PluginMessages.LockInvoicePricing => post ? (object)new LockInvoicePricingPostContext<TEntity>(ctx) : new LockInvoicePricingPreContext<TEntity>(ctx),
-                PluginMessages.UnlockInvoicePricing => post ? (object)new UnlockInvoicePricingPostContext<TEntity>(ctx) : new UnlockInvoicePricingPreContext<TEntity>(ctx),
-                PluginMessages.Reschedule => post ? (object)new ReschedulePostContext<TEntity>(ctx) : new ReschedulePreContext<TEntity>(ctx),
-                PluginMessages.ImmediateBook => post ? (object)new ImmediateBookPostContext<TEntity>(ctx) : new ImmediateBookPreContext<TEntity>(ctx),
-                PluginMessages.SendTemplate => post ? (object)new SendTemplatePostContext<TEntity>(ctx) : new SendTemplatePreContext<TEntity>(ctx),
-                PluginMessages.SendFax => post ? (object)new SendFaxPostContext<TEntity>(ctx) : new SendFaxPreContext<TEntity>(ctx),
-                PluginMessages.AddProductToKit => post ? (object)new AddProductToKitPostContext<TEntity>(ctx) : new AddProductToKitPreContext<TEntity>(ctx),
-                PluginMessages.RemoveProductFromKit => post ? (object)new RemoveProductFromKitPostContext<TEntity>(ctx) : new RemoveProductFromKitPreContext<TEntity>(ctx),
-                _ => null,
+                [PluginMessages.Create] = TypedContextFactory.Of(c => new CreatePreContext<TEntity>(c), c => new CreatePostContext<TEntity>(c)),
+                [PluginMessages.Update] = TypedContextFactory.Of(c => new UpdatePreContext<TEntity>(c), c => new UpdatePostContext<TEntity>(c)),
+                [PluginMessages.Delete] = TypedContextFactory.Of(c => new DeletePreContext<TEntity>(c), c => new DeletePostContext<TEntity>(c)),
+                [PluginMessages.CreateMultiple] = TypedContextFactory.Of(c => new CreateMultiplePreContext<TEntity>(c), c => new CreateMultiplePostContext<TEntity>(c)),
+                [PluginMessages.UpdateMultiple] = TypedContextFactory.Of(c => new UpdateMultiplePreContext<TEntity>(c), c => new UpdateMultiplePostContext<TEntity>(c)),
+                [PluginMessages.Retrieve] = TypedContextFactory.Of(c => new RetrievePreContext<TEntity>(c), c => new RetrievePostContext<TEntity>(c)),
+                [PluginMessages.RetrieveMultiple] = TypedContextFactory.Of(c => new RetrieveMultiplePreContext<TEntity>(c), c => new RetrieveMultiplePostContext<TEntity>(c)),
+                [PluginMessages.Associate] = TypedContextFactory.Of(c => new AssociatePreContext<TEntity>(c), c => new AssociatePostContext<TEntity>(c)),
+                [PluginMessages.Disassociate] = TypedContextFactory.Of(c => new DisassociatePreContext<TEntity>(c), c => new DisassociatePostContext<TEntity>(c)),
+                [PluginMessages.Merge] = TypedContextFactory.Of(c => new MergePreContext<TEntity>(c), c => new MergePostContext<TEntity>(c)),
+                [PluginMessages.GrantAccess] = TypedContextFactory.Of(c => new GrantAccessPreContext<TEntity>(c), c => new GrantAccessPostContext<TEntity>(c)),
+                [PluginMessages.Assign] = TypedContextFactory.Of(c => new AssignPreContext<TEntity>(c), c => new AssignPostContext<TEntity>(c)),
+                [PluginMessages.ModifyAccess] = TypedContextFactory.Of(c => new ModifyAccessPreContext<TEntity>(c), c => new ModifyAccessPostContext<TEntity>(c)),
+                [PluginMessages.RevokeAccess] = TypedContextFactory.Of(c => new RevokeAccessPreContext<TEntity>(c), c => new RevokeAccessPostContext<TEntity>(c)),
+                [PluginMessages.QualifyLead] = TypedContextFactory.Of(c => new QualifyLeadPreContext<TEntity>(c), c => new QualifyLeadPostContext<TEntity>(c)),
+                [PluginMessages.WinOpportunity] = TypedContextFactory.Of(c => new WinOpportunityPreContext<TEntity>(c), c => new WinOpportunityPostContext<TEntity>(c)),
+                [PluginMessages.LoseOpportunity] = TypedContextFactory.Of(c => new LoseOpportunityPreContext<TEntity>(c), c => new LoseOpportunityPostContext<TEntity>(c)),
+                [PluginMessages.ConvertSalesOrderToInvoice] = TypedContextFactory.Of(c => new ConvertSalesOrderToInvoicePreContext<TEntity>(c), c => new ConvertSalesOrderToInvoicePostContext<TEntity>(c)),
+                [PluginMessages.GenerateQuoteFromOpportunity] = TypedContextFactory.Of(c => new GenerateQuoteFromOpportunityPreContext<TEntity>(c), c => new GenerateQuoteFromOpportunityPostContext<TEntity>(c)),
+                [PluginMessages.AddToQueue] = TypedContextFactory.Of(c => new AddToQueuePreContext<TEntity>(c), c => new AddToQueuePostContext<TEntity>(c)),
+                [PluginMessages.RemoveFromQueue] = TypedContextFactory.Of(c => new RemoveFromQueuePreContext<TEntity>(c), c => new RemoveFromQueuePostContext<TEntity>(c)),
+                [PluginMessages.PickFromQueue] = TypedContextFactory.Of(c => new PickFromQueuePreContext<TEntity>(c), c => new PickFromQueuePostContext<TEntity>(c)),
+                [PluginMessages.RouteTo] = TypedContextFactory.Of(c => new RouteToPreContext<TEntity>(c), c => new RouteToPostContext<TEntity>(c)),
+                [PluginMessages.ReleaseToQueue] = TypedContextFactory.Of(c => new ReleaseToQueuePreContext<TEntity>(c), c => new ReleaseToQueuePostContext<TEntity>(c)),
+                [PluginMessages.SendEmail] = TypedContextFactory.Of(c => new SendEmailPreContext<TEntity>(c), c => new SendEmailPostContext<TEntity>(c)),
+                [PluginMessages.SendEmailFromTemplate] = TypedContextFactory.Of(c => new SendEmailFromTemplatePreContext<TEntity>(c), c => new SendEmailFromTemplatePostContext<TEntity>(c)),
+                [PluginMessages.DeliverIncomingEmail] = TypedContextFactory.Of(c => new DeliverIncomingEmailPreContext<TEntity>(c), c => new DeliverIncomingEmailPostContext<TEntity>(c)),
+                [PluginMessages.DeliverPromoteEmail] = TypedContextFactory.Of(c => new DeliverPromoteEmailPreContext<TEntity>(c), c => new DeliverPromoteEmailPostContext<TEntity>(c)),
+                [PluginMessages.AddMembersTeam] = TypedContextFactory.Of(c => new AddMembersTeamPreContext<TEntity>(c), c => new AddMembersTeamPostContext<TEntity>(c)),
+                [PluginMessages.RemoveMembersTeam] = TypedContextFactory.Of(c => new RemoveMembersTeamPreContext<TEntity>(c), c => new RemoveMembersTeamPostContext<TEntity>(c)),
+                [PluginMessages.AddListMembersList] = TypedContextFactory.Of(c => new AddListMembersListPreContext<TEntity>(c), c => new AddListMembersListPostContext<TEntity>(c)),
+                [PluginMessages.AddMemberList] = TypedContextFactory.Of(c => new AddMemberListPreContext<TEntity>(c), c => new AddMemberListPostContext<TEntity>(c)),
+                [PluginMessages.RemoveMemberList] = TypedContextFactory.Of(c => new RemoveMemberListPreContext<TEntity>(c), c => new RemoveMemberListPostContext<TEntity>(c)),
+                [PluginMessages.CloseIncident] = TypedContextFactory.Of(c => new CloseIncidentPreContext<TEntity>(c), c => new CloseIncidentPostContext<TEntity>(c)),
+                [PluginMessages.CancelContract] = TypedContextFactory.Of(c => new CancelContractPreContext<TEntity>(c), c => new CancelContractPostContext<TEntity>(c)),
+                [PluginMessages.CloneContract] = TypedContextFactory.Of(c => new CloneContractPreContext<TEntity>(c), c => new CloneContractPostContext<TEntity>(c)),
+                [PluginMessages.RetrievePrincipalAccess] = TypedContextFactory.Of(c => new RetrievePrincipalAccessPreContext<TEntity>(c), c => new RetrievePrincipalAccessPostContext<TEntity>(c)),
+                [PluginMessages.RetrieveSharedPrincipalsAndAccess] = TypedContextFactory.Of(c => new RetrieveSharedPrincipalsAndAccessPreContext<TEntity>(c), c => new RetrieveSharedPrincipalsAndAccessPostContext<TEntity>(c)),
+                [PluginMessages.WinQuote] = TypedContextFactory.Of(c => new WinQuotePreContext<TEntity>(c), c => new WinQuotePostContext<TEntity>(c)),
+                [PluginMessages.AddItemCampaign] = TypedContextFactory.Of(c => new AddItemCampaignPreContext<TEntity>(c), c => new AddItemCampaignPostContext<TEntity>(c)),
+                [PluginMessages.RemoveItemCampaign] = TypedContextFactory.Of(c => new RemoveItemCampaignPreContext<TEntity>(c), c => new RemoveItemCampaignPostContext<TEntity>(c)),
+                [PluginMessages.Recalculate] = TypedContextFactory.Of(c => new RecalculatePreContext<TEntity>(c), c => new RecalculatePostContext<TEntity>(c)),
+                [PluginMessages.LockSalesOrderPricing] = TypedContextFactory.Of(c => new LockSalesOrderPricingPreContext<TEntity>(c), c => new LockSalesOrderPricingPostContext<TEntity>(c)),
+                [PluginMessages.UnlockSalesOrderPricing] = TypedContextFactory.Of(c => new UnlockSalesOrderPricingPreContext<TEntity>(c), c => new UnlockSalesOrderPricingPostContext<TEntity>(c)),
+                [PluginMessages.LockInvoicePricing] = TypedContextFactory.Of(c => new LockInvoicePricingPreContext<TEntity>(c), c => new LockInvoicePricingPostContext<TEntity>(c)),
+                [PluginMessages.UnlockInvoicePricing] = TypedContextFactory.Of(c => new UnlockInvoicePricingPreContext<TEntity>(c), c => new UnlockInvoicePricingPostContext<TEntity>(c)),
+                [PluginMessages.Reschedule] = TypedContextFactory.Of(c => new ReschedulePreContext<TEntity>(c), c => new ReschedulePostContext<TEntity>(c)),
+                [PluginMessages.ImmediateBook] = TypedContextFactory.Of(c => new ImmediateBookPreContext<TEntity>(c), c => new ImmediateBookPostContext<TEntity>(c)),
+                [PluginMessages.SendTemplate] = TypedContextFactory.Of(c => new SendTemplatePreContext<TEntity>(c), c => new SendTemplatePostContext<TEntity>(c)),
+                [PluginMessages.SendFax] = TypedContextFactory.Of(c => new SendFaxPreContext<TEntity>(c), c => new SendFaxPostContext<TEntity>(c)),
+                [PluginMessages.AddProductToKit] = TypedContextFactory.Of(c => new AddProductToKitPreContext<TEntity>(c), c => new AddProductToKitPostContext<TEntity>(c)),
+                [PluginMessages.RemoveProductFromKit] = TypedContextFactory.Of(c => new RemoveProductFromKitPreContext<TEntity>(c), c => new RemoveProductFromKitPostContext<TEntity>(c)),
             };
-        }
+
+        // Returns null for a permissive OnMessage<TMessage>() / On<TRequest>() step that Vela does not model, so its
+        // handler receives the plain ILocalPluginContext or a generic message context.
+        private static object? BuildTypedContext(string? message, PluginStages stage, ILocalPluginContext ctx)
+            => message != null && TypedContexts.TryGetValue(message, out TypedContextFactory? factory)
+                ? factory.Build(stage == PluginStages.PostOperation, ctx)
+                : null;
+
+        // The concrete context the dispatch builds for a modelled message at a stage, or null when it builds none.
+        private static Type? ExpectedContextType(string? message, PluginStages stage)
+            => message != null && TypedContexts.TryGetValue(message, out TypedContextFactory? factory)
+                ? (stage == PluginStages.PostOperation ? factory.PostType : factory.PreType)
+                : null;
 
         // A permissive OnMessage<TMessage>() step whose handler takes a generic message context
         // (IMessagePreContext<TRequest> / IMessagePostContext<TRequest>) does not carry TRequest in the message

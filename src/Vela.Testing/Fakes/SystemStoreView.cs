@@ -5,8 +5,8 @@ using Microsoft.Xrm.Sdk.Query;
 namespace Vela.Testing
 {
     // The SYSTEM view of an in-memory store: every call runs as SYSTEM, so it is not subject to the store's security
-    // model (WithSecurity), as ctx.SystemService (CreateOrganizationService(null)) is not on a real org. Audit columns
-    // still record the store's calling user.
+    // model (WithSecurity), as ctx.SystemService (CreateOrganizationService(null)) is not on a real org. Writes are
+    // stamped with the SYSTEM user, on behalf of the store's calling user (createdonbehalfby), as on a real org.
     internal sealed class SystemStoreView : IOrganizationService
     {
         private readonly InMemoryOrganizationService _store;

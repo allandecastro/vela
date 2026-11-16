@@ -39,7 +39,8 @@ namespace Vela.Testing
     /// <c>AsVirtual</c>/<c>AsElastic</c>) wins; then the <c>OwnershipType</c> of the table's registered metadata
     /// (<c>WithEntityMetadata</c>); then the early-bound type (a generated class exposes an <c>OwnerId</c> property only
     /// for user/team-owned tables), also when the pipeline handed the store a plain copy of it; late-bound rows with
-    /// none of these default to user-owned. Values the caller already set are never overwritten on Create.
+    /// none of these default to user-owned. The audit columns and <c>owningbusinessunit</c> are always stamped (a value
+    /// the caller supplies is ignored, as on Dataverse); <c>ownerid</c> is kept when the caller sets it.
     /// </remarks>
     internal sealed class SystemFieldApplier
     {
@@ -55,6 +56,7 @@ namespace Vela.Testing
         internal const string OwningUser = "owninguser";
         internal const string OwningTeam = "owningteam";
         internal const string OwningBusinessUnit = "owningbusinessunit";
+        internal const string CreatedOnBehalfBy = "createdonbehalfby";
         internal const string OrganizationId = "organizationid";
 
         private const string SystemUser = "systemuser";
@@ -124,16 +126,32 @@ namespace Vela.Testing
 
             EntityReference caller = new EntityReference(SystemUser, actor.UserId);
 
-            // overriddencreatedon backdates createdon (e.g. data migrations), exactly as the platform does.
-            if (!stored.Contains(CreatedOn) && stored.Contains(OverriddenCreatedOn) && stored[OverriddenCreatedOn] is DateTime overridden)
+            // Verified live: the audit columns and owningbusinessunit a caller supplies on Create are silently ignored
+            // and stamped from the actual time, caller and owner. overriddencreatedon=X backdates createdon to X (a data
+            // migration) and itself records the actual creation time.
+            stored[CreatedOn] = stored.GetAttributeValue<object>(OverriddenCreatedOn) is DateTime overridden ? overridden : now;
+            if (stored.Contains(OverriddenCreatedOn) && stored[OverriddenCreatedOn] is DateTime)
             {
-                stored[CreatedOn] = overridden;
+                stored[OverriddenCreatedOn] = now;
             }
 
-            SetIfAbsent(stored, CreatedOn, now);
-            SetIfAbsent(stored, CreatedBy, caller);
-            SetIfAbsent(stored, ModifiedOn, now);
-            SetIfAbsent(stored, ModifiedBy, caller);
+            stored[CreatedBy] = caller;
+            stored[ModifiedOn] = now;
+            stored[ModifiedBy] = caller;
+            stored.Attributes.Remove(OwningBusinessUnit);
+            if (actor.OnBehalfOfUserId is Guid onBehalfOf)
+            {
+                // Verified live: a write through the SYSTEM service records the calling user here.
+                stored[CreatedOnBehalfBy] = new EntityReference(SystemUser, onBehalfOf);
+            }
+
+            // Verified live: a statecode supplied without a statuscode is ignored; the record is created in the default
+            // state and status.
+            if (stored.Contains(StateCode) && !(stored.Contains(StatusCode) && stored[StatusCode] != null))
+            {
+                stored.Attributes.Remove(StateCode);
+            }
+
             SetIfAbsent(stored, StateCode, new OptionSetValue(0));
             SetIfAbsent(stored, StatusCode, new OptionSetValue(1));
             SetIfAbsent(stored, VersionNumber, version);
@@ -147,6 +165,16 @@ namespace Vela.Testing
                 SetIfAbsent(stored, OrganizationId, new EntityReference(Organization, actor.OrganizationId));
             }
         }
+
+        /// <summary>
+        /// Whether the table is declared organization-owned (<c>AsOrganizationOwned</c>) or registered so by its metadata,
+        /// so it has no <c>ownerid</c> column. The early-bound inference is left out: a hand-written test class without an
+        /// <c>OwnerId</c> property does not make a write fail.
+        /// </summary>
+        public bool IsKnownOrganizationOwned(string logicalName) =>
+            (_declared.TryGetValue(logicalName, out OwnershipKind declared)
+                || _registered.TryGetValue(logicalName, out declared))
+            && declared == OwnershipKind.OrganizationOwned;
 
         /// <summary>Refreshes modified columns and re-derives owner columns when the update changed the owner.</summary>
         public void ApplyOnUpdate(Entity update, Entity stored, SystemActor actor, DateTime now, long version)
@@ -238,12 +266,16 @@ namespace Vela.Testing
     /// <summary>The calling identity stamped into system columns: user, business unit and organization.</summary>
     internal readonly struct SystemActor
     {
-        public SystemActor(Guid userId, Guid businessUnitId, Guid organizationId)
+        public SystemActor(Guid userId, Guid businessUnitId, Guid organizationId, Guid? onBehalfOfUserId = null)
         {
             UserId = userId;
             BusinessUnitId = businessUnitId;
             OrganizationId = organizationId;
+            OnBehalfOfUserId = onBehalfOfUserId;
         }
+
+        /// <summary>The calling user a SYSTEM write is made for (stamped into <c>createdonbehalfby</c>), else null.</summary>
+        public Guid? OnBehalfOfUserId { get; }
 
         public Guid UserId { get; }
 

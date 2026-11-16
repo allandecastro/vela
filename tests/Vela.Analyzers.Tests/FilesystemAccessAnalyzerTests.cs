@@ -106,4 +106,74 @@ namespace Demo
 }";
         await Verify.VerifyAnalyzerAsync(code);
     }
+
+    [Fact]
+    public async Task Flags_a_StreamReader_or_StreamWriter_opened_on_a_path()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using System;
+    using System.IO;
+    using Microsoft.Xrm.Sdk;
+    public class MyPlugin : IPlugin
+    {
+        public void Execute(IServiceProvider sp)
+        {
+            using (var reader = new {|#0:StreamReader|}(""c:\\in.txt"")) { }
+            using (var writer = new {|#1:StreamWriter|}(""c:\\out.txt"", true)) { }
+        }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code, Expected("StreamReader"),
+            new DiagnosticResult(Vela.Analyzers.FilesystemAccessAnalyzer.DiagnosticId, DiagnosticSeverity.Warning).WithLocation(1).WithArguments("StreamWriter"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_StreamReader_or_StreamWriter_over_a_stream()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using System;
+    using System.IO;
+    using Microsoft.Xrm.Sdk;
+    public class MyPlugin : IPlugin
+    {
+        public void Execute(IServiceProvider sp)
+        {
+            var buffer = new MemoryStream();
+            using (var writer = new StreamWriter(buffer)) { }
+            using (var reader = new StreamReader(new MemoryStream(), System.Text.Encoding.UTF8)) { }
+        }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_a_File_or_Directory_call_through_using_static()
+    {
+        string code = Harness + @"
+namespace Demo
+{
+    using System;
+    using Microsoft.Xrm.Sdk;
+    using static System.IO.File;
+    using static System.IO.Directory;
+    public class MyPlugin : IPlugin
+    {
+        public void Execute(IServiceProvider sp)
+        {
+            var text = {|#0:ReadAllText|}(""c:\\x.txt"");
+            var files = {|#1:GetFiles|}(""c:\\"");
+            var upper = Execute2(text);
+        }
+
+        private static string Execute2(string s) => s;
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code, Expected("File"),
+            new DiagnosticResult(Vela.Analyzers.FilesystemAccessAnalyzer.DiagnosticId, DiagnosticSeverity.Warning).WithLocation(1).WithArguments("Directory"));
+    }
 }

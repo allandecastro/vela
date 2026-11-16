@@ -132,12 +132,16 @@ The pipeline follows the platform's
 ### The execution context
 
 - **Identity.** `UserId`, `InitiatingUserId`, `BusinessUnitId` and `OrganizationId` come from `WithCurrentUser(...)`,
-  `WithCurrentBusinessUnit(...)` and `WithOrganizationId(...)`, consistent with `WhoAmI` and the
-  `createdby`/`ownerid` stamping.
+  `WithCurrentBusinessUnit(...)` and `WithOrganizationId(...)`, consistent with the `createdby`/`ownerid` stamping
+  and with `WhoAmI` called from the test.
 - **User and SYSTEM services.** `ctx.Service` acts as `ctx.UserId` and is subject to the security model under
-  `WithSecurity`. `ctx.SystemService` acts as SYSTEM and is not (audit columns still record the calling user). A
-  plugin fired by a write made through `ctx.SystemService` runs as SYSTEM, so its own `ctx.Service` is unrestricted
-  too.
+  `WithSecurity`. `ctx.SystemService` acts as SYSTEM and is not. A record written through `ctx.SystemService` has
+  SYSTEM as `createdby`, `modifiedby` and `ownerid`, the calling user as `createdonbehalfby`, and the root business
+  unit as `owningbusinessunit`. A plugin fired by a write made through `ctx.SystemService` runs as SYSTEM, so its
+  own `ctx.Service` is unrestricted too.
+- **`WhoAmI` inside a plugin** returns the SYSTEM user and the root business unit, on `ctx.Service` as well as on
+  `ctx.SystemService`. Read the calling user from `ctx.UserId` or `ctx.InitiatingUserId` instead. With
+  `PluginContext`, `ctx.Service` is the store itself, so `WhoAmI` on it returns the configured user.
 - **Step registration.** A `.Disabled()` step never fires. The plugin is constructed with the step's
   `WithUnsecureConfig(...)` value and, for `WithSecureConfigFrom("Name")`, the value set with
   `pipeline.WithSecureConfig("Name", "value")` (what `vela apply --secure-config Name=value` provides in production).
@@ -228,9 +232,11 @@ The pipeline follows the platform's
     PostOperation steps.
   - `Execute(new SetStateRequest { ... })` fires the `SetStateDynamicEntity` steps the same way around a
     `statecode`/`statuscode` Update. Steps registered on `SetState` never fire.
-  - `Execute(new MergeRequest { ... })` writes the master's new values (`UpdateContent` and the columns filled from
-    the subordinate) through an Update that fires the Update steps at PreOperation and PostOperation, between the
-    `Merge` PreOperation and PostOperation steps. No Update runs when the master does not change.
+  - `Execute(new MergeRequest { ... })` writes the master's `UpdateContent` through an Update that fires the Update
+    steps at PreOperation and PostOperation, between the `Merge` PreOperation and PostOperation steps. The
+    subordinate's own columns are not copied to the master, so no master Update runs when `UpdateContent` is null
+    or empty. The subordinate gets `statecode` 1, `statuscode` 2 and `masterid`; merging it again faults with
+    `0x80045304`.
   - Status -1 (or no status) resolves to the state's default status: status 1 for state 0, status 2 for any other
     state, unless you declare it with `WithDefaultStatus("table", state, status)`.
 - **Bypass parameters.** On an `Execute(...)` request, `BypassCustomPluginExecution = true` skips every step,
@@ -465,7 +471,10 @@ derive the intersect mapping from it.
 `Execute(...)` handles the `Create`, `Update`, `Delete`, `Retrieve` and `RetrieveMultiple` requests,
 `CreateMultipleRequest`/`UpdateMultipleRequest`, and `ExecuteMultipleRequest`/`ExecuteTransactionRequest`.
 `ExecuteMultiple` honours `ContinueOnError` and `ReturnResponses`; `ExecuteTransaction` rolls the whole batch back
-if any request throws.
+if any request throws. When the failing request raised a platform fault, the `ExecuteTransaction` faults with an
+`ExecuteTransactionFault` detail that carries that fault's `ErrorCode` and message and the request's
+`FaultedRequestIndex`. A plugin's `InvalidPluginExecutionException` surfaces as itself, as it does for a single
+request.
 
 ### File and image columns
 
@@ -498,16 +507,21 @@ they do online:
 
 - **Audit:** `createdon`/`createdby` on Create, `modifiedon`/`modifiedby` on Create and every Update, stamped with
   the calling user (`WithCurrentUser(...)`). Without one, a stable non-empty default user
-  (`InMemoryOrganizationService.DefaultCallingUser`) is used instead of the empty GUID.
+  (`InMemoryOrganizationService.DefaultCallingUser`) is used instead of the empty GUID. A value the caller supplies
+  for these columns, or for `owningbusinessunit`, is ignored on Create and Update. To arrange a record with given
+  audit values, `Seed(...)` it.
 - **Owner (user- or team-owned tables):** `ownerid`, `owninguser` or `owningteam`, and `owningbusinessunit` (from
   `WithCurrentBusinessUnit(...)`). A caller-supplied `ownerid` is kept and the owning columns are derived from it.
   Assign by updating `ownerid` to a `team` reference (`owningteam` follows) or with
   `Execute(new AssignRequest { Target = ..., Assignee = new EntityReference("team", id) })`.
 - **Organization (organization-owned tables):** `organizationid` (from `WithOrganizationId(...)`), no owner columns.
-- **State:** `statecode` (0) and `statuscode` (1) by default on Create, so plugins see an active record; a
-  caller-supplied value is kept.
+  On a table declared with `AsOrganizationOwned(...)` or registered as organization-owned by its metadata, a Create
+  or Update that sets `ownerid` faults with `0x80041103`, and `Assign` faults with `0x80040800`.
+- **State:** `statecode` (0) and `statuscode` (1) by default on Create, so plugins see an active record. A
+  `statecode` supplied without a `statuscode` is ignored; supplied together, both are kept.
 - **Row version:** `versionnumber` is set on Create and increased on every Update.
-- **Backdating:** a caller-supplied `overriddencreatedon` sets `createdon` on Create, as in a data migration.
+- **Backdating:** a caller-supplied `overriddencreatedon` sets `createdon` on Create, as in a data migration, and
+  `overriddencreatedon` then holds the actual creation time.
 - **Timestamps** use `DateTime.UtcNow`. Pin them with `WithClock(() => fixedInstant)` to assert
   `createdon`/`modifiedon`. The same clock expires the plugin cache (`IPluginCacheService`): each harness has its
   own cache, so move the clock past a TTL instead of sleeping (see [Caching](caching.md#test-a-ttl)).

@@ -183,6 +183,30 @@ namespace Vela.Testing
             return new SystemActor(_currentUserId, businessUnit, _currentOrganizationId);
         }
 
+        // The identity stamped into the audit and owner columns. As SYSTEM (ctx.SystemService) it is the SYSTEM user in
+        // the root business unit, with the calling user as createdonbehalfby (verified live); otherwise the acting user.
+        private SystemActor StampingActor()
+        {
+            SystemActor actor = Actor();
+            return _actingAsSystem
+                ? new SystemActor(SystemUserId, RootBusinessUnit(actor), actor.OrganizationId, onBehalfOfUserId: actor.UserId)
+                : actor;
+        }
+
+        // WhoAmI inside a plugin returns the SYSTEM user on every service, whether created for null, the context's
+        // UserId or Guid.Empty (verified live). The store runs on behalf of a plugin's service inside RunAs; the
+        // test's own calls (outside any plugin) see the configured current user.
+        private SystemActor WhoAmIActor()
+        {
+            SystemActor actor = Actor();
+            return _actingAsSystem || _runAsDepth > 0
+                ? new SystemActor(SystemUserId, RootBusinessUnit(actor), actor.OrganizationId)
+                : actor;
+        }
+
+        // The root business unit: the top of the security model's hierarchy, else the acting user's business unit.
+        private Guid RootBusinessUnit(SystemActor actor) => _security?.RootBusinessUnitId() ?? actor.BusinessUnitId;
+
         /// <summary>
         /// The acting identity (user, its business unit, and organization) the pipeline stamps onto a plugin
         /// execution context. Kept consistent with what <c>WhoAmI</c> reports and how <c>createdby</c>/<c>ownerid</c>
@@ -197,9 +221,16 @@ namespace Vela.Testing
 
         // Set while the store runs on behalf of the SYSTEM identity (a plugin's ctx.SystemService, i.e.
         // IOrganizationServiceFactory.CreateOrganizationService(null)): SYSTEM is not subject to the security model,
-        // so every privilege / field-security / read-filter check is skipped. Audit/owner stamping still uses the
-        // calling user (and its registered business unit), so the configured security model is not torn down.
+        // so every privilege / field-security / read-filter check is skipped, and the audit/owner columns are stamped
+        // with the SYSTEM user (see StampingActor).
         private bool _actingAsSystem;
+
+        // How many RunAs scopes are open: above zero, the store runs on behalf of a plugin's service.
+        private int _runAsDepth;
+
+        // The id the store stands the org's SYSTEM user in with: stamped into createdby/modifiedby/ownerid by a write
+        // through the SYSTEM service and returned by WhoAmI inside a plugin.
+        internal static Guid SystemUserId => PluginPipeline.SystemUserId;
 
         // The security model to ENFORCE for the current call: null when no model is configured or when acting as
         // SYSTEM. Stamping (Actor, owning-business-unit realignment) keeps reading _security directly.
@@ -213,6 +244,7 @@ namespace Vela.Testing
         {
             Guid previousUser = _currentUserId;
             bool previousSystem = _actingAsSystem;
+            _runAsDepth++;
             if (userId.HasValue)
             {
                 _currentUserId = userId.Value;
@@ -231,6 +263,7 @@ namespace Vela.Testing
             {
                 _currentUserId = previousUser;
                 _actingAsSystem = previousSystem;
+                _runAsDepth--;
             }
         }
 

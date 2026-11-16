@@ -477,7 +477,9 @@ Without a request type, generate one (`vela models --messages <name>` / `--custo
 `IMessagePreContext<TRequest>` / `IMessagePostContext<TRequest>`. The two-argument forms
 `IMessagePreContext<TRequest, TEntity>` / `IMessagePostContext<TRequest, TEntity>` add `ctx.PreImage` /
 `ctx.PostImage`. At PostOperation `ctx.Response` is a base `OrganizationResponse` (read `ctx.Response.Results[...]`).
-These paths offer no `FilterOn`.
+These paths offer no `FilterOn`. `TRequest` is a typed view of the marker's message: a request whose `RequestName`
+(or `[CustomMessage]` / `[SdkMessage]`) names another message is rejected when the steps are registered, since
+`ctx.Request` would read that message's parameters.
 
 An untyped `ILocalPluginContext` handler has no `ctx.Request`: read the record with `ctx.GetTarget<T>()`,
 `ctx.GetTargetRef()` (an `EntityReference` target) or `ctx.GetRequest<TRequest>()`.

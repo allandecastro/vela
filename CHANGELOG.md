@@ -67,6 +67,38 @@ All notable changes to Vela are documented here. The format is based on
 - `Vela.Testing`: an asynchronous step that fails keeps the writes it made before failing, and the asynchronous steps
   those writes queued run, as on Dataverse, where an asynchronous step runs outside any transaction (verified live).
   The harness rolled them back. The failure is still recorded in `AsyncStepFailures`.
+- `PluginMessages.GlobalMessages` is an `IReadOnlyList<string>` (it was a `string[]`), so no caller can change the
+  shared list every plugin reads. Code that indexed it or enumerated it still compiles; code that assigned it to a
+  `string[]` or wrote into it does not. `PluginMessages.IsGlobalMessage(...)` is unchanged.
+- A step handler whose context does not match its step, and an `OnMessage<TMarker>().Handle<TRequest>(...)` whose
+  request belongs to another message, now fail when the steps are registered (see Fixed). A plugin that registered
+  such a step but never ran it (or caught the error) now fails to load.
+- `Vela.Testing`: `createdon`, `createdby`, `modifiedon`, `modifiedby` and `owningbusinessunit` supplied on a Create
+  or Update are ignored and stamped from the clock, the caller and the owner, as on Dataverse (verified live). They
+  were kept on Create, and `createdon`/`createdby`/`owningbusinessunit` on Update. `overriddencreatedon` still
+  backdates `createdon`, and now holds the actual creation time. Use `Seed(...)` to arrange records with given audit
+  values.
+- `Vela.Testing`: a Create that sets `statecode` without `statuscode` creates an active record (`statecode` 0,
+  `statuscode` 1), as on Dataverse (verified live). It kept the `statecode` before. Set both to create in another
+  state.
+- `Vela.Testing`: `Merge` no longer copies the subordinate's columns into the master: only `UpdateContent` is
+  written, as on Dataverse (verified live). Merging a subordinate that is already inactive faults with `0x80045304`.
+- `Vela.Testing`: an `ExecuteTransaction` whose child raises a platform fault now faults with an
+  `ExecuteTransactionFault` detail carrying the child's `ErrorCode` and message and its `FaultedRequestIndex`
+  (verified live), on `InMemoryOrganizationService` and `PluginPipeline`. The child's own fault surfaced before.
+- `Vela.Testing`: a write through the SYSTEM service (`ctx.SystemService`) is stamped with SYSTEM as `createdby`,
+  `modifiedby` and `ownerid`, the calling user as `createdonbehalfby` and the root business unit as
+  `owningbusinessunit` (verified live). It recorded the calling user before. `WhoAmI` called from inside a plugin
+  returns SYSTEM on every service, as on Dataverse; from the test it still returns the configured user. Read the
+  caller from `ctx.UserId` or `ctx.InitiatingUserId`.
+- `Vela.Testing`: on a table declared organization-owned (`AsOrganizationOwned`) or registered so by its metadata, a
+  Create or Update that sets `ownerid` faults with `0x80041103`, and `Assign` faults with `0x80040800` (verified
+  live). Both succeeded before.
+- `Vela.Testing`: `Associate`/`Disassociate` over a self-referential relationship (N:N or 1:N) without
+  `Relationship.PrimaryEntityRole` fault with `0x80040203` (verified live); with a role, `Referenced` makes the
+  calling record the parent (1:N) or puts it in the second intersect column (N:N). An undeclared relationship name
+  faults with `0x80040216` (verified live) instead of throwing `InvalidOperationException`; the message still says
+  how to declare it.
 
 ### Added (Framework)
 
@@ -128,6 +160,37 @@ All notable changes to Vela are documented here. The format is based on
   version or later. `Vela.Testing` uses `Vela.Plugins` internals, so a newer `Vela.Plugins` with an older
   `Vela.Testing` could fail at run time with `MissingMethodException` or `TypeLoadException`; NuGet now reports the
   mismatch at restore (NU1608). Reference the same version of both packages.
+- A step handler whose context does not match its step now fails when the steps are registered, with an
+  `InvalidPluginExecutionException` naming the handler, the step and the context the step passes (for example
+  `This step passes IAssignPostContext<Account>`). Through the permissive `Handle(Delegate)` overload, an `OnAssign()`
+  step bound to an `IUpdatePostContext<T>` handler (and the same mismatch on every typed trigger but Create, Update and
+  Delete) compiled and threw a raw `ArgumentException` on every execution. The check covers the generated
+  `{Handler}Context`, a generic message context on a modelled message, and a post-operation context at a pre-stage.
+- `OnMessage<TMarker>().Handle<TRequest>(...)` checks `TRequest` against the step's message when the steps are
+  registered: a request whose `RequestName` (or `[CustomMessage]` / `[SdkMessage]`) names another message is rejected,
+  since `ctx.Request` would read the parameters of a message it does not describe. A request that names no message
+  is still accepted as a typed view.
+- VELA015 checks the handler context of every typed `On{Message}()` trigger (`OnAssign()`, `OnSendEmail()`, ...), not
+  only `OnCreate()`, `OnUpdate()` and `OnDelete()`.
+- VELA003 flags a second `ForRelationship(...)` or `SkipWhenDepthAbove(...)`, which the builder already rejected. The
+  analyzer and the builder now read one list of set-once modifiers.
+- VELA008 compares every typed `On{Message}()` trigger (it knew 11), keyed by the sdkmessage it registers on, and
+  treats an `OnAsyncOnly<TRequest>()` step as asynchronous.
+- VELA019 also flags `new StreamReader(path)` / `new StreamWriter(path)` and `File` / `Directory` calls imported with
+  `using static System.IO.File;`. A reader or writer over a `Stream` is not flagged.
+- The VELA012 code fix binds each argument to its constructor parameter: `new ArgumentNullException(nameof(x))` no
+  longer becomes an exception whose message is the parameter name, named arguments (`paramName:`, `innerException:`)
+  no longer produce code that does not compile, and an inner exception alone gives `(inner.Message, inner)` (no fix
+  when that inner exception is an expression it would evaluate twice).
+- The VELA004 code fix is offered only for a handler named without a qualifier and declared in the registering class
+  or one of its base classes, from a non-static member of a non-static class. It used to edit a same-named static
+  method of the file when the handler belonged to another class, or make a static helper class's method an instance
+  method that no longer compiled.
+- A typed request or response property read (`Get<T>()` on `TypedRequest` / `TypedResponse`) whose parameter holds
+  another type throws `InvalidPluginExecutionException` (it threw `InvalidCastException`), so the caller sees the
+  message naming the parameter. The base `Entity` to early-bound conversion is bound once per type instead of through
+  reflection on every read.
+- `RetryPolicy` rethrows the last fault with its original stack trace when a wait overran the time budget.
 
 ### Added (CLI)
 

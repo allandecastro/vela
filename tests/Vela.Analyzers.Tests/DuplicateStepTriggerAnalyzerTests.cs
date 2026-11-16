@@ -19,10 +19,17 @@ namespace Vela.Steps
         IStages OnCreate();
         IStages OnUpdate();
         IStages OnAssign();
+        IStages OnSendEmail();
+        IStages OnSendFax();
+        IStages OnWinOpportunity();
+        IStages OnRouteTo();
+        IStages OnFoo();
+        IAsyncStages OnAsyncOnly<TRequest>();
     }
     public interface IStages : IFluentStep { IMode PreOperation(); IMode PostOperation(); }
     public interface IMode : IFluentStep { IConfig Sync(); IConfig Async(); }
-    public interface IConfig : IFluentStep { void Handle(); }
+    public interface IAsyncStages : IFluentStep { IConfig PostOperation(); }
+    public interface IConfig : IFluentStep { void Handle(); IConfig WithDescription(string d); }
 }
 
 namespace Microsoft.Xrm.Sdk.Messages { public class CreateRequest { } }
@@ -32,6 +39,7 @@ namespace Microsoft.Crm.Sdk.Messages
     public class SendEmailRequest { }
     public class SendFaxRequest { }
     public class SetStateRequest { }
+    public class WinOpportunityRequest { }
 }
 
 namespace Vela.Messages
@@ -138,5 +146,52 @@ namespace Demo
             "RegisterStep().OnCreate().PreOperation().Sync().Handle();\n" +
             "            RegisterStep().OnUpdate().PreOperation().Sync().Handle();");
         await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Flags_every_typed_trigger_not_only_the_crud_ones()
+    {
+        // The message is derived from the method name against the shared TypedTriggers list.
+        string code = InRegister(
+            "RegisterStep().OnRouteTo().PostOperation().Sync().Handle();\n" +
+            "            RegisterStep().{|#0:OnRouteTo|}().PostOperation().Sync().Handle();");
+        await Verify.VerifyAnalyzerAsync(code, Expected("message 'routeto' at postoperation (sync)"));
+    }
+
+    [Fact]
+    public async Task Keys_a_typed_trigger_by_the_sdkmessage_it_registers_on()
+    {
+        // OnWinOpportunity() registers on Win; the request-typed form of the same message collides with it.
+        string code = InRegister(
+            "RegisterStep().OnSendEmail().PostOperation().Sync().Handle();\n" +
+            "            RegisterStep().{|#0:OnSendFax|}().PostOperation().Sync().Handle();\n" +
+            "            RegisterStep().OnWinOpportunity().PreOperation().Sync().Handle();\n" +
+            "            RegisterStep().{|#1:On<Microsoft.Crm.Sdk.Messages.WinOpportunityRequest>|}().PreOperation().Sync().Handle();");
+        await Verify.VerifyAnalyzerAsync(code,
+            Expected("message 'send' at postoperation (sync)"),
+            new DiagnosticResult(Vela.Analyzers.DuplicateStepTriggerAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+                .WithLocation(1).WithArguments("message 'win' at preoperation (sync)"));
+    }
+
+    [Fact]
+    public async Task Does_not_read_an_On_method_that_is_not_a_typed_trigger()
+    {
+        // OnFoo() is no typed trigger (a generated extension for a message Vela does not model): never guessed.
+        string code = InRegister(
+            "RegisterStep().OnFoo().PostOperation().Sync().Handle();\n" +
+            "            RegisterStep().OnFoo().PostOperation().Sync().Handle();");
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
+    public async Task Treats_an_OnAsyncOnly_step_as_asynchronous()
+    {
+        // An OnAsyncOnly<TRequest>() step runs asynchronously: it collides with an async step on the same message, not
+        // with a sync one, even when its chain names no mode.
+        string code = InRegister(
+            "RegisterStep().On<Microsoft.Crm.Sdk.Messages.SendEmailRequest>().PostOperation().Sync().Handle();\n" +
+            "            RegisterStep().OnAsyncOnly<Microsoft.Crm.Sdk.Messages.SendEmailRequest>().PostOperation().WithDescription(\"x\").Handle();\n" +
+            "            RegisterStep().{|#0:OnAsyncOnly<Microsoft.Crm.Sdk.Messages.SendEmailRequest>|}().PostOperation().WithDescription(\"y\").Handle();");
+        await Verify.VerifyAnalyzerAsync(code, Expected("message 'send' at postoperation (async)"));
     }
 }

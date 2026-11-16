@@ -1,4 +1,5 @@
 using System;
+using System.ServiceModel;
 using System.Linq;
 using Microsoft.Xrm.Sdk;
 using Xunit;
@@ -44,12 +45,16 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void Associate_over_an_undeclared_relationship_throws_with_guidance()
+        public void Associate_over_an_undeclared_relationship_faults_with_guidance()
         {
             InMemoryOrganizationService crm = new InMemoryOrganizationService();
-            Assert.Throws<InvalidOperationException>(() => crm.Associate(
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() => crm.Associate(
                 "account", Guid.NewGuid(), new Relationship("not_declared"),
                 new EntityReferenceCollection { new EntityReference("contact", Guid.NewGuid()) }));
+
+            // Verified live: an unknown relationship name faults with 0x80040216.
+            Assert.Equal(unchecked((int)0x80040216), fault.Detail.ErrorCode);
+            Assert.Contains("WithManyToMany(\"not_declared\"", fault.Detail.Message);
         }
 
         [Fact]
@@ -70,21 +75,27 @@ namespace Vela.Testing.Tests
             Assert.Equal(accountId, row.GetAttributeValue<EntityReference>("accountid").Id);
         }
 
-        [Fact]
-        public void Associate_over_a_self_referential_relationship_maps_columns_by_position()
+        [Theory]
+        [InlineData(EntityRole.Referencing, "parentid", "childid")]
+        [InlineData(EntityRole.Referenced, "childid", "parentid")]
+        public void Associate_over_a_self_referential_relationship_maps_columns_by_role(EntityRole role, string callerColumn, string relatedColumn)
         {
-            Guid parentId = Guid.NewGuid();
-            Guid childId = Guid.NewGuid();
+            Guid callerId = Guid.NewGuid();
+            Guid relatedId = Guid.NewGuid();
             InMemoryOrganizationService crm = new InMemoryOrganizationService()
                 .WithManyToMany("account_parent", "account_hierarchy", "account", "parentid", "account", "childid")
-                .Seed(new Entity("account") { Id = parentId }, new Entity("account") { Id = childId });
+                .Seed(new Entity("account") { Id = callerId }, new Entity("account") { Id = relatedId });
 
-            crm.Associate("account", parentId, new Relationship("account_parent"),
-                new EntityReferenceCollection { new EntityReference("account", childId) });
+            crm.Associate("account", callerId, new Relationship("account_parent") { PrimaryEntityRole = role },
+                new EntityReferenceCollection { new EntityReference("account", relatedId) });
 
             Entity row = Assert.Single(crm.GetAll("account_hierarchy"));
-            Assert.Equal(parentId, row.GetAttributeValue<EntityReference>("parentid").Id);
-            Assert.Equal(childId, row.GetAttributeValue<EntityReference>("childid").Id);
+            Assert.Equal(callerId, row.GetAttributeValue<EntityReference>(callerColumn).Id);
+            Assert.Equal(relatedId, row.GetAttributeValue<EntityReference>(relatedColumn).Id);
+
+            crm.Disassociate("account", callerId, new Relationship("account_parent") { PrimaryEntityRole = role },
+                new EntityReferenceCollection { new EntityReference("account", relatedId) });
+            Assert.Empty(crm.GetAll("account_hierarchy"));
         }
     }
 }
