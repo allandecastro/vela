@@ -1,7 +1,12 @@
 # Write a plugin
 
+This page covers the plugin side of Vela: how to declare steps, which images and request types a handler gets, the
+context helpers, errors, tracing and the sandbox rules. It assumes a solution created with
+[`vela init`](scaffold.md) and [early-bound models](models.md); [`vela add plugin`](add.md) generates the file to
+start from. A Custom API uses a different base class: see [Write a Custom API](custom-apis.md).
+
 A plugin is a class deriving from `EntityPluginBase<TEntity>` that declares its steps in `RegisterPluginSteps()`.
-Each step is one fluent chain that ends in a `Handle(...)`:
+Each step is one fluent chain that ends in `Handle(...)`:
 
 ```csharp
 namespace Zava.Plugins.Account.Plugins
@@ -33,9 +38,11 @@ namespace Zava.Plugins.Account.Plugins
 ```
 
 The `using` directives sit inside the namespace so that `Account` resolves to the model and not to the
-`Zava.Plugins.Account` namespace (see [Namespaces and usings](scaffold.md#namespaces-and-usings)). Deploy it with [`vela plan` / `vela apply`](plan-apply.md) and test it with
-[`PluginPipeline`](testing.md#simulate-the-pipeline-cascade), which runs its steps as Dataverse does
-(`PluginContext` is for edge cases: see [Which one to use](testing.md#which-one-to-use)). A Custom API is a different base class: see [Write a Custom API](custom-apis.md).
+`Zava.Plugins.Account` namespace (see [Namespaces and usings](scaffold.md#namespaces-and-usings)).
+
+Next steps: test the plugin with [`PluginPipeline`](testing.md#simulate-the-pipeline-cascade), which runs its steps
+as Dataverse does (`PluginContext` is for edge cases, see [Which one to use](testing.md#which-one-to-use)), then
+deploy it with [`vela plan` and `vela apply`](plan-apply.md).
 
 ## Choosing a step
 
@@ -48,40 +55,27 @@ The `using` directives sit inside the namespace so that `Account` resolves to th
 | Compare with the previous values | add `WithPreImage(...)` | Never on Create. |
 | Read the saved values | add `WithPostImage(...)` | PostOperation only, never on Delete. |
 | React to a message with no typed trigger (a Custom API, an unmodelled message) | `On<TRequest>()` (or a marker, `OnMessage<TMarker>()`) | See [Other messages](#other-messages). A message with a typed trigger is registered only through it ([VELA023](../reference/analyzers.md#vela023)). |
-| Change a record's state | `OnUpdate().FilterOn(x => x.StateCode)` | `SetStateRequest` is [deprecated](https://learn.microsoft.com/dotnet/api/microsoft.crm.sdk.messages.setstaterequest) in favour of an Update of `statecode`. That Update step also runs, at PreOperation and PostOperation, for a caller that still sends `SetStateRequest`. `On<SetStateRequest>()` (registers on `SetStateDynamicEntity`) is only for logic that needs that request's own inputs (`EntityMoniker`, `State`, `Status`). A step on `SetState` never fires ([VELA022](../reference/analyzers.md#vela022)). |
+| Change a record's state | `OnUpdate().FilterOn(x => x.StateCode)` | See [State changes](#state-changes). |
 
-## Several steps in one class
+### State changes
 
-A plugin class can declare several steps, each bound to its own handler:
+`SetStateRequest` is [deprecated](https://learn.microsoft.com/dotnet/api/microsoft.crm.sdk.messages.setstaterequest)
+in favour of an Update of `statecode`, so react to a state change with an Update step filtered on `StateCode`. That
+step also runs, at PreOperation and PostOperation, for a caller that still sends `SetStateRequest`.
+`On<SetStateRequest>()` (registered on `SetStateDynamicEntity`) is only for logic that needs that request's own
+inputs (`EntityMoniker`, `State`, `Status`). A step on `SetState` never fires
+([VELA022](../reference/analyzers.md#vela022)).
 
-```csharp
-protected override void RegisterPluginSteps()
-{
-    RegisterStep().OnCreate().PostOperation().Sync()
-        .FilterOn(a => a.Name, a => a.Telephone1)
-        .WithPostImage(a => a.Name, a => a.Telephone1)
-        .Handle(OnCreatePost);
+## Writing the Target: which stage persists
 
-    RegisterStep().OnUpdate().PostOperation().Sync()
-        .FilterOn(a => a.Name, a => a.Telephone1)
-        .WithPreImage(a => a.Name, a => a.Telephone1)
-        .Handle(OnUpdatePost);
-}
+Setting a column on the Target (`ctx.Request.Target.X = ...`) reaches the database only while the main operation
+is still ahead:
 
-private void OnCreatePost(OnCreatePostContext ctx) => ctx.Trace("Created: {0}", ctx.PostImage?.Name);
-
-private void OnUpdatePost(OnUpdatePostContext ctx) => ctx.Trace("Was: {0}", ctx.PreImage?.Name);
-```
-
-Several steps may also share a **trigger** (message, stage, mode and entity) when something tells them apart: their
-filtering attributes, their images, their relationship scope (`ForRelationship`) or an explicit
-`WithStepKey("...")`. Each is deployed as its own Dataverse step, and at run time the executing step
-(`OwningExtension`) selects the handler. Two steps on one trigger that differ in none of these (for example only by
-rank) are rejected at registration, and [VELA008](../reference/analyzers.md#vela008) flags them at build: give one a
-`WithStepKey(...)`.
-
-The handler is bound as a method group, so its context type is checked at build time: binding an `OnUpdate()`
-step to a handler taking `ICreatePostContext<Account>` is a [VELA015](../reference/analyzers.md#vela015) error.
+- **PreValidation / PreOperation (Sync):** the value is saved with the row. Set defaults, normalize and derive
+  columns here.
+- **PostOperation (Sync):** the row is already written, so the change is not saved. Call `ctx.Service.Update(...)`,
+  and pass data to later steps with a shared variable.
+- **Async:** no effect at all ([VELA018](../reference/analyzers.md#vela018)). Call `ctx.Service.Update(...)`.
 
 ## The step chain
 
@@ -104,7 +98,8 @@ The builder enforces this order (the type-state makes any other order a compile 
      `WithSupportedDeployment(...)`, `WithUnsecureConfig("...")`, `WithSecureConfigFrom("Name")`, `Disabled()`,
      `SkipWhenDepthAbove(n)`, and `ForRelationship(...)` on `OnAssociate()` / `OnDisassociate()`.
 5. **Handler**: `Handle(...)` closes the chain. A chain that stops earlier is flagged by
-   [VELA002](../reference/analyzers.md#vela002). `vela add` names the handler `Handle{Message}` (`HandleUpdate`)
+   [VELA002](../reference/analyzers.md#vela002), and a `static` handler by
+   [VELA004](../reference/analyzers.md#vela004). `vela add` names the handler `Handle{Message}` (`HandleUpdate`)
    unless you pass `--handler`.
 
 > [!NOTE]
@@ -112,6 +107,18 @@ The builder enforces this order (the type-state makes any other order a compile 
 > `a => a.Name`. [VELA001](../reference/analyzers.md#vela001) flags a selector on a base `Entity` member
 > (`a => a.LogicalName`) or a nested path (`a => a.PrimaryContactId.Id`), and the runtime rejects them too.
 > `vela models` names the `Id` override's column, so `a => a.Id` selects the primary key.
+
+### FilterOn on a bulk write
+
+- A single `OnCreate()` / `OnUpdate()` step also runs under `CreateMultiple` / `UpdateMultiple`, once per row whose
+  Target carries a filtered column.
+- An `OnCreateMultiple()` / `OnUpdateMultiple()` step fires once for the batch if at least one row carries a
+  filtered column (not at all if none do), and receives **every** row of `ctx.Request.Targets`, including the rows
+  without it: the filter gates the batch, not each row. Re-check each row (`target.Contains(...)`) before acting on
+  it.
+
+`FilterOn` fires the step when a column is **sent**, not when its value changes: see
+[Reacting only to real changes](#reacting-only-to-real-changes-haschanged).
 
 ### Execution order (rank)
 
@@ -130,7 +137,7 @@ RegisterStep().OnUpdate().PreOperation().Sync()
     .Handle(ValidateName);
 ```
 
-Steps sharing a rank run in an order Dataverse does not define. `vela plan` / `vela apply` warn when a step you
+Steps sharing a rank run in an order Dataverse does not define. `vela plan` and `vela apply` warn when a step you
 deploy shares its rank with another step in the environment (fatal under `--strict`).
 
 ### Relationship scope
@@ -180,32 +187,65 @@ RegisterStep().OnUpdate().PostOperation().Sync()
 
 `WithImpersonation(Guid systemUserId)` sets the step's `impersonatinguserid`: `ctx.Service` (and the injected
 `IOrganizationService`) then act as that user, while `ctx.InitiatingUserId` stays the caller. Without it the step
-runs as the calling user. `Guid.Empty` is rejected. `vela plan` / `vela apply` diff and write the field like any
+runs as the calling user. `Guid.Empty` is rejected. `vela plan` and `vela apply` diff and write the field like any
 other.
 
 ### Description, state and configuration
 
 - `WithDescription("...")` is the step description makers see. `vela apply` appends a `[vela:stepkey=...]` line
-  that keeps the step's identity if an admin renames it; leave it in place. Dataverse stores 256 characters
+  that keeps the step's identity if an admin renames the step; leave it in place. Dataverse stores 256 characters
   including that line, and `vela plan` rejects a longer description before any write.
-- Steps are registered enabled. `Disabled()` registers a dormant step (kill switch, phased rollout); `apply` sets
-  the state and `plan` shows the transition.
+- Steps are registered enabled. `Disabled()` registers a dormant step (kill switch, phased rollout); `vela apply`
+  sets the state and `vela plan` shows the transition.
 - Both configuration strings reach the constructor `(string unsecureConfig, string secureConfig)` and the protected
   `UnsecureConfig` / `SecureConfig` properties (never null):
-  - `WithUnsecureConfig("...")` is compiled into the assembly, stored unencrypted and printed by `plan`/`inspect`.
-    Never put a secret in it.
+  - `WithUnsecureConfig("...")` is compiled into the assembly, stored unencrypted and printed by `vela plan` and
+    `vela inspect`. Never put a secret in it.
   - `WithSecureConfigFrom("PaymentApiKey")` only **names** a secret. The value is supplied at deployment
     (`vela apply --secure-config PaymentApiKey=@payment-key.txt`, or the `VELA_SECURE_CONFIG_PaymentApiKey`
     environment variable), so it never lands in git or in the assembly. Plan output shows only a digest. With no
-    value given, `apply` never writes, clears or deletes the environment's secure configuration; an empty value
-    (`PaymentApiKey=`) clears it. See [plan and apply](plan-apply.md).
+    value given, `vela apply` never writes, clears or deletes the environment's secure configuration; an empty
+    value (`PaymentApiKey=`) clears it. See [Plan and apply](plan-apply.md).
+
+## Several steps in one class
+
+A plugin class can declare several steps, each bound to its own handler:
+
+```csharp
+protected override void RegisterPluginSteps()
+{
+    RegisterStep().OnCreate().PostOperation().Sync()
+        .FilterOn(a => a.Name, a => a.Telephone1)
+        .WithPostImage(a => a.Name, a => a.Telephone1)
+        .Handle(OnCreatePost);
+
+    RegisterStep().OnUpdate().PostOperation().Sync()
+        .FilterOn(a => a.Name, a => a.Telephone1)
+        .WithPreImage(a => a.Name, a => a.Telephone1)
+        .Handle(OnUpdatePost);
+}
+
+private void OnCreatePost(OnCreatePostContext ctx) => ctx.Trace("Created: {0}", ctx.PostImage?.Name);
+
+private void OnUpdatePost(OnUpdatePostContext ctx) => ctx.Trace("Was: {0}", ctx.PreImage?.Name);
+```
+
+Several steps may also share a **trigger** (message, stage, mode and entity) when something tells them apart: their
+filtering attributes, their images, their relationship scope (`ForRelationship`) or an explicit
+`WithStepKey("...")`. Each is deployed as its own Dataverse step, and at run time the executing step
+(`OwningExtension`) selects the handler. Two steps on one trigger that differ in none of these (for example only by
+rank) are rejected at registration, and [VELA008](../reference/analyzers.md#vela008) flags them at build: give one a
+`WithStepKey(...)`.
+
+The handler is bound as a method group, so its context type is checked at build time: binding an `OnUpdate()`
+step to a handler taking `ICreatePostContext<Account>` is a [VELA015](../reference/analyzers.md#vela015) error.
 
 ## Images
 
 An image is a snapshot of the record that Dataverse hands the step. The builder offers only the images the message
 and stage support, so an invalid image does not compile:
 
-| Message | Pre-image | Post-image | Request property |
+| Message | Pre-image | Post-image | Image taken from (`messagepropertyname`) |
 | --- | --- | --- | --- |
 | `Create` | no | PostOperation | `Id` |
 | `CreateMultiple` | no | PostOperation | `Ids` |
@@ -217,11 +257,11 @@ and stage support, so an invalid image does not compile:
 | other typed triggers | no | no | |
 
 Through `OnMessage<TMarker>()` and `On<TRequest>()` both images are offered, and the same rule table is checked when
-the step is built: a post-image before PostOperation, a pre-image on Create/CreateMultiple, a post-image on Delete
-and any image on `RouteTo` or `SendFromTemplate` throw. Images on `Send` / `DeliverIncoming` / `DeliverPromote` register against
-`EmailId`, on `SetState` / `SetStateDynamicEntity` against `EntityMoniker`, and on any other message against
-`Target`. `vela plan` checks the same table before writing anything, and [VELA007](../reference/analyzers.md#vela007)
-reports what it can see at build.
+the step is built: a post-image before PostOperation, a pre-image on Create or CreateMultiple, a post-image on Delete
+and any image on `RouteTo` or `SendFromTemplate` throw. Images on `Send`, `DeliverIncoming` and `DeliverPromote`
+register against `EmailId`, on `SetState` and `SetStateDynamicEntity` against `EntityMoniker`, and on any other
+message against `Target`. `vela plan` checks the same table before writing anything, and
+[VELA007](../reference/analyzers.md#vela007) reports what it can see at build.
 
 - **PreValidation pre-images.** A top-level PreValidation step runs outside the transaction and its image is read
   without a lock, so the row can change before the main operation. Use it for validation; a read that must match
@@ -247,11 +287,11 @@ RegisterStep().OnMerge().PreOperation().Sync()
 ### Typed step context (read images as `ctx.PreImage` / `ctx.PostImage`)
 
 Every **named** handler on a typed trigger (and on `On<TRequest>()`, `OnAsyncOnly<TRequest>()` and the `On<Name>()`
-extensions `vela models` generates) gets a generated context named
-`{Handler}Context`, nested in the plugin class. It derives from the message context (`UpdatePostContext<Account>`
-for a PostOperation Update) and, on Create, Update, Delete, Assign and Merge, exposes `ctx.PreImage` /
-`ctx.PostImage` typed to **exactly the captured columns**. Reading a column the step did not capture is a compile
-error. On CreateMultiple / UpdateMultiple it exposes the per-target lists `ctx.PreImages` / `ctx.PostImages`.
+extensions `vela models` generates) gets a generated context named `{Handler}Context`, nested in the plugin class.
+It derives from the message context (`UpdatePostContext<Account>` for a PostOperation Update) and, on Create,
+Update, Delete, Assign and Merge, exposes `ctx.PreImage` / `ctx.PostImage` typed to **exactly the captured
+columns**. Reading a column the step did not capture is a compile error. On CreateMultiple / UpdateMultiple it
+exposes the per-target lists `ctx.PreImages` / `ctx.PostImages`.
 
 ```csharp
 public sealed partial class AccountAudit(string unsecureConfig, string secureConfig)
@@ -336,11 +376,6 @@ and queue messages) and `ctx.Request.Targets` the `EntityCollection` of CreateMu
 | `OnAssign()` | `AssignRequest` | `ctx.Request.Target`, `ctx.Request.Assignee` |
 | `OnGrantAccess()` / `OnModifyAccess()` / `OnRevokeAccess()` | the SDK request | `ctx.Request.Target` |
 
-To **call** Upsert from plugin code, use `UpsertRequest<TEntity>` / `UpsertResponse`, or
-`service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))`, which upserts a copy of `account` keyed by exactly
-that key (`account` itself is not modified and must not have an id) and returns `(Created, Target)` (see
-[alternate keys](models.md#what-the-generated-table-classes-contain)).
-
 ## Messages
 
 Typed triggers exist for:
@@ -373,33 +408,40 @@ A **global** message (`Associate`, `Disassociate`, `UnlockSalesOrderPricing`, `U
 `RemoveProductFromKit`) has no per-table filter: its step registers on no table, whatever the plugin's `T`, and
 `ctx.PrimaryEntityName` is `none`.
 
+`OnAssign()` is entity-bound and fires on reassignment, with the new owner in `ctx.Request.Assignee`. An Update of
+`ownerid` fires Update steps only, never Assign.
+
 **One way per message.** A message with a typed trigger is registered through it. `On<TRequest>()` and
 `OnAsyncOnly<TRequest>()` are only for messages without one: `On<UpdateRequest>()` throws when the step is
 registered, naming the trigger to use, and [VELA023](../reference/analyzers.md#vela023) reports it at build with a
 code fix to `OnUpdate()`. `OnMessage<UpdateRequest>()` is rejected the same way.
 
 **A trigger is named after the SDK request; the step registers on the sdkmessage.** Where they differ, Dataverse only
-knows the sdkmessage, and the handler sees it in `ctx.MessageName`: `SendEmail` → `Send`, `SendEmailFromTemplate` →
-`SendFromTemplate`, `DeliverIncomingEmail` → `DeliverIncoming`, `DeliverPromoteEmail` → `DeliverPromote`,
-`WinOpportunity` / `WinQuote` → `Win`, `LoseOpportunity` → `Lose`, `CloseIncident` → `Close`, `CancelContract` →
-`Cancel`, `CloneContract` → `Clone`, `AddMembersTeam` → `AddMembers`, `RemoveMembersTeam` → `RemoveMembers`,
-`AddListMembersList` → `AddListMembers`, `AddMemberList` → `AddMember`, `RemoveMemberList` → `RemoveMember`,
-`AddItemCampaign` → `AddItem`, `RemoveItemCampaign` → `RemoveItem`, `SendFax` / `SendTemplate` → `Send`.
-The test harness (`PluginContext.For<T>().OnMessage("...")`, `WithRequest(...)`) translates the same way. The translation covers every
-SDK request whose name is not an sdkmessage, so `On<CloseQuoteRequest>()` registers on `Close` too, and
-`On<SetStateRequest>()` on `SetStateDynamicEntity` (a step on `SetState` never fires; `SetStateRequest` itself is
-deprecated, see [the table above](#choosing-a-step)). A request type outside the table
-states its sdkmessage with `[SdkMessage("...")]` (`Vela.Messages`).
+knows the sdkmessage, and the handler sees it in `ctx.MessageName`:
 
-`ReviseQuote`, `FulfillSalesOrder`, `ConvertQuoteToSalesOrder`, `GenerateSalesOrderFromOpportunity`,
-`GenerateInvoiceFromOpportunity` and the three `Get*ProductsFromOpportunity` accept no custom step (Dataverse fails
-with 0x80044187), so they have no trigger. Neither do `RenewContract`, `RenewEntitlement`, `QualifyMemberList`,
-`CopyCampaignResponse`, `ExecuteWorkflow`, `SetProcess`, `SendBulkMail`, `ReassignObjectsOwner`, `InitializeFrom`,
-`ConvertProductToKit` and `ConvertKitToProduct`, for the same reason. Global messages such as `WhoAmI` cannot carry an entity-bound step either;
-call them from a handler (`service.Execute(new WhoAmIRequest())`).
+| Trigger | sdkmessage |
+| --- | --- |
+| `SendEmail`, `SendFax`, `SendTemplate` | `Send` |
+| `SendEmailFromTemplate` | `SendFromTemplate` |
+| `DeliverIncomingEmail` / `DeliverPromoteEmail` | `DeliverIncoming` / `DeliverPromote` |
+| `WinOpportunity`, `WinQuote` / `LoseOpportunity` | `Win` / `Lose` |
+| `CloseIncident` / `CancelContract` / `CloneContract` | `Close` / `Cancel` / `Clone` |
+| `AddMembersTeam` / `RemoveMembersTeam` | `AddMembers` / `RemoveMembers` |
+| `AddListMembersList` / `AddMemberList` / `RemoveMemberList` | `AddListMembers` / `AddMember` / `RemoveMember` |
+| `AddItemCampaign` / `RemoveItemCampaign` | `AddItem` / `RemoveItem` |
 
-`OnAssign()` is entity-bound and fires on reassignment, with the new owner in `ctx.Request.Assignee`. An Update of
-`ownerid` fires Update steps only, never Assign.
+The test harness (`PluginContext.For<T>().OnMessage("...")`, `WithRequest(...)`) translates the same way. The
+translation covers every SDK request whose name is not an sdkmessage, so `On<CloseQuoteRequest>()` registers on
+`Close` too, and `On<SetStateRequest>()` on `SetStateDynamicEntity` (see [State changes](#state-changes)). A request
+type outside the table states its sdkmessage with `[SdkMessage("...")]` (`Vela.Messages`).
+
+**Messages without a trigger.** `ReviseQuote`, `FulfillSalesOrder`, `ConvertQuoteToSalesOrder`,
+`GenerateSalesOrderFromOpportunity`, `GenerateInvoiceFromOpportunity` and the three `Get*ProductsFromOpportunity`
+accept no custom step (Dataverse fails with 0x80044187), so they have no trigger. Neither do `RenewContract`,
+`RenewEntitlement`, `QualifyMemberList`, `CopyCampaignResponse`, `ExecuteWorkflow`, `SetProcess`, `SendBulkMail`,
+`ReassignObjectsOwner`, `InitializeFrom`, `ConvertProductToKit` and `ConvertKitToProduct`, for the same reason.
+Global messages such as `WhoAmI` cannot carry an entity-bound step either; call them from a handler
+(`service.Execute(new WhoAmIRequest())`).
 
 `vela init --samples` generates an `AccountMessageReference.cs` cheat sheet with one handler per message, to copy
 the shape you need. It is an `abstract` class, so it compiles but is never deployed.
@@ -407,9 +449,9 @@ the shape you need. It is an `abstract` class, so it compiles but is never deplo
 ### Other messages
 
 For a message without a typed trigger, when you have a request type (an SDK request, or one generated by
-[`vela models --messages` / `--custom-apis`](models.md)), use `On<TRequest>()`. The message name comes from the request's `RequestName`, and the handler gets
-its generated `{Handler}Context` (a `MessagePreContext<TRequest, TEntity>` / `MessagePostContext<TRequest, TEntity>`)
-with a typed `ctx.Request`:
+[`vela models --messages` / `--custom-apis`](models.md)), use `On<TRequest>()`. The message name comes from the
+request's `RequestName`, and the handler gets its generated `{Handler}Context` (a
+`MessagePreContext<TRequest, TEntity>` / `MessagePostContext<TRequest, TEntity>`) with a typed `ctx.Request`:
 
 ```csharp
 protected override void RegisterPluginSteps() =>
@@ -424,7 +466,7 @@ private void OnScore(OnScoreContext ctx)
 ```
 
 Without a request type, generate one (`vela models --messages <name>` / `--custom-apis <name>`), or use a marker type,
-`OnMessage<TMarker>()` (a class marked `[CustomMessage("...")]`), and bind either
+`OnMessage<TMarker>()` (a class marked `[CustomMessage("...")]`, namespace `Vela.Constants`), and bind either
 `.Handle(OnX)` with `void OnX(ILocalPluginContext ctx)`, or `.Handle<TRequest>(OnX)` with
 `IMessagePreContext<TRequest>` / `IMessagePostContext<TRequest>`. The two-argument forms
 `IMessagePreContext<TRequest, TEntity>` / `IMessagePostContext<TRequest, TEntity>` add `ctx.PreImage` /
@@ -434,62 +476,69 @@ These paths offer no `FilterOn`.
 An untyped `ILocalPluginContext` handler has no `ctx.Request`: read the record with `ctx.GetTarget<T>()`,
 `ctx.GetTargetRef()` (an `EntityReference` target) or `ctx.GetRequest<TRequest>()`.
 
-## Writing the Target: which stage persists
+## Read and write records
 
-Setting a column on the Target (`ctx.Request.Target.X = ...`) reaches the database only while the main operation
-is still ahead:
+Read with the typed helpers rather than `new ColumnSet(true)` ([VELA013](../reference/analyzers.md#vela013) flags
+all-columns reads in a plugin):
 
-- **PreValidation / PreOperation (Sync):** the value is saved with the row. Set defaults, normalize, derive here.
-- **PostOperation (Sync):** the row is already written; the change is not saved. Call `ctx.Service.Update(...)`,
-  and pass data to later steps with a shared variable.
-- **Async:** no effect at all ([VELA018](../reference/analyzers.md#vela018)). Call `ctx.Service.Update(...)`.
+```csharp
+using Microsoft.Xrm.Sdk.Query;   // ConditionOperator
+using Vela.Context;              // Retrieve<T>, RetrieveByKey, UpsertByKey
+using Vela.Querying;             // Query.For<T>()
 
-## Errors
+Account account = ctx.Service.Retrieve<Account>(id, a => a.Name, a => a.CreditLimit);
+Account byKey = ctx.Service.RetrieveByKey<Account>(Account.ByAccountNumberKey("A-001"), a => a.Name);
+Contact? first = Query.For<Contact>()
+    .Where(c => c.ParentCustomerId, ConditionOperator.Equal, id)
+    .Select(c => c.FullName)
+    .FirstOrDefault(ctx.Service);
+```
 
-- Throw `InvalidPluginExecutionException("...")` or `PluginBusinessException("...")` for a user-facing failure.
-  `PluginBusinessException(message, errorCode)` adds a code that an SDK caller reads from the fault's
-  `ErrorDetails["SubErrorCode"]` (the top-level code stays `0x80040265`; the Web API drops it).
-- A `FaultException<OrganizationServiceFault>` from a service call is rethrown unchanged, so the caller gets the
-  fault's own code (a duplicate key stays `0x80040237`).
-- Any other exception reaches the caller as `An unexpected error occurred. Correlation id: {id}.` and is traced in
-  full. [VELA012](../reference/analyzers.md#vela012) flags such throws. Override
-  `FormatUnexpectedErrorMessage(context, exception)` for a more detailed message.
-- Don't swallow an exception in a synchronous step: the operation would commit without the work. A swallowed failed
-  **write** fails the operation anyway (`0x8009000C`); a swallowed failed read is harmless. Catch only for
-  deliberate best-effort work, and trace it. [VELA027](../reference/analyzers.md#vela027) flags an empty `catch`
-  block.
+`Retrieve<T>` sends a real Retrieve (the steps registered on Retrieve run) and needs at least one column. See
+[Reading one record by id](queries.md#reading-one-record-by-id) and [Typed queries](queries.md) for the full
+query builder.
 
-## Context helpers
+To write by alternate key, `service.UpsertByKey(account, Account.ByAccountNumberKey("A-001"))` upserts a copy of
+`account` keyed by exactly that key (`account` itself is not modified and must not have an id) and returns
+`(Created, Target)`. `UpsertRequest<TEntity>` / `UpsertResponse` (`Vela.Messages`) are the request form. See
+[alternate keys](models.md#what-the-generated-table-classes-contain).
 
-- `ctx.Service` (the current user: the impersonated user if the step has one, otherwise the caller),
-  `ctx.SystemService` and `ctx.AsUser(userId)`. Every call through them is traced. `ctx.Service` accepts
-  early-bound entities directly.
-- `ctx.GetRequiredService<T>()`: see [Dependency injection](dependency-injection.md).
-- `ctx.GetTarget<T>()`, `ctx.GetTargetRef()`, `ctx.GetTargets()` / `ctx.TryGetTargets(...)`.
-- `ctx.GetPreImage<T>()` / `ctx.GetPostImage<T>()` (optional alias), and the bulk `ctx.GetPreImage(index, alias)`.
-- `ctx.GetPreImageMerged()` / `ctx.GetPostImageMerged()` (typed: `GetPreImageMerged<Account>()`): the image's
-  captured columns overlaid with the Target's. A column in neither is absent, not the stored value. The result is a
-  detached copy: writing to it does not persist. On a bulk step, `ctx.GetPreImageMerged(index)` /
-  `ctx.GetPostImageMerged(index)` merge one row's Target with its image.
-- `target.Contains(x => x.Name)` (all of), `target.ContainsAny(x => x.A, x => x.B)` (any of).
-- `ctx.HasChanged<Account>(x => x.Name)` / `ctx.HasAnyChanged<Account>(...)`: see below.
-- `entity.GetFormattedValue(x => x.StatusCode)`: the display value, or `null`.
+Two more helpers work on records:
+
 - `entity.Clone()` (`using Vela.Querying;`): a create-ready copy. It resets the id and drops the primary key, the
   audit columns (`createdon`, `createdby`, `modifiedon`, `modifiedby`, `versionnumber`), `RowVersion`,
   `EntityState`, `KeyAttributes`, `FormattedValues` and `RelatedEntities`, and deep-copies everything else (nested
   records of a collection column are cloned with their id reset). Business columns such as `ownerid` are kept.
-- `ctx.Tag`, `ctx.GetSharedVariable("key")`, `ctx.TryGetSharedVariable<T>("key", out var v)`: shared variables,
+- `service.UploadFile(...)` / `service.DownloadFile(...)` / `service.DeleteFile(...)` (`using Vela.Files;`): the
+  File and Image column block protocol, in blocks of at most 4 MB. A download whose size differs from the announced
+  size throws.
+
+## Context helpers
+
+- **Services.** `ctx.Service` (the current user: the impersonated user if the step has one, otherwise the caller),
+  `ctx.SystemService` and `ctx.AsUser(userId)`. Every call through them is traced (see [Tracing](#tracing)).
+  `ctx.Service` accepts early-bound entities directly. `ctx.GetRequiredService<T>()` resolves a registered service:
+  see [Dependency injection](dependency-injection.md).
+- **Target.** `ctx.GetTarget<T>()`, `ctx.GetTargetRef()`, `ctx.GetTargets()` / `ctx.TryGetTargets(...)`.
+- **Images.** `ctx.GetPreImage<T>()` / `ctx.GetPostImage<T>()` (optional alias), and the bulk
+  `ctx.GetPreImage(index, alias)`.
+- **Image merged with the Target.** `ctx.GetPreImageMerged()` / `ctx.GetPostImageMerged()` (typed:
+  `GetPreImageMerged<Account>()`): the image's captured columns overlaid with the Target's. A column in neither is
+  absent, not the stored value. The result is a detached copy: writing to it does not persist. On a bulk step,
+  `ctx.GetPreImageMerged(index)` / `ctx.GetPostImageMerged(index)` merge one row's Target with its image.
+- **Columns** (`using Vela.Querying;`). `target.Contains(x => x.Name)` (all of),
+  `target.ContainsAny(x => x.A, x => x.B)` (any of), `entity.GetFormattedValue(x => x.StatusCode)` (the display
+  value, or `null`).
+- **Changes.** `ctx.HasChanged<Account>(x => x.Name)` / `ctx.HasAnyChanged<Account>(...)`: see below.
+- **Shared variables.** `ctx.Tag`, `ctx.GetSharedVariable("key")`, `ctx.TryGetSharedVariable<T>("key", out var v)`,
   including those of parent contexts. A PreValidation step's shared variables reach the later stages only through
   the parent context, which these helpers walk.
-- `ctx.GetEnvironmentVariable("adc_X")` / `ctx.GetEnvironmentVariableAs<T>(...)`: see
-  [Environment variables](environment-variables.md).
-- `ctx.AcquireManagedIdentityToken(scopes)`: see [Managed identity](managed-identity.md).
-- `ctx.IsApplicationUser`, `ctx.EnvironmentId` (a string), `ctx.TenantId`, `ctx.InitiatingUserAgent`,
+- **Configuration and identity.** `ctx.GetEnvironmentVariable("adc_X")` / `ctx.GetEnvironmentVariableAs<T>(...)`
+  (see [Environment variables](environment-variables.md)), `ctx.AcquireManagedIdentityToken(scopes)` (see
+  [Managed identity](managed-identity.md)).
+- **Caller.** `ctx.IsApplicationUser`, `ctx.EnvironmentId` (a string), `ctx.TenantId`, `ctx.InitiatingUserAgent`,
   `ctx.IsPortalsClientCall`, `ctx.PortalsContactId`.
-- `service.UploadFile(...)` / `service.DownloadFile(...)` / `service.DeleteFile(...)` (`using Vela.Files;`): the
-  File/Image column block protocol, in blocks of at most 4 MB. A download whose size differs from the announced
-  size throws.
-- `ctx.LogInformation(...)`, `ctx.LogWarning(...)`, `ctx.LogError(ex, ...)`, `ctx.LogMetric(...)`: see
+- **Logging.** `ctx.LogInformation(...)`, `ctx.LogWarning(...)`, `ctx.LogError(ex, ...)`, `ctx.LogMetric(...)`: see
   [Telemetry](telemetry.md).
 
 ### Reacting only to real changes: HasChanged
@@ -512,27 +561,37 @@ private void OnCreditLimit(OnCreditLimitContext ctx)
 }
 ```
 
-It needs an entity Target (Create/Update; Delete, Assign and SetState carry an `EntityReference` and throw) and a
-pre-image holding the column, or it throws; a column absent from the Target counts as unchanged. It works at any
-stage that has a registered pre-image (PreValidation, PreOperation and PostOperation). It never compares with a
-post-image, which already holds the new value, and it is unavailable on Create, which has no prior state. Strings compare exactly (case included) and multi-select
-choices as sets.
+- It needs an entity Target (Create and Update; Delete, Assign and SetState carry an `EntityReference` and throw)
+  and a pre-image holding the column, or it throws. A column absent from the Target counts as unchanged.
+- It works at any stage that has a registered pre-image (PreValidation, PreOperation and PostOperation). It never
+  compares with a post-image, which already holds the new value, and it is unavailable on Create, which has no
+  prior state.
+- Strings compare exactly (case included) and multi-select choices as sets.
+
 [VELA009](../reference/analyzers.md#vela009) flags a `HasChanged` with no pre-image or on an uncaptured column.
 
-### FilterOn on a bulk write
+## Errors
 
-- A single `OnCreate()` / `OnUpdate()` step also runs under `CreateMultiple` / `UpdateMultiple`, once per row whose
-  Target carries a filtered column.
-- An `OnCreateMultiple()` / `OnUpdateMultiple()` step fires once for the batch if at least one row carries a
-  filtered column (not at all if none do), and receives **every** row of `ctx.Request.Targets`, including the rows
-  without it: the filter gates the batch, not each row. Re-check each row
-  (`target.Contains(...)`) before acting on it.
+- Throw `InvalidPluginExecutionException("...")` or `PluginBusinessException("...")` for a user-facing failure.
+  `PluginBusinessException(message, errorCode)` adds a code that an SDK caller reads from the fault's
+  `ErrorDetails["SubErrorCode"]` (the top-level code stays `0x80040265`; the Web API drops it). For a message in the
+  user's language, see [Localized messages](localization.md).
+- A `FaultException<OrganizationServiceFault>` from a service call is rethrown unchanged, so the caller gets the
+  fault's own code (a duplicate key stays `0x80040237`).
+- Any other exception reaches the caller as `An unexpected error occurred. Correlation id: {id}.` and is traced in
+  full. [VELA012](../reference/analyzers.md#vela012) flags such throws. Override
+  `FormatUnexpectedErrorMessage(context, exception)` for a more detailed message.
+- Don't swallow an exception in a synchronous step: the operation would commit without the work. A swallowed failed
+  **write** fails the operation anyway (`0x8009000C`); a swallowed failed read is harmless. Catch only for
+  deliberate best-effort work, and trace it. [VELA027](../reference/analyzers.md#vela027) flags an empty `catch`
+  block.
 
 ## Tracing
 
 - Whether a trace is persisted is the environment's **Plugin Trace Log** setting (`Off` / `Exception` / `All`), not
   code; there is no runtime verbosity switch (the sandbox has no environment variables to set). In code you control
-  each plugin class's automatic traces (below) and what you trace yourself. `ctx.Trace(...)` also goes to the platform's Application Insights logger at Information level.
+  each plugin class's automatic traces (below) and what you trace yourself. `ctx.Trace(...)` also goes to the
+  platform's Application Insights logger at Information level.
 - The runtime traces an `Executing ...` line and `Entering handler '<Name>' for message '<Message>'.` for each named
   handler (`protected override bool AutoTraceHandlerEntry => false;` silences the latter).
 - Each Dataverse call through the context services is traced as one line when it starts and one when it ends,
@@ -547,9 +606,9 @@ choices as sets.
   parameters, images and columns, never their values. To include values (and a success snapshot) while debugging:
   `protected override TraceSnapshotDetail AutoSnapshotDetail => TraceSnapshotDetail.Full;`. Snapshots go to the
   trace log only, never to Application Insights.
-- `ctx.TraceExecutionSnapshot("phase")` traces a snapshot at a point you choose, names, ids and counts only like the
-  automatic one; pass `TraceSnapshotDetail.Full` to include the values. `ctx.TraceMethod("details")` traces a light
-  checkpoint (method, message, stage, depth).
+- `ctx.TraceExecutionSnapshot("phase")` traces a snapshot at a point you choose, with names, ids and counts only,
+  like the automatic one; pass `TraceSnapshotDetail.Full` to include the values. `ctx.TraceMethod("details")` traces
+  a light checkpoint (method, message, stage, depth).
 
 > [!WARNING]
 > A full snapshot writes record values into the Plugin Trace Log. Keep it out of plugins handling sensitive data
@@ -577,7 +636,7 @@ A step that writes to its own table can fire itself again. Stop that in the step
 - **Write in a pre-stage.** A column set on the Target in PreValidation / PreOperation is saved with the row: no
   extra Update to recurse on.
 - **Filter on the columns that matter**, and leave them out of the step's own write.
-- **Check for a real change** with `HasChanged`.
+- **Check for a real change** with [`HasChanged`](#reacting-only-to-real-changes-haschanged).
 - **Flag your own write** with a shared variable. The cascaded execution sees it through its parent context:
 
   ```csharp
@@ -603,6 +662,11 @@ recursion prevention. `PluginPipeline` caps the cascade at the same depth by def
 
 ## Respect the sandbox
 
+- **No state on the plugin.** The sandbox caches a plugin instance and calls it concurrently, so a writable field
+  or a mutable collection on the class leaks data between executions
+  ([VELA011](../reference/analyzers.md#vela011)). Keep per-execution state in locals or services.
+- **No parallel work.** Don't start threads or tasks, and don't block on one
+  ([VELA024](../reference/analyzers.md#vela024)).
 - **No filesystem.** `File`, `Directory`, `FileStream`, `FileInfo` and `DirectoryInfo` throw at run time
   ([VELA019](../reference/analyzers.md#vela019)). Use `MemoryStream` or embedded resources. `System.IO.Path` string
   helpers are fine.
@@ -623,9 +687,12 @@ recursion prevention. `PluginPipeline` caps the cascade at the same depth by def
   ```
 
   No TLS setup is needed: the sandbox runs plugins on .NET Framework 4.8 with `SecurityProtocol` at
-  `SystemDefault`. Don't set `ServicePointManager.SecurityProtocol`; it is process-wide. The
-  scaffolded plugin project already references `System.Net.Http`.
-- **About 2 minutes** for the whole synchronous pipeline. Offload slow work to an async step or outside Dataverse.
+  `SystemDefault`. Don't set `ServicePointManager.SecurityProtocol`; it is process-wide. The scaffolded plugin
+  project already references `System.Net.Http`.
+- **Time limit.** Microsoft states that "a Dataverse message operation must complete within **2 minutes**",
+  including all its registered plug-ins, and advises limiting a plug-in to about 2 seconds
+  ([Time and resource constraints](https://learn.microsoft.com/power-apps/developer/data-platform/analyze-performance#time-and-resource-constraints)).
+  Offload slow work to an async step or outside Dataverse.
 - **Retry only what can be retried.** Service-protection limits don't apply to data operations from a plugin, and a
   failed call inside a transaction cannot be replayed (`RetryPolicy` runs the operation once when
   `ctx.IsInTransaction` is true). `RetryPolicy.Execute(ctx, ...)` is for calls that leave the sandbox; each wait is
@@ -640,6 +707,9 @@ recursion prevention. `PluginPipeline` caps the cascade at the same depth by def
 
 ## See also
 
-- [Typed queries](queries.md), [Dependency injection](dependency-injection.md), [Caching](caching.md).
-- [Testing with Vela.Testing](testing.md).
+- [Testing with Vela.Testing](testing.md): run the plugin's steps with `PluginPipeline`.
+- [Plan and apply](plan-apply.md): deploy the steps.
+- [Typed queries](queries.md), [Dependency injection](dependency-injection.md), [Caching](caching.md),
+  [Localized messages](localization.md).
 - [Escape hatches](escape-hatches.md): drop to the raw SDK.
+- [Analyzers](../reference/analyzers.md): every VELA rule cited on this page.
