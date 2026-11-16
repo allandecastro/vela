@@ -53,6 +53,8 @@ VELA_BUILD_SMOKE=1 dotnet test tests/Vela.Cli.Tests -c Release --no-build --filt
 ```
 
 Docs: `docfx docs/docfx.json --warningsAsErrors` must report 0 warnings.
+After adding, renaming or moving a docs page (give it a `_description` front matter) or changing a description, run
+`dotnet run docs/tools/UpdateLlmsTxt.cs` and commit the regenerated `docs/llms.txt`.
 
 ## Generated step API
 
@@ -82,7 +84,8 @@ A new typed message touches more files: [docs/contributing/extending-plugins.md]
   fixture and the golden file together.
 - Policy: every gated core stays at **80% or more** on both coverage and mutation score. A threshold may be
   ratcheted up, never lowered below 80. If a run dips, kill the surviving mutant or add the missing test.
-- `docs.yml`: docfx with `--warningsAsErrors` on pull requests that touch `docs/`, deployment from `main`.
+- `docs.yml`: on pull requests that touch `docs/`, checks that `docs/llms.txt` matches the tables of contents and
+  builds docfx with `--warningsAsErrors`; deployment from `main`.
 
 ## Conventions
 

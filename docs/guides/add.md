@@ -1,3 +1,7 @@
+---
+_description: "Generate a plugin, service, Custom API or test file, or add a step to an existing plugin"
+---
+
 # Add a component (`vela add`)
 
 `vela add` generates a **single** plugin, service, Custom API or test file into an existing project, or adds a step to

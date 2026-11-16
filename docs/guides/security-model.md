@@ -1,3 +1,7 @@
+---
+_description: "Opt-in security in the in-memory service: roles, privileges, business units, teams, sharing"
+---
+
 # Security model in tests
 
 By default the in-memory service of [`Vela.Testing`](testing.md) grants **full access**: most plugin tests do not

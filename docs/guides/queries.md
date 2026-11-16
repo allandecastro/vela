@@ -1,3 +1,7 @@
+---
+_description: "Typed QueryExpression and FetchXML with Query.For<T>(), and typed reads of one record with service.Retrieve<T>(id, a => a.Col) and RetrieveByKey"
+---
+
 # Typed queries
 
 Vela builds and runs Dataverse queries from your [early-bound models](models.md), so a table or column typo is a

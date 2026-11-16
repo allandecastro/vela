@@ -1,3 +1,7 @@
+---
+_description: "Typed table, Custom API and SDK message classes, security roles, drift checks, offline generation, TypeScript form and table types (preview)"
+---
+
 # Early-bound models (`vela models`)
 
 `vela models` generates typed C# classes from your Dataverse environment: early-bound table classes, typed

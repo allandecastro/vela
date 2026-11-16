@@ -1,3 +1,7 @@
+---
+_description: "The versioned JSON contract of plan, apply and inspect, and the exit codes"
+---
+
 # Machine-readable output
 
 `vela plan`, `vela apply` and `vela inspect` write a versioned JSON document that scripts, CI pipelines and coding

@@ -1,3 +1,7 @@
+---
+_description: "What is out of scope, and where the harness differs from Dataverse"
+---
+
 # Limitations
 
 This page lists what Vela does not do, by design, and the known gaps of each package. Check it before you file a

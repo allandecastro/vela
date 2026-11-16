@@ -1,3 +1,7 @@
+---
+_description: "The mutation gates, their thresholds and how to run an area locally"
+---
+
 # Mutation testing
 
 This page explains how Vela uses mutation testing (Stryker.NET) to guard its correctness-critical code: what the

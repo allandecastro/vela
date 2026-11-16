@@ -1,3 +1,7 @@
+---
+_description: "Preview then apply registrations: --solution (an unmanaged solution), secure config, batched writes, resuming a failed apply, CI usage"
+---
+
 # Plan and apply
 
 This page is the reference for `vela plan`, `vela apply` and `vela inspect`, the commands that deploy plugin

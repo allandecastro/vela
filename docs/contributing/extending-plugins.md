@@ -1,3 +1,7 @@
+---
+_description: "The files a new modelled message touches"
+---
+
 # Add a typed plugin message
 
 This page explains how to add a modelled message to the framework: a message with its own typed trigger

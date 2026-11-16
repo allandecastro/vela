@@ -1,3 +1,7 @@
+---
+_description: "Short answers to common questions"
+---
+
 # FAQ
 
 Short answers to common questions about Vela, grouped by topic. For the full list of what Vela does not do by

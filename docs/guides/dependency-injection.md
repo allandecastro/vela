@@ -1,3 +1,7 @@
+---
+_description: "The sandbox-safe container: registration, lifetimes, the built-in services and the user a service runs as"
+---
+
 # Dependency injection
 
 Vela ships a small resolver for plugins and Custom APIs: register services in `ConfigureServices` (or once for the

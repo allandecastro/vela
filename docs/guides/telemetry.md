@@ -1,3 +1,7 @@
+---
+_description: "Leveled, structured telemetry to the trace log and Application Insights through the platform logger"
+---
+
 # Telemetry and Application Insights
 
 Emit leveled, structured telemetry from a plugin handler. This page covers the log levels, custom dimensions,

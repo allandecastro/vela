@@ -1,3 +1,7 @@
+---
+_description: "Short recipes for the most common patterns"
+---
+
 # Cookbook
 
 Short recipes for the patterns you reach for most, for developers who already have a scaffolded solution (see the

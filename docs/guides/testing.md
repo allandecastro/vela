@@ -1,3 +1,7 @@
+---
+_description: "PluginPipeline (the default) runs the whole in-memory pipeline; PluginContext runs one plugin, for edge cases"
+---
+
 # Testing with Vela.Testing
 
 `Vela.Testing` runs plugins and Custom APIs **without a Dataverse connection** and **without a mocking library**.

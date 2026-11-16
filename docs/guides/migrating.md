@@ -1,3 +1,7 @@
+---
+_description: "Move an existing plugin or workflow-activity project to Vela"
+---
+
 # Migrating an existing plugin project to Vela
 
 This guide converts an existing Dataverse plugin or workflow-activity codebase to Vela: what to set up first, how

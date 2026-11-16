@@ -1,3 +1,7 @@
+---
+_description: "Fixes for common errors, in the order you meet them"
+---
+
 # Troubleshooting
 
 This page lists the errors you are most likely to meet with Vela, in the order you meet them (writing code,

@@ -20,7 +20,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/C%23-239120?style=for-the-badge&logo=csharp&logoColor=white" alt="C#" />
-  <img src="https://img.shields.io/badge/.NET_Framework_4.6.2--4.8-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET Framework 4.6.2-4.8" />
+  <img src="https://img.shields.io/badge/.NET_Framework_4.6.2--4.8-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET Framework 4.6.2 to 4.8" />
   <img src="https://img.shields.io/badge/.NET_10-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET 10" />
   <img src="https://img.shields.io/badge/Microsoft_Dataverse-107C10?style=for-the-badge&logo=microsoft&logoColor=white" alt="Microsoft Dataverse" />
   <img src="https://img.shields.io/badge/Power_Platform-742774?style=for-the-badge&logo=microsoftpowerplatform&logoColor=white" alt="Power Platform" />
@@ -30,7 +30,7 @@ Vela is a framework (`Vela.Plugins`), a CLI (`Vela.Cli`, command `vela`) and a n
 (`Vela.Testing`) for building Microsoft Dataverse plugins and Custom APIs, with a safe, preview-first
 `plan` → `apply` workflow.
 
-> **Status** - Pre-1.0, published on NuGet.org and actively developed. Until 1.0, a minor version (`0.y`) may contain
+> **Status:** pre-1.0, published on NuGet.org and actively developed. Until 1.0, a minor version (`0.y`) may contain
 > breaking changes; [`CHANGELOG.md`](CHANGELOG.md) calls them out with the migration. The framework packages
 > (`Vela.Messages`, `Vela.Plugins`, `Vela.Testing`) are versioned together, the CLI (`Vela.Cli`) on its own.
 
@@ -38,33 +38,33 @@ Vela is a framework (`Vela.Plugins`), a CLI (`Vela.Cli`, command `vela`) and a n
 
 Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://allandecastro.github.io/vela/)**:
 
-- [Getting started](https://allandecastro.github.io/vela/getting-started/install.html) - install, quickstart, initialize a solution
-- [Guides](https://allandecastro.github.io/vela/guides/) - plugins, Custom APIs, DI, caching, testing, plan and apply, models, signing
-- [Configuration](https://allandecastro.github.io/vela/configuration/) - authentication, environments and CI
-- [Reference](https://allandecastro.github.io/vela/reference/) - CLI cheat sheet, JSON output, analyzers, limitations, FAQ
+- [Getting started](https://allandecastro.github.io/vela/getting-started/install.html): install, quickstart, initialize a solution
+- [Guides](https://allandecastro.github.io/vela/guides/): plugins, Custom APIs, dependency injection, built-in services, testing, models, plan and apply, signing
+- [Configuration](https://allandecastro.github.io/vela/configuration/): authentication, environments and CI
+- [Reference](https://allandecastro.github.io/vela/reference/): CLI cheat sheet, JSON output, analyzers, limitations, FAQ
 
 ## Features
 
-- **Fluent base types** - declarative step registration and strongly-typed handlers for plugins and Custom APIs.
-- **Typed context helpers** - strongly-typed target/images, framework tracing, lightweight DI, and a TTL cache.
-- **Typed reads** - read one record by id (`service.Retrieve<Account>(id, a => a.Name)`), by alternate key, or query by
+- **Fluent base types:** declarative step registration and strongly-typed handlers for plugins and Custom APIs.
+- **Typed context helpers:** strongly-typed target and images, framework tracing, lightweight DI, and a TTL cache.
+- **Typed reads:** read one record by id (`service.Retrieve<Account>(id, a => a.Name)`), by alternate key, or query by
   criteria (`Query.For<Account>()`) with early-bound column selectors instead of column-name strings.
-- **Analyzers, code fixes and source generators** - bundled Roslyn analyzers (VELA001-VELA028) catch invalid step/column usage and plugin pitfalls at build time, several with an IDE code fix, and a source generator emits typed image projections and typed step contexts (`ctx.PreImage` / `ctx.PostImage`). Shipped inside `Vela.Plugins` - no extra reference or setup.
-- **`vela` CLI** - preview-first `plan` → `apply` of registrations, scaffolding (`vela init` / `vela add`), early-bound generation (`vela models`), package signing (`vela sign`)
-  and plug-in trace logs (`vela logs`).
-- **Idempotent apply** - safe upsert/delete of steps, Custom APIs, and images against a live environment.
-- **No-connection testing** - run plugins against an in-memory Dataverse with no live connection and no mocking-library dependency, with an **opt-in security model** (roles, privileges, business units, teams, sharing and relationship cascades) when you need it.
+- **Analyzers, code fixes and source generators:** bundled Roslyn analyzers (VELA001 to VELA028) catch invalid step and column usage and plugin pitfalls at build time, several with an IDE code fix, and a source generator emits typed image projections and typed step contexts (`ctx.PreImage` / `ctx.PostImage`). They ship inside `Vela.Plugins`, with no extra reference or setup.
+- **`vela` CLI:** preview-first `plan` → `apply` of registrations, scaffolding (`vela init` / `vela add`), early-bound generation (`vela models`), package signing (`vela sign`)
+  and execution logs from the Plug-in Trace Log or failed system jobs (`vela logs`).
+- **Idempotent apply:** safe upsert and delete of steps, Custom APIs, and images against a live environment.
+- **No-connection testing:** run plugins against an in-memory Dataverse with no live connection and no mocking-library dependency, with an **opt-in security model** (roles, privileges, business units, teams, sharing and relationship cascades) when you need it.
 
 ## Packages
 
 | Package | Target | What it gives you |
 | --- | --- | --- |
-| `Vela.Plugins` | .NET Framework 4.6.2 | Runtime: fluent plugin/Custom API base types, typed context helpers, lightweight DI and caching. Bundles the Roslyn analyzers (VELA001-VELA028), their code fixes and source generators (typed image projections and step contexts). |
+| `Vela.Plugins` | .NET Framework 4.6.2 | Runtime: fluent plugin and Custom API base types, typed context helpers, lightweight DI and caching. Bundles the Roslyn analyzers (VELA001 to VELA028), their code fixes and source generators (typed image projections and step contexts). |
 | `Vela.Messages` | .NET Framework 4.6.2, .NET 10.0 | Typed request/response base classes (`TypedRequest`, `CustomApiRequest`); a dependency of `Vela.Plugins`, usable alone from client code. |
-| `Vela.Cli` (command `vela`) | .NET 10.0 | Plan/apply, scaffolding, early-bound model generation and package signing for plugins and Custom APIs. |
+| `Vela.Cli` (command `vela`) | .NET 10.0 | Plan and apply, scaffolding, early-bound model generation and package signing for plugins and Custom APIs. |
 | `Vela.Testing` | .NET Framework 4.6.2 | Test harness: an in-memory Dataverse and plugin pipeline (`PluginPipeline`), plus a fluent fake execution context (`PluginContext`) for single-plugin edge cases. |
 
-The libraries target .NET Framework 4.6.2 so any supported plug-in project can reference them (see
+The libraries target .NET Framework 4.6.2 so any supported plugin project can reference them (see
 [Support for .NET Framework versions](https://learn.microsoft.com/power-apps/developer/data-platform/supported-customizations#support-for-net-framework-versions)
 on Microsoft Learn); `vela init` scaffolds plugin projects on `net48`. See [Target framework](https://allandecastro.github.io/vela/guides/migrating.html#before-you-start) for the plugin-package caveat.
 

@@ -1,3 +1,7 @@
+---
+_description: "Read Dataverse environment variables, typed, with a missing-value policy and optional caching"
+---
+
 # Environment variables
 
 Read Dataverse [environment variables](https://learn.microsoft.com/power-apps/maker/data-platform/environmentvariables)

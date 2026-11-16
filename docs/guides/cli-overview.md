@@ -1,3 +1,7 @@
+---
+_description: "Commands, generated help, option syntax, exit codes, proxy, solution prefix (vela solution show), execution logs (vela logs)"
+---
+
 # The vela CLI
 
 `Vela.Cli` is a .NET global tool that installs the **`vela`** command. This page lists the commands, explains the

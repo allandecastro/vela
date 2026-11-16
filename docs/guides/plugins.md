@@ -1,3 +1,7 @@
+---
+_description: "The step builder: typed triggers, stages, modes, FilterOn, images, several steps per class, typed handler contexts, context helpers, errors, tracing and the sandbox rules"
+---
+
 # Write a plugin
 
 This page covers the plugin side of Vela: how to declare steps, which images and request types a handler gets, the

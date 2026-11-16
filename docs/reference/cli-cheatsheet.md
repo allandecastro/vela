@@ -1,3 +1,7 @@
+---
+_description: "Every command, option and environment variable at a glance"
+---
+
 # CLI cheat sheet
 
 Every `vela` command and option on one page. For how the commands fit together, see
