@@ -7,8 +7,9 @@ All notable changes to Vela are documented here. The format is based on
 ## Versioning policy
 
 - Vela ships as **two independent release lines**:
-  - **Framework** - `Vela.Plugins` + `Vela.Testing`, versioned **together** (the test harness reuses the
-    runtime's internals via `InternalsVisibleTo`, so the two must stay in lockstep) and tagged `framework-vX.Y.Z`.
+  - **Framework** - `Vela.Messages` + `Vela.Plugins` + `Vela.Testing`, versioned **together** (the test harness
+    reuses the runtime's internals via `InternalsVisibleTo`, so the packages must stay in lockstep) and tagged
+    `framework-vX.Y.Z`.
   - **CLI** - `Vela.Cli`, versioned on its own cadence and tagged `cli-vX.Y.Z`.
 - **Pre-1.0 (`0.y.z`):** the public API is still settling. A **minor** bump (`0.y`) may contain breaking
   changes; a **patch** bump (`0.y.z`) is reserved for backwards-compatible fixes. Breaking changes are called
@@ -16,23 +17,32 @@ All notable changes to Vela are documented here. The format is based on
 - **From 1.0 onward:** standard SemVer - **major** for breaking changes, **minor** for backwards-compatible
   features, **patch** for backwards-compatible fixes.
 - A line is released by pushing its tag (`framework-vX.Y.Z` or `cli-vX.Y.Z`), which packs and publishes only
-  that line's package(s). The **Unreleased** section below accumulates changes until the next tag, at which
-  point it is renamed to that version with a date.
+  that line's package(s). The **Unreleased** section below accumulates the changes of both lines, each under a
+  heading that names its line (`### Fixed (Framework)`, `### Added (CLI)`, ...). Cutting a release moves that
+  line's entries out of **Unreleased** into a new `## [X.Y.Z] - YYYY-MM-DD (Vela.Cli)` or
+  `## [X.Y.Z] - YYYY-MM-DD (Vela.Messages + Vela.Plugins + Vela.Testing)` section, with the line dropped from the
+  headings; the other line's entries stay under **Unreleased** (see [RELEASING.md](RELEASING.md)).
 
 ## [Unreleased]
 
-### Fixed (Framework)
+### Changed (Framework, breaking)
 
 - `Vela.Testing`: with security on, a record's new owner must hold Read on the table, as in Dataverse. A Create with
   `ownerid`, an Update of `ownerid`, an `AssignRequest`, and a PreOperation plugin that sets `Target["ownerid"]` now
   fail with `0x80040299` when the owner holds no Read, or `0x80042f0a` on Update and Assign when the owner team has no
   role; the Update writes nothing. They succeeded before. Owners the security model does not declare, and the caller
-  itself, are not checked. Tests that hand records to a declared user or team with no Read on the table need a role
-  that grants it (User level is enough).
+  itself, are not checked. Migration: give the target owner a role with Read on the table (User level is enough).
+
+### Fixed (Framework)
+
 - A lightweight Custom API registered with a handler delegate, `RegisterCustomApi("name", ctx => ...)`, now runs that
   delegate. Only a lambda capturing `this` or a method of the plug-in itself worked before: a lambda capturing nothing
   or only locals, and a method of another object, threw `InvalidPluginExecutionException: handler
   '<RegisterCustomApi>b__...' was not found` on every call.
+- The `Vela.Testing` package depends on exactly the `Vela.Plugins` version of its release (`[X.Y.Z]`) instead of that
+  version or later. `Vela.Testing` uses `Vela.Plugins` internals, so a newer `Vela.Plugins` with an older
+  `Vela.Testing` could fail at run time with `MissingMethodException` or `TypeLoadException`; NuGet now reports the
+  mismatch at restore (NU1608). Reference the same version of both packages.
 
 ### Added (CLI)
 
@@ -54,7 +64,6 @@ All notable changes to Vela are documented here. The format is based on
   long scan, a wait at the apply prompt or a long apply could end in a 401 mid-apply (exit `7`). Vela now renews it
   when it is within five minutes of expiry (MSAL `AcquireTokenSilent`, or the Azure credential's `GetToken`). The
   connection-string and client-secret paths are unchanged: the SDK renews their token.
-
 - `vela add plugin`, `add step`, `add test`, `add service` and `add customapi` accept the table logical name in
   `--entity` (`--entity account`), as `--filtering-attributes` accepts a column logical name: it resolves to the
   generated model's class through its `EntityLogicalNameValue` (a wrong-case class name is corrected too), so the
@@ -88,6 +97,12 @@ All notable changes to Vela are documented here. The format is based on
   message the environment does not have (`Dataverse message not found`) or a table that message has no filter for
   (`no message filter exists for entity ...`). `apply` failed on these with exit `7` after its deletes and the package
   publish. A step on the message of a Custom API that the same run creates is not checked against the environment.
+- `vela init` no longer scaffolds against an unlisted framework version, nor a framework minor newer than the one the
+  CLI was released with. It resolved the highest version on nuget.org, unlisted ones included, so a withdrawn release
+  or a framework minor that changed the API the scaffold generates could give a solution that did not build. It now
+  takes the newest listed stable `Vela.Plugins` with the same minor as its built-in framework version (the same major
+  from 1.0), and uses that built-in version when nuget.org is unreachable or lists none. `--core-version` still pins
+  any version.
 
 ### Docs
 
@@ -96,7 +111,6 @@ All notable changes to Vela are documented here. The format is based on
   the token cache path, certificate authentication through `--connection-string`, `Associate` support for 1:N
   relationships, and "The plug-in type could not be found" in the first seconds after a deployment (run the operation
   again after a few seconds; bumping the assembly version does not change it).
-
 - [`vela add`](docs/guides/add.md) says `--entity` takes the class name or the table logical name.
 - The README lists the typed reads (`Retrieve<T>`, `RetrieveByKey`, `Query.For<T>()`) and `vela logs`, says `--solution`
   names an unmanaged solution, and links the security policy.

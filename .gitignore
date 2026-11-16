@@ -58,3 +58,6 @@ StrykerOutput/
 # DocFX local build output
 docs/_site/
 docs/obj/
+
+# macOS
+.DS_Store

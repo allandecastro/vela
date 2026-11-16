@@ -191,8 +191,8 @@ placed outside as warning IDE0065. See
   `--output ~/Desktop --name ZavaDemo` gives `~/Desktop/ZavaDemo`.
 - `--no-tests`; with `--samples`: `--no-integrations`, `--no-console`.
 - `--core-version <ver>` (also `--core-version=X`): the `Vela.Plugins` and `Vela.Testing` version the projects
-  reference. Default: the latest published framework version, resolved from nuget.org; when it cannot be resolved,
-  the framework version the CLI was released with.
+  reference. Default: the newest listed framework release on nuget.org that this CLI is compatible with (the same
+  minor as the framework version the CLI was released with); when none can be resolved, that framework version.
 - `--web-resources` (or `--webresources`, preview): also scaffold the TypeScript web-resources project (see below); `--web-resources-namespace`
   and `--web-resources-folder` set its global name and build folder (they warn and are ignored without
   `--web-resources`).

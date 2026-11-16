@@ -153,7 +153,7 @@ internal static class CliCommands
                     new("--no-integrations", CliOptionKind.Flag, "With --samples: skip the Integrations project."),
                     new("--no-tests", CliOptionKind.Flag, "Skip the unit tests project."),
                     new("--no-console", CliOptionKind.Flag, "With --samples: skip the console project."),
-                    new("--core-version", CliOptionKind.Value, "Vela.Plugins version (default: latest on nuget.org).", "ver"),
+                    new("--core-version", CliOptionKind.Value, "Vela.Plugins version (default: latest compatible release on nuget.org).", "ver"),
                     new("--managed-identity", CliOptionKind.Flag, "Add the signing step to the Integrations package (implies --integrations).", Aliases: ["--mi"]),
                     new("--web-resources", CliOptionKind.Flag, "(preview) Add a TypeScript web resources project.", Aliases: ["--webresources"]),
                     new("--web-resources-namespace", CliOptionKind.Value, "(preview) Namespace of the web resources.", "name"),

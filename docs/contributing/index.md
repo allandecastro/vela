@@ -46,12 +46,12 @@ CI runs the generator with `-- --check` and fails when the committed files are s
 
 ## Run the build smoke test
 
-The build smoke test (`Generate_ThenDotnetBuild_Succeeds`) packs the framework as version 1.0.0, scaffolds a
+The build smoke test (`Generate_ThenDotnetBuild_Succeeds`) packs the framework as version 0.0.0-local, scaffolds a
 solution with `vela init` and builds it. CI always runs it; run it locally when the scaffold changes. Clear the cached
-1.0.0 packages first, or the build compiles against an old framework:
+0.0.0-local packages first, or the build compiles against an old framework:
 
 ```bash
-rm -rf ~/.nuget/packages/vela.{plugins,testing,messages}/1.0.0
+rm -rf ~/.nuget/packages/vela.{plugins,testing,messages}/0.0.0-local
 VELA_BUILD_SMOKE=1 dotnet test tests/Vela.Cli.Tests -c Release --filter "FullyQualifiedName~Generate_ThenDotnetBuild_Succeeds"
 ```
 
@@ -61,7 +61,8 @@ The documentation samples in `docs/samples/Vela.DocSamples` are part of `Vela.sl
 their tests run, and the pages include them with `[!code-csharp[](...#region)]`. Build the site locally with:
 
 ```bash
-docfx docs/docfx.json --warningsAsErrors
+dotnet tool restore                                       # DocFX is pinned in .config/dotnet-tools.json
+dotnet tool run docfx docs/docfx.json --warningsAsErrors
 ```
 
 The docs workflow runs the same command on every pull request that touches `docs/`, and it must report 0 warnings.

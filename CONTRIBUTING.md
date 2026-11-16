@@ -140,9 +140,9 @@ actually compiles the generated C#. It always runs in CI; locally it is reported
 (it restores/builds, so it needs the SDK and the Microsoft packages):
 
 ```powershell
-# The smoke test packs Vela.Plugins / Vela.Testing / Vela.Messages as 1.0.0: evict any stale 1.0.0 from the
+# The smoke test packs Vela.Plugins / Vela.Testing / Vela.Messages as 0.0.0-local: evict any stale 0.0.0-local from the
 # global NuGet cache first, or it shadows the fresh local feed and the build compiles against old binaries.
-foreach ($p in 'vela.plugins', 'vela.testing', 'vela.messages') { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:USERPROFILE\.nuget\packages\$p\1.0.0" }
+foreach ($p in 'vela.plugins', 'vela.testing', 'vela.messages') { Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$env:USERPROFILE\.nuget\packages\$p\0.0.0-local" }
 $env:VELA_BUILD_SMOKE = "1"
 dotnet test .\tests\Vela.Cli.Tests --filter Generate_ThenDotnetBuild_Succeeds
 ```
@@ -153,7 +153,8 @@ The documentation site is built with DocFX from `docs/`. A pull request that tou
 warnings:
 
 ```bash
-docfx docs/docfx.json --warningsAsErrors
+dotnet tool restore                                       # DocFX is pinned in .config/dotnet-tools.json
+dotnet tool run docfx docs/docfx.json --warningsAsErrors
 ```
 
 [`docs/llms.txt`](docs/llms.txt) indexes the pages for AI tools. Its header and its `## Optional` section are
@@ -177,8 +178,9 @@ line, in this order: `Changed (Framework, breaking)`, `Added (Framework)`, `Chan
 dependencies that aren't shipped need no entry; a change to a shipped dependency floor (e.g. `Newtonsoft.Json` in
 `Vela.Plugins`) does.
 
-The `Changelog` workflow fails a pull request that changes `src/` or `docs/` without touching `CHANGELOG.md`. When
-no entry is needed, a maintainer adds the `no-changelog` label, which re-runs the check. Releases are cut by the
+The `Changelog` workflow fails a pull request that changes `src/`, `docs/`, `Directory.Packages.props`,
+`Directory.Build.props` or a `NUGET.md` without adding a `- ` entry line under `## [Unreleased]`. When no entry is
+needed, a maintainer adds the `no-changelog` label, which re-runs the check. Releases are cut by the
 maintainer (see [RELEASING.md](RELEASING.md)): don't bump versions or move entries out of `## [Unreleased]`.
 
 ## Release
@@ -189,5 +191,5 @@ Release artifacts are produced by the release pipeline and should include only t
 The packages follow [Semantic Versioning](https://semver.org/) and ship as two independent release lines: the
 **framework** (`Vela.Messages` + `Vela.Plugins` + `Vela.Testing`, versioned together) and the **CLI** (`Vela.Cli`). Record every
 notable change in [`CHANGELOG.md`](CHANGELOG.md) under **Unreleased** as you merge it (see [Changelog](#changelog)); cutting a release means
-renaming that section (with a date) and pushing the line's tag - `framework-vX.Y.Z` or `cli-vX.Y.Z` - which
+moving that line's entries into a dated section (see [RELEASING.md](RELEASING.md)) and pushing the line's tag - `framework-vX.Y.Z` or `cli-vX.Y.Z` - which
 packs and publishes only that line. See the changelog's *Versioning policy* section for the pre-1.0 rules.
