@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Metadata;
 
 namespace Vela.Testing
 {
@@ -35,9 +36,10 @@ namespace Vela.Testing
     /// </summary>
     /// <remarks>
     /// The ownership type is resolved per table: an explicit declaration (<c>AsOrganizationOwned</c>/<c>AsUserOwned</c>/
-    /// <c>AsVirtual</c>/<c>AsElastic</c>) wins; otherwise it is inferred from the early-bound type (a generated class
-    /// exposes an <c>OwnerId</c> property only for user/team-owned tables); late-bound rows with no declaration default
-    /// to user-owned. Values the caller already set are never overwritten on Create.
+    /// <c>AsVirtual</c>/<c>AsElastic</c>) wins; then the <c>OwnershipType</c> of the table's registered metadata
+    /// (<c>WithEntityMetadata</c>); then the early-bound type (a generated class exposes an <c>OwnerId</c> property only
+    /// for user/team-owned tables), also when the pipeline handed the store a plain copy of it; late-bound rows with
+    /// none of these default to user-owned. Values the caller already set are never overwritten on Create.
     /// </remarks>
     internal sealed class SystemFieldApplier
     {
@@ -63,6 +65,9 @@ namespace Vela.Testing
         private readonly Dictionary<string, OwnershipKind> _declared =
             new Dictionary<string, OwnershipKind>(StringComparer.OrdinalIgnoreCase);
 
+        private readonly Dictionary<string, OwnershipKind> _registered =
+            new Dictionary<string, OwnershipKind>(StringComparer.OrdinalIgnoreCase);
+
         public void Declare(string entityLogicalName, OwnershipKind kind)
         {
             if (string.IsNullOrWhiteSpace(entityLogicalName))
@@ -71,6 +76,41 @@ namespace Vela.Testing
             }
 
             _declared[entityLogicalName] = kind;
+        }
+
+        // The ownership the table's registered metadata states (WithEntityMetadata). A later registration replaces it;
+        // an OwnershipType that names no ownership (None, or not set) clears it.
+        public void Register(string entityLogicalName, OwnershipTypes? ownership)
+        {
+            OwnershipKind? kind = FromMetadata(ownership);
+            if (kind == null)
+            {
+                _registered.Remove(entityLogicalName);
+            }
+            else
+            {
+                _registered[entityLogicalName] = kind.Value;
+            }
+        }
+
+        private static OwnershipKind? FromMetadata(OwnershipTypes? ownership)
+        {
+            if (ownership == null)
+            {
+                return null;
+            }
+
+            if ((ownership.Value & OwnershipTypes.OrganizationOwned) != 0)
+            {
+                return OwnershipKind.OrganizationOwned;
+            }
+
+            if ((ownership.Value & (OwnershipTypes.UserOwned | OwnershipTypes.TeamOwned)) != 0)
+            {
+                return OwnershipKind.UserOwned;
+            }
+
+            return null;
         }
 
         /// <summary>Populates create-time system columns on <paramref name="stored"/> (the record about to be saved).</summary>
@@ -167,11 +207,18 @@ namespace Vela.Testing
                 return declared;
             }
 
-            // Early-bound generated classes expose an OwnerId property only for user/team-owned tables, so a
-            // typed instance lets us infer ownership with no configuration. Late-bound rows default to user-owned.
-            if (source != null && source.GetType() != typeof(Entity))
+            if (_registered.TryGetValue(logicalName, out OwnershipKind registered))
             {
-                return source.GetType().GetProperty(nameof(OwnerId)) != null
+                return registered;
+            }
+
+            // Early-bound generated classes expose an OwnerId property only for user/team-owned tables, so a
+            // typed instance lets us infer ownership with no configuration. The pipeline hands the store a plain copy
+            // of the target, which still carries the type it was copied from. Late-bound rows default to user-owned.
+            Type? earlyBound = source == null ? null : EntityValues.EarlyBoundType(source);
+            if (earlyBound != null)
+            {
+                return earlyBound.GetProperty(nameof(OwnerId)) != null
                     ? OwnershipKind.UserOwned
                     : OwnershipKind.OrganizationOwned;
             }

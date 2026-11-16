@@ -84,7 +84,9 @@ See [Sharing and assigning](https://learn.microsoft.com/power-apps/developer/dat
 Declare 1:N relationships with `WithParentalRelationship(...)`, `WithReferentialRelationship(..., restrictDelete: true)`
 or, for any other cascade configuration, `WithRelationship(..., cascade)`. Deleting a parent then cascades per the
 relationship: **Cascade** deletes the children, **RemoveLink** clears their lookup, and **Restrict** blocks the delete
-while children exist. Assign cascades the same way.
+while children exist. A Restrict met anywhere in the cascade, on a grandchild for example, fails the whole delete and
+leaves every record as it was. Assign cascades the same way. Each method takes an optional `schemaName`, the
+relationship's real schema name (see [Relationships](testing.md#relationships)).
 
 A table can be the child of only one parental relationship (one where Assign, Reparent, Share or Unshare cascades, or
 Delete is Cascade). Declaring a second one throws, unless it is over the same lookup column (a polymorphic lookup
