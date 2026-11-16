@@ -42,12 +42,11 @@ namespace Vela.Testing
                 // A read is not transactional: IsInTransaction is false at every stage (verified live for a top-level
                 // read). A read issued from inside a write's transaction still runs within it (its data and its
                 // rollback), but its steps also report false: that nested case was NOT verified live.
-                FireStage(ReadInvocation(PluginMessages.Retrieve, PluginStages.PreValidation, entityName, id, inputs.Parameters, null), asyncQueue);
-                FireStage(ReadInvocation(PluginMessages.Retrieve, PluginStages.PreOperation, entityName, id, inputs.Parameters, null), asyncQueue);
-
-                Entity entity = (Entity)_store.Execute(inputs).Results["Entity"];
-                ParameterCollection outputs = new ParameterCollection { [RetrieveOutput] = entity };
-                FireStage(ReadInvocation(PluginMessages.Retrieve, PluginStages.PostOperation, entityName, id, inputs.Parameters, outputs), asyncQueue);
+                ParameterCollection outputs = RunStages(
+                    stage => FireStage(ReadInvocation(PluginMessages.Retrieve, stage, entityName, id, inputs.Parameters, null), asyncQueue),
+                    () => new ParameterCollection { [RetrieveOutput] = (Entity)_store.Execute(inputs).Results["Entity"] },
+                    result => FireStage(ReadInvocation(PluginMessages.Retrieve, PluginStages.PostOperation, entityName, id, inputs.Parameters, result), asyncQueue),
+                    transactional: false);
 
                 RetrieveResponse response = new RetrieveResponse();
                 response.Results["Entity"] = outputs[RetrieveOutput];
@@ -72,14 +71,16 @@ namespace Vela.Testing
             return RunOperation(asyncQueue =>
             {
                 ParameterCollection inputs = new ParameterCollection { ["Query"] = RequestValues.Clone(query)! };
-                FireStage(ReadInvocation(PluginMessages.RetrieveMultiple, PluginStages.PreValidation, entityName, Guid.Empty, inputs, null), asyncQueue);
-                FireStage(ReadInvocation(PluginMessages.RetrieveMultiple, PluginStages.PreOperation, entityName, Guid.Empty, inputs, null), asyncQueue);
-
-                QueryBase effective = inputs["Query"] as QueryBase
-                    ?? throw new InvalidPluginExecutionException("RetrieveMultiple: a PreOperation step left InputParameters[\"Query\"] without a query.");
-                EntityCollection result = _store.RetrieveMultiple(effective);
-                ParameterCollection outputs = new ParameterCollection { [RetrieveMultipleOutput] = result };
-                FireStage(ReadInvocation(PluginMessages.RetrieveMultiple, PluginStages.PostOperation, entityName, Guid.Empty, inputs, outputs), asyncQueue);
+                ParameterCollection outputs = RunStages(
+                    stage => FireStage(ReadInvocation(PluginMessages.RetrieveMultiple, stage, entityName, Guid.Empty, inputs, null), asyncQueue),
+                    () =>
+                    {
+                        QueryBase effective = inputs["Query"] as QueryBase
+                            ?? throw new InvalidPluginExecutionException("RetrieveMultiple: a PreOperation step left InputParameters[\"Query\"] without a query.");
+                        return new ParameterCollection { [RetrieveMultipleOutput] = _store.RetrieveMultiple(effective) };
+                    },
+                    result => FireStage(ReadInvocation(PluginMessages.RetrieveMultiple, PluginStages.PostOperation, entityName, Guid.Empty, inputs, result), asyncQueue),
+                    transactional: false);
 
                 return (EntityCollection)outputs[RetrieveMultipleOutput];
             }, shared);

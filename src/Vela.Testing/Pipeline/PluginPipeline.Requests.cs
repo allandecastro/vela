@@ -286,17 +286,18 @@ namespace Vela.Testing
                 // pre stages and again after the merge (the subordinate's post-image is the deactivated record).
                 MergeStates? merge = request is MergeRequest mergeRequest ? MergeStates.Before(_store, mergeRequest) : null;
 
-                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PreValidation, entityName, entityId, request.Parameters, null), merge, post: false), asyncQueue);
-                EnterTransaction();
-                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PreOperation, entityName, entityId, request.Parameters, null), merge, post: false), asyncQueue);
+                return RunStages(
+                    stage => FireStage(WithMergeStates(GenericInvocation(message, stage, entityName, entityId, request.Parameters, null), merge, post: false), asyncQueue),
+                    () =>
+                    {
+                        OrganizationResponse response = request is MergeRequest mainMerge
+                            ? ExecuteMergeMain(mainMerge, asyncQueue)
+                            : TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = request.RequestName };
 
-                OrganizationResponse response = request is MergeRequest mainMerge
-                    ? ExecuteMergeMain(mainMerge, asyncQueue)
-                    : TryStoreExecute(request) ?? new OrganizationResponse { ResponseName = request.RequestName };
-
-                merge?.After(_store);
-                FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results), merge, post: true), asyncQueue);
-                return response;
+                        merge?.After(_store);
+                        return response;
+                    },
+                    response => FireStage(WithMergeStates(GenericInvocation(message, PluginStages.PostOperation, entityName, entityId, request.Parameters, response.Results), merge, post: true), asyncQueue));
             }, shared);
         }
 
