@@ -11,6 +11,9 @@ namespace Vela.Cli.Tests;
 
 public class ProjectScaffolderTests
 {
+    // The local-dev <Version> of the repo's framework projects: the build smoke tests pack them at this version.
+    private const string LocalFrameworkVersion = "0.0.0-local";
+
     private static ScaffoldOptions Options(string outputDir, bool console = true, bool integrations = true, bool tests = true, bool force = false, bool demos = true) => new(
         SolutionName: "ZavaSales",
         Prefix: "Zava",
@@ -18,7 +21,7 @@ public class ProjectScaffolderTests
         IncludeConsole: console,
         IncludeIntegrations: integrations,
         IncludeTests: tests,
-        CoreVersion: "1.0.0",
+        CoreVersion: LocalFrameworkVersion,
         Force: force,
         Interactive: false,
         IncludeSamples: demos);
@@ -69,7 +72,7 @@ public class ProjectScaffolderTests
     {
         RunInTempDir(temp =>
         {
-            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--output", temp, "--core-version", LocalFrameworkVersion], out ScaffoldOptions options, out _));
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
 
             string root = Path.Combine(temp, "ZavaSales");
@@ -109,7 +112,7 @@ public class ProjectScaffolderTests
     {
         RunInTempDir(temp =>
         {
-            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--integrations", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--integrations", "--output", temp, "--core-version", LocalFrameworkVersion], out ScaffoldOptions options, out _));
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
 
             string root = Path.Combine(temp, "ZavaSales");
@@ -162,7 +165,7 @@ public class ProjectScaffolderTests
     {
         RunInTempDir(temp =>
         {
-            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--managed-identity", "--no-tests", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--managed-identity", "--no-tests", "--output", temp, "--core-version", LocalFrameworkVersion], out ScaffoldOptions options, out _));
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
 
             string root = Path.Combine(temp, "ZavaSales");
@@ -213,7 +216,7 @@ public class ProjectScaffolderTests
     {
         RunInTempDir(temp =>
         {
-            Assert.True(ScaffoldOptions.TryParse(["VpmiSales", "--prefix", "Vpmi", "--publisher-prefix", "vpmi", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.True(ScaffoldOptions.TryParse(["VpmiSales", "--prefix", "Vpmi", "--publisher-prefix", "vpmi", "--output", temp, "--core-version", LocalFrameworkVersion], out ScaffoldOptions options, out _));
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
 
             string root = Path.Combine(temp, "VpmiSales");
@@ -233,7 +236,7 @@ public class ProjectScaffolderTests
     {
         RunInTempDir(temp =>
         {
-            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--output", temp, "--core-version", LocalFrameworkVersion], out ScaffoldOptions options, out _));
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
 
             string root = Path.Combine(temp, "ZavaSales");
@@ -1102,7 +1105,7 @@ public class ProjectScaffolderTests
         // every `vela add` kind - the code an agent or a developer actually starts from.
         RunInTempDir(temp =>
         {
-            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--publisher-prefix", "zava", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--publisher-prefix", "zava", "--output", temp, "--core-version", LocalFrameworkVersion], out ScaffoldOptions options, out _));
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
             string root = Path.Combine(temp, "ZavaSales");
 
@@ -1209,7 +1212,7 @@ public class ProjectScaffolderTests
         // Custom API and a test like the Plugins pair does.
         RunInTempDir(temp =>
         {
-            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--publisher-prefix", "zava", "--integrations", "--managed-identity", "--output", temp, "--core-version", "1.0.0"], out ScaffoldOptions options, out _));
+            Assert.True(ScaffoldOptions.TryParse(["ZavaSales", "--prefix", "Zava", "--publisher-prefix", "zava", "--integrations", "--managed-identity", "--output", temp, "--core-version", LocalFrameworkVersion], out ScaffoldOptions options, out _));
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(options));
             string root = Path.Combine(temp, "ZavaSales");
 
@@ -1246,7 +1249,7 @@ public class ProjectScaffolderTests
         Assert.True(messagesProject is not null, "Could not locate Vela.Messages.csproj from the test directory.");
 
         // The scaffold resolves Vela from nuget.org and emits no nuget.config; here we build against the repo's
-        // *current* Vela.Plugins / Vela.Testing (1.0.0) instead, so the test writes its own local-packages nuget.config
+        // *current* Vela.Plugins / Vela.Testing (LocalFrameworkVersion) instead, so the test writes its own local-packages nuget.config
         // (additive; nuget.org still resolves the Microsoft SDK / test packages) and packs those projects into it.
         string localFeed = Path.Combine(root, "local-packages");
         if (!Directory.Exists(localFeed))

@@ -4,7 +4,7 @@
     <AssemblyName>Vela.Plugins</AssemblyName>
     <RootNamespace>Vela</RootNamespace>
     <PackageId>Vela.Plugins</PackageId>
-    <Version>1.0.0</Version>
+    <Version>0.0.0-local</Version>
     <Title>Vela — Build Dataverse with confidence</Title>
     <Description>Vela runtime for Microsoft Dataverse: fluent plugin/Custom API base types, typed context helpers, lightweight DI and caching for plugins and Custom APIs.</Description>
   </PropertyGroup>

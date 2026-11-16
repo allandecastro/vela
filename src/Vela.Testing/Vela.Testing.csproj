@@ -4,7 +4,7 @@
     <AssemblyName>Vela.Testing</AssemblyName>
     <RootNamespace>Vela.Testing</RootNamespace>
     <PackageId>Vela.Testing</PackageId>
-    <Version>1.0.0</Version>
+    <Version>0.0.0-local</Version>
     <Title>Vela.Testing — Unit-test Dataverse plugins without a connection</Title>
     <Description>Test helpers for Vela plugins and Custom APIs: build a fake plugin execution context (no Dataverse connection, no mocking-library dependency) and assert behaviour with a fluent, strongly-typed builder.</Description>
     <!-- Extend the shared tags (defined in Directory.Build.props, imported before this body). -->
@@ -21,4 +21,16 @@
     <!-- ProjectReference (no PrivateAssets) so dotnet pack emits a NuGet dependency on Vela.Plugins. -->
     <ProjectReference Include="..\Vela.Plugins\Vela.Plugins.csproj" />
   </ItemGroup>
+
+  <!-- Vela.Testing uses Vela.Plugins internals (InternalsVisibleTo), so it only works with the Vela.Plugins of its own
+       release: pack the dependency as the exact range [X] instead of the `>= X` a ProjectReference packs.
+       _GetProjectReferenceVersions (NuGet pack targets) reads each referenced project's version into
+       _ProjectReferencesWithVersions; the pack task parses its ProjectVersion metadata as a version range. -->
+  <Target Name="VelaPinPluginsDependency" AfterTargets="_GetProjectReferenceVersions">
+    <ItemGroup>
+      <_ProjectReferencesWithVersions Condition="'%(Filename)' == 'Vela.Plugins' and !$([System.String]::Copy('%(ProjectVersion)').StartsWith('['))">
+        <ProjectVersion>[%(ProjectVersion)]</ProjectVersion>
+      </_ProjectReferencesWithVersions>
+    </ItemGroup>
+  </Target>
 </Project>

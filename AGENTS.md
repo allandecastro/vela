@@ -45,14 +45,15 @@ mono ~/.nuget/packages/xunit.runner.console/2.9.2/tools/net462/xunit.console.exe
 ```
 
 When the scaffold (`ProjectScaffolder`, `ScaffoldTemplates*`, `AddCommand`) changes, run the build smoke test. It
-packs the framework as 1.0.0, so clear that version from the NuGet cache first:
+packs the framework as 0.0.0-local, so clear that version from the NuGet cache first:
 
 ```bash
-rm -rf ~/.nuget/packages/vela.{plugins,testing,messages}/1.0.0
+rm -rf ~/.nuget/packages/vela.{plugins,testing,messages}/0.0.0-local
 VELA_BUILD_SMOKE=1 dotnet test tests/Vela.Cli.Tests -c Release --no-build --filter "FullyQualifiedName~Generate_ThenDotnetBuild_Succeeds"
 ```
 
-Docs: `docfx docs/docfx.json --warningsAsErrors` must report 0 warnings.
+Docs: `dotnet tool restore`, then `dotnet tool run docfx docs/docfx.json --warningsAsErrors` (DocFX is pinned in
+`.config/dotnet-tools.json`) must report 0 warnings.
 After adding, renaming or moving a docs page (give it a `_description` front matter) or changing a description, run
 `dotnet run docs/tools/UpdateLlmsTxt.cs` and commit the regenerated `docs/llms.txt`.
 
@@ -84,7 +85,7 @@ A new typed message touches more files: [docs/contributing/extending-plugins.md]
   fixture and the golden file together.
 - Policy: every gated core stays at **80% or more** on both coverage and mutation score. A threshold may be
   ratcheted up, never lowered below 80. If a run dips, kill the surviving mutant or add the missing test.
-- `docs.yml`: on pull requests that touch `docs/`, checks that `docs/llms.txt` matches the tables of contents and
+- `docs.yml`: on pull requests that touch `docs/`, `CHANGELOG.md` or `README.md`, checks that `docs/llms.txt` matches the tables of contents and
   builds docfx with `--warningsAsErrors`; deployment from `main`.
 
 ## Conventions
@@ -93,8 +94,8 @@ A new typed message touches more files: [docs/contributing/extending-plugins.md]
 - **CHANGELOG**: every user-visible change gets an entry under `## [Unreleased]`, under the existing heading of
   its kind and line: `### Changed (Framework, breaking)`, `### Added (Framework)`, `### Changed (Framework)`,
   `### Fixed (Framework)`, `### Changed (CLI, breaking)`, `### Added (CLI)`, `### Changed (CLI)`, `### Fixed (CLI)`,
-  `### Docs`. `changelog.yml` fails a PR that changes `src/` or `docs/` without `CHANGELOG.md`, unless it carries the
-  `no-changelog` label (CI, tests, internal refactors).
+  `### Docs`. `changelog.yml` fails a PR that changes `src/`, `docs/`, `Directory.*.props` or a `NUGET.md` without adding a
+  `- ` line under `## [Unreleased]`, unless it carries the `no-changelog` label (CI, tests, internal refactors).
 - **Web resources are a work-in-progress preview** (`--webresources`, `DataverseRegistration.WebResources.cs`, the
   client-side scaffold): exclude them from coverage and mutation gates, and don't invest in them.
 - **Plugin TFM**: the libraries target net462; the plugin projects scaffolded by `vela init` target net48.

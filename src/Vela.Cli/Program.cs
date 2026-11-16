@@ -100,9 +100,9 @@ static int RunNew(string[] args)
         return exitCode;
     }
 
-    // Unless the caller pinned a version, scaffold against the latest published framework resolved from
-    // nuget.org, so the CLI and framework can release on independent tags without the scaffold going stale.
-    // Falls back to the built-in default when offline.
+    // Unless the caller pinned a version, scaffold against the newest listed framework release on nuget.org that
+    // this CLI is compatible with (the release line of DefaultCoreVersion), so a framework patch release is picked
+    // up without a CLI release. Falls back to the built-in default when offline or when nothing compatible is listed.
     if (!options.CoreVersionPinned)
     {
         string? latest = ScaffoldOptions.ResolveLatestFrameworkVersion();
@@ -110,11 +110,11 @@ static int RunNew(string[] args)
         {
             options = options with { CoreVersion = latest };
             // A notice, not output: stderr, so `vela init --json` writes nothing but the JSON document to stdout.
-            Console.Error.WriteLine($"Scaffolding against Vela.Plugins {latest} (latest on nuget.org; override with --core-version).");
+            Console.Error.WriteLine($"Scaffolding against Vela.Plugins {latest} (latest compatible release on nuget.org; override with --core-version).");
         }
         else
         {
-            Console.Error.WriteLine($"Could not reach nuget.org; scaffolding against Vela.Plugins {options.CoreVersion} (built-in default). Override with --core-version.");
+            Console.Error.WriteLine($"Could not resolve a compatible Vela.Plugins release from nuget.org; scaffolding against Vela.Plugins {options.CoreVersion} (built-in default). Override with --core-version.");
         }
     }
 

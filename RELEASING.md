@@ -7,11 +7,11 @@ GitHub-hosted `windows-latest` runner (the net462 harness only builds on Windows
 
 | Line | Tag | Packages |
 | --- | --- | --- |
-| Framework | `framework-vX.Y.Z` | `Vela.Messages` + `Vela.Plugins` + `Vela.Testing` (versioned together) |
+| Framework | `framework-vX.Y.Z` | `Vela.Messages` + `Vela.Plugins` + `Vela.Testing` (versioned together; `Vela.Testing` depends on the exact `Vela.Plugins` version) |
 | CLI | `cli-vX.Y.Z` | `Vela.Cli` |
 
 The tag is the single source of truth for the version; the `<Version>` in each `.csproj` is only the
-local-dev default.
+local-dev default, `0.0.0-local`, which never collides with a published version.
 
 ## One-time setup (NuGet.org)
 
@@ -24,8 +24,18 @@ local-dev default.
 
 ## Cut a release
 
-1. Move the relevant entries from `## [Unreleased]` to a new `## [X.Y.Z] - YYYY-MM-DD` section in
-   [`CHANGELOG.md`](CHANGELOG.md) (open a PR, merge to `main`).
+1. In [`CHANGELOG.md`](CHANGELOG.md) (open a PR, merge to `main`), cut the line's section out of `## [Unreleased]`.
+   `Unreleased` holds both lines, each heading qualified by its line; a release takes only its own line's entries:
+   - Add a section right below `## [Unreleased]`, headed `## [X.Y.Z] - YYYY-MM-DD (Vela.Cli)` for the CLI, or
+     `## [X.Y.Z] - YYYY-MM-DD (Vela.Messages + Vela.Plugins + Vela.Testing)` for the framework.
+   - Move into it every entry under a heading of that line, and drop the line from the heading:
+     `### Changed (Framework, breaking)` becomes `### Changed (breaking)`, `### Added (CLI)` becomes `### Added`,
+     `### Fixed (Framework)` becomes `### Fixed`, and so on. Keep the order `Changed (breaking)`, `Added`,
+     `Changed`, `Fixed`. Remove the headings left empty in `Unreleased`.
+   - `### Docs` entries have no line: move them with the release they describe, or leave them for the next one.
+   - Entries of the other line stay under `## [Unreleased]`, under their qualified headings.
+   - A CLI release that follows a framework release bumps `ScaffoldOptions.DefaultCoreVersion` to that framework
+     version (a test fails until it matches the newest framework section) and says so under `### Changed`.
 2. For a framework release, in the same PR: move the rules listed in
    [`src/Vela.Analyzers/AnalyzerReleases.Unshipped.md`](src/Vela.Analyzers/AnalyzerReleases.Unshipped.md) (its
    `### New Rules`, `### Removed Rules` and `### Changed Rules` tables) to a new `## Release X.Y.Z` section at the
@@ -41,11 +51,12 @@ local-dev default.
 
 ## Framework version in scaffolded projects
 
-`vela init` resolves the latest published `Vela.Plugins` version from nuget.org at scaffold time, so a new
-framework release is picked up automatically with no CLI release. `--core-version X.Y.Z` still pins a specific
-version. The only remaining coupling is the offline fallback constant `ScaffoldOptions.DefaultCoreVersion`,
-used when nuget.org is unreachable; bump it to a recent published version when convenient, but it is no longer
-release-critical.
+`vela init` resolves, from the nuget.org registration index, the newest **listed** stable `Vela.Plugins` version
+on the release line of `ScaffoldOptions.DefaultCoreVersion`: the same minor before 1.0, the same major from 1.0. A
+framework patch release is picked up with no CLI release; an unlisted version is never picked. A new framework
+minor (or, from 1.0, major) may break the code the scaffold generates, so `vela init` uses it only once a CLI release
+bumps `DefaultCoreVersion` to it. When nuget.org is unreachable or lists no compatible version, `vela init` uses
+`DefaultCoreVersion` itself. `--core-version X.Y.Z` pins a specific version.
 
 ## Versioning
 
