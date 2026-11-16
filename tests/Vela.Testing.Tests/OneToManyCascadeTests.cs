@@ -264,7 +264,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithParentalRelationship("account", "contact", "parentcustomerid")
                 .WithSecurity(s => s
-                    .BusinessUnit(SalesBu)
+                    .BusinessUnit(SalesBu).BusinessUnit(new Guid("b0000000-0000-0000-0000-0000000003b9"))
                     .Role("mover", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Assign))
                     .User(Alice, SalesBu, "mover")
                     .User(Bob, new Guid("b0000000-0000-0000-0000-0000000003b9"))) // Bob in another BU

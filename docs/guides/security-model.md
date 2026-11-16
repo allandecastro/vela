@@ -28,11 +28,24 @@ evaluates access, see
 | `BusinessUnit(id, parent)` | A business unit, under its parent (none for the root). |
 | `Role(name, r => r.Grant(table, AccessLevel.X, Privilege.Y, ...))` | A named role and its grants. |
 | `User(id, businessUnit, roles...)` | A user in a business unit, with its roles. |
-| `Team(id, businessUnit, roles...)` | A team with its roles. `Team(id, businessUnit, TeamPrivilegeInheritance.TeamOnly, roles...)` gives the members the team's User-level grants only for records the team owns. |
+| `Team(id, businessUnit, roles...)` | A team with its roles. |
 | `Member(userId, teamId)` | A team membership: the member uses the team's roles. |
 
 `Role(...)` also takes an id, a template id and the grant tuples of a generated `Roles` class (see
 [Role membership](#role-membership)).
+
+**Member's privilege inheritance** is a setting of the role, as on the platform (`role.isinherited`): declare it with
+`r.MemberPrivilegeInheritance(TeamPrivilegeInheritance.TeamOnly)`. A user who holds such a role through a team uses
+its User-level grants only for records that team owns; its higher levels are unaffected, and the same user's other
+roles are not restricted. A role assigned to a user directly keeps all its grants. The older
+`Team(id, businessUnit, TeamPrivilegeInheritance.TeamOnly, roles...)` overload still works: it applies the setting to
+that team's roles only. See
+[Define the privileges and properties of a security role](https://learn.microsoft.com/power-platform/admin/security-roles-privileges#define-the-privileges-and-properties-of-a-security-role).
+
+The configuration fails fast with an `InvalidOperationException` when `WithSecurity` builds it if it names something
+it does not declare: a role or team not defined, a user or team in a business unit not declared (once any
+`BusinessUnit(...)` is declared), a `Manager`, `Position` or `FieldPermission` naming an unknown principal, two roles
+with the same id, or one id declared both as a user and as a team.
 
 ## Arrange with Seed, act with Create
 
@@ -78,6 +91,15 @@ nothing through a share.
 - `WithSharedRecord(record, principal, AccessRights.ReadAccess)` shares a record during arrange. It does not cascade.
 
 See [Sharing and assigning](https://learn.microsoft.com/power-apps/developer/data-platform/security-sharing-assigning).
+
+## Associate and Disassociate
+
+- **N:N relationship.** Associating or disassociating needs the **Append** privilege on the records of both tables,
+  whichever side the call is made from. See
+  [Table privileges](https://learn.microsoft.com/power-platform/admin/security-roles-privileges#table-privileges).
+- **1:N relationship.** The call writes each child's lookup through an Update, which needs Write and Append on the
+  child and, when the lookup is set, AppendTo on the parent. Called from the parent side, the harness also demands
+  AppendTo on the parent and Append on each child before writing.
 
 ## Relationship cascades
 
@@ -134,8 +156,15 @@ A report's record is reached whether the report owns it, the report's team owns 
 
 ## Field-level security
 
-`SecureColumn(table, column)` marks a column secured, and `FieldPermission(principal, table, column, read:, update:)`
-grants it. Without permission, a secured column is hidden on read and rejected on write, whatever the record access.
+`SecureColumn(table, column)` marks a column secured, and `FieldPermission(principal, table, column, read:, update:,
+create:)` grants it to a user or team, as a column security profile does. The three permissions are separate:
+
+- without `read`, the column is hidden on read (and an aggregate or group-by over it throws);
+- without `update`, an Update that sets the column throws;
+- without `create`, a Create that sets the column throws. `update: true` alone does not allow it.
+
+These checks apply whatever the record access. See
+[Column-level security](https://learn.microsoft.com/power-platform/admin/field-level-security).
 
 ## Role membership
 
