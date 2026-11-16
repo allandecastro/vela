@@ -603,6 +603,31 @@ internal static partial class DataverseRegistration
     return prefix.Length >= 2 && prefix.Length <= 8 && char.IsLetter(prefix[0]) && prefix.All(char.IsLetterOrDigit);
 }
 
+    // plan and apply deploy into an unmanaged solution of a development environment. Dataverse does not let a component
+    // be added to a managed solution (Learn: "Solutions in Power Apps", AddSolutionComponent "adds a solution component
+    // to an unmanaged solution"), so a --solution that is managed in the target environment means the run points at
+    // the wrong environment (a test or production one where the solution was imported managed). Checked once, after
+    // connecting and before anything is read or written; a missing solution fails here too rather than mid-apply.
+    internal static void EnsureSolutionIsUnmanaged(IOrganizationService service, string solutionUniqueName, string? environment)
+    {
+        QueryExpression query = new QueryExpression("solution")
+        {
+            ColumnSet = new ColumnSet("ismanaged"),
+            TopCount = 1,
+        };
+        query.Criteria.AddCondition("uniquename", ConditionOperator.Equal, solutionUniqueName);
+
+        Entity solution = service.RetrieveMultiple(query).Entities.FirstOrDefault()
+            ?? throw new InvalidOperationException($"Solution not found: {solutionUniqueName}");
+        if (solution.GetAttributeValue<bool>("ismanaged"))
+        {
+            throw new InvalidOperationException(
+                $"Solution '{solutionUniqueName}' is managed in {environment ?? "this environment"}. Vela deploys to the " +
+                "unmanaged solution in a development environment: check that the connection points at the development " +
+                "environment, not a test or production one where the solution was imported managed. Nothing was written.");
+        }
+    }
+
     internal static string ResolveSolutionCustomizationPrefix(IOrganizationService service, string solutionUniqueName)
 {
     QueryExpression query = new QueryExpression("solution")

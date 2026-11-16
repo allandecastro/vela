@@ -29,6 +29,21 @@ package already named with a prefix is uploaded as is: `vela init --publisher-pr
 `--solution` is optional there, and required only with `--webresources`. See
 [Authentication](../configuration/authentication.md) for the other ways to connect.
 
+`plan` and `apply` deploy into an unmanaged solution, which lives in a development environment. Right after
+connecting, before reading or writing anything, they check the `--solution` solution in the target environment and
+exit `4` when it does not exist, or when it is managed:
+
+```text
+Solution 'ZavaSales' is managed in https://zava-test.crm.dynamics.com. Vela deploys to the unmanaged solution in a
+development environment: check that the connection points at the development environment, not a test or production
+one where the solution was imported managed. Nothing was written.
+```
+
+A managed solution there usually means the connection points at a test or production environment, where the solution
+was imported managed. Microsoft documents that components can't be added to a managed solution: see
+[Solutions in Power Apps](https://learn.microsoft.com/power-apps/maker/data-platform/solutions-overview#contextual-commands).
+`inspect` is read-only and does not run this check.
+
 One run targets one solution. Packages that deploy into different solutions take one run per solution, each with its
 `-p`:
 
