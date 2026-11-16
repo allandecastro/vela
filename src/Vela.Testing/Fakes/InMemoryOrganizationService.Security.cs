@@ -268,8 +268,13 @@ namespace Vela.Testing
                 field = aliased.AttributeLogicalName;
             }
 
-            return _security!.IsSecuredColumn(table, field) && !_security.CanReadColumn(_currentUserId, table, field);
+            return IsUnreadableSecuredColumn(table, field);
         }
+
+        // Whether the column is field-secured and the current user holds no read permission on it. Assumes security
+        // is enforced.
+        private bool IsUnreadableSecuredColumn(string entity, string column) =>
+            !string.IsNullOrEmpty(column) && _security!.IsSecuredColumn(entity, column) && !_security.CanReadColumn(_currentUserId, entity, column);
 
         // Field-level security: reject a RetrieveMultiple that aggregates or groups by a field-secured column the
         // caller can't read (the aggregate value would otherwise leak it).
@@ -291,15 +296,7 @@ namespace Vela.Testing
 
             foreach (KeyValuePair<string, string> column in InMemoryQueryEngine.AttributeExpressionColumns(expression))
             {
-                DemandSecuredAggregateColumn(column.Key, column.Value);
-            }
-        }
-
-        private void DemandSecuredAggregateColumn(string entity, string column)
-        {
-            if (!string.IsNullOrEmpty(column) && _security!.IsSecuredColumn(entity, column) && !_security.CanReadColumn(_currentUserId, entity, column))
-            {
-                throw _security.PrivilegeDenied(_currentUserId, Privilege.Read, $"{entity}.{column}");
+                DemandSecuredColumnRead(column.Key, column.Value);
             }
         }
 
@@ -313,14 +310,16 @@ namespace Vela.Testing
                 return;
             }
 
-            if (!string.IsNullOrEmpty(column) && _security!.IsSecuredColumn(entity, column) && !_security.CanReadColumn(_currentUserId, entity, column))
+            if (IsUnreadableSecuredColumn(entity, column))
             {
-                throw _security.PrivilegeDenied(_currentUserId, Privilege.Read, $"{entity}.{column}");
+                throw _security!.PrivilegeDenied(_currentUserId, Privilege.Read, $"{entity}.{column}");
             }
         }
 
-        // Field-level security: reject a Create/Update that sets a field-secured column the caller can't write.
-        private void DemandSecuredColumnWrites(Entity entity)
+        // Field-level security: reject a Create that sets a field-secured column the caller has no create permission
+        // on, or an Update that sets one the caller has no update permission on (a column security profile grants the
+        // two separately).
+        private void DemandSecuredColumnWrites(Entity entity, bool onCreate)
         {
             if (Enforcing == null)
             {
@@ -329,9 +328,17 @@ namespace Vela.Testing
 
             foreach (string column in entity.Attributes.Keys)
             {
-                if (_security!.IsSecuredColumn(entity.LogicalName, column) && !_security.CanWriteColumn(_currentUserId, entity.LogicalName, column))
+                if (!_security!.IsSecuredColumn(entity.LogicalName, column))
                 {
-                    throw _security.PrivilegeDenied(_currentUserId, Privilege.Write, $"{entity.LogicalName}.{column}");
+                    continue;
+                }
+
+                bool allowed = onCreate
+                    ? _security.CanCreateColumn(_currentUserId, entity.LogicalName, column)
+                    : _security.CanUpdateColumn(_currentUserId, entity.LogicalName, column);
+                if (!allowed)
+                {
+                    throw _security.PrivilegeDenied(_currentUserId, onCreate ? Privilege.Create : Privilege.Write, $"{entity.LogicalName}.{column}");
                 }
             }
         }
@@ -492,7 +499,7 @@ namespace Vela.Testing
             EntityReference owner =
                 entity.Contains(SystemFieldApplier.OwnerId) && entity[SystemFieldApplier.OwnerId] is EntityReference explicitOwner
                     ? explicitOwner
-                    : new EntityReference("systemuser", _currentUserId);
+                    : new EntityReference(PrincipalKind.SystemUser, _currentUserId);
 
             if (Enforcing == null)
             {
@@ -510,8 +517,7 @@ namespace Vela.Testing
 
             _security.Demand(_currentUserId, entity.LogicalName, Privilege.Create, prospective);
 
-            bool ownedByCaller = string.Equals(owner.LogicalName, "systemuser", StringComparison.OrdinalIgnoreCase) && owner.Id == _currentUserId;
-            if (!ownedByCaller)
+            if (!PrincipalKind.IsUser(owner, _currentUserId))
             {
                 // Pass the prospective record (with its owner/BU set) so Assign is depth/BU-checked against the
                 // record's target owner, exactly as a real org checks an assignment — not treated as a blanket grant.
@@ -527,8 +533,7 @@ namespace Vela.Testing
         // caller owning its own record.
         private void DemandOwnerCanRead(string entityName, EntityReference? owner, bool onCreate)
         {
-            if (_security == null || owner == null ||
-                (string.Equals(owner.LogicalName, "systemuser", StringComparison.OrdinalIgnoreCase) && owner.Id == _currentUserId))
+            if (_security == null || owner == null || PrincipalKind.IsUser(owner, _currentUserId))
             {
                 return;
             }
@@ -540,11 +545,30 @@ namespace Vela.Testing
             }
         }
 
-        // Relating records needs AppendTo on the record being related to and Append on each record related to it,
-        // mirroring the platform. Off (or nothing configured) is a no-op.
-        private void DemandAssociationAccess(string entityName, Guid entityId, EntityReferenceCollection relatedEntities)
+        // Associating or disassociating over an N:N relationship needs Append on the records of both tables (Learn,
+        // security roles and privileges: "For many-to-many relationships, a user must have Append privilege for both
+        // tables being associated or disassociated"), whichever side the call is made from. Off is a no-op.
+        private void DemandManyToManyAccess(string entityName, Guid entityId, EntityReferenceCollection relatedEntities)
         {
             if (Enforcing == null)
+            {
+                return;
+            }
+
+            DemandAccess(entityName, Privilege.Append, StoredOrNull(entityName, entityId));
+            foreach (EntityReference related in relatedEntities)
+            {
+                DemandAccess(related.LogicalName, Privilege.Append, StoredOrNull(related.LogicalName, related.Id));
+            }
+        }
+
+        // A 1:N Associate/Disassociate made from the parent (referenced) side needs AppendTo on the parent and Append on
+        // each child before the children's lookups are written. From the child side no pre-check runs: the call is the
+        // Update of the child's lookup, which demands Write and Append on the child and, when it sets the lookup,
+        // AppendTo on the parent. Off is a no-op.
+        private void DemandOneToManyAccess(string entityName, Guid entityId, OneToManyRegistry.OneToMany relationship, EntityReferenceCollection relatedEntities)
+        {
+            if (Enforcing == null || !string.Equals(entityName, relationship.ReferencedEntity, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -654,7 +678,7 @@ namespace Vela.Testing
                 return access;
             }
 
-            AccessRights sharerRights = EffectiveAccess(new EntityReference("systemuser", _currentUserId), target);
+            AccessRights sharerRights = EffectiveAccess(new EntityReference(PrincipalKind.SystemUser, _currentUserId), target);
             return new PrincipalAccess { Principal = access.Principal, AccessMask = access.AccessMask & sharerRights };
         }
         // Applies each child 1:N relationship's Delete cascade, then removes the record via <paramref name="removeRecord"/>:
@@ -909,14 +933,14 @@ namespace Vela.Testing
         private void ApplyCascadedOwner(Entity child, EntityReference newOwner)
         {
             child[SystemFieldApplier.OwnerId] = newOwner;
-            if (string.Equals(newOwner.LogicalName, "team", StringComparison.OrdinalIgnoreCase))
+            if (PrincipalKind.IsTeam(newOwner))
             {
-                child[SystemFieldApplier.OwningTeam] = new EntityReference("team", newOwner.Id);
+                child[SystemFieldApplier.OwningTeam] = new EntityReference(PrincipalKind.Team, newOwner.Id);
                 child.Attributes.Remove(SystemFieldApplier.OwningUser);
             }
             else
             {
-                child[SystemFieldApplier.OwningUser] = new EntityReference("systemuser", newOwner.Id);
+                child[SystemFieldApplier.OwningUser] = new EntityReference(PrincipalKind.SystemUser, newOwner.Id);
                 child.Attributes.Remove(SystemFieldApplier.OwningTeam);
             }
 

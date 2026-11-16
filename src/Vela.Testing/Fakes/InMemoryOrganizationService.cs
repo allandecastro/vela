@@ -563,7 +563,7 @@ namespace Vela.Testing
             Entity resolved = WithResolvedLookupKeys(entity);
             DemandLookupTargetsExist(resolved, onCreate: true);
             DemandLookupAppends(resolved, null);
-            DemandSecuredColumnWrites(entity);
+            DemandSecuredColumnWrites(entity, onCreate: true);
 
             Entity stored = EntityValues.Clone(resolved);
             if (stored.Id == Guid.Empty)
@@ -1018,7 +1018,7 @@ namespace Vela.Testing
             Entity resolved = WithResolvedLookupKeys(entity);
             DemandLookupTargetsExist(resolved, onCreate: false);
             DemandLookupAppends(resolved, stored);
-            DemandSecuredColumnWrites(entity);
+            DemandSecuredColumnWrites(entity, onCreate: false);
 
             // Dataverse Update merges the supplied attributes onto the existing record. The merge is built on a copy
             // (deep-copying the incoming values, so the caller's entity does not stay aliased with the store) and
@@ -1667,7 +1667,6 @@ namespace Vela.Testing
         public void Associate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
             DemandStrictSecurityConfigured();
-            DemandAssociationAccess(entityName, entityId, relatedEntities);
 
             // A 1:N "association" is not an intersect row - it sets the child's lookup to the parent (an Update). Only
             // an N:N relationship uses an intersect table. Try N:N first, then 1:N, matching the real Associate; an
@@ -1676,6 +1675,7 @@ namespace Vela.Testing
             {
                 if (_oneToMany.TryResolveBySchema(relationship.SchemaName, out OneToManyRegistry.OneToMany oneToMany))
                 {
+                    DemandOneToManyAccess(entityName, entityId, oneToMany, relatedEntities);
                     DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
                     RunAtomically<object?>(() => { SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: true); return null; });
                     return;
@@ -1684,6 +1684,7 @@ namespace Vela.Testing
                 _relationships.Resolve(relationship.SchemaName); // not N:N or 1:N -> throws the standard guidance
             }
 
+            DemandManyToManyAccess(entityName, entityId, relatedEntities);
             DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
             DemandManyToManySides(relationship.SchemaName, rel, entityName, relatedEntities);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
@@ -1764,7 +1765,6 @@ namespace Vela.Testing
         public void Disassociate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
             DemandStrictSecurityConfigured();
-            DemandAssociationAccess(entityName, entityId, relatedEntities);
 
             // 1:N disassociate clears the child's lookup (an Update); only N:N removes intersect rows. Resolve first so
             // an undeclared relationship throws the standard guidance before the target-existence check.
@@ -1772,6 +1772,7 @@ namespace Vela.Testing
             {
                 if (_oneToMany.TryResolveBySchema(relationship.SchemaName, out OneToManyRegistry.OneToMany oneToMany))
                 {
+                    DemandOneToManyAccess(entityName, entityId, oneToMany, relatedEntities);
                     DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
                     RunAtomically<object?>(() => { SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: false); return null; });
                     return;
@@ -1780,6 +1781,7 @@ namespace Vela.Testing
                 _relationships.Resolve(relationship.SchemaName); // not N:N or 1:N -> throws the standard guidance
             }
 
+            DemandManyToManyAccess(entityName, entityId, relatedEntities);
             DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
@@ -2177,7 +2179,7 @@ namespace Vela.Testing
             // Deleting a file clears its File column: it needs Write on that record (and on the column when it is
             // secured), and touches no other column or table, even one holding the same Guid.
             DemandAccess(blob.EntityLogicalName, Privilege.Write, record);
-            DemandSecuredColumnWrites(new Entity(blob.EntityLogicalName, blob.RecordId) { [blob.AttributeName] = null });
+            DemandSecuredColumnWrites(new Entity(blob.EntityLogicalName, blob.RecordId) { [blob.AttributeName] = null }, onCreate: false);
             if (record.GetAttributeValue<Guid?>(blob.AttributeName) == fileId)
             {
                 record.Attributes.Remove(blob.AttributeName);

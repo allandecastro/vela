@@ -698,6 +698,79 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void Member_privilege_inheritance_is_set_per_role_on_a_team_holding_two_roles()
+        {
+            // The team holds a "Team privileges only" role (account) and a default role (contact). Through the team,
+            // Alice uses the first role's User-level Read only on the team's accounts, and the second one on her own
+            // contacts as well.
+            Guid ownAccount = Guid.NewGuid();
+            Guid teamAccount = Guid.NewGuid();
+            Guid ownContact = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("team-accounts", r => r
+                        .Grant("account", AccessLevel.User, Privilege.Read)
+                        .MemberPrivilegeInheritance(TeamPrivilegeInheritance.TeamOnly))
+                    .Role("contacts", r => r.Grant("contact", AccessLevel.User, Privilege.Read))
+                    .User(Alice, SalesBu)
+                    .Team(SalesTeam, SalesBu, "team-accounts", "contacts")
+                    .Member(Alice, SalesTeam))
+                .Seed(
+                    AccountOwnedBy(ownAccount, Alice, SalesBu),
+                    AccountOwnedByTeam(teamAccount, SalesTeam),
+                    new Entity("contact", ownContact)
+                    {
+                        ["ownerid"] = new EntityReference("systemuser", Alice),
+                        ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
+                    });
+
+            Assert.NotNull(svc.Retrieve("account", teamAccount, new ColumnSet(true)));
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Retrieve("account", ownAccount, new ColumnSet(true)));
+            Assert.NotNull(svc.Retrieve("contact", ownContact, new ColumnSet(true)));
+        }
+
+        [Fact]
+        public void A_team_only_role_assigned_to_a_user_directly_covers_their_own_records()
+        {
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("reader", r => r
+                        .Grant("account", AccessLevel.User, Privilege.Read)
+                        .MemberPrivilegeInheritance(TeamPrivilegeInheritance.TeamOnly))
+                    .User(Alice, SalesBu, "reader"))
+                .Seed(AccountOwnedBy(record, Alice, SalesBu));
+
+            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
+        }
+
+        [Fact]
+        public void The_team_shim_does_not_make_the_role_team_only_for_another_team()
+        {
+            // Team(id, bu, TeamOnly, roles) applies the setting to that team's roles only: the same role held through
+            // a default team still covers the member's own records.
+            Guid otherTeam = new Guid("7ea11000-0000-0000-0000-000000000005");
+            Guid record = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read))
+                    .User(Alice, SalesBu)
+                    .Team(SalesTeam, SalesBu, TeamPrivilegeInheritance.TeamOnly, "reader")
+                    .Team(otherTeam, SalesBu, "reader")
+                    .Member(Alice, SalesTeam)
+                    .Member(Alice, otherTeam))
+                .Seed(AccountOwnedBy(record, Alice, SalesBu));
+
+            Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
+        }
+
+        [Fact]
         public void A_members_own_role_still_covers_their_records_alongside_a_team_only_team()
         {
             Guid record = Guid.NewGuid();
@@ -919,7 +992,7 @@ namespace Vela.Testing.Tests
             Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));
         }
 
-        // --- Associate / Disassociate need Append (related) + AppendTo (primary) -------------------------
+        // --- N:N Associate / Disassociate need Append on both tables, whichever side the call is made from --
 
         private static InMemoryOrganizationService WithAccountContactM2M(Guid accountId, Guid contactId, Action<SecurityConfiguration> security) =>
             new InMemoryOrganizationService()
@@ -951,22 +1024,181 @@ namespace Vela.Testing.Tests
                 new EntityReferenceCollection { new EntityReference("contact", contactId) }));
         }
 
+        // Learn (security roles and privileges): "For many-to-many relationships, a user must have Append privilege
+        // for both tables being associated or disassociated."
+        private static Action<SecurityConfiguration> AppendOnBoth => s => s
+            .BusinessUnit(SalesBu)
+            .Role("linker", r => r
+                .Grant("account", AccessLevel.Organization, Privilege.Append)
+                .Grant("contact", AccessLevel.Organization, Privilege.Append))
+            .User(Alice, SalesBu, "linker");
+
         [Fact]
-        public void Associate_succeeds_with_append_and_appendto()
+        public void Associate_n_to_n_succeeds_with_append_on_both_tables_from_either_side()
+        {
+            Guid accountId = Guid.NewGuid();
+            Guid contactId = Guid.NewGuid();
+            InMemoryOrganizationService svc = WithAccountContactM2M(accountId, contactId, AppendOnBoth);
+
+            svc.Associate("account", accountId, new Relationship("account_contacts"),
+                new EntityReferenceCollection { new EntityReference("contact", contactId) });
+            Assert.Single(svc.GetAll("account_contact"));
+
+            svc.Disassociate("contact", contactId, new Relationship("account_contacts"),
+                new EntityReferenceCollection { new EntityReference("account", accountId) });
+            Assert.Empty(svc.GetAll("account_contact"));
+
+            svc.Associate("contact", contactId, new Relationship("account_contacts"),
+                new EntityReferenceCollection { new EntityReference("account", accountId) });
+            Assert.Single(svc.GetAll("account_contact"));
+        }
+
+        [Theory]
+        [InlineData("account")]
+        [InlineData("contact")]
+        public void Associate_n_to_n_is_denied_without_append_on_the_primary_table_even_with_appendto(string side)
+        {
+            // AppendTo on the primary record and Append on the related one was the harness's old rule; N:N needs
+            // Append on both tables, so the old grant set no longer relates the records, from either side.
+            Guid accountId = Guid.NewGuid();
+            Guid contactId = Guid.NewGuid();
+            string other = side == "account" ? "contact" : "account";
+            InMemoryOrganizationService svc = WithAccountContactM2M(accountId, contactId, s => s
+                .BusinessUnit(SalesBu)
+                .Role("linker", r => r
+                    .Grant(side, AccessLevel.Organization, Privilege.AppendTo)
+                    .Grant(other, AccessLevel.Organization, Privilege.Append))
+                .User(Alice, SalesBu, "linker"));
+            Guid primaryId = side == "account" ? accountId : contactId;
+            Guid relatedId = side == "account" ? contactId : accountId;
+
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Associate(
+                side, primaryId, new Relationship("account_contacts"),
+                new EntityReferenceCollection { new EntityReference(other, relatedId) }));
+
+            Assert.Equal(PrincipalPrivilegeDenied, fault.Detail.ErrorCode);
+            Assert.Contains($"prvAppend{side}", fault.Detail.Message);
+            Assert.Empty(svc.GetAll("account_contact"));
+        }
+
+        [Fact]
+        public void Disassociate_n_to_n_is_denied_without_append_on_the_related_table()
         {
             Guid accountId = Guid.NewGuid();
             Guid contactId = Guid.NewGuid();
             InMemoryOrganizationService svc = WithAccountContactM2M(accountId, contactId, s => s
                 .BusinessUnit(SalesBu)
                 .Role("linker", r => r
-                    .Grant("account", AccessLevel.Organization, Privilege.AppendTo)
-                    .Grant("contact", AccessLevel.Organization, Privilege.Append))
+                    .Grant("account", AccessLevel.Organization, Privilege.Append)
+                    .Grant("contact", AccessLevel.Organization, Privilege.AppendTo))
                 .User(Alice, SalesBu, "linker"));
 
-            svc.Associate("account", accountId, new Relationship("account_contacts"),
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Disassociate(
+                "account", accountId, new Relationship("account_contacts"),
+                new EntityReferenceCollection { new EntityReference("contact", contactId) }));
+
+            Assert.Contains("prvAppendcontact", fault.Detail.Message);
+        }
+
+        // --- 1:N Associate / Disassociate --------------------------------------------------------------
+
+        private static InMemoryOrganizationService WithAccountContact1N(Guid accountId, Guid contactId, Action<SecurityConfiguration> security) =>
+            new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithReferentialRelationship("account", "contact", "parentcustomerid")
+                .WithSecurity(security)
+                .Seed(
+                    AccountOwnedBy(accountId, Alice, SalesBu),
+                    new Entity("contact", contactId)
+                    {
+                        ["ownerid"] = new EntityReference("systemuser", Alice),
+                        ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
+                    });
+
+        // What the Update of the child's lookup demands: Write and Append on the child, AppendTo on the parent.
+        private static Action<SecurityConfiguration> LookupWriter => s => s
+            .BusinessUnit(SalesBu)
+            .Role("writer", r => r
+                .Grant("account", AccessLevel.Organization, Privilege.AppendTo)
+                .Grant("contact", AccessLevel.Organization, Privilege.Write, Privilege.Append))
+            .User(Alice, SalesBu, "writer");
+
+        [Fact]
+        public void Associate_one_to_many_from_the_child_side_is_decided_by_the_lookup_update()
+        {
+            // No AppendTo on the child and no Append on the parent: the old generic pre-check (AppendTo on the calling
+            // record, Append on the related one) denied this; the child's lookup Update allows it.
+            Guid accountId = Guid.NewGuid();
+            Guid contactId = Guid.NewGuid();
+            InMemoryOrganizationService svc = WithAccountContact1N(accountId, contactId, LookupWriter);
+            Relationship relationship = new Relationship("account_contact");
+
+            svc.Associate("contact", contactId, relationship, new EntityReferenceCollection { new EntityReference("account", accountId) });
+            Assert.Equal(accountId, Assert.Single(svc.GetAll("contact")).GetAttributeValue<EntityReference>("parentcustomerid").Id);
+
+            svc.Disassociate("contact", contactId, relationship, new EntityReferenceCollection { new EntityReference("account", accountId) });
+            Assert.Null(Assert.Single(svc.GetAll("contact")).GetAttributeValue<EntityReference>("parentcustomerid"));
+        }
+
+        [Fact]
+        public void Associate_one_to_many_from_the_child_side_is_denied_without_write_on_the_child()
+        {
+            Guid accountId = Guid.NewGuid();
+            Guid contactId = Guid.NewGuid();
+            InMemoryOrganizationService svc = WithAccountContact1N(accountId, contactId, s => s
+                .BusinessUnit(SalesBu)
+                .Role("appender", r => r
+                    .Grant("account", AccessLevel.Organization, Privilege.AppendTo, Privilege.Append)
+                    .Grant("contact", AccessLevel.Organization, Privilege.Append, Privilege.AppendTo))
+                .User(Alice, SalesBu, "appender"));
+
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Associate(
+                "contact", contactId, new Relationship("account_contact"),
+                new EntityReferenceCollection { new EntityReference("account", accountId) }));
+
+            Assert.Contains("prvWritecontact", fault.Detail.Message);
+            Assert.Null(Assert.Single(svc.GetAll("contact")).GetAttributeValue<EntityReference>("parentcustomerid"));
+        }
+
+        [Fact]
+        public void Associate_one_to_many_from_the_child_side_is_denied_without_appendto_on_the_parent()
+        {
+            Guid accountId = Guid.NewGuid();
+            Guid contactId = Guid.NewGuid();
+            InMemoryOrganizationService svc = WithAccountContact1N(accountId, contactId, s => s
+                .BusinessUnit(SalesBu)
+                .Role("writer", r => r
+                    .Grant("account", AccessLevel.Organization, Privilege.Append)
+                    .Grant("contact", AccessLevel.Organization, Privilege.Write, Privilege.Append, Privilege.AppendTo))
+                .User(Alice, SalesBu, "writer"));
+
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Associate(
+                "contact", contactId, new Relationship("account_contact"),
+                new EntityReferenceCollection { new EntityReference("account", accountId) }));
+
+            Assert.Contains("prvAppendToaccount", fault.Detail.Message);
+        }
+
+        [Fact]
+        public void Associate_one_to_many_from_the_parent_side_needs_appendto_on_the_parent_and_the_child_update()
+        {
+            Guid accountId = Guid.NewGuid();
+            Guid contactId = Guid.NewGuid();
+            InMemoryOrganizationService svc = WithAccountContact1N(accountId, contactId, LookupWriter);
+
+            svc.Associate("account", accountId, new Relationship("account_contact"),
                 new EntityReferenceCollection { new EntityReference("contact", contactId) });
 
-            Assert.Single(svc.GetAll("account_contact"));
+            Assert.Equal(accountId, Assert.Single(svc.GetAll("contact")).GetAttributeValue<EntityReference>("parentcustomerid").Id);
+
+            InMemoryOrganizationService denied = WithAccountContact1N(accountId, contactId, s => s
+                .BusinessUnit(SalesBu)
+                .Role("writer", r => r.Grant("contact", AccessLevel.Organization, Privilege.Write, Privilege.Append))
+                .User(Alice, SalesBu, "writer"));
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() => denied.Associate(
+                "account", accountId, new Relationship("account_contact"),
+                new EntityReferenceCollection { new EntityReference("contact", contactId) }));
+            Assert.Contains("prvAppendToaccount", fault.Detail.Message);
         }
 
         [Fact]
