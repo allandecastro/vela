@@ -118,6 +118,11 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (Framework)
 
+- `Vela.Testing`: a `Role(...)` declared or redefined on the `SecurityConfiguration` after `WithSecurity`, and a
+  `RoleBuilder.MemberPrivilegeInheritance(...)` changed afterwards, apply to the next privilege check, as `Grant`,
+  `User`, `Team` and `Member` changes already did. The security model copied the role list and the "team privileges
+  only" roles when `WithSecurity` built it, so such a change was ignored. The `WithSecurity` validation of role
+  names is not run again for these later changes: a role name that is still undeclared grants nothing.
 - `Vela.Testing`: a row created through `PluginPipeline` from an early-bound class without an `OwnerId` property is
   organization-owned, as it already was through `InMemoryOrganizationService`. It got `ownerid`, `owninguser` and
   `owningbusinessunit` before, because the pipeline's copy of the target lost its type. The `OwnershipType` of
