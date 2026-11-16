@@ -83,7 +83,9 @@ A new typed message touches more files: [docs/contributing/extending-plugins.md]
 - **Commits and PRs carry no AI attribution**: no `Co-Authored-By` trailer for an AI, no "Generated with" line.
 - **CHANGELOG**: every user-visible change gets an entry under `## [Unreleased]`, under the existing heading of
   its kind and line: `### Changed (Framework, breaking)`, `### Added (Framework)`, `### Changed (Framework)`,
-  `### Fixed (Framework)`, `### Changed (CLI, breaking)`, `### Added (CLI)`, `### Fixed (CLI)`.
+  `### Fixed (Framework)`, `### Changed (CLI, breaking)`, `### Added (CLI)`, `### Changed (CLI)`, `### Fixed (CLI)`,
+  `### Docs`. `changelog.yml` fails a PR that changes `src/` or `docs/` without `CHANGELOG.md`, unless it carries the
+  `no-changelog` label (CI, tests, internal refactors).
 - **Web resources are a work-in-progress preview** (`--webresources`, `DataverseRegistration.WebResources.cs`, the
   client-side scaffold): exclude them from coverage and mutation gates, and don't invest in them.
 - **Plugin TFM**: the libraries target net462; the plugin projects scaffolded by `vela init` target net48.

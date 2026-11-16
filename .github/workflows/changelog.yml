@@ -1,0 +1,54 @@
+name: Changelog
+
+# A pull request that changes what users get (src/: the packages, the CLI, the analyzers; docs/: the documentation
+# site) must add an entry to CHANGELOG.md under `## [Unreleased]`, unless a maintainer labels it `no-changelog` (CI,
+# tests, internal refactors, editorial docs passes). Dependency bumps only touch Directory.Packages.props, so they pass
+# unless they also change src/. See CONTRIBUTING.md#changelog.
+#
+# Adding or removing the label re-runs the check (`labeled` / `unlabeled`). It runs on `pull_request`, never
+# `pull_request_target`: fork PRs get a read-only token and no secrets, and the check needs neither.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0 # the diff needs the merge base of the PR and its base branch
+      - name: CHANGELOG.md updated for shipped changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          NO_CHANGELOG: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
+        run: |
+          if [ "$NO_CHANGELOG" = "true" ]; then
+            echo "Labelled no-changelog: no entry required."
+            exit 0
+          fi
+          # Three dots: the changes of the PR since it branched, whatever has landed on the base branch since.
+          changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          shipped=$(printf '%s\n' "$changed" | grep -E '^(src|docs)/' || true)
+          if [ -z "$shipped" ]; then
+            echo "No change under src/ or docs/: no entry required."
+            exit 0
+          fi
+          if printf '%s\n' "$changed" | grep -qx 'CHANGELOG.md'; then
+            echo "CHANGELOG.md is updated."
+            exit 0
+          fi
+          echo "Shipped files changed without a CHANGELOG.md entry:"
+          printf '%s\n' "$shipped" | sed 's/^/  /'
+          echo "::error title=CHANGELOG.md not updated::This pull request changes src/ or docs/ but not CHANGELOG.md. Add one entry under '## [Unreleased]', in the existing heading of its kind (e.g. '### Fixed (CLI)'); see CONTRIBUTING.md#changelog. If the change is not user-visible (CI, tests, an internal refactor), a maintainer adds the 'no-changelog' label instead."
+          exit 1
