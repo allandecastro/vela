@@ -1,6 +1,8 @@
 # Dependency update pull requests. NuGet versions are pinned centrally in Directory.Packages.props (and the Stryker
-# tool in .config/dotnet-tools.json); the workflows pin third-party actions by major version. Minor and patch updates
-# are grouped into one pull request per ecosystem; a major update gets its own.
+# tool in .config/dotnet-tools.json). The workflows pin GitHub's own actions (actions/*) by major version, and the
+# third-party actions of release.yml (which hold the NuGet OIDC token and the release write token) by full commit SHA
+# with a `# vX.Y.Z` comment; Dependabot bumps the SHA and the comment together. Minor and patch updates are grouped
+# into one pull request per ecosystem; a major update gets its own.
 version: 2
 updates:
   - package-ecosystem: nuget
