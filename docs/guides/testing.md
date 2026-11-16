@@ -59,7 +59,8 @@ post images), and a plugin's own writes fire further steps (the **cascade**).
   the assembly. It throws when a step or Custom API names a type it cannot resolve, since that registration would
   never fire.
 - `PluginPipeline.Empty().Register<MyPlugin>()` scopes a test to the plugins you name. `Register<T>()` throws for a
-  type that declares no step and no Custom API.
+  type that declares no step and no Custom API, and for a type already registered (by an earlier `Register` or by
+  `FromAssembly`), whose steps would otherwise fire twice.
 
 ### Configure the pipeline
 
@@ -74,6 +75,7 @@ clock and id sequence; see [In-memory Dataverse](#in-memory-dataverse)). It adds
 | `WithMaxDepth(n)` | The cascade depth limit (default 8, the Dataverse default). |
 | `WithManagedIdentityService(service)` | A managed-identity service for every plugin and Custom API the pipeline runs (see [Managed identity](managed-identity.md#testing)). |
 | `WithService<T>(instance)` | A test double for a service the plugin registers (see [Replacing services](#replacing-services)). |
+| `WithEnvironmentId(id)`, `WithTenantId(id)`, `AsApplicationUser()` | The `EnvironmentId`, `TenantId` and `IsApplicationUser` of every step's context (empty, `Guid.Empty` and `false` by default). |
 
 ### Assert on the result
 
@@ -142,7 +144,7 @@ The pipeline follows the platform's
   set to that user, and its `ctx.Service` acts as that user (privileges under `WithSecurity`, audit stamping);
   `InitiatingUserId` stays the caller.
 - **Ids.** `CorrelationId` is one id per top-level operation (an `ExecuteTransaction` batch shares one, each
-  `ExecuteMultiple` child gets its own), kept by the asynchronous steps it queues. `RequestId` is one id per call
+  `ExecuteMultiple` child gets its own), kept by the asynchronous steps it queues and by the writes they make. `RequestId` is one id per call
   into the pipeline. `OperationId` equals it on synchronous steps and is the job id on asynchronous steps.
   `IsolationMode` is 2 (sandbox) and `SecondaryEntityName` is `"none"`.
 - **Asynchronous steps.** An asynchronous step's `OwningExtension` has the step's id but no `Name` (a synchronous
@@ -151,7 +153,10 @@ The pipeline follows the platform's
 - **`ParentContext`.** A PreOperation or PostOperation step of a `Create`, `Update` or `Delete` has the operation's
   own stage-30 (MainOperation) context as `ParentContext`. The context of the plugin whose write triggered the
   operation is one level further up (`ParentContext.ParentContext`). A PreValidation step's `ParentContext` is that
-  calling plugin's context directly.
+  calling plugin's context directly. Each record has its own stage-30 context: the root of a cascaded `Delete` and
+  each row of a `CreateMultiple`/`UpdateMultiple` see their own record there. The Update steps fired inside an
+  `Assign`, a `SetState` or a `Merge` have that message's stage-30 context as `ParentContext` (`Assign/30`,
+  `SetStateDynamicEntity/30`, `Merge/30`).
 - **Shared variables.** Shared variables set by a PreValidation step are not in the later steps' own
   `SharedVariables`: they are visible only through `ParentContext.SharedVariables`. A cascaded operation inherits the
   shared variables of the plugin that issued it. To avoid re-entrancy, see
@@ -208,6 +213,9 @@ The pipeline follows the platform's
     PostOperation steps.
   - `Execute(new SetStateRequest { ... })` fires the `SetStateDynamicEntity` steps the same way around a
     `statecode`/`statuscode` Update. Steps registered on `SetState` never fire.
+  - `Execute(new MergeRequest { ... })` writes the master's new values (`UpdateContent` and the columns filled from
+    the subordinate) through an Update that fires the Update steps at PreOperation and PostOperation, between the
+    `Merge` PreOperation and PostOperation steps. No Update runs when the master does not change.
   - Status -1 (or no status) resolves to the state's default status: status 1 for state 0, status 2 for any other
     state, unless you declare it with `WithDefaultStatus("table", state, status)`.
 - **Bypass parameters.** On an `Execute(...)` request, `BypassCustomPluginExecution = true` skips every step,
@@ -260,7 +268,8 @@ another at PostOperation), or none does, they throw an `InvalidOperationExceptio
 you state in full is passed to the plugin as is. The plugin-less `Build()` keeps whatever trigger you set.
 
 `Execute<TPlugin>()` constructs the plugin (parameterless constructor, or the
-`(string unsecureConfig, string secureConfig)` constructor with empty configuration) and returns it.
+`(string unsecureConfig, string secureConfig)` constructor with `null` for both, as `PluginPipeline` passes for a step
+with no configuration) and returns it.
 
 `ctx.PrimaryEntityId` is the `Target`'s id (an entity or an `EntityReference`), and `Guid.Empty` without a Target or
 on a global message such as `Associate`. `WithPrimaryEntity(name, id)` sets it explicitly.

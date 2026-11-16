@@ -51,6 +51,9 @@ All notable changes to Vela are documented here. The format is based on
   name. `Associate`, `Disassociate`, a deep insert and a `RelatedEntitiesQuery` find the relationship by it, so two
   1:N relationships between the same tables can each be addressed. Declaring a schema name that another relationship
   (1:N or N:N) already uses throws. Without one, the relationship keeps its `{referenced}_{referencing}` name.
+- `Vela.Testing`: `PluginPipeline.WithEnvironmentId(...)`, `WithTenantId(...)` and `AsApplicationUser()` set the
+  `EnvironmentId`, `TenantId` and `IsApplicationUser` of every step's context, as `PluginContextBuilder` does for one
+  plugin.
 
 ### Fixed (Framework)
 
@@ -84,6 +87,21 @@ All notable changes to Vela are documented here. The format is based on
   delegate. Only a lambda capturing `this` or a method of the plug-in itself worked before: a lambda capturing nothing
   or only locals, and a method of another object, threw `InvalidPluginExecutionException: handler
   '<RegisterCustomApi>b__...' was not found` on every call.
+- `Vela.Testing`: a write made by an asynchronous step keeps the `CorrelationId` of the operation that queued the step,
+  as on Dataverse (verified live). It got a new id before.
+- `Vela.Testing`: each record gets its own stage-30 `ParentContext`. The root of a cascaded `Delete` saw a child
+  record's context there, and rows 2 and later of a `CreateMultiple` or `UpdateMultiple` saw row 1's.
+- `Vela.Testing`: the Update steps fired inside an `AssignRequest` have `Assign/30` as `ParentContext` (verified live),
+  and inside a `SetStateRequest` `SetStateDynamicEntity/30`. Both saw an `Update/30` context before.
+- `Vela.Testing`: a `MergeRequest` fires the Update steps on the master, under `Merge/30` (verified live). It fired no
+  Update step before.
+- `Vela.Testing`: the steps of an `AssignRequest` work on a copy of the request, like the other messages, and a pre
+  step that replaces the `Assignee` changes the owner written. Steps could change the caller's request before.
+- `Vela.Testing`: `PluginPipeline.Register` throws for a type already registered (by an earlier `Register` or by
+  `FromAssembly`). Its steps fired twice before.
+- `Vela.Testing`: `PluginContext.Execute<TPlugin>()` passes `null` as the unsecure and secure configuration, as
+  `PluginPipeline` does for a step with no configuration. It passed empty strings before.
+- `Vela.Testing`: a bulk step's image collections no longer hold the images of a disabled step of the same plugin.
 
 ### Added (CLI)
 

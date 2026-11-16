@@ -38,8 +38,9 @@ namespace Vela.Testing
         // The operations on the (synchronous) call stack; the one that opened the transaction owns its commit/rollback.
         private readonly Stack<OperationFrame> _frames = new Stack<OperationFrame>();
 
-        // A transaction scope spanning several operations (the two passes of a split Update, an ExecuteTransaction).
-        private TransactionClaim? _claim;
+        // Set while the correlation id in force must not change: inside an ExecuteTransaction batch (its children share
+        // one id) and while an asynchronous step runs (its writes keep the id of the operation that queued it).
+        private bool _correlationPinned;
 
         // Asynchronous steps of committed transactions, run when the outermost service call returns.
         private readonly Queue<Action> _committedAsync = new Queue<Action>();
@@ -65,10 +66,11 @@ namespace Vela.Testing
             // PreValidation steps get the extra input FromSandbox = true (verified live; the other stages were not
             // observed to carry it).
             OperationFrame frame = new OperationFrame { FromSandbox = _contextStack.Count > 0, InitialShared = CopyParameters(_sharedVariables) };
-            if (_frames.Count == 0 && _claim == null)
+            if (_frames.Count == 0 && !_correlationPinned)
             {
                 // A top-level operation gets its own correlation id, shared by everything it cascades into and the
-                // async steps it queues (verified live: each child of an ExecuteMultiple gets its own id).
+                // async steps it queues, their own writes included (verified live: the cascade and its async steps
+                // share one id; each child of an ExecuteMultiple gets its own).
                 _correlationId = Guid.NewGuid();
             }
 
@@ -130,8 +132,7 @@ namespace Vela.Testing
         }
 
         // Called by an operation once its PreValidation stage has run: opens the transaction unless one is already
-        // open (a nested operation joins it). The opener owns the commit/rollback, unless a multi-operation scope
-        // (RunInOneTransaction) claimed it for its own direct operations.
+        // open (a nested operation, or a child of an ExecuteTransaction, joins it). The opener owns the commit/rollback.
         private void EnterTransaction()
         {
             if (_transaction != null)
@@ -141,62 +142,41 @@ namespace Vela.Testing
 
             PipelineTransaction transaction = new PipelineTransaction(_store.Snapshot());
             _transaction = transaction;
-            if (_claim != null && _claim.Transaction == null && _depth == _claim.Depth + 1)
-            {
-                _claim.Transaction = transaction;
-            }
-            else
-            {
-                _frames.Peek().Owned = transaction;
-            }
+            _frames.Peek().Owned = transaction;
         }
 
-        // Runs several operations as one transaction. Eager opens it now (ExecuteTransaction: every child runs inside
-        // it); lazy lets the first operation open it after its own PreValidation stage (the two passes of a split
-        // Update). Inside an open transaction the operations simply join it.
-        private T RunInOneTransaction<T>(Func<T> body, bool eager)
+        // Runs several operations as one transaction, opened now so that every operation runs inside it, its
+        // PreValidation stage included (ExecuteTransaction). Inside an open transaction the operations simply join it.
+        private T RunInOneTransaction<T>(Func<T> body)
         {
             if (_transaction != null)
             {
                 return body();
             }
 
-            TransactionClaim claim = new TransactionClaim(_depth);
-            TransactionClaim? previousClaim = _claim;
-            if (_frames.Count == 0 && previousClaim == null)
+            bool previousPinned = _correlationPinned;
+            if (_frames.Count == 0 && !previousPinned)
             {
                 // One correlation id for the whole scope (verified live: an ExecuteTransaction batch shares one id).
                 _correlationId = Guid.NewGuid();
             }
 
-            _claim = claim;
-            if (eager)
-            {
-                claim.Transaction = _transaction = new PipelineTransaction(_store.Snapshot());
-            }
-
+            _correlationPinned = true;
+            PipelineTransaction transaction = _transaction = new PipelineTransaction(_store.Snapshot());
             try
             {
                 T result = body();
-                if (claim.Transaction != null)
-                {
-                    Commit(claim.Transaction);
-                }
-
+                Commit(transaction);
                 return result;
             }
             catch
             {
-                if (claim.Transaction != null)
-                {
-                    Rollback(claim.Transaction);
-                }
-
+                Rollback(transaction);
                 throw;
             }
             finally
             {
-                _claim = previousClaim;
+                _correlationPinned = previousPinned;
             }
         }
 
@@ -239,14 +219,16 @@ namespace Vela.Testing
                 Guid? previousCaller = _callerUserId;
                 Guid? previousInitiating = _initiatingUserId;
                 PipelineTransaction? previousTransaction = _transaction;
-                TransactionClaim? previousClaim = _claim;
+                bool previousPinned = _correlationPinned;
                 _depth = depth;
                 _sharedVariables = shared;
                 _bypass = bypass;
                 _callerUserId = caller;
                 _initiatingUserId = initiating;
                 _transaction = null;
-                _claim = null;
+                // The step's own writes keep the operation's correlation id (verified live: the cascade and its async
+                // steps share one), although they start with no operation on the call stack.
+                _correlationPinned = true;
                 _correlationId = correlationId;
                 _requestId = requestId;
                 _asyncOperationId = Guid.NewGuid();
@@ -296,7 +278,7 @@ namespace Vela.Testing
                     _callerUserId = previousCaller;
                     _initiatingUserId = previousInitiating;
                     _transaction = previousTransaction;
-                    _claim = previousClaim;
+                    _correlationPinned = previousPinned;
                 }
             };
         }
@@ -452,6 +434,9 @@ namespace Vela.Testing
             context.OperationId = context.Mode == (int)ExecutionMode.Asynchronous ? _asyncOperationId : _requestId;
             context.IsolationMode = 2;
             context.SecondaryEntityName = "none";
+            context.EnvironmentId = _environmentId;
+            context.TenantId = _tenantId;
+            context.IsApplicationUser = _isApplicationUser;
 
             PipelineTransaction? transaction = _transaction;
             _contextStack.Push(context);
