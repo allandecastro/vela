@@ -234,7 +234,9 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   - manager and position hierarchy security, and field-level (column) security;
   - the Read privilege on every table a read touches, linked tables included (a read without it throws
     `0x80040220`), and record trimming on joins: a join to a record the caller cannot read drops the primary row on
-    an inner join, or omits the linked columns on a left outer join, recursively through nested joins.
+    an inner join, or omits the linked columns on a left outer join, recursively through nested joins;
+  - the Read privilege a new record owner must hold, for owners declared in the model; an owner id the model does not
+    know is not checked. A user owner counts Read from any of its roles, whatever its teams' inheritance mode.
 
   With security on, a lookup set by id must point at an existing record; with it off, a lookup may point at a record
   the test never seeded. A parent's Delete PreValidation steps still see its cascaded children; by PreOperation they

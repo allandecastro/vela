@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.ServiceModel;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
@@ -488,16 +489,17 @@ namespace Vela.Testing
         // assignment, so it additionally needs Assign. No-op when security is off.
         private void DemandCreate(Entity entity)
         {
-            if (Enforcing == null)
-            {
-                DemandStrictSecurityConfigured();
-                return;
-            }
-
             EntityReference owner =
                 entity.Contains(SystemFieldApplier.OwnerId) && entity[SystemFieldApplier.OwnerId] is EntityReference explicitOwner
                     ? explicitOwner
                     : new EntityReference("systemuser", _currentUserId);
+
+            if (Enforcing == null)
+            {
+                DemandStrictSecurityConfigured();
+                DemandOwnerCanRead(entity.LogicalName, owner, onCreate: true);
+                return;
+            }
 
             Entity prospective = new Entity(entity.LogicalName) { [SystemFieldApplier.OwnerId] = owner };
             Guid ownerBusinessUnit = _security!.BusinessUnitOfPrincipal(owner);
@@ -514,6 +516,27 @@ namespace Vela.Testing
                 // Pass the prospective record (with its owner/BU set) so Assign is depth/BU-checked against the
                 // record's target owner, exactly as a real org checks an assignment — not treated as a blanket grant.
                 _security.Demand(_currentUserId, entity.LogicalName, Privilege.Assign, prospective);
+            }
+
+            DemandOwnerCanRead(entity.LogicalName, owner, onCreate: true);
+        }
+
+        // A record's owner must hold Read on its table, whoever sets it (Create with ownerid, an ownerid Update, Assign,
+        // or a PreOperation plugin writing Target["ownerid"]) — verified live. The check is on the owner, not the
+        // caller, so it also runs as SYSTEM; it needs a configured model and an owner the model knows, and skips the
+        // caller owning its own record.
+        private void DemandOwnerCanRead(string entityName, EntityReference? owner, bool onCreate)
+        {
+            if (_security == null || owner == null ||
+                (string.Equals(owner.LogicalName, "systemuser", StringComparison.OrdinalIgnoreCase) && owner.Id == _currentUserId))
+            {
+                return;
+            }
+
+            FaultException<OrganizationServiceFault>? denied = _security.OwnerReadDenied(owner, entityName, onCreate);
+            if (denied != null)
+            {
+                throw denied;
             }
         }
 

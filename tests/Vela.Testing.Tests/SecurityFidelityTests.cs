@@ -227,14 +227,16 @@ namespace Vela.Testing.Tests
                     .Role("author", r => r
                         .Grant("account", AccessLevel.Organization, Privilege.Create)
                         .Grant("account", AccessLevel.User, Privilege.Assign))
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read)) // the owner must hold Read
                     .User(Alice, SalesBu, "author")
-                    .User(Bob, OtherBu));
+                    .User(Bob, OtherBu, "reader"));
 
             svc.Create(new Entity("account")); // owned by Alice: no assignment implied, allowed
 
             // Creating on behalf of Bob (another BU) is an assignment a User-level Assign cannot cover.
-            Assert.Throws<FaultException<OrganizationServiceFault>>(
+            FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) }));
+            Assert.Equal(unchecked((int)0x80040220), ex.Detail.ErrorCode); // PrincipalPrivilegeDenied: the Assign, not the owner's Read
         }
 
         // --- Assign across BUs needs a broad enough Assign depth ----------------------------------------
@@ -249,8 +251,9 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .BusinessUnit(OtherBu)
                     .Role("assigner", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Assign))
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read)) // the owner must hold Read
                     .User(Alice, SalesBu, "assigner")
-                    .User(Carol, SalesBu))
+                    .User(Carol, SalesBu, "reader"))
                 .Seed(AccountOwnedBy(record, Bob, OtherBu));
 
             svc.Execute(new AssignRequest

@@ -57,7 +57,10 @@ The harness checks the Read privilege first, then whether the record is in reach
 ## Ownership and assignment
 
 Owning a record (directly or through a team) satisfies the User depth. Changing `ownerid` (with `AssignRequest` or a
-plain `Update`) needs the **Assign** privilege, and the owning business unit follows the new owner.
+plain `Update`) needs the **Assign** privilege, and the owning business unit follows the new owner. A new owner the
+security model knows must hold Read on the table (User level is enough), whoever sets it, a PreOperation plugin
+included; otherwise the Create, Update or Assign fails with `0x80040299` (`0x80042f0a` when an owner team has no role,
+on Update or Assign). See [Record ownership](https://learn.microsoft.com/power-platform/admin/update-record-owner#record-ownership).
 
 ## Sharing
 

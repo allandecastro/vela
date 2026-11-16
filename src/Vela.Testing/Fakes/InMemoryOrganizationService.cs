@@ -969,6 +969,7 @@ namespace Vela.Testing
             if (changesOwner)
             {
                 DemandAccess(entity.LogicalName, Privilege.Assign, stored);
+                DemandOwnerCanRead(entity.LogicalName, entity[SystemFieldApplier.OwnerId] as EntityReference, onCreate: false);
             }
 
             // A lookup set by key is resolved first (a key that matches nothing throws before the stored row
