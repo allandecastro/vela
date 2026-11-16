@@ -448,6 +448,12 @@ namespace Vela.Testing.Security
         // out of its reach (depth, owner, no share). Verified live for a Retrieve by id.
         private const int RecordAccessDenied = unchecked((int)0x80048306);
 
+        // 0x80040299 TargetPrincipalLacksReadPrivilege — a record's new owner holds no Read on the table (verified live
+        // on Create, Update of ownerid and Assign). 0x80042f0a TeamNotAssignedRoles — the owner is a team with no role
+        // at all, raised on Update/Assign (Create still raises 0x80040299).
+        private const int TargetPrincipalLacksReadPrivilege = unchecked((int)0x80040299);
+        private const int TeamNotAssignedRoles = unchecked((int)0x80042f0a);
+
         private const string SystemUser = "systemuser";
         private const string Team = "team";
 
@@ -763,6 +769,55 @@ namespace Vela.Testing.Security
 
             return new FaultException<OrganizationServiceFault>(fault, new FaultReason(message));
         }
+
+        /// <summary>
+        /// The fault the platform raises when <paramref name="owner"/> may not own a record of <paramref name="entity"/>
+        /// because it holds no Read on the table, or null when it may (or when the model does not know the principal,
+        /// so arbitrary owner ids stay unchecked). A user qualifies through its own roles or a team's, a team through
+        /// its own roles whatever its inheritance mode (verified live), at any depth.
+        /// </summary>
+        public FaultException<OrganizationServiceFault>? OwnerReadDenied(EntityReference owner, string entity, bool onCreate)
+        {
+            string table = entity.ToLowerInvariant();
+            bool isTeam = string.Equals(owner.LogicalName, Team, StringComparison.OrdinalIgnoreCase);
+            bool canRead;
+            if (isTeam)
+            {
+                if (!_teams.TryGetValue(owner.Id, out Principal team))
+                {
+                    return null;
+                }
+
+                canRead = LevelsFor(team.Roles, table, Privilege.Read).Any();
+                if (!canRead && team.Roles.Count == 0 && !onCreate)
+                {
+                    return Fault(TeamNotAssignedRoles, OwnerReadMessage(owner.Id, Team, entity));
+                }
+            }
+            else
+            {
+                if (!_users.ContainsKey(owner.Id))
+                {
+                    return null;
+                }
+
+                // Learn says a user whose Read comes only from a "team privileges only" team needs it at Organization
+                // level; that is unverified live, so a user owner takes Read at any level from any of its roles.
+                canRead = HoldsPrivilege(owner.Id, table, Privilege.Read);
+            }
+
+            if (canRead)
+            {
+                return null;
+            }
+
+            string message = OwnerReadMessage(owner.Id, isTeam ? Team : "user", entity);
+            return Fault(TargetPrincipalLacksReadPrivilege, onCreate ? "Read Privilege Check For Owner failed with exception: " + message : message);
+        }
+
+        private static string OwnerReadMessage(Guid ownerId, string kind, string entity) =>
+            $"Principal {kind} (Id={ownerId}) is missing prvRead{entity} privilege on entity '{entity}'. " +
+            "Consider adding missed privilege to one of the principal (user/team) roles.";
 
         /// <summary>
         /// Whether <paramref name="userId"/> holds <paramref name="privilege"/> on <paramref name="entity"/> at any

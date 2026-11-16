@@ -784,14 +784,16 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .BusinessUnit(OtherBu)
                     .Role("author", r => r.Grant("account", AccessLevel.Organization, Privilege.Create)) // depth covers any owner
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read)) // the owner must hold Read
                     .User(Alice, SalesBu, "author")   // ...but no Assign
-                    .User(Bob, OtherBu));
+                    .User(Bob, OtherBu, "reader"));
 
             svc.Create(new Entity("account")); // owned by the caller: fine
 
             // Create depth is satisfied, so this isolates the missing Assign privilege.
-            Assert.Throws<FaultException<OrganizationServiceFault>>(
+            FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) }));
+            Assert.Equal(PrincipalPrivilegeDenied, ex.Detail.ErrorCode);
         }
 
         [Fact]
@@ -806,14 +808,16 @@ namespace Vela.Testing.Tests
                     .Role("author", r => r
                         .Grant("account", AccessLevel.User, Privilege.Create)
                         .Grant("account", AccessLevel.Organization, Privilege.Assign))
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read)) // the owner must hold Read
                     .User(Alice, SalesBu, "author")
-                    .User(Bob, OtherBu));
+                    .User(Bob, OtherBu, "reader"));
 
             svc.Create(new Entity("account")); // Alice's own: User-level Create covers it
 
             // Bob is in another BU; a User-level Create does not reach a record that will be owned by him.
-            Assert.Throws<FaultException<OrganizationServiceFault>>(
+            FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) }));
+            Assert.Equal(PrincipalPrivilegeDenied, ex.Detail.ErrorCode);
         }
 
         [Fact]
@@ -825,8 +829,9 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)
                     .BusinessUnit(OtherBu)
                     .Role("admin", r => r.Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Assign))
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read)) // the owner must hold Read
                     .User(Alice, SalesBu, "admin")
-                    .User(Bob, OtherBu));
+                    .User(Bob, OtherBu, "reader"));
 
             Guid id = svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) });
 
@@ -846,9 +851,10 @@ namespace Vela.Testing.Tests
                     .Role("author", r => r
                         .Grant("account", AccessLevel.Organization, Privilege.Create)
                         .Grant("account", AccessLevel.BusinessUnit, Privilege.Assign))
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read)) // the owner must hold Read
                     .User(Alice, SalesBu, "author")
-                    .User(Carol, SalesBu)   // same BU as Alice
-                    .User(Bob, OtherBu));   // different BU
+                    .User(Carol, SalesBu, "reader")   // same BU as Alice
+                    .User(Bob, OtherBu, "reader"));   // different BU
 
             // Same-BU owner: a BusinessUnit-level Assign reaches the prospective owner.
             Assert.NotEqual(Guid.Empty,
@@ -856,8 +862,9 @@ namespace Vela.Testing.Tests
 
             // Other-BU owner: a BusinessUnit-level Assign does NOT reach the prospective owner, so the assignment
             // implied by the create is denied. With the record omitted from the Assign check this wrongly succeeded.
-            Assert.Throws<FaultException<OrganizationServiceFault>>(
+            FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", Bob) }));
+            Assert.Equal(PrincipalPrivilegeDenied, ex.Detail.ErrorCode);
         }
 
         [Fact]
@@ -870,8 +877,9 @@ namespace Vela.Testing.Tests
                     .BusinessUnit(SalesBu)   // Alice's BU
                     .BusinessUnit(OtherBu)   // Bob's BU
                     .Role("admin", r => r.Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Assign))
+                    .Role("reader", r => r.Grant("account", AccessLevel.User, Privilege.Read)) // the owner must hold Read
                     .User(Alice, SalesBu, "admin")
-                    .User(Bob, OtherBu));
+                    .User(Bob, OtherBu, "reader"));
 
             svc.Create(new Entity("account", record) { ["ownerid"] = new EntityReference("systemuser", Bob) });
 

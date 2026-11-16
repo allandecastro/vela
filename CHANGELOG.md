@@ -21,6 +21,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (Framework)
+
+- `Vela.Testing`: with security on, a record's new owner must hold Read on the table, as in Dataverse. A Create with
+  `ownerid`, an Update of `ownerid`, an `AssignRequest`, and a PreOperation plugin that sets `Target["ownerid"]` now
+  fail with `0x80040299` when the owner holds no Read, or `0x80042f0a` on Update and Assign when the owner team has no
+  role; the Update writes nothing. They succeeded before. Owners the security model does not declare, and the caller
+  itself, are not checked. Tests that hand records to a declared user or team with no Read on the table need a role
+  that grants it (User level is enough).
+
 ### Added (CLI)
 
 - `vela plan` and `vela apply` check the `--solution` solution right after connecting, before reading or writing
