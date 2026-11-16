@@ -28,7 +28,7 @@
          pulls transitively (NU1902/NU1903). Earlier 8.x patches later picked up advisories, so track the latest 8.x
          servicing patch. The vela init scaffold pins the same versions (ScaffoldTemplates.CryptographyXmlVersion /
          CryptographyPkcsVersion; a test keeps them equal). -->
-    <PackageVersion Include="System.Security.Cryptography.Xml" Version="8.0.5" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="11.0.0" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
 
     <!-- Test stack (shared by every *.Tests project) -->
