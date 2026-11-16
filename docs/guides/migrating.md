@@ -1,47 +1,43 @@
 # Migrating an existing plugin project to Vela
 
-You do not need a greenfield project to adopt Vela. Existing Dataverse plugin and workflow-activity
-codebases convert cleanly, and the conversion is usually a net simplification: less hand-rolled
-infrastructure, typed models and queries instead of string keys, and a code-as-source-of-truth deploy
-instead of the Plugin Registration Tool.
+This guide converts an existing Dataverse plugin or workflow-activity codebase to Vela: what to set up first, how
+each part of the source maps to Vela, and how to verify and deploy the result. It applies to the classic
+`PluginBase` + tuple template, raw `IPlugin` classes, and solutions split over many assemblies.
 
-This guide is the practical recipe distilled from converting several real, hand-written codebases (from the
-classic `PluginBase` + tuple template, to raw `IPlugin` classes, to fragmented multi-assembly solutions,
-to large integration-heavy ones).
+If you are starting from scratch instead, follow the [quickstart](../getting-started/quickstart.md).
 
 ## Why migrate
 
 - **Consolidation.** Solutions that fragmented into many per-feature assemblies, each carrying its own
-  regenerated copy of the early-bound model, collapse to **one shared models project + one plugin package**.
+  regenerated copy of the early-bound model, collapse to **one shared models project and one plugin package**.
 - **Typed everywhere.** Magic attribute strings and hand-maintained option-set numbers become generated
   models and enums. Typing alone tends to surface latent bugs (for example a handler that writes to a
   post-operation target and never persists the change).
 - **Less infrastructure.** The hand-rolled base plugin, local context, and message/stage/mode dispatch are
   replaced by `EntityPluginBase<T>` and a fluent step builder.
-- **Modern outbound auth.** A stack of token acquisition + secret storage + custom decryption can be
-  replaced by [managed identity](managed-identity.md).
+- **Simpler outbound auth.** Token acquisition, secret storage and custom decryption can be replaced by a
+  [managed identity](managed-identity.md).
 - **Deploy from code.** [`vela plan` / `vela apply`](plan-apply.md) register steps, images, and Custom APIs
   from your code, replacing manual registration.
 
 ## Before you start
 
-- Target `net48`. Microsoft supports plug-ins on .NET Framework 4.6.2 through 4.8 and recommends 4.8; 4.8.1 is
-  not supported, and `vela` warns when a package targets it. Existing plug-ins on an older version keep running,
-  but plan the move to 4.8.
+- Target `net48`, as the scaffold does. `vela plan` and `vela apply` warn when a package targets a later framework
+  (such as `net481`), which Dataverse does not accept for plugins. See
+  [Microsoft's plugin requirements](https://learn.microsoft.com/power-apps/developer/data-platform/write-plug-in)
+  for the supported .NET Framework versions.
 - Reference the published `Vela.Plugins` package from NuGet. Do not pin an in-repo development version. Its
   dependency surface is deliberately lean so the plugin package loads in the Dataverse sandbox unmerged (no
   ILMerge / ILRepack step): the SDK core assemblies, `Microsoft.Extensions.DependencyInjection.Abstractions`
-  (the abstractions only, not the concrete container), `Newtonsoft.Json`, and `System.ComponentModel.Annotations`. The package also carries its companion
-  `Vela.Messages` (the typed request/response and model base types); no concrete DI container or heavy runtime
-  closure comes along.
-- Generate [early-bound models](models.md) with `vela models`. If you cannot connect to the org yet, you
-  can stub the few models you need by hand to get building, then regenerate later.
-- If your repository uses Central Package Management, a freshly scaffolded solution may fail to restore
-  (NU1008). See [troubleshooting](troubleshooting.md); a local `Directory.Packages.props` that sets
-  `ManagePackageVersionsCentrally` to `false` for the solution resolves it.
-
-Scaffold a target solution first with [`vela init`](scaffold.md) so you have the project layout, csproj,
-and package references to copy your logic into.
+  (the abstractions only, not a container), `Newtonsoft.Json` and `System.ComponentModel.Annotations`. It also
+  brings its companion `Vela.Messages` (the typed request and response base types).
+- Scaffold a target solution with [`vela init`](scaffold.md), so you have the project layout, project files and
+  package references to copy your logic into. If your repository uses Central Package Management, the scaffold's
+  own `Directory.Packages.props` turns it off for the new solution, so the inline package versions restore.
+- Generate [early-bound models](models.md) with `vela models`. If you cannot connect to the environment yet,
+  generate them offline from an exported solution with
+  [`--from-solution`](models.md#offline-generation-from-an-exported-solution---from-solution), then regenerate
+  from the environment later.
 
 ## Map your source to Vela
 
@@ -104,10 +100,11 @@ mapping is mechanical:
 | `Execute(CodeActivityContext ctx)` body | `Execute(ILocalPluginContext ctx, TRequest request)` (typed) or `Handle(ILocalPluginContext ctx)` (lightweight) |
 | the workflow's implicit primary entity | an explicit `EntityReference` request parameter |
 
-Scaffold the shell with [`vela add customapi`](add.md) (`--prefix <publisherprefix>` names it): `--entity <Table>` generates a typed
-`CustomApiBase<TRequest, TResponse>` with its request/response classes; `--global` generates a lightweight
-`CustomApiBase` whose `Handle` reads `ctx.GetInputParameter<T>(...)` and writes `ctx.SetOutputParameter(...)`.
-Then port the body. The lightweight global form (what the generic case below uses):
+Scaffold the shell with [`vela add customapi`](add.md) (`--prefix <publisherprefix>` is the publisher prefix of
+its unique name). With `--entity <Table>`, it generates a typed `CustomApiBase<TRequest, TResponse>` bound to that
+table, with its request and response classes. With `--global`, it generates a lightweight `CustomApiBase` whose
+`Handle` method reads `ctx.GetInputParameter<T>(...)` and writes `ctx.SetOutputParameter(...)`. Then port the
+body. The lightweight global form, which the generic case below also uses:
 
 ```csharp
 // before: a workflow activity that recalculates a total on a record
@@ -128,20 +125,21 @@ public sealed class RecalculateTotal(string u, string s) : CustomApiBase(u, s)
 
     private void Handle(ILocalPluginContext ctx)
         => ctx.SetOutputParameter("NewTotal", Recalculate(ctx, ctx.GetInputParameter<EntityReference>("Target")));
+
+    private static Money Recalculate(ILocalPluginContext ctx, EntityReference target) { /* the ported logic */ }
 }
 ```
 
-(For a model-typed version with `CustomApiBase<TRequest, TResponse>` and `.Request(...)` / `.Response(...)`, see
-the [Custom API guide](custom-apis.md) - scaffold it with `--entity <Table>`.)
+For the typed version with `CustomApiBase<TRequest, TResponse>` and `.Request(...)` / `.Response(...)`, see the
+[Custom API guide](custom-apis.md); scaffold it with `--entity <Table>`.
 
-A clean input/output activity maps one to one. **The invocation surface changes:** callers that triggered the
-activity from a classic workflow must be re-pointed at the Custom API - editing those workflows to call the new
-API. Marking it `.WorkflowSdkStep(true)` only makes it *available* as a workflow step; it does not redirect the
-existing activity steps.
+An activity with clear inputs and outputs maps one to one. **The callers change:** a classic workflow that used the
+activity must be edited to call the Custom API instead. Marking the API `.WorkflowSdkStep(true)` only makes it
+*available* as a workflow step; it does not replace the existing activity steps.
 
-**The generic "operate on any entity / any attribute" activity** becomes a **global** (unbound) Custom API with an
-`EntityReference` parameter for the record plus a `string` parameter for the attribute name - there is no implicit
-primary entity to lean on. If you mark it `WorkflowSdkStep(true)`, use `EntityReference` (an `Entity` /
+**A generic "operate on any table or column" activity** becomes a **global** (unbound) Custom API with an
+`EntityReference` parameter for the record and a `string` parameter for the column name, because there is no
+implicit primary entity. If you mark it `WorkflowSdkStep(true)`, use `EntityReference` (an `Entity` /
 `EntityCollection` / `StringArray` parameter is rejected on a workflow-enabled API), and pass several attribute
 names as one delimited `string` rather than a `string[]`.
 
@@ -165,29 +163,32 @@ a block namespace, or the segment hides the generated entity type of the same na
 - **Keep plugins stateless.** Instances are cached and shared across threads, so avoid mutable instance
   fields and mutable static state; the only fields should be the readonly configuration from the
   constructor.
-- **Throw to roll back.** Synchronous steps run inside the platform transaction. Throw
-  `InvalidPluginExecutionException` to abort and roll back; do not catch and swallow in a synchronous step.
-- **Respect the sandbox.** No filesystem access, restricted outbound HTTP, and a two-minute execution
-  budget. Route outbound calls through `HttpClient` with a [managed identity](managed-identity.md) token.
+- **Throw to roll back.** A synchronous step in the transaction rolls back when it throws
+  `InvalidPluginExecutionException`; do not catch and swallow the error in a synchronous step (see
+  [Errors](plugins.md#errors)).
+- **Respect the sandbox.** No file system, outbound HTTP limited to what the administrator allows, and a time limit
+  on the synchronous pipeline. See [Respect the sandbox](plugins.md#respect-the-sandbox).
 - **Extract logic into services.** Move shared data access out of the handler into DI services; this also
   makes the code straightforward to [test](testing.md).
 
 ## Known limits and escape hatches
 
 - **N:N traversal** in a typed query links through the intersect table, which needs its model
-  (`vela models --intersect`, see [Intersect tables](models.md#intersect-nn-join-tables---intersect)); without it,
-  keep the FetchXML through the [escape hatch](escape-hatches.md).
+  (`vela models --intersect`, see [Intersect tables](models.md#intersect-nn-join-tables---intersect)). Until you
+  generate it, keep the FetchXML through the [escape hatch](escape-hatches.md).
 - **Several steps on one trigger** (same message, stage, mode and table) can live in one plugin class when their
   filtering attributes, images or relationship scope tell them apart; otherwise give each a `WithStepKey(...)`
   (VELA008 flags the ones that collide). See [Write a plugin](plugins.md).
-- **Images at PreValidation.** A pre-image is available at PreValidation (Update, Delete, UpdateMultiple), but a
-  post-image only at PostOperation, and Create never has a pre-image.
-- **Unmodelled or advanced tables** (system tables, some intersect tables) may not have generated models
-  yet; those reads stay late-bound until the model exists.
+- **Images depend on the message and stage.** Vela rejects an image the platform cannot provide (for example a
+  post-image before PostOperation, or a pre-image on Create) when the step is built. See
+  [Images](plugins.md#images).
+- **Tables without a model.** Generate any table you read, including system tables, with
+  `vela models --entities <table>`; a read stays late-bound until its table has a model.
 
 ## Verify
 
-Build the solution against the published package, then deploy from code:
+Build the solution against the published package (the plugin project writes its package to `artifacts/`), then
+preview and deploy from code:
 
 ```bash
 dotnet build -c Release
@@ -195,6 +196,6 @@ vela plan  --packages-dir ./artifacts --solution <YourSolution> --interactive
 vela apply --packages-dir ./artifacts --solution <YourSolution> --interactive
 ```
 
-A clean build against `Vela.Plugins` from NuGet, with the plugin package produced, means the conversion is
-ready to register. See [Plan & Apply](plan-apply.md) for the deployment loop and
-[testing](testing.md) for exercising the converted plugins before you ship.
+A clean build against `Vela.Plugins` from NuGet that produces the plugin package means the conversion is ready to
+register. `vela plan` shows what `apply` would change. See [Plan and apply](plan-apply.md) for the deployment loop
+and [Testing](testing.md) to cover the converted plugins before you deploy.
