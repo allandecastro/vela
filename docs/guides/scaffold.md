@@ -1,3 +1,7 @@
+---
+_description: "Every vela init option, the generated layout, the optional projects, samples and PROJECT.md"
+---
+
 # Scaffold a solution (`vela init`)
 
 This guide is the reference for `vela init`: the layout it generates, the `PROJECT.md` it records, the samples, the

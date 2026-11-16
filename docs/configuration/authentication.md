@@ -1,3 +1,7 @@
+---
+_description: "Connect the CLI: ambient Azure credential, client secret, connection string, interactive login, sovereign clouds"
+---
+
 # Authentication
 
 `vela plan`, `apply`, `inspect`, [`models`](../guides/models.md), `logs` and `solution show` connect to a Dataverse

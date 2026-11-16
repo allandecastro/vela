@@ -36,6 +36,13 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
+      # The page list of llms.txt is generated from the toc.yml files and each page's _description front matter.
+      # Regenerate it, and fail when the committed file differs.
+      - name: Check that llms.txt matches the tables of contents
+        shell: bash
+        run: |
+          dotnet run docs/tools/UpdateLlmsTxt.cs
+          git diff --exit-code -- docs/llms.txt || { echo "::error file=docs/llms.txt::docs/llms.txt is out of date. Run 'dotnet run docs/tools/UpdateLlmsTxt.cs' and commit the result."; exit 1; }
       - name: Install DocFX
         run: dotnet tool update -g docfx
       - name: Build the docs site

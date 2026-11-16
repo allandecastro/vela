@@ -1,3 +1,7 @@
+---
+_description: "One plugin from code to a running step: write, test, build, plan, apply, read its trace"
+---
+
 # End-to-end example
 
 This page follows one plugin from code to a running step: write it, test it without a connection, build the plugin

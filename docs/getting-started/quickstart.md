@@ -1,3 +1,7 @@
+---
+_description: "From an empty folder to a tested, registered plugin: install, init, models, add, build and test, plan, apply"
+---
+
 # Quickstart
 
 This page takes you from an empty folder to a tested plugin registered in Dataverse, in five steps. It is for a C#

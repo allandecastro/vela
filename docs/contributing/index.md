@@ -1,3 +1,7 @@
+---
+_description: "Build and test the Vela framework itself"
+---
+
 # Contributing
 
 This section is for people who build, test or contribute to the Vela framework itself. To use Vela, start at

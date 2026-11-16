@@ -1,3 +1,7 @@
+---
+_description: "What vela init scaffolds and where to edit"
+---
+
 # Initialize a solution
 
 This page summarizes what `vela init` gives you and what to do next. Read it after the [Quickstart](quickstart.md),

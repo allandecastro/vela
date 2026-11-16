@@ -1,3 +1,7 @@
+---
+_description: "Solution layout and how a step goes from registration to execution"
+---
+
 # Architecture
 
 This page describes how the Vela repository is laid out, the rules that keep its projects apart, and how a plugin

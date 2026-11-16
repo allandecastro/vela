@@ -1,3 +1,7 @@
+---
+_description: "A TTL cache scoped per organization: what is safe to cache and how to test a TTL"
+---
+
 # Caching
 
 `IPluginCacheService` (namespace `Vela.Caching`) is a built-in in-memory cache with a time to live (TTL). It keeps a

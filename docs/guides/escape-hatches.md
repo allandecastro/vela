@@ -1,3 +1,7 @@
+---
+_description: "Drop to the raw Dataverse SDK, read or create a record with its related records"
+---
+
 # Escape hatches
 
 Vela is a thin, opt-in layer over the Dataverse SDK. Every abstraction exposes the underlying SDK object, so when

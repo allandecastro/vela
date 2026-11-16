@@ -1,3 +1,7 @@
+---
+_description: "Install the vela CLI and the prerequisites: the .NET 10 SDK, Mono for .NET Framework tests outside Windows, an existing unmanaged solution"
+---
+
 # Install
 
 This page installs the `vela` CLI and lists what you need to build, test and deploy a Vela plugin. `Vela.Cli` is a

@@ -147,6 +147,27 @@ $env:VELA_BUILD_SMOKE = "1"
 dotnet test .\tests\Vela.Cli.Tests --filter Generate_ThenDotnetBuild_Succeeds
 ```
 
+## Documentation
+
+The documentation site is built with DocFX from `docs/`. A pull request that touches `docs/` must build with no
+warnings:
+
+```bash
+docfx docs/docfx.json --warningsAsErrors
+```
+
+[`docs/llms.txt`](docs/llms.txt) indexes the pages for AI tools. Its header and its `## Optional` section are
+hand-written; the page list between them is generated from the `toc.yml` files: each page's toc name, and the
+`_description` in the page's front matter (one line, in double quotes; DocFX also uses it as the page's meta
+description). A new page gets a `_description`. After you add, rename or move a page, or change a description,
+regenerate the list from the repository root and commit the result:
+
+```bash
+dotnet run docs/tools/UpdateLlmsTxt.cs
+```
+
+The `Docs` workflow runs the same script on a pull request and fails when `docs/llms.txt` changes.
+
 ## Changelog
 
 Every user-visible change gets **one entry** in [`CHANGELOG.md`](CHANGELOG.md) under `## [Unreleased]`: framework

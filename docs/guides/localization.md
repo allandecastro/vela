@@ -1,3 +1,7 @@
+---
+_description: "Resolve messages in the user's or the organization's language"
+---
+
 # Localized messages
 
 The built-in `IMessageService` (namespace `Vela.Localization`) lets a plugin or Custom API show messages, in

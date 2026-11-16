@@ -1,3 +1,7 @@
+---
+_description: "VELA001 to VELA028, their code fixes, and the source generator"
+---
+
 # Analyzers and generators
 
 This page lists every Roslyn rule Vela reports, the source generator that emits typed step contexts and image

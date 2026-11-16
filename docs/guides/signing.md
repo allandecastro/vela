@@ -1,3 +1,7 @@
+---
+_description: "Sign a plugin package for managed identity"
+---
+
 # Sign the plugin package (`vela sign`)
 
 A plugin that uses a managed identity must ship in a signed plugin package (`.nupkg`); see

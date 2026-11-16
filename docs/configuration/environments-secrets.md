@@ -1,3 +1,7 @@
+---
+_description: "Run the CLI unattended: passing secrets, strict mode, output in pipelines"
+---
+
 # Environments and CI
 
 This page covers running the `vela` CLI unattended: passing secrets safely, failing the build on warnings, labelling

@@ -1,3 +1,7 @@
+---
+_description: "Typed request and response, parameters (required by default), binding, the rules Build() enforces, and changing a deployed Custom API"
+---
+
 # Write a Custom API
 
 This page shows how to author a Custom API with Vela, call it, react to it with a plugin step, and change it once

@@ -1,3 +1,7 @@
+---
+_description: "Call external APIs with a managed-identity token, link the plugin package to the identity, and test it"
+---
+
 # Managed identity
 
 Acquire a token for an external API from inside a plugin with the environment's **managed identity**, so you call
