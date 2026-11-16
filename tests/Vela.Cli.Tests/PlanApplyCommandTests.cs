@@ -561,6 +561,33 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Empty(Strings(failure.GetProperty("notApplied")));
     }
 
+    [Fact]
+    public void A_failure_of_the_read_back_after_apply_exits_7_with_an_apply_failed_document()
+    {
+        // Every write landed (the step and the solution add); reading the environment back to check convergence fails.
+        // The run still ends with the apply-failed document and the partial-apply exit, not a generic error.
+        FakeOrgService org = Org();
+        Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
+        org.OnRetrieveMultiple = q =>
+            q.EntityName == "sdkmessageprocessingstep" && org.Executed.Any(r => r is Microsoft.Crm.Sdk.Messages.AddSolutionComponentRequest)
+                ? throw new InvalidOperationException("read-back failed")
+                : inner(q);
+
+        int exit = Run("apply", Options(autoApprove: true, solution: "ZavaSales"), Host(org, Local([LocalStep()])));
+
+        Assert.Equal(CliExitCodes.ExitPartialApply, exit);
+        JsonElement json = StdoutJson();
+        Assert.Equal("apply-failed", json.GetProperty("mode").GetString());
+        JsonElement failure = json.GetProperty("failure");
+        Assert.Contains("read-back failed", failure.GetProperty("error").GetString());
+        string[] completed = Strings(failure.GetProperty("completed"));
+        Assert.Contains($"create step {Plugin} (main)", completed);
+        Assert.Contains("add unchanged components to solution ZavaSales", completed);
+        Assert.Equal([PlanApplyCommand.ReadBackOperation], Strings(failure.GetProperty("failed")));
+        Assert.Empty(Strings(failure.GetProperty("notApplied")));
+        Assert.Contains("read-back failed", _error.ToString());
+    }
+
     private static string[] Strings(JsonElement array) => array.EnumerateArray().Select(e => e.GetString()!).ToArray();
 
     [Fact]

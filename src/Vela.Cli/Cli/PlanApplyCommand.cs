@@ -61,6 +61,9 @@ internal static class PlanApplyCommand
     internal const string ApplyMode = "apply";
     internal const string InspectMode = "inspect";
 
+    // The last step of apply, after every write: the environment is read again to check that it converged.
+    internal const string ReadBackOperation = "read the environment back to check that it converged";
+
     public static int Run(string command, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost? host = null)
     {
         host ??= PlanApplyHost.Default;
@@ -324,6 +327,9 @@ internal static class PlanApplyCommand
         }
 
         int addedToSolution;
+        RegistrationState after;
+        RegistrationDiff afterDiff;
+        ManagedIdentityPlan? afterLinks;
         ApplyRun run = new();
         try
         {
@@ -343,6 +349,15 @@ internal static class PlanApplyCommand
             }
 
             addedToSolution = missing.Count;
+            run.CompletePending();
+
+            // The read-back is part of the run: every write already landed, so a failure here still ends with the
+            // apply-failed document and the partial-apply exit, listing the writes as completed.
+            run.Pending = ReadBackOperation;
+            after = ReadCurrent(service, local, options, jsonOptions, out _, withRetired: true);
+            afterDiff = BuildDiff(local, after);
+            // The managed identity link is read again too: a link the platform did not keep is not a success either.
+            afterLinks = ReadManagedIdentityLinks(service, local, options, validate: false);
         }
         catch (Exception applyEx) when (applyEx is not DataverseConnectionException)
         {
@@ -352,11 +367,21 @@ internal static class PlanApplyCommand
             // The document lists what landed (failure.completed), what failed and what was not attempted, the same lists
             // as the resume report on stderr.
             string error = RedactSecrets(applyEx.Message);
+            ApplyFailure outcome = run.ToFailure(error);
+            if (run.Pending != null)
+            {
+                // A failure after ApplyDiff (the solution add or the read-back): ApplyDiff wrote no report for it.
+                foreach (string line in ApplyResumeReport.Build(outcome.Failed, error, outcome.Completed, outcome.NotApplied))
+                {
+                    Console.Error.WriteLine(EscapeControl(line));
+                }
+            }
+
             PlanPreview failure = preview with
             {
                 Mode = "apply-failed",
                 Notes = [.. preview.Notes, "Apply failed mid-run; Dataverse may be left partially updated. Re-run 'apply' to reconcile.", error],
-                Failure = run.ToFailure(error),
+                Failure = outcome,
             };
             if (!WantsHumanOutput(options, host) || !string.IsNullOrWhiteSpace(options.OutPath))
             {
@@ -366,12 +391,8 @@ internal static class PlanApplyCommand
             return Fail($"Apply failed mid-run; Dataverse may be partially updated: {applyEx.Message}", ExitPartialApply, includeUsage: false);
         }
 
-        RegistrationState after = ReadCurrent(service, local, options, jsonOptions, out _, withRetired: true);
-        RegistrationDiff afterDiff = BuildDiff(local, after);
         // Every write succeeded, yet the environment can still differ (the platform silently ignored or normalized a
         // value). That is not a success: the next apply would plan the same change again.
-        // The managed identity link is read again too: a link the platform did not keep is not a success either.
-        ManagedIdentityPlan? afterLinks = ReadManagedIdentityLinks(service, local, options, validate: false);
         int linksRemaining = afterLinks?.Pending.Length ?? 0;
         bool converged = afterDiff.Summary.Added == 0 && afterDiff.Summary.Changed == 0 && afterDiff.Summary.Removed == 0 && linksRemaining == 0;
         PlanPreview result = BuildPlanPreview(converged ? "apply-execute" : "apply-not-converged", options.Environment, afterDiff, local.Diagnostics, after.Diagnostics, unmanaged: unmanaged, info: [.. local.Info ?? [], .. after.Info ?? []], managedIdentity: afterLinks) with

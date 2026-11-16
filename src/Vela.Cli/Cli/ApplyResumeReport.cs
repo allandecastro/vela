@@ -133,17 +133,25 @@ internal sealed class ApplyRun
 {
     public ApplyProgress? Progress { get; set; }
 
+    private readonly List<string> _completedAfter = [];
+
     /// <summary>The operation running after ApplyDiff completed, if any (it is the one that failed).</summary>
     public string? Pending { get; set; }
 
+    /// <summary>Records the pending operation as completed, so a later failure lists it under completed.</summary>
+    public void CompletePending()
+    {
+        if (Pending != null)
+        {
+            _completedAfter.Add(Pending);
+            Pending = null;
+        }
+    }
+
     public ApplyFailure ToFailure(string error)
     {
-        if (Progress == null)
-        {
-            return new ApplyFailure(error, [], Pending == null ? [] : [Pending], []);
-        }
-
-        (List<string> completed, List<string> failed, List<string> notApplied) = Progress.Outcomes();
+        (List<string> completed, List<string> failed, List<string> notApplied) = Progress != null ? Progress.Outcomes() : ([], [], []);
+        completed.AddRange(_completedAfter);
         if (Pending != null)
         {
             failed.Add(Pending);

@@ -278,6 +278,10 @@ All notable changes to Vela are documented here. The format is based on
   The JSON output was already escaped.
 - The CLI's parsed options no longer print the connection string or inline `--secure-config` values when formatted as
   text (record `ToString`); no current output did, but any log of the options would have leaked them.
+- `vela apply` reads the environment back after its writes inside the failure handling. A failure of that read used
+  to end with a generic error (exit `4`), with no resume report and no `apply-failed` document; it now exits `7` with
+  both, listing every write as completed and the read-back as failed. A failure while adding unchanged components to
+  the solution now prints the resume report on stderr too.
 
 ### Docs
 
