@@ -477,7 +477,8 @@ namespace Vela.Testing
         /// <summary>
         /// Instantiates and executes a plugin, returning the instance for assertions. Supports both a
         /// parameterless constructor and the Vela <c>(string unsecureConfig, string secureConfig)</c> primary
-        /// constructor that generated plugins use, so <c>Execute&lt;MyPlugin&gt;()</c> works on scaffolded code.
+        /// constructor that generated plugins use (with null for both, as for a step with no configuration), so
+        /// <c>Execute&lt;MyPlugin&gt;()</c> works on scaffolded code.
         /// </summary>
         public TPlugin Execute<TPlugin>()
             where TPlugin : IPlugin
@@ -489,8 +490,8 @@ namespace Vela.Testing
         }
 
         // A Vela plugin/Custom API has no parameterless constructor (its primary constructor takes the unsecure
-        // and secure configuration); fall back to that two-string constructor with empty configuration when there
-        // is no parameterless one.
+        // and secure configuration); fall back to that two-string constructor when there is no parameterless one,
+        // passing null for both, as PluginPipeline does for a step registered without configuration.
         private static TPlugin CreatePluginInstance<TPlugin>()
             where TPlugin : IPlugin
         {
@@ -504,7 +505,7 @@ namespace Vela.Testing
             ConstructorInfo? configCtor = PluginActivator.FindConfigurationConstructor(type);
             if (configCtor is not null)
             {
-                return (TPlugin)PluginActivator.Create(configCtor, string.Empty, string.Empty);
+                return (TPlugin)PluginActivator.Create(configCtor, null, null);
             }
 
             throw new InvalidOperationException(

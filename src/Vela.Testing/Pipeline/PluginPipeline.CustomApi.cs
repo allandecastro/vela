@@ -67,7 +67,6 @@ namespace Vela.Testing
                     context.InputParameters[parameter.Key] = parameter.Value;
                 }
 
-
                 PipelineExecutionEntry entry = new PipelineExecutionEntry(pluginType.FullName ?? pluginType.Name, message, PluginStages.MainOperation, ExecutionMode.Synchronous, entityName, _depth);
                 _log.Add(entry);
                 ExecuteWithContext(context, plugin, entry);

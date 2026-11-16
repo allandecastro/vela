@@ -85,7 +85,7 @@ namespace Vela.Testing
             }, shared);
         }
 
-        // Whether an enabled step is registered for the message on this table (or as a table-less step).
+        // One stage of a read: its steps report IsInTransaction = false, even inside a write's transaction.
         private static StageInvocation ReadInvocation(string message, PluginStages stage, string entityName, Guid entityId, ParameterCollection inputs, ParameterCollection? outputs)
         {
             StageInvocation invocation = GenericInvocation(message, stage, entityName, entityId, inputs, outputs);
