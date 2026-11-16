@@ -161,7 +161,7 @@ internal static class ModelDriftChecker
     }
 
     // public const string EntityLogicalNameValue = "account";
-    private static string? TryReadEntityLogicalName(string line)
+    internal static string? TryReadEntityLogicalName(string line)
     {
         const string marker = "EntityLogicalNameValue = \"";
         int start = line.IndexOf(marker, StringComparison.Ordinal);
