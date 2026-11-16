@@ -224,7 +224,8 @@ namespace Vela.Testing
 
         /// <summary>
         /// Declares a table as organization-owned: Create/Update stamp audit columns
-        /// (<c>createdon</c>/<c>createdby</c>/<c>modifiedon</c>/<c>modifiedby</c>) but no owner columns.
+        /// (<c>createdon</c>/<c>createdby</c>/<c>modifiedon</c>/<c>modifiedby</c>) but no owner columns. A declaration
+        /// wins over the <c>OwnershipType</c> of registered metadata and over the early-bound type.
         /// </summary>
         public InMemoryOrganizationService AsOrganizationOwned(string entityLogicalName)
         {
@@ -235,7 +236,8 @@ namespace Vela.Testing
         /// <summary>
         /// Declares a table as user/team-owned (the default): Create/Update stamp audit columns plus
         /// <c>ownerid</c>, <c>owninguser</c>/<c>owningteam</c> and <c>owningbusinessunit</c>. Use this to override
-        /// inference for a late-bound table that should carry owner columns.
+        /// what registered metadata (<see cref="WithEntityMetadata(EntityMetadata[])"/>) or the early-bound type would
+        /// infer. With none of the three, a table is user-owned.
         /// </summary>
         public InMemoryOrganizationService AsUserOwned(string entityLogicalName)
         {
@@ -289,6 +291,13 @@ namespace Vela.Testing
         /// </summary>
         public InMemoryOrganizationService WithManyToMany(string relationshipSchemaName, string intersectEntity, string firstEntity, string firstAttribute, string secondEntity, string secondAttribute)
         {
+            if (!string.IsNullOrWhiteSpace(relationshipSchemaName)
+                && _oneToMany.TryResolveBySchema(relationshipSchemaName, out OneToManyRegistry.OneToMany oneToMany)
+                && oneToMany.HasSchemaName)
+            {
+                throw DuplicateSchemaName(relationshipSchemaName);
+            }
+
             _relationships.Add(relationshipSchemaName, intersectEntity, firstEntity, firstAttribute, secondEntity, secondAttribute);
             return this;
         }
@@ -324,22 +333,42 @@ namespace Vela.Testing
         /// common presets. Like Dataverse, a table can be the child of only one <b>parental</b> relationship (one
         /// where Assign/Reparent/Share/Unshare cascades or Delete is Cascade); declaring a second one throws
         /// <see cref="InvalidOperationException"/>, unless it is over the same lookup column (a polymorphic lookup).
+        /// <para>
+        /// <paramref name="schemaName"/> is the relationship's real schema name (for example
+        /// <c>contact_customer_accounts</c>): <c>AssociateRequest</c>/<c>DisassociateRequest</c>, a deep insert and a
+        /// <c>RelatedEntitiesQuery</c> find the relationship by it. Two relationships cannot share a schema name. Without
+        /// it the relationship is named <c>{referencedEntity}_{referencingEntity}</c>.
+        /// </para>
         /// </summary>
-        public InMemoryOrganizationService WithRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, CascadeConfiguration cascade)
+        public InMemoryOrganizationService WithRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, CascadeConfiguration cascade, string? schemaName = null)
         {
             if (string.IsNullOrWhiteSpace(referencedEntity) || string.IsNullOrWhiteSpace(referencingEntity) || string.IsNullOrWhiteSpace(referencingAttribute))
             {
                 throw new ArgumentException("Referenced/referencing entity and the referencing attribute are required.");
             }
 
+            bool named = !string.IsNullOrWhiteSpace(schemaName);
+            if (named && _relationships.TryResolve(schemaName!, out _))
+            {
+                throw DuplicateSchemaName(schemaName!);
+            }
+
             _oneToMany.Add(new OneToManyRegistry.OneToMany(
-                $"{referencedEntity}_{referencingEntity}", referencedEntity, referencingEntity, referencingAttribute, cascade));
+                named ? schemaName! : $"{referencedEntity}_{referencingEntity}", referencedEntity, referencingEntity, referencingAttribute, cascade, named));
             DeriveSeededAccess();
             return this;
         }
 
-        /// <summary>Declares a <b>parental</b> 1:N relationship: every action (incl. Delete) cascades to children.</summary>
-        public InMemoryOrganizationService WithParentalRelationship(string referencedEntity, string referencingEntity, string referencingAttribute) =>
+        internal static InvalidOperationException DuplicateSchemaName(string schemaName) =>
+            new InvalidOperationException(
+                $"A relationship with schema name '{schemaName}' is already declared on the in-memory service. Relationship schema names are unique.");
+
+        /// <summary>
+        /// Declares a <b>parental</b> 1:N relationship: every action (incl. Delete) cascades to children.
+        /// <paramref name="schemaName"/> is the relationship's real schema name (see
+        /// <see cref="WithRelationship(string, string, string, CascadeConfiguration, string)"/>).
+        /// </summary>
+        public InMemoryOrganizationService WithParentalRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, string? schemaName = null) =>
             WithRelationship(referencedEntity, referencingEntity, referencingAttribute, new CascadeConfiguration
             {
                 Assign = CascadeType.Cascade,
@@ -348,13 +377,15 @@ namespace Vela.Testing
                 Reparent = CascadeType.Cascade,
                 Share = CascadeType.Cascade,
                 Unshare = CascadeType.Cascade,
-            });
+            }, schemaName);
 
         /// <summary>
         /// Declares a <b>referential</b> 1:N relationship: Delete removes the child's link and Merge moves the child to
         /// the merged-into record; nothing else cascades. Set <paramref name="restrictDelete"/> to block deleting the parent while children exist.
+        /// <paramref name="schemaName"/> is the relationship's real schema name (see
+        /// <see cref="WithRelationship(string, string, string, CascadeConfiguration, string)"/>).
         /// </summary>
-        public InMemoryOrganizationService WithReferentialRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, bool restrictDelete = false) =>
+        public InMemoryOrganizationService WithReferentialRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, bool restrictDelete = false, string? schemaName = null) =>
             WithRelationship(referencedEntity, referencingEntity, referencingAttribute, new CascadeConfiguration
             {
                 Assign = CascadeType.NoCascade,
@@ -365,7 +396,7 @@ namespace Vela.Testing
                 Reparent = CascadeType.NoCascade,
                 Share = CascadeType.NoCascade,
                 Unshare = CascadeType.NoCascade,
-            });
+            }, schemaName);
 
         /// <summary>
         /// Registers table metadata so plugins can read it with <c>RetrieveEntityRequest</c>,
@@ -400,6 +431,7 @@ namespace Vela.Testing
                 }
 
                 _metadata[logicalName!] = entity!;
+                _systemFields.Register(logicalName!, entity!.OwnershipType);
             }
 
             return this;
@@ -531,7 +563,7 @@ namespace Vela.Testing
             Entity resolved = WithResolvedLookupKeys(entity);
             DemandLookupTargetsExist(resolved, onCreate: true);
             DemandLookupAppends(resolved, null);
-            DemandSecuredColumnWrites(entity);
+            DemandSecuredColumnWrites(entity, onCreate: true);
 
             Entity stored = EntityValues.Clone(resolved);
             if (stored.Id == Guid.Empty)
@@ -574,6 +606,7 @@ namespace Vela.Testing
                     // Clone before stamping the parent FK so the deep insert never mutates the caller's child
                     // entities (a real service round-trips copies, leaving the request graph untouched).
                     Entity toCreate = EntityValues.Clone(child);
+                    EntityValues.CarryEarlyBoundType(child, toCreate);
                     toCreate[relationship.ReferencingAttribute] = new EntityReference(parentEntity, parentId);
 
                     // EntityValues.Clone copies only attributes, so carry over the child's own RelatedEntities
@@ -618,7 +651,7 @@ namespace Vela.Testing
             }
 
             throw new InvalidOperationException(
-                $"Deep insert: several 1:N relationships link '{parentEntity}' to '{childEntity}' and none matches schema '{schemaName}'. Declare the relationship using its real schema name so it can be resolved.");
+                $"Deep insert: several 1:N relationships link '{parentEntity}' to '{childEntity}' and none matches schema '{schemaName}'. Pass the schema name to the declaration (WithRelationship(..., schemaName: \"{schemaName}\")) so it can be resolved.");
         }
 
         // 0x80040217 ObjectDoesNotExist — the platform's fault code for a record that does not exist. Real plugins
@@ -765,6 +798,7 @@ namespace Vela.Testing
             if (TryResolveReference(key, out Guid existingId))
             {
                 Entity toUpdate = EntityValues.Clone(target);
+                EntityValues.CarryEarlyBoundType(target, toUpdate);
                 toUpdate.Id = existingId;
                 toUpdate.KeyAttributes.Clear();
                 Update(toUpdate);
@@ -774,6 +808,7 @@ namespace Vela.Testing
             }
 
             Entity toCreate = EntityValues.Clone(target);
+            EntityValues.CarryEarlyBoundType(target, toCreate);
             // The alternate-key columns are real columns: seed them from the key so the new record carries them.
             foreach (KeyValuePair<string, object> pair in target.KeyAttributes)
             {
@@ -801,8 +836,8 @@ namespace Vela.Testing
         }
 
         // Include support: fills a retrieved record's RelatedEntities from a RelationshipQueryCollection (1:N
-        // children and N:1 parent). The relationship is resolved by the (this-entity, other-entity) pair against the
-        // declared 1:N relationships - the real Dataverse schema name is not in the registry - mirroring how the
+        // children and N:1 parent). The relationship is resolved against the declared 1:N relationships by schema
+        // name (the one given to WithRelationship), else by the (this-entity, other-entity) pair, mirroring how the
         // deep insert resolves relationships. Declare relationships with WithRelationship for this to resolve.
         private void PopulateRetrievedRelations(Entity entity, string entityName, Guid id, RelationshipQueryCollection related)
         {
@@ -904,8 +939,10 @@ namespace Vela.Testing
 
         // Resolves a write target that identifies its row by alternate key (Id empty + KeyAttributes) to a concrete
         // Id, returning a clone with the Id set and the key attributes cleared, so update-by-key works like a real
-        // org. A target with an Id (or no key) is returned unchanged.
-        private Entity ResolveWriteTarget(Entity target)
+        // org; a key that matches nothing throws the platform not-found fault. A target with an Id (or no key) is
+        // returned unchanged. Every Update path goes through it (UpdateCore), and the pipeline calls it before any
+        // step fires, so the steps see Target.Id set to the resolved record, as on Dataverse.
+        internal Entity ResolveWriteTarget(Entity target)
         {
             if (target.Id != Guid.Empty || target.KeyAttributes == null || target.KeyAttributes.Count == 0)
             {
@@ -914,6 +951,7 @@ namespace Vela.Testing
 
             Guid id = ResolveReference(new EntityReference(target.LogicalName) { KeyAttributes = target.KeyAttributes });
             Entity resolved = EntityValues.Clone(target);
+            EntityValues.CarryEarlyBoundType(target, resolved);
             resolved.Id = id;
             resolved.KeyAttributes.Clear();
             return resolved;
@@ -947,6 +985,9 @@ namespace Vela.Testing
             }
 
             EnsureWritable(entity.LogicalName);
+
+            // A row addressed by alternate key is updated like one addressed by id (Update, UpdateMultiple, Upsert).
+            entity = ResolveWriteTarget(entity);
             if (!Table(entity.LogicalName).TryGetValue(entity.Id, out Entity? stored))
             {
                 throw RecordDoesNotExist(entity.LogicalName, entity.Id);
@@ -977,7 +1018,7 @@ namespace Vela.Testing
             Entity resolved = WithResolvedLookupKeys(entity);
             DemandLookupTargetsExist(resolved, onCreate: false);
             DemandLookupAppends(resolved, stored);
-            DemandSecuredColumnWrites(entity);
+            DemandSecuredColumnWrites(entity, onCreate: false);
 
             // Dataverse Update merges the supplied attributes onto the existing record. The merge is built on a copy
             // (deep-copying the incoming values, so the caller's entity does not stay aliased with the store) and
@@ -1060,7 +1101,13 @@ namespace Vela.Testing
             // Unconditional, like Create/Update: with security off this is the WithStrictSecurity guard.
             DemandAccess(entityName, Privilege.Delete, stored);
 
-            CascadeDelete(entityName, id, new HashSet<Guid>(), removeRecord);
+            // One transaction: a Restrict met deep in the cascade (a grandchild) fails the delete after siblings were
+            // already removed or unlinked, so the whole store rolls back to how it was before the delete.
+            RunAtomically<object?>(() =>
+            {
+                CascadeDelete(entityName, id, new HashSet<Guid>(), removeRecord);
+                return null;
+            });
         }
 
         // Removes a single record from the store with no cascade — the default remover, and the primitive the
@@ -1167,7 +1214,7 @@ namespace Vela.Testing
 
                 case UpdateRequest update:
                 {
-                    Update(ResolveWriteTarget(update.Target));
+                    Update(update.Target);
                     return new UpdateResponse();
                 }
 
@@ -1227,7 +1274,7 @@ namespace Vela.Testing
                 {
                     // Modern Dataverse models assignment as an ownerid Update; UpdateCore infers the Assign
                     // privilege from the ownerid change, so both paths enforce identically.
-                    UpdateCore(new Entity(assign.Target.LogicalName, assign.Target.Id) { ["ownerid"] = assign.Assignee });
+                    UpdateCore(new Entity(assign.Target.LogicalName, ResolveReference(assign.Target)) { ["ownerid"] = assign.Assignee });
                     return new AssignResponse();
                 }
 
@@ -1395,8 +1442,10 @@ namespace Vela.Testing
                     return DeleteFile(request);
                 default:
                     throw new MessageNotModelledException(
-                        $"InMemoryOrganizationService.Execute handles Create/Update/Delete/Retrieve/RetrieveMultiple, " +
-                        $"CreateMultiple/UpdateMultiple, Assign/SetState/Associate/Disassociate, ExecuteMultiple/ExecuteTransaction, the " +
+                        $"InMemoryOrganizationService.Execute handles Create/Update/Upsert/Delete/Retrieve/RetrieveMultiple, " +
+                        $"CreateMultiple/UpdateMultiple, Assign/SetState/Associate/Disassociate/Merge, ExecuteMultiple/ExecuteTransaction, " +
+                        $"WhoAmI, the sharing messages (GrantAccess/ModifyAccess/RevokeAccess/RetrievePrincipalAccess/" +
+                        $"RetrieveSharedPrincipalsAndAccess), the record-team messages (AddUserToRecordTeam/RemoveUserFromRecordTeam), the " +
                         $"File/Image block messages (InitializeFileBlocksUpload/UploadBlock/CommitFileBlocksUpload/" +
                         $"InitializeFileBlocksDownload/DownloadBlock/DeleteFile), and the metadata reads " +
                         $"RetrieveEntity/RetrieveAllEntities/RetrieveAttribute. For other messages, inject a service that " +
@@ -1530,24 +1579,6 @@ namespace Vela.Testing
                 $"WithEntityMetadata(FakeEntityMetadata.For(\"{logicalName}\")...Build()).");
         }
 
-        /// <summary>
-        /// Associates records over a many-to-many relationship by creating its intersect rows. The relationship must be
-        /// declared with <see cref="WithManyToMany"/>. A 1:N "association" is just an <c>Update</c> of the lookup column.
-        /// Idempotent: an existing pair is not duplicated.
-        /// </summary>
-        // Resolves an N:N relationship from an explicit WithManyToMany(...) declaration, falling back to a
-        // ManyToManyRelationshipMetadata carried by a registered EntityMetadata (so WithManyToMany is optional
-        // once metadata is registered). Throws the registry's guidance message if neither has it.
-        private RelationshipRegistry.ManyToMany ResolveManyToMany(string schemaName)
-        {
-            if (TryResolveManyToMany(schemaName, out RelationshipRegistry.ManyToMany relationship))
-            {
-                return relationship;
-            }
-
-            return _relationships.Resolve(schemaName); // not found anywhere → throws the standard guidance
-        }
-
         // Non-throwing N:N resolution: a declared WithManyToMany relationship, else one recovered from registered
         // EntityMetadata. Used by Include reads to tell a N:N schema name from a 1:N/N:1 one.
         private bool TryResolveManyToMany(string schemaName, out RelationshipRegistry.ManyToMany relationship)
@@ -1625,10 +1656,17 @@ namespace Vela.Testing
             }
         }
 
+        /// <summary>
+        /// Associates records. Over a many-to-many relationship (declared with <see cref="WithManyToMany(string, string, string, string, string, string)"/>
+        /// or carried by registered metadata) it creates the intersect rows; <paramref name="entityName"/> and the
+        /// related records must be the relationship's two sides. Associating a pair that is already associated faults,
+        /// and nothing is written. Over a 1:N relationship declared with
+        /// <see cref="WithRelationship(string, string, string, CascadeConfiguration, string)"/> it sets the child's lookup
+        /// to the parent (an Update), from either side.
+        /// </summary>
         public void Associate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
             DemandStrictSecurityConfigured();
-            DemandAssociationAccess(entityName, entityId, relatedEntities);
 
             // A 1:N "association" is not an intersect row - it sets the child's lookup to the parent (an Update). Only
             // an N:N relationship uses an intersect table. Try N:N first, then 1:N, matching the real Associate; an
@@ -1637,6 +1675,7 @@ namespace Vela.Testing
             {
                 if (_oneToMany.TryResolveBySchema(relationship.SchemaName, out OneToManyRegistry.OneToMany oneToMany))
                 {
+                    DemandOneToManyAccess(entityName, entityId, oneToMany, relatedEntities);
                     DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
                     RunAtomically<object?>(() => { SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: true); return null; });
                     return;
@@ -1645,7 +1684,9 @@ namespace Vela.Testing
                 _relationships.Resolve(relationship.SchemaName); // not N:N or 1:N -> throws the standard guidance
             }
 
+            DemandManyToManyAccess(entityName, entityId, relatedEntities);
             DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
+            DemandManyToManySides(relationship.SchemaName, rel, entityName, relatedEntities);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
             EntityReference caller = new EntityReference(entityName, entityId);
@@ -1677,6 +1718,30 @@ namespace Vela.Testing
             }
         }
 
+        // An N:N Associate links the relationship's two tables: the calling record must be one side and every related
+        // record the other (the same table for a self-referential relationship). Anything else would write an intersect
+        // row naming a table the relationship does not join. The fault code is not verified live.
+        private static void DemandManyToManySides(string schemaName, RelationshipRegistry.ManyToMany relationship, string entityName, EntityReferenceCollection relatedEntities)
+        {
+            bool isFirst = string.Equals(entityName, relationship.FirstEntity, StringComparison.OrdinalIgnoreCase);
+            bool isSecond = string.Equals(entityName, relationship.SecondEntity, StringComparison.OrdinalIgnoreCase);
+            if (!isFirst && !isSecond)
+            {
+                throw PlatformFault.Create(PlatformFault.InvalidArgument,
+                    $"Cannot associate a {entityName} record over the relationship '{schemaName}': it links {relationship.FirstEntity} and {relationship.SecondEntity}.");
+            }
+
+            string otherSide = isFirst ? relationship.SecondEntity : relationship.FirstEntity;
+            foreach (EntityReference related in relatedEntities)
+            {
+                if (!string.Equals(related.LogicalName, otherSide, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw PlatformFault.Create(PlatformFault.InvalidArgument,
+                        $"Cannot associate {entityName} with a {related.LogicalName} record over the relationship '{schemaName}': it links {relationship.FirstEntity} and {relationship.SecondEntity}.");
+                }
+            }
+        }
+
         // Sets (Associate) or clears (Disassociate) a 1:N lookup: the child's ReferencingAttribute points at the
         // parent. Works from either side - entityName may be the parent (referenced) side, with relatedEntities the
         // children, or the child (referencing) side, with the single related record the parent.
@@ -1700,7 +1765,6 @@ namespace Vela.Testing
         public void Disassociate(string entityName, Guid entityId, Relationship relationship, EntityReferenceCollection relatedEntities)
         {
             DemandStrictSecurityConfigured();
-            DemandAssociationAccess(entityName, entityId, relatedEntities);
 
             // 1:N disassociate clears the child's lookup (an Update); only N:N removes intersect rows. Resolve first so
             // an undeclared relationship throws the standard guidance before the target-existence check.
@@ -1708,6 +1772,7 @@ namespace Vela.Testing
             {
                 if (_oneToMany.TryResolveBySchema(relationship.SchemaName, out OneToManyRegistry.OneToMany oneToMany))
                 {
+                    DemandOneToManyAccess(entityName, entityId, oneToMany, relatedEntities);
                     DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
                     RunAtomically<object?>(() => { SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: false); return null; });
                     return;
@@ -1716,6 +1781,7 @@ namespace Vela.Testing
                 _relationships.Resolve(relationship.SchemaName); // not N:N or 1:N -> throws the standard guidance
             }
 
+            DemandManyToManyAccess(entityName, entityId, relatedEntities);
             DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
@@ -2121,7 +2187,7 @@ namespace Vela.Testing
             // Deleting a file clears its File column: it needs Write on that record (and on the column when it is
             // secured), and touches no other column or table, even one holding the same Guid.
             DemandAccess(blob.EntityLogicalName, Privilege.Write, record);
-            DemandSecuredColumnWrites(new Entity(blob.EntityLogicalName, blob.RecordId) { [blob.AttributeName] = null });
+            DemandSecuredColumnWrites(new Entity(blob.EntityLogicalName, blob.RecordId) { [blob.AttributeName] = null }, onCreate: false);
             if (record.GetAttributeValue<Guid?>(blob.AttributeName) == fileId)
             {
                 record.Attributes.Remove(blob.AttributeName);

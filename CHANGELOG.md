@@ -21,7 +21,58 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (Framework, breaking)
+
+- `Vela.Testing`: with security on, an N:N `Associate` or `Disassociate` needs the Append privilege on the records of
+  both tables, whichever side the call is made from, as Learn documents for many-to-many relationships. The harness
+  demanded AppendTo on the calling record and Append on the related ones, so a role granting AppendTo instead of Append
+  on one table now fails with `0x80040220`, and a call from the other side of the same relationship is checked the
+  same way. Grant Append on both tables.
+- `Vela.Testing`: a 1:N `Associate` or `Disassociate` called from the child side is checked only as the Update of the
+  child's lookup (Write and Append on the child, AppendTo on the parent when the lookup is set). It also demanded
+  AppendTo on the child and Append on the parent, which denied calls the platform allows. The parent side is unchanged.
+- `Vela.Testing`: field-level security has a separate Create permission, `FieldPermission(..., create: true)`, as a
+  column security profile does. A Create that sets a secured column now needs it; `update: true` alone no longer
+  allows it, and fails with `0x80040220`. Add `create: true` where a test creates records with a secured column set.
+- `Vela.Testing`: `WithSecurity` fails fast with an `InvalidOperationException` on a configuration that was ignored
+  silently: a user or team in a business unit not declared (once any `BusinessUnit(...)` is declared), a `Manager`,
+  `Position` or `FieldPermission` naming a principal that is not declared, two roles with the same id, and an id
+  declared both as a user and as a team.
+
+### Added (Framework)
+
+- `Vela.Testing`: `RoleBuilder.MemberPrivilegeInheritance(TeamPrivilegeInheritance)` sets the member's privilege
+  inheritance on the role, where the platform keeps it (`role.isinherited`). A user who holds a "Team privileges only"
+  role through a team uses its User-level grants only for that team's records, while the team's other roles keep
+  covering the user's own records. `Team(id, businessUnit, TeamPrivilegeInheritance, roles)` still works and applies
+  the setting to that team's roles only.
+- `Vela.Testing`: `WithRelationship`, `WithParentalRelationship` and `WithReferentialRelationship` (on
+  `InMemoryOrganizationService` and `PluginPipeline`) take an optional `schemaName`, the relationship's real schema
+  name. `Associate`, `Disassociate`, a deep insert and a `RelatedEntitiesQuery` find the relationship by it, so two
+  1:N relationships between the same tables can each be addressed. Declaring a schema name that another relationship
+  (1:N or N:N) already uses throws. Without one, the relationship keeps its `{referenced}_{referencing}` name.
+
 ### Fixed (Framework)
+
+- `Vela.Testing`: a row created through `PluginPipeline` from an early-bound class without an `OwnerId` property is
+  organization-owned, as it already was through `InMemoryOrganizationService`. It got `ownerid`, `owninguser` and
+  `owningbusinessunit` before, because the pipeline's copy of the target lost its type. The `OwnershipType` of
+  metadata registered with `WithEntityMetadata` now decides the ownership too (it was ignored), after an
+  `AsOrganizationOwned`/`AsUserOwned`/`AsVirtual`/`AsElastic` declaration and before the early-bound type, and
+  `FakeEntityMetadata.From<T>()` sets `OrganizationOwned` for a class without an `ownerid` column (it left
+  `OwnershipType` unset).
+- `Vela.Testing`: `InMemoryOrganizationService.Update`, `UpdateMultipleRequest` and `AssignRequest` resolve a target
+  addressed by alternate key (`KeyAttributes`). They threw a not-found fault for the empty id before; only
+  `UpdateRequest` and `PluginPipeline` resolved the key.
+- `Vela.Testing`: a delete that a Restrict relationship blocks deeper in the cascade (on a grandchild) leaves the store
+  unchanged. Children already deleted or unlinked by the cascade stayed deleted or unlinked before.
+- `Vela.Testing`: a null link column no longer matches in a join or an Any/All filter. A row with an empty column was
+  joined to every row whose linked column was empty too.
+- `Vela.Testing`: an N:N `Associate` faults with `0x80040203` when the record or a related record is not one of the
+  relationship's two tables. It wrote an intersect row before.
+- `Vela.Testing`: a deep insert that matches several 1:N relationships names the new `schemaName` parameter in its
+  error, and `MessageNotModelledException` lists every message the store handles (Upsert, Merge, WhoAmI, the sharing
+  and record-team messages were missing).
 
 - `Vela.Testing`: with security on, a record's new owner must hold Read on the table, as in Dataverse. A Create with
   `ownerid`, an Update of `ownerid`, an `AssignRequest`, and a PreOperation plugin that sets `Target["ownerid"]` now

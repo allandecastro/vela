@@ -61,16 +61,20 @@ namespace Vela.Testing.Security
     }
 
     /// <summary>
-    /// How a team's members inherit its roles (the team's "Member's privilege inheritance" setting).
+    /// How the members of a team inherit a role the team holds: the security role's "Member's privilege inheritance"
+    /// setting (<c>role.isinherited</c>). Set it per role with <see cref="RoleBuilder.MemberPrivilegeInheritance"/>.
     /// </summary>
     public enum TeamPrivilegeInheritance
     {
-        /// <summary>Team and user privileges: members use the team's roles as their own (the default).</summary>
+        /// <summary>
+        /// Direct User (Basic) access level and Team privileges: members use the role's grants as their own (the
+        /// default for a new role).
+        /// </summary>
         MemberAndTeam,
 
         /// <summary>
-        /// Team privileges only: a member can use the team's <see cref="AccessLevel.User"/>-level grants only for
-        /// records owned by the team, not for their own records. Higher levels are unaffected.
+        /// Team privileges only: a member can use the role's <see cref="AccessLevel.User"/>-level grants, held through
+        /// a team, only for records owned by that team, not for their own records. Higher levels are unaffected.
         /// </summary>
         TeamOnly,
     }
@@ -88,6 +92,21 @@ namespace Vela.Testing.Security
         // (entity, privilege) -> highest level granted. A role never lowers a privilege it already grants.
         internal Dictionary<(string Entity, Privilege Privilege), AccessLevel> Grants { get; } =
             new Dictionary<(string, Privilege), AccessLevel>();
+
+        internal TeamPrivilegeInheritance Inheritance { get; private set; } = TeamPrivilegeInheritance.MemberAndTeam;
+
+        /// <summary>
+        /// Sets the role's "Member's privilege inheritance" (<c>role.isinherited</c>). With
+        /// <see cref="TeamPrivilegeInheritance.TeamOnly"/>, a user who holds the role through a team can use its
+        /// <see cref="AccessLevel.User"/>-level grants only for records that team owns. The default is
+        /// <see cref="TeamPrivilegeInheritance.MemberAndTeam"/>. A role assigned to a user directly keeps all its
+        /// grants whatever this setting.
+        /// </summary>
+        public RoleBuilder MemberPrivilegeInheritance(TeamPrivilegeInheritance inheritance)
+        {
+            Inheritance = inheritance;
+            return this;
+        }
 
         /// <summary>
         /// Grants one or more <paramref name="privileges"/> on <paramref name="entity"/> at <paramref name="level"/>.
@@ -139,6 +158,7 @@ namespace Vela.Testing.Security
         private readonly HashSet<(string Entity, string Column)> _securedColumns = new HashSet<(string, string)>();
         private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldRead = new HashSet<(Guid, string, string)>();
         private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldUpdate = new HashSet<(Guid, string, string)>();
+        private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldCreate = new HashSet<(Guid, string, string)>();
 
         /// <summary>Declares a business unit, optionally as a child of <paramref name="parent"/> (a BU hierarchy).</summary>
         public SecurityConfiguration BusinessUnit(Guid id, Guid parent = default)
@@ -260,9 +280,11 @@ namespace Vela.Testing.Security
             Team(id, businessUnit, TeamPrivilegeInheritance.MemberAndTeam, roles);
 
         /// <summary>
-        /// Registers a team with an explicit <paramref name="inheritance"/> mode. With
-        /// <see cref="TeamPrivilegeInheritance.TeamOnly"/>, members use the team's Basic-level grants only for
-        /// records owned by the team.
+        /// Registers a team and applies <paramref name="inheritance"/> to every role it holds, for this team only.
+        /// On the platform the setting belongs to the role (<c>role.isinherited</c>): prefer
+        /// <see cref="RoleBuilder.MemberPrivilegeInheritance"/>. With <see cref="TeamPrivilegeInheritance.TeamOnly"/>,
+        /// members use these roles' Basic-level grants only for records owned by the team; a role declared
+        /// <see cref="TeamPrivilegeInheritance.TeamOnly"/> stays so whatever is passed here.
         /// </summary>
         public SecurityConfiguration Team(Guid id, Guid businessUnit, TeamPrivilegeInheritance inheritance, params string[] roles)
         {
@@ -328,8 +350,13 @@ namespace Vela.Testing.Security
             return this;
         }
 
-        /// <summary>Grants a principal (user or team) read and/or update on a field-secured <paramref name="column"/>.</summary>
-        public SecurityConfiguration FieldPermission(Guid principal, string entity, string column, bool read = true, bool update = false)
+        /// <summary>
+        /// Grants a principal (user or team) permissions on a field-secured <paramref name="column"/>, as a column
+        /// security profile does: <paramref name="read"/> to see the value, <paramref name="update"/> to change it on
+        /// an existing record, <paramref name="create"/> to set it when creating a record. The three are independent:
+        /// <paramref name="update"/> does not allow setting the column on Create.
+        /// </summary>
+        public SecurityConfiguration FieldPermission(Guid principal, string entity, string column, bool read = true, bool update = false, bool create = false)
         {
             (Guid, string, string) key = (principal, Norm(entity), Norm(column));
             if (read)
@@ -340,6 +367,11 @@ namespace Vela.Testing.Security
             if (update)
             {
                 _fieldUpdate.Add(key);
+            }
+
+            if (create)
+            {
+                _fieldCreate.Add(key);
             }
 
             return this;
@@ -409,7 +441,90 @@ namespace Vela.Testing.Security
                 }
             }
 
-            return new SecurityModel(_businessUnitParents, roles, _users, _teams, _memberships, sharing, accessTeams, _roleIds, _roleTemplateIds, _managers, _positions, _positionParents, _hierarchyDepth, _securedColumns, _fieldRead, _fieldUpdate);
+            ValidatePrincipals();
+            ValidateRoleIds();
+
+            // A role whose own setting is "Team privileges only", plus each (team, role) a team declared TeamOnly holds.
+            HashSet<string> teamOnlyRoles = new HashSet<string>(
+                _roles.Where(r => r.Value.Inheritance == TeamPrivilegeInheritance.TeamOnly).Select(r => r.Key),
+                StringComparer.OrdinalIgnoreCase);
+
+            return new SecurityModel(_businessUnitParents, roles, teamOnlyRoles, _users, _teams, _memberships, sharing, accessTeams, _roleIds, _roleTemplateIds, _managers, _positions, _positionParents, _hierarchyDepth, _securedColumns, _fieldRead, _fieldUpdate, _fieldCreate);
+        }
+
+        // Settings that name a principal or business unit the configuration does not declare would be ignored
+        // silently (a manager link that never matches, a field permission nobody holds), so they fail fast.
+        private void ValidatePrincipals()
+        {
+            foreach (Guid id in _users.Keys)
+            {
+                if (_teams.ContainsKey(id))
+                {
+                    throw new InvalidOperationException(
+                        $"{id} is declared both as a user and as a team. A principal id identifies one record, a systemuser or a team.");
+                }
+            }
+
+            // Once any business unit is declared, every user and team must be in a declared one: a typo would otherwise
+            // leave the principal outside the hierarchy, and every depth check against it would fail without saying why.
+            if (_businessUnitParents.Count > 0)
+            {
+                HashSet<Guid> declared = new HashSet<Guid>(
+                    _businessUnitParents.Keys.Concat(_businessUnitParents.Values).Where(id => id != Guid.Empty));
+                foreach ((Principal principal, string kind) in _users.Values.Select(u => (u, "User")).Concat(_teams.Values.Select(t => (t, "Team"))))
+                {
+                    if (!declared.Contains(principal.BusinessUnit))
+                    {
+                        throw new InvalidOperationException(
+                            $"{kind} {principal.Id} is in business unit {principal.BusinessUnit}, which is not declared. Declare it with BusinessUnit({principal.BusinessUnit}, ...).");
+                    }
+                }
+            }
+
+            foreach (KeyValuePair<Guid, Guid> link in _managers)
+            {
+                DemandUser(link.Key, "Manager", "user");
+                DemandUser(link.Value, "Manager", "manager");
+            }
+
+            foreach (Guid userId in _positions.Keys)
+            {
+                DemandUser(userId, "Position", "user");
+            }
+
+            foreach ((Guid principal, _, _) in _fieldRead.Concat(_fieldUpdate).Concat(_fieldCreate))
+            {
+                if (!_users.ContainsKey(principal) && !_teams.ContainsKey(principal))
+                {
+                    throw new InvalidOperationException(
+                        $"FieldPermission names {principal}, which is neither a declared user nor a declared team. Declare it with User({principal}, ...) or Team({principal}, ...).");
+                }
+            }
+        }
+
+        private void DemandUser(Guid id, string setting, string role)
+        {
+            if (!_users.ContainsKey(id))
+            {
+                throw new InvalidOperationException(
+                    $"{setting} names {id} as the {role}, which is not a declared user. Declare it with User({id}, ...).");
+            }
+        }
+
+        // Each role is one record: two names sharing a root id would materialize two role rows with the same id.
+        private void ValidateRoleIds()
+        {
+            Dictionary<Guid, string> seen = new Dictionary<Guid, string>();
+            foreach (KeyValuePair<string, Guid> role in _roleIds)
+            {
+                if (seen.TryGetValue(role.Value, out string? other))
+                {
+                    throw new InvalidOperationException(
+                        $"Roles '{other}' and '{role.Key}' have the same id {role.Value}. Give each role its own id.");
+                }
+
+                seen[role.Value] = role.Key;
+            }
         }
     }
 
@@ -430,7 +545,10 @@ namespace Vela.Testing.Security
 
         public IReadOnlyList<string> Roles { get; }
 
-        /// <summary>For teams: how members inherit its roles. Ignored for users.</summary>
+        /// <summary>
+        /// For teams: <see cref="TeamPrivilegeInheritance.TeamOnly"/> applies that setting to every role the team
+        /// holds (the <c>Team(id, bu, inheritance, roles)</c> shim). Ignored for users.
+        /// </summary>
         public TeamPrivilegeInheritance Inheritance { get; }
     }
 
@@ -454,11 +572,11 @@ namespace Vela.Testing.Security
         private const int TargetPrincipalLacksReadPrivilege = unchecked((int)0x80040299);
         private const int TeamNotAssignedRoles = unchecked((int)0x80042f0a);
 
-        private const string SystemUser = "systemuser";
-        private const string Team = "team";
+        private const string Team = PrincipalKind.Team;
 
         private readonly Dictionary<Guid, Guid> _businessUnitParents;
         private readonly Dictionary<string, Dictionary<(string Entity, Privilege Privilege), AccessLevel>> _roles;
+        private readonly HashSet<string> _teamOnlyRoles;
         private readonly Dictionary<Guid, Principal> _users;
         private readonly Dictionary<Guid, Principal> _teams;
         private readonly Dictionary<Guid, HashSet<Guid>> _memberships;
@@ -473,6 +591,7 @@ namespace Vela.Testing.Security
         private readonly HashSet<(string Entity, string Column)> _securedColumns;
         private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldRead;
         private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldUpdate;
+        private readonly HashSet<(Guid Principal, string Entity, string Column)> _fieldCreate;
 
         // The privileges that can also be granted per-record via sharing (PoA). Create is not shareable.
         private static readonly Privilege[] ShareablePrivileges =
@@ -484,6 +603,7 @@ namespace Vela.Testing.Security
         internal SecurityModel(
             Dictionary<Guid, Guid> businessUnitParents,
             Dictionary<string, Dictionary<(string Entity, Privilege Privilege), AccessLevel>> roles,
+            HashSet<string> teamOnlyRoles,
             Dictionary<Guid, Principal> users,
             Dictionary<Guid, Principal> teams,
             Dictionary<Guid, HashSet<Guid>> memberships,
@@ -497,10 +617,12 @@ namespace Vela.Testing.Security
             int hierarchyDepth,
             HashSet<(string Entity, string Column)> securedColumns,
             HashSet<(Guid Principal, string Entity, string Column)> fieldRead,
-            HashSet<(Guid Principal, string Entity, string Column)> fieldUpdate)
+            HashSet<(Guid Principal, string Entity, string Column)> fieldUpdate,
+            HashSet<(Guid Principal, string Entity, string Column)> fieldCreate)
         {
             _businessUnitParents = businessUnitParents;
             _roles = roles;
+            _teamOnlyRoles = teamOnlyRoles;
             _users = users;
             _teams = teams;
             _memberships = memberships;
@@ -515,6 +637,7 @@ namespace Vela.Testing.Security
             _securedColumns = securedColumns;
             _fieldRead = fieldRead;
             _fieldUpdate = fieldUpdate;
+            _fieldCreate = fieldCreate;
         }
 
         /// <summary>Whether a column is field-secured (hidden/blocked unless a field permission grants it).</summary>
@@ -524,8 +647,11 @@ namespace Vela.Testing.Security
         /// <summary>Whether the user may read a field-secured column (directly or via a team).</summary>
         public bool CanReadColumn(Guid userId, string entity, string column) => FieldAllowed(_fieldRead, userId, entity, column);
 
-        /// <summary>Whether the user may write a field-secured column (directly or via a team).</summary>
-        public bool CanWriteColumn(Guid userId, string entity, string column) => FieldAllowed(_fieldUpdate, userId, entity, column);
+        /// <summary>Whether the user may change a field-secured column on an existing record (directly or via a team).</summary>
+        public bool CanUpdateColumn(Guid userId, string entity, string column) => FieldAllowed(_fieldUpdate, userId, entity, column);
+
+        /// <summary>Whether the user may set a field-secured column when creating a record (directly or via a team).</summary>
+        public bool CanCreateColumn(Guid userId, string entity, string column) => FieldAllowed(_fieldCreate, userId, entity, column);
 
         private bool FieldAllowed(HashSet<(Guid Principal, string Entity, string Column)> permissions, Guid userId, string entity, string column)
         {
@@ -728,7 +854,7 @@ namespace Vela.Testing.Security
                 return Guid.Empty;
             }
 
-            if (string.Equals(principal.LogicalName, Team, StringComparison.OrdinalIgnoreCase))
+            if (PrincipalKind.IsTeam(principal))
             {
                 return _teams.TryGetValue(principal.Id, out Principal team) ? team.BusinessUnit : Guid.Empty;
             }
@@ -779,7 +905,7 @@ namespace Vela.Testing.Security
         public FaultException<OrganizationServiceFault>? OwnerReadDenied(EntityReference owner, string entity, bool onCreate)
         {
             string table = entity.ToLowerInvariant();
-            bool isTeam = string.Equals(owner.LogicalName, Team, StringComparison.OrdinalIgnoreCase);
+            bool isTeam = PrincipalKind.IsTeam(owner);
             bool canRead;
             if (isTeam)
             {
@@ -949,11 +1075,11 @@ namespace Vela.Testing.Security
 
             if (record.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId) is EntityReference owner)
             {
-                if (string.Equals(owner.LogicalName, SystemUser, StringComparison.OrdinalIgnoreCase))
+                if (PrincipalKind.IsUser(owner))
                 {
                     Add(owner.Id, HierarchyRights);
                 }
-                else if (string.Equals(owner.LogicalName, Team, StringComparison.OrdinalIgnoreCase))
+                else if (PrincipalKind.IsTeam(owner))
                 {
                     foreach (Guid member in MembersOf(owner.Id))
                     {
@@ -965,16 +1091,11 @@ namespace Vela.Testing.Security
             EntityReference target = new EntityReference(table, record.Id);
             foreach (PrincipalAccess share in _sharing.SharesOf(target).Concat(_sharing.InheritedOf(target)))
             {
-                if (share.Principal == null)
-                {
-                    continue;
-                }
-
-                if (string.Equals(share.Principal.LogicalName, SystemUser, StringComparison.OrdinalIgnoreCase))
+                if (PrincipalKind.IsUser(share.Principal))
                 {
                     Add(share.Principal.Id, share.AccessMask);
                 }
-                else if (string.Equals(share.Principal.LogicalName, Team, StringComparison.OrdinalIgnoreCase))
+                else if (PrincipalKind.IsTeam(share.Principal))
                 {
                     foreach (Guid member in MembersOf(share.Principal.Id))
                     {
@@ -1129,7 +1250,7 @@ namespace Vela.Testing.Security
         }
 
         // Each granted level, tagged with the team it must be scoped to (non-null only for a Basic/User-level grant
-        // from a "Team privileges only" team, which then covers only that team's records).
+        // of a "Team privileges only" role held through a team, which then covers only that team's records).
         private IEnumerable<(AccessLevel Level, Guid? RestrictToTeamOwned)> GrantedLevels(Guid userId, string table, Privilege privilege)
         {
             if (_users.TryGetValue(userId, out Principal user))
@@ -1155,9 +1276,10 @@ namespace Vela.Testing.Security
                 {
                     if (_teams.TryGetValue(teamId, out Principal team))
                     {
-                        bool teamOnly = team.Inheritance == TeamPrivilegeInheritance.TeamOnly;
-                        foreach (AccessLevel level in LevelsFor(team.Roles, table, privilege))
+                        bool teamOnlyTeam = team.Inheritance == TeamPrivilegeInheritance.TeamOnly;
+                        foreach ((string role, AccessLevel level) in RoleLevels(team.Roles, table, privilege))
                         {
+                            bool teamOnly = teamOnlyTeam || _teamOnlyRoles.Contains(role);
                             yield return (level, teamOnly && level == AccessLevel.User ? teamId : (Guid?)null);
                         }
                     }
@@ -1165,7 +1287,11 @@ namespace Vela.Testing.Security
             }
         }
 
-        private IEnumerable<AccessLevel> LevelsFor(IReadOnlyList<string> roleNames, string table, Privilege privilege)
+        private IEnumerable<AccessLevel> LevelsFor(IReadOnlyList<string> roleNames, string table, Privilege privilege) =>
+            RoleLevels(roleNames, table, privilege).Select(grant => grant.Level);
+
+        // Each role of roleNames granting the privilege on the table, with the level it grants.
+        private IEnumerable<(string Role, AccessLevel Level)> RoleLevels(IReadOnlyList<string> roleNames, string table, Privilege privilege)
         {
             foreach (string roleName in roleNames)
             {
@@ -1173,7 +1299,7 @@ namespace Vela.Testing.Security
                     grants.TryGetValue((table, privilege), out AccessLevel level) &&
                     level != AccessLevel.None)
                 {
-                    yield return level;
+                    yield return (roleName, level);
                 }
             }
         }
@@ -1211,12 +1337,12 @@ namespace Vela.Testing.Security
                 return false;
             }
 
-            if (string.Equals(owner.LogicalName, SystemUser, StringComparison.OrdinalIgnoreCase))
+            if (PrincipalKind.IsUser(owner))
             {
                 return owner.Id == userId;
             }
 
-            if (string.Equals(owner.LogicalName, Team, StringComparison.OrdinalIgnoreCase))
+            if (PrincipalKind.IsTeam(owner))
             {
                 // The principal owns the record if it IS the owning team, or is a member of it.
                 return owner.Id == userId ||
@@ -1229,7 +1355,7 @@ namespace Vela.Testing.Security
         // True when the record is owned by the given team specifically (used by the Team-privileges-only scope).
         private static bool OwnedByTeam(Entity? record, Guid teamId) =>
             record?.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId) is EntityReference owner &&
-            string.Equals(owner.LogicalName, Team, StringComparison.OrdinalIgnoreCase) && owner.Id == teamId;
+            PrincipalKind.IsTeam(owner) && owner.Id == teamId;
 
         private static Guid OwningBusinessUnit(Entity record) =>
             record.GetAttributeValue<EntityReference>(SystemFieldApplier.OwningBusinessUnit)?.Id ?? Guid.Empty;

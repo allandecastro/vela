@@ -44,24 +44,6 @@ namespace Vela.Testing
             ExecuteUpdateMultiple(new[] { entity }, sharedVariables);
         }
 
-        // A write target addressed by alternate key (Id empty + KeyAttributes) is resolved to the record's id before
-        // any step fires, as Dataverse does: the steps see Target.Id / PrimaryEntityId set to the resolved record, and
-        // a key that matches nothing throws the platform not-found fault. Returns a clone (the caller's entity is not
-        // mutated); a target that already has an id (or no key) is returned unchanged.
-        private Entity ResolveKeyedTarget(Entity entity)
-        {
-            if (entity.Id != Guid.Empty || entity.KeyAttributes == null || entity.KeyAttributes.Count == 0)
-            {
-                return entity;
-            }
-
-            Guid id = _store.ResolveReference(new EntityReference(entity.LogicalName) { KeyAttributes = entity.KeyAttributes });
-            Entity resolved = EntityValues.Clone(entity);
-            resolved.Id = id;
-            resolved.KeyAttributes.Clear();
-            return resolved;
-        }
-
         // SetState, as the platform runs it (verified live): the request fires the SetStateDynamicEntity steps (never
         // the SetState ones), and its main operation is an Update of statecode/statuscode at the same depth that fires
         // the Update steps at PreOperation and PostOperation only. The SetStateDynamicEntity steps see the Status as
@@ -274,7 +256,9 @@ namespace Vela.Testing
                 throw new ArgumentNullException(nameof(entities));
             }
 
-            entities = entities.Select(entity => ResolveKeyedTarget(EntityValues.CloneTarget(entity))).ToArray();
+            // A target addressed by alternate key is resolved to the record's id before any step fires, as Dataverse
+            // does: the steps see Target.Id / PrimaryEntityId set to the resolved record.
+            entities = entities.Select(entity => _store.ResolveWriteTarget(EntityValues.CloneTarget(entity))).ToArray();
             RunOperation<object?>(asyncQueue =>
             {
                 UpdateBatch(entities, platformUpdate: false, asyncQueue);
@@ -409,6 +393,7 @@ namespace Vela.Testing
                 if (_store.TryResolveReference(key, out Guid existingId))
                 {
                     Entity toUpdate = EntityValues.Clone(target);
+                    EntityValues.CarryEarlyBoundType(target, toUpdate);
                     toUpdate.Id = existingId;
                     toUpdate.KeyAttributes.Clear();
                     ExecuteUpdate(toUpdate);
@@ -418,6 +403,7 @@ namespace Vela.Testing
                 else
                 {
                     Entity toCreate = EntityValues.Clone(target);
+                    EntityValues.CarryEarlyBoundType(target, toCreate);
                     foreach (KeyValuePair<string, object> pair in target.KeyAttributes)
                     {
                         if (!toCreate.Attributes.Contains(pair.Key))

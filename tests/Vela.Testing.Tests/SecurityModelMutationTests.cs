@@ -131,6 +131,101 @@ namespace Vela.Testing.Tests
                 exception.Message);
         }
 
+        // ---- Configuration validation ----------------------------------------------------------------------
+
+        private static InvalidOperationException ConfigurationError(Action<SecurityConfiguration> configure) =>
+            Assert.Throws<InvalidOperationException>(() => new InMemoryOrganizationService().WithSecurity(configure));
+
+        [Fact]
+        public void A_user_in_an_undeclared_business_unit_fails_once_business_units_are_declared()
+        {
+            InvalidOperationException exception = ConfigurationError(s => s.BusinessUnit(SalesBu).User(Alice, SubBu));
+
+            Assert.Equal(
+                $"User {Alice} is in business unit {SubBu}, which is not declared. Declare it with BusinessUnit({SubBu}, ...).",
+                exception.Message);
+        }
+
+        [Fact]
+        public void A_team_in_an_undeclared_business_unit_fails_once_business_units_are_declared()
+        {
+            InvalidOperationException exception = ConfigurationError(s => s.BusinessUnit(SalesBu).Team(Crew, SubBu));
+
+            Assert.StartsWith($"Team {Crew} is in business unit {SubBu}", exception.Message);
+        }
+
+        [Fact]
+        public void A_business_unit_declared_only_as_a_parent_counts_as_declared()
+        {
+            new InMemoryOrganizationService().WithSecurity(s => s.BusinessUnit(SubBu, SalesBu).User(Alice, SalesBu));
+        }
+
+        [Fact]
+        public void Business_units_are_not_checked_when_none_is_declared()
+        {
+            new InMemoryOrganizationService().WithSecurity(s => s.User(Alice, SalesBu).Team(Crew, SubBu));
+        }
+
+        [Fact]
+        public void A_manager_link_naming_an_unknown_user_fails()
+        {
+            InvalidOperationException exception = ConfigurationError(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu).Manager(Alice, Bob));
+
+            Assert.Equal($"Manager names {Bob} as the manager, which is not a declared user. Declare it with User({Bob}, ...).", exception.Message);
+            Assert.Contains("as the user", ConfigurationError(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu).Manager(Bob, Alice)).Message);
+        }
+
+        [Fact]
+        public void A_position_on_an_unknown_user_fails()
+        {
+            InvalidOperationException exception = ConfigurationError(s => s.BusinessUnit(SalesBu).Position(Bob, Guid.NewGuid()));
+
+            Assert.Equal($"Position names {Bob} as the user, which is not a declared user. Declare it with User({Bob}, ...).", exception.Message);
+        }
+
+        [Fact]
+        public void A_field_permission_for_an_unknown_principal_fails()
+        {
+            InvalidOperationException exception = ConfigurationError(s => s
+                .BusinessUnit(SalesBu)
+                .SecureColumn("account", "creditlimit")
+                .FieldPermission(Bob, "account", "creditlimit", read: false, create: true));
+
+            Assert.Equal(
+                $"FieldPermission names {Bob}, which is neither a declared user nor a declared team. Declare it with User({Bob}, ...) or Team({Bob}, ...).",
+                exception.Message);
+        }
+
+        [Fact]
+        public void A_field_permission_for_a_declared_team_is_accepted()
+        {
+            new InMemoryOrganizationService().WithSecurity(s => s
+                .BusinessUnit(SalesBu)
+                .Team(Crew, SalesBu)
+                .FieldPermission(Crew, "account", "creditlimit"));
+        }
+
+        [Fact]
+        public void Two_roles_with_the_same_id_fail()
+        {
+            Guid id = Guid.NewGuid();
+            InvalidOperationException exception = ConfigurationError(s => s
+                .Role("first", id, r => r.Grant("account", AccessLevel.User, Privilege.Read))
+                .Role("second", id, r => r.Grant("contact", AccessLevel.User, Privilege.Read)));
+
+            Assert.Equal($"Roles 'first' and 'second' have the same id {id}. Give each role its own id.", exception.Message);
+        }
+
+        [Fact]
+        public void A_user_id_equal_to_a_team_id_fails()
+        {
+            InvalidOperationException exception = ConfigurationError(s => s.BusinessUnit(SalesBu).User(Alice, SalesBu).Team(Alice, SalesBu));
+
+            Assert.Equal(
+                $"{Alice} is declared both as a user and as a team. A principal id identifies one record, a systemuser or a team.",
+                exception.Message);
+        }
+
         // ---- Hierarchy -------------------------------------------------------------------------------------
 
         // Alice (SalesBu) manages Bob (SubBu, a child of SalesBu); Alice holds only User-level Read on accounts, so
