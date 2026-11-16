@@ -135,27 +135,27 @@ internal static class AddCommand
         string? entity = TryReadOption(args, "--entity") ?? TryReadOption(args, "-e");
         if (entity is not null && !IdentifierPattern.IsMatch(entity))
         {
-            return Fail($"Invalid entity model type '{entity}'. Use the early-bound class name, e.g. 'Account'.", ExitInvalidArguments, includeUsage: false);
+            return Fail($"Invalid entity '{entity}'. Use the early-bound class name or the table logical name, e.g. 'Account' or 'account'.", ExitInvalidArguments, includeUsage: false);
         }
 
         string? name = FindPositional(args.Skip(1).ToArray(), ValueOptions);
+        bool defaultName = false;
         if (string.IsNullOrWhiteSpace(name) && kind == "plugin")
         {
-            // A plugin's name is optional: it defaults to <Entity>Plugin, so --entity (required anyway) names it.
+            // A plugin's name is optional: it defaults to <Entity>Plugin, so --entity (required anyway) names it. The
+            // default is taken once --entity is resolved to its model class, below.
             if (string.IsNullOrWhiteSpace(entity))
             {
-                return Fail("A plugin needs an entity. Pass --entity <ModelType> (the early-bound class name, e.g. Account); without a name, the plugin is named <ModelType>Plugin.", ExitInvalidArguments, includeUsage: false);
+                return Fail("A plugin needs an entity. Pass --entity <ModelType> (the early-bound class name, e.g. Account, or the table logical name); without a name, the plugin is named <ModelType>Plugin.", ExitInvalidArguments, includeUsage: false);
             }
 
-            name = DefaultPluginName(entity!);
+            defaultName = true;
         }
-
-        if (string.IsNullOrWhiteSpace(name))
+        else if (string.IsNullOrWhiteSpace(name))
         {
             return Fail($"Missing name. Usage: vela add {kind} <Name> [--entity <ModelType>] [--project <csproj>] [--force]", ExitInvalidArguments, includeUsage: false);
         }
-
-        if (!IdentifierPattern.IsMatch(name))
+        else if (!IdentifierPattern.IsMatch(name))
         {
             return Fail($"Invalid name '{name}'. Use a valid C# identifier (letters, digits, '_'; not starting with a digit).", ExitInvalidArguments, includeUsage: false);
         }
@@ -168,6 +168,21 @@ internal static class AddCommand
         }
 
         string projectDir = Path.GetDirectoryName(Path.GetFullPath(projectFile))!;
+
+        // --entity is emitted as a type (EntityPluginBase<T>, BoundTo<T>, new T { ... }) and names the <Table>/ folder, so
+        // a table logical name ('account') is resolved to its generated model class ('Account') first.
+        if (!string.IsNullOrWhiteSpace(entity))
+        {
+            if (!TryResolveEntityModelType(projectDir, entity!, out string modelType, out string? entityError))
+            {
+                return Fail(entityError!, ExitInvalidArguments, includeUsage: false);
+            }
+
+            entity = modelType;
+        }
+
+        name = defaultName ? DefaultPluginName(entity!) : name!;
+
         string rootNamespace = ReadRootNamespace(projectFile);
         string prefix = StripRoleSuffix(rootNamespace);
         string modelsNamespace = $"{prefix}.Shared.Models.Generated";
@@ -1408,6 +1423,91 @@ internal static class AddCommand
         return projectDir;
     }
 
+    // Resolves --entity to the early-bound class the generated code names, through the model lookup
+    // --filtering-attributes uses (from the solution root, skipping build output): a model class of that exact name is
+    // kept; otherwise a generated model whose EntityLogicalNameValue is the value (the table logical name, e.g.
+    // 'account') gives its class ('Account'), and a wrong-case class name is corrected. With no matching model, a value
+    // with no upper-case letter is refused, as --filtering-attributes refuses a logical name it cannot map: it reads as a
+    // logical name, and EntityPluginBase<account> would not compile. A class-cased value is kept (the model may not be
+    // generated yet).
+    private static bool TryResolveEntityModelType(string projectDir, string entity, out string modelType, out string? error)
+    {
+        modelType = entity;
+        error = null;
+        if (TryFindEntityModelFile(projectDir, entity, out _))
+        {
+            return true;
+        }
+
+        string? byLogicalName = null;
+        string? byClassName = null;
+        foreach ((string className, string? logicalName) in EnumerateEntityModels(projectDir))
+        {
+            if (byLogicalName is null && string.Equals(logicalName, entity, StringComparison.OrdinalIgnoreCase))
+            {
+                byLogicalName = className;
+            }
+            else if (byClassName is null && string.Equals(className, entity, StringComparison.OrdinalIgnoreCase))
+            {
+                byClassName = className;
+            }
+        }
+
+        string? resolved = byLogicalName ?? byClassName;
+        if (resolved is not null)
+        {
+            Console.Error.WriteLine($"Note: --entity '{entity}' resolved to the early-bound class '{resolved}' (the generated code uses the model class, not the table logical name).");
+            modelType = resolved;
+            return true;
+        }
+
+        if (!entity.Any(char.IsUpper))
+        {
+            error = $"--entity '{entity}': no early-bound model was found whose class or table logical name is '{entity}', and the generated code uses the model class (e.g. Account, not account). Run 'vela models' first, or pass the class name.";
+            return false;
+        }
+
+        return true;
+    }
+
+    // The generated early-bound models under the solution root (build output skipped): each file's "class X : Entity"
+    // with the EntityLogicalNameValue it declares (null when it has none).
+    private static System.Collections.Generic.IEnumerable<(string ClassName, string? LogicalName)> EnumerateEntityModels(string projectDir)
+    {
+        string root = FindSolutionRoot(projectDir);
+        foreach (string file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+        {
+            if (IsBuildOutput(file))
+            {
+                continue;
+            }
+
+            string text;
+            try
+            {
+                text = File.ReadAllText(file);
+            }
+            catch
+            {
+                continue;
+            }
+
+            Match classMatch = EntityClassDecl.Match(text);
+            if (classMatch.Success)
+            {
+                string? logicalName = text.Split('\n').Select(ModelDriftChecker.TryReadEntityLogicalName).FirstOrDefault(l => l is not null);
+                yield return (classMatch.Groups["name"].Value, logicalName);
+            }
+        }
+    }
+
+    // "class Account : Entity" (with or without further base types after Entity).
+    private static readonly Regex EntityClassDecl = new("\\bclass\\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\\s*:\\s*Entity\\b", RegexOptions.Compiled);
+
+    private static bool IsBuildOutput(string file) =>
+        file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+        || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
+
     // Locates the generated early-bound model file for an entity: from the solution root (FindSolutionRoot, so a
     // sibling models project is reached), finds a "{entity}.cs" that declares "class {entity} : Entity", skipping build
     // output. False when not found.
@@ -1419,8 +1519,7 @@ internal static class AddCommand
         var classDecl = new Regex($"class\\s+{Regex.Escape(entity)}\\s*:\\s*Entity", RegexOptions.Compiled);
         foreach (string file in Directory.EnumerateFiles(root, entity + ".cs", SearchOption.AllDirectories))
         {
-            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            if (IsBuildOutput(file))
             {
                 continue;
             }
