@@ -74,6 +74,20 @@ All notable changes to Vela are documented here. The format is based on
   the quickstart (`--entities account --out src/<Prefix>.Shared/Models/Generated --namespace
   <Prefix>.Shared.Models.Generated --interactive`) instead of the `--project src/<Prefix>.Shared/<Prefix>.Shared.csproj`
   form. Both write to the same folder and namespace.
+- `vela apply` registers a step on the message of a Custom API created by the same run. It wrote the Custom APIs and
+  the steps in one batch, and looked up the step's message before anything was sent, so the lookup failed
+  (`Dataverse message not found`), neither the Custom API nor the step was created, and every run stopped with exit
+  `7` after its deletes and the package publish. `apply` now writes the Custom APIs (with their parameters and
+  response properties) first, then the steps. When a Custom API fails, the run stops before the steps.
+- `vela plan` and `vela apply` exit `4` before any write, and `apply` before its confirmation prompt, when a Custom API
+  the run would create or update has a unique name without the `--solution` publisher prefix. This was a warning in
+  `diagnostics` (an error only with `--strict`), and `apply` failed on it with exit `7` after deleting the removed
+  steps and Custom APIs and publishing the package. The message lists every such Custom API; no JSON document is
+  written, and `diagnostics` no longer carries this warning.
+- `vela plan` and `vela apply` also exit `4` before any write when a step the run would create or update names a
+  message the environment does not have (`Dataverse message not found`) or a table that message has no filter for
+  (`no message filter exists for entity ...`). `apply` failed on these with exit `7` after its deletes and the package
+  publish. A step on the message of a Custom API that the same run creates is not checked against the environment.
 
 ### Docs
 

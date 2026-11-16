@@ -1406,11 +1406,11 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
     }
 
     [Fact]
-    public void ApplyDiff_capture_abort_does_not_report_unflushed_custom_api_update_as_completed()   // #305
+    public void ApplyDiff_capture_abort_does_not_report_unflushed_step_as_completed()   // #305
     {
-        // A changed custom-api is captured, then an added step throws during the same upsert capture phase. Nothing in
-        // the batch flushed, so only the publish completed; the api update is captured-but-unflushed ("not applied")
-        // and the step whose capture threw is the failure.
+        // A changed custom-api is flushed in its own phase, before the steps. In the step phase, a first added step is
+        // captured, then a second one throws during the same capture. Nothing of the step phase flushed: the first step
+        // is captured-but-unflushed ("not applied"), and the step whose capture threw is the failure.
         const string type = "Zava.Plugins.Thing";
         var svc = new TestSupport.FakeOrgService
         {
@@ -1419,17 +1419,19 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
                 "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
                 "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = type }),
                 "customapi" => TestSupport.FakeOrgService.Collection(new Entity("customapi", Guid.NewGuid())), // exists → update path
+                "sdkmessage" when (string)q.Criteria.Conditions[0].Values[0] == "Update" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid())),
                 "sdkmessage" => throw new InvalidOperationException("boom-at-added-step"),
                 _ => new EntityCollection(),
             },
         };
 
         JsonElement changedApi = Json(new { pluginTypeName = type, uniqueName = "zava_Changed" });
-        JsonElement addedStep = Json(new { pluginTypeName = type, message = "Update", entityLogicalName = "", stage = 40, mode = 0, stepKey = "dv-1", enabled = true });
+        JsonElement capturedStep = Json(new { pluginTypeName = type, message = "Update", entityLogicalName = "", stage = 40, mode = 0, stepKey = "dv-1", enabled = true });
+        JsonElement throwingStep = Json(new { pluginTypeName = type, message = "Delete", entityLogicalName = "", stage = 40, mode = 0, stepKey = "dv-2", enabled = true });
         var diff = new RegistrationDiff(
             LocalAssemblies: ["Zava.Plugins"],
             CurrentAssemblies: ["Zava.Plugins"],
-            Added: [new RegistrationItem("step", type, addedStep)],
+            Added: [new RegistrationItem("step", type, capturedStep), new RegistrationItem("step", type, throwingStep)],
             Removed: [],
             Changed: [new RegistrationChange("custom-api", type, changedApi, changedApi)],
             LocalItems: [],
@@ -1448,10 +1450,11 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         }
 
         string stderr = captured.ToString();
-        Assert.Contains("completed (1):", stderr);                 // publish only
-        Assert.DoesNotContain($"+ update custom-api {type}", stderr);  // captured but never flushed
-        Assert.Contains($"failed at: create step {type} (dv-1)", stderr); // the owner whose capture threw
-        Assert.Contains($"- update custom-api {type}", stderr);          // captured, never flushed
+        Assert.Contains("completed (2):", stderr);                         // publish, then the custom API phase
+        Assert.Contains($"+ update custom-api {type}", stderr);              // flushed before the steps
+        Assert.DoesNotContain($"+ create step {type} (dv-1)", stderr);        // captured but never flushed
+        Assert.Contains($"failed at: create step {type} (dv-2)", stderr);    // the owner whose capture threw
+        Assert.Contains($"- create step {type} (dv-1)", stderr);             // captured, never flushed
     }
 
     [Fact]

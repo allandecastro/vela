@@ -46,9 +46,7 @@ internal static partial class DataverseRegistration
     // production hazard. Fail fast instead. (An intentionally global step leaves EntityLogicalName empty.)
     if (!string.IsNullOrWhiteSpace(definition.EntityLogicalName) && !filterId.HasValue)
     {
-        throw new InvalidOperationException(
-            $"Cannot register step '{BuildStepName(definition)}': no message filter exists for entity '{definition.EntityLogicalName}' on message '{definition.Message}'. " +
-            "Check the entity logical name is correct and that the entity supports this message. Registering it anyway would create an unfiltered step that fires for every entity.");
+        throw new InvalidOperationException(MissingMessageFilterMessage(definition));
     }
 
     int normalizedMode = definition.Mode;
@@ -313,6 +311,10 @@ internal static partial class DataverseRegistration
 }
 
     internal static Guid ResolveMessageId(IOrganizationService service, string messageName)
+        => FindMessageId(service, messageName) ?? throw new InvalidOperationException(MessageNotFoundMessage(messageName));
+
+    // The sdkmessage id of a message name, or null when the environment has no such message.
+    internal static Guid? FindMessageId(IOrganizationService service, string messageName)
 {
     QueryExpression query = new QueryExpression("sdkmessage")
     {
@@ -320,14 +322,61 @@ internal static partial class DataverseRegistration
         TopCount = 1
     };
     query.Criteria.AddCondition("name", ConditionOperator.Equal, messageName);
-    Entity? row = service.RetrieveMultiple(query).Entities.FirstOrDefault();
-    if (row == null)
-    {
-        throw new InvalidOperationException($"Dataverse message not found: {messageName}");
-    }
-
-    return row.Id;
+    return service.RetrieveMultiple(query).Entities.FirstOrDefault()?.Id;
 }
+
+    private static string MessageNotFoundMessage(string messageName) => $"Dataverse message not found: {messageName}";
+
+    private static string MissingMessageFilterMessage(StepApplyDefinition definition) =>
+        $"Cannot register step '{BuildStepName(definition)}': no message filter exists for entity '{definition.EntityLogicalName}' on message '{definition.Message}'. " +
+        "Check the entity logical name is correct and that the entity supports this message. Registering it anyway would create an unfiltered step that fires for every entity.";
+
+    /// <summary>
+    /// The read-only check behind the preview of plan and apply: resolves the message, and the message filter of a
+    /// step scoped to a table, of every step the diff adds or changes, and returns one problem per step apply could
+    /// not register. It runs before any write, so such a step stops the run before a delete or the package publish
+    /// rather than after them. The message of a Custom API this run creates does not exist yet (Dataverse creates it
+    /// with the Custom API, which apply writes before the steps), so a step on that message is not checked here.
+    /// </summary>
+    internal static IReadOnlyList<string> FindUnregistrableSteps(IOrganizationService service, RegistrationDiff diff)
+    {
+        HashSet<string> createdApiMessages = new(
+            diff.Added.Where(item => !IsStep(item) && !IsWebResource(item))
+                .Select(item => TryGetString(item.Definition, "uniqueName") ?? item.Type),
+            StringComparer.OrdinalIgnoreCase);
+        IEnumerable<JsonElement> written = diff.Added.Where(IsStep).Select(item => item.Definition)
+            .Concat(diff.Changed.Where(change => string.Equals(change.Kind, "step", StringComparison.OrdinalIgnoreCase)).Select(change => change.After));
+
+        Dictionary<string, Guid?> messageIds = new(StringComparer.OrdinalIgnoreCase);
+        StepMetadataCache filters = new StepMetadataCache();
+        List<string> problems = [];
+        foreach (JsonElement element in written)
+        {
+            StepApplyDefinition definition = ParseStepDefinition(element);
+            if (createdApiMessages.Contains(definition.Message))
+            {
+                continue;
+            }
+
+            if (!messageIds.TryGetValue(definition.Message, out Guid? messageId))
+            {
+                messageId = FindMessageId(service, definition.Message);
+                messageIds[definition.Message] = messageId;
+            }
+
+            if (messageId is not Guid id)
+            {
+                problems.Add($"Cannot register step '{BuildStepName(definition)}': {MessageNotFoundMessage(definition.Message)}.");
+            }
+            else if (!string.IsNullOrWhiteSpace(definition.EntityLogicalName)
+                && filters.ResolveMessageFilterId(service, id, definition.EntityLogicalName) is null)
+            {
+                problems.Add(MissingMessageFilterMessage(definition));
+            }
+        }
+
+        return problems;
+    }
 
     internal static Guid? ResolveMessageFilterId(IOrganizationService service, Guid messageId, string entityLogicalName)
 {

@@ -142,7 +142,7 @@ internal static partial class DataverseRegistration
     private static bool IsChildDelete(CapturedOperation op)
         => op.Category is "request-parameter" or "response-property" or "image";
 
-    // ---- Upsert phase (tier 1: step/api rows, a created step's disable; tier 2: images, params, secure config) --
+    // ---- Upsert phases (Custom APIs, then steps; tier 1: rows, a created step's disable; tier 2: children) -------
 
     private static void ApplyUpsertsBatched(
         IOrganizationService service,
@@ -159,44 +159,58 @@ internal static partial class DataverseRegistration
         int chunkSize,
         ApplyProgress progress)
     {
-        BatchCapturingService capturing = new BatchCapturingService(service, solutionUniqueName);
-        List<CapturedOwner> owners = [];
-
         // Nothing is written during capture (see ApplyDeletesBatched): outcomes are recorded only after the flush.
         int planned = progress.Cursor;
 
+        // Two phases, each captured then flushed: the Custom APIs (with their parameters and response properties), then
+        // the steps. Capturing a step resolves its sdkmessage from the live environment, and the message of a Custom
+        // API is created by Dataverse with the Custom API: a step on an API this run creates can only be captured once
+        // that API is written. A failed Custom API phase stops the run before the steps (RecordOutcomes throws), so a
+        // step is never attempted on an API that was not written.
+        BatchCapturingService apis = new BatchCapturingService(service, solutionUniqueName);
+        List<CapturedOwner> apiOwners = [];
         foreach (RegistrationItem item in addedApis)
         {
             string uniqueName = TryGetString(item.Definition, "uniqueName") ?? item.Type;
-            CaptureOwner(capturing, new BatchOwner($"api-add:{planned}:{uniqueName}", uniqueName, "custom-api", planned,
-                $"skipping custom API upsert for '{item.Type}'"), owners, progress,
-                () => UpsertCustomApi(capturing, pluginTypeIds, item.Definition, verbose, customApiSolutionPrefix));
+            CaptureOwner(apis, new BatchOwner($"api-add:{planned}:{uniqueName}", uniqueName, "custom-api", planned,
+                $"skipping custom API upsert for '{item.Type}'"), apiOwners, progress,
+                () => UpsertCustomApi(apis, pluginTypeIds, item.Definition, verbose, customApiSolutionPrefix));
             planned++;
         }
 
         foreach (RegistrationChange change in changedApis)
         {
             string uniqueName = TryGetString(change.After, "uniqueName") ?? change.Type;
-            CaptureOwner(capturing, new BatchOwner($"api-chg:{planned}:{uniqueName}", uniqueName, "custom-api", planned,
-                $"skipping custom API update for '{change.Type}'"), owners, progress,
-                () => UpsertCustomApi(capturing, pluginTypeIds, change.After, verbose, customApiSolutionPrefix));
+            CaptureOwner(apis, new BatchOwner($"api-chg:{planned}:{uniqueName}", uniqueName, "custom-api", planned,
+                $"skipping custom API update for '{change.Type}'"), apiOwners, progress,
+                () => UpsertCustomApi(apis, pluginTypeIds, change.After, verbose, customApiSolutionPrefix));
             planned++;
         }
 
+        FlushUpserts(service, apis, apiOwners, chunkSize, progress, planned);
+
+        BatchCapturingService steps = new BatchCapturingService(service, solutionUniqueName);
+        List<CapturedOwner> stepOwners = [];
         foreach (RegistrationItem item in addedSteps)
         {
-            CaptureOwner(capturing, new BatchOwner($"step:{planned}", $"Plugin {item.Type}", "step", planned, ignorableWarning: null), owners, progress,
-                () => UpsertStep(capturing, pluginTypeIds, item.Definition, verbose, metadataCache, secureConfigByStepKey));
+            CaptureOwner(steps, new BatchOwner($"step:{planned}", $"Plugin {item.Type}", "step", planned, ignorableWarning: null), stepOwners, progress,
+                () => UpsertStep(steps, pluginTypeIds, item.Definition, verbose, metadataCache, secureConfigByStepKey));
             planned++;
         }
 
         foreach (RegistrationChange change in changedSteps)
         {
-            CaptureOwner(capturing, new BatchOwner($"step:{planned}", $"Plugin {change.Type}", "step", planned, ignorableWarning: null), owners, progress,
-                () => UpsertStep(capturing, pluginTypeIds, change.After, verbose, metadataCache, secureConfigByStepKey));
+            CaptureOwner(steps, new BatchOwner($"step:{planned}", $"Plugin {change.Type}", "step", planned, ignorableWarning: null), stepOwners, progress,
+                () => UpsertStep(steps, pluginTypeIds, change.After, verbose, metadataCache, secureConfigByStepKey));
             planned++;
         }
 
+        FlushUpserts(service, steps, stepOwners, chunkSize, progress, planned);
+    }
+
+    // Flushes one captured upsert phase in two tiers and records each owner's outcome (throws on any failure).
+    private static void FlushUpserts(IOrganizationService service, BatchCapturingService capturing, List<CapturedOwner> owners, int chunkSize, ApplyProgress progress, int phaseEnd)
+    {
         BatchApplyReport report = new BatchApplyReport();
         if (capturing.Operations.Count > 0)
         {
@@ -217,7 +231,7 @@ internal static partial class DataverseRegistration
             RenderBatchReport(report);
         }
 
-        RecordOutcomes(owners, report, progress, planned);
+        RecordOutcomes(owners, report, progress, phaseEnd);
     }
 
     // One owner captured in a batched phase, with the progress lines it logged during capture.

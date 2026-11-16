@@ -19,7 +19,7 @@ namespace Vela.Cli.Tests.TestSupport;
 /// <para>
 /// Importing a plugin package simulates the platform: it materializes the package's plugin assembly and plugin types
 /// (the CLI waits for those after the upload). The SDK message catalogue is seeded with
-/// <see cref="SeedMessage"/>.
+/// <see cref="SeedMessage"/>; creating a Custom API adds its message, as the platform does.
 /// </para>
 /// </summary>
 internal sealed class StatefulOrgService : IOrganizationService
@@ -60,6 +60,13 @@ internal sealed class StatefulOrgService : IOrganizationService
         if (string.Equals(entity.LogicalName, "pluginpackage", StringComparison.OrdinalIgnoreCase))
         {
             ImportPackage(Table("pluginpackage")[id]);
+        }
+        else if (string.Equals(entity.LogicalName, "customapi", StringComparison.OrdinalIgnoreCase))
+        {
+            // The platform creates the Custom API's message (named after its unique name) with it, and the message
+            // filter of its bound table, so a step can register on it.
+            string? bound = entity.GetAttributeValue<string>("boundentitylogicalname");
+            SeedMessage(entity.GetAttributeValue<string>("uniquename"), string.IsNullOrWhiteSpace(bound) ? [] : [bound!]);
         }
 
         return id;

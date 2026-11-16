@@ -61,6 +61,21 @@ The connection points at an environment where the `--solution` solution is manag
 environment that imported it) or does not exist. Connect to the development environment that holds the unmanaged
 solution. Nothing was written. See [Plan and apply](plan-apply.md).
 
+## `Custom API '...' must start with the solution publisher prefix` (exit 4)
+
+A Custom API the run would create or update has a unique name without the publisher prefix of the `--solution`
+solution. Rename it as the message suggests (`DoThing` under prefix `acme`: `acme_DoThing`), or target the solution
+of the matching publisher. `plan` and `apply` stop on it before any write, so nothing was written. See
+[Plan and apply](plan-apply.md#errors-that-stop-the-preview).
+
+## `Dataverse message not found` or `no message filter exists for entity` (exit 4)
+
+A step the run would create or update names a message the environment does not have, or a table that message has no
+filter for. Check the message and the table of the step: for a step on a Custom API, that its unique name matches a
+Custom API of the package or of the environment, and for a step on a table, that the message supports it. `plan` and `apply` stop
+on it before any write, so nothing was written. A step on a Custom API that the same run creates is not affected. See
+[Plan and apply](plan-apply.md#errors-that-stop-the-preview).
+
 ## `plan` shows no changes
 
 Check the `.nupkg` path or `--packages-dir`, the package version, and the environment you connect to.
