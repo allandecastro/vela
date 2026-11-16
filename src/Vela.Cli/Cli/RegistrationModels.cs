@@ -44,13 +44,36 @@ public sealed class DataverseConnectionException : Exception
         return false;
     }
 }
-public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, DataverseTokenProvider? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool AutoApprove, bool Interactive, bool Strict, bool Verbose, string? WebResourcesRoot = null, bool Json = false, int? TimeoutMinutes = null, int? BatchChunkSize = null, string[]? SecureConfigs = null, bool DetailedExitCode = false, Guid? ManagedIdentityId = null);
+public sealed record SharedOptions(string[] PackagePaths, string? PackageAssembly, string? ConnectionString, string? OAuthUrl, DataverseTokenProvider? OAuthToken, string? SolutionUniqueName, string? Environment, string? OutPath, bool AutoApprove, bool Interactive, bool Strict, bool Verbose, string? WebResourcesRoot = null, bool Json = false, int? TimeoutMinutes = null, int? BatchChunkSize = null, string[]? SecureConfigs = null, bool DetailedExitCode = false, Guid? ManagedIdentityId = null)
+{
+    // The compiler-generated record ToString prints every member, including the connection string (which can embed a
+    // client secret), the token provider and inline --secure-config values. Any interpolation or log of the options
+    // would leak them, so the secret-bearing members print only whether they are set.
+    private bool PrintMembers(System.Text.StringBuilder builder)
+    {
+        builder.Append($"PackagePaths = [{string.Join(", ", PackagePaths)}], PackageAssembly = {PackageAssembly}, ");
+        builder.Append($"ConnectionString = {(ConnectionString == null ? "null" : "***")}, OAuthUrl = {OAuthUrl}, ");
+        builder.Append($"OAuthToken = {(OAuthToken == null ? "null" : "***")}, SolutionUniqueName = {SolutionUniqueName}, ");
+        builder.Append($"Environment = {Environment}, OutPath = {OutPath}, AutoApprove = {AutoApprove}, Interactive = {Interactive}, ");
+        builder.Append($"Strict = {Strict}, Verbose = {Verbose}, WebResourcesRoot = {WebResourcesRoot}, Json = {Json}, ");
+        builder.Append($"TimeoutMinutes = {TimeoutMinutes}, BatchChunkSize = {BatchChunkSize}, ");
+        builder.Append($"SecureConfigs = {(SecureConfigs == null ? "null" : $"{SecureConfigs.Length} value(s), redacted")}, ");
+        builder.Append($"DetailedExitCode = {DetailedExitCode}, ManagedIdentityId = {ManagedIdentityId}");
+        return true;
+    }
+}
 public sealed record ExtractedPackage(string PackagePath, string TempDirectory, string PrimaryAssemblyPath, string[] RegistrableAssemblyPaths);
 public sealed record AssemblyPayload(string AssemblyName, string AssemblyPath);
 // HasRegistrations (local scan): false when the package holds no step, Custom API or unmanaged plugin type (a freshly
 // scaffolded, still empty project). Such a package is not created in Dataverse; one that already exists is republished.
 public sealed record PluginPackagePayload(string PackageName, string Version, string PackagePath, bool HasRegistrations = true);
-public sealed record RegistrationItem(string Kind, string Type, JsonElement Definition);
+public sealed record RegistrationItem(string Kind, string Type, JsonElement Definition)
+{
+    /// <summary>The row id of a live step (the live read sets it). Apply deletes a removed step by this id, never by a
+    /// lookup that could match another row. Not part of the diff or the JSON output.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Guid? LiveId { get; init; }
+}
 // Local package scan only (the live state leaves both null), keyed by full step key (DiffEngine.GetStepKey):
 // SecureConfigNameByStepKey is the secure configuration NAME each step declares (WithSecureConfigFrom);
 // SecureConfigByStepKey is the RAW value SecureConfigResolver resolved for it from --secure-config or the environment.
@@ -59,20 +82,33 @@ public sealed record RegistrationItem(string Kind, string Type, JsonElement Defi
 // TypedCustomApiUniqueNames (local scan only) lists the Custom APIs whose code declares a request class
 // (CustomApiBase<TRequest, TResponse>); a lightweight one (RegisterCustomApi(name, handler)) has none. A side list, not
 // part of the custom-api item shape, so it never enters the plan/apply diff; `vela models` reads it.
-public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics, IReadOnlyDictionary<string, string>? SecureConfigByStepKey = null, IReadOnlyDictionary<string, string>? SecureConfigNameByStepKey = null, string[]? UnmanagedPluginTypes = null, string[]? Info = null, string[]? TypedCustomApiUniqueNames = null);
+// PluginTypeNames (local scan only) lists every class of the scanned assemblies that Dataverse registers as a plugin
+// type (Vela plugins and Custom APIs, and the unmanaged IPlugin / CodeActivity classes): a live plugin type missing
+// from it is removed by the package update. Null when unknown (a state built by hand), which skips that check.
+// RetiredAssemblies / RetiredItems (live state only): the assemblies of a deployed plugin package that the local
+// package no longer contains (the assembly was renamed), and the Vela steps and the Custom APIs of their plugin types.
+// The diff deletes those steps and moves those Custom APIs (DiffEngine.BuildDiff), never pairing them with a local item.
+public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics, IReadOnlyDictionary<string, string>? SecureConfigByStepKey = null, IReadOnlyDictionary<string, string>? SecureConfigNameByStepKey = null, string[]? UnmanagedPluginTypes = null, string[]? Info = null, string[]? TypedCustomApiUniqueNames = null, string[]? PluginTypeNames = null, string[]? RetiredAssemblies = null, RegistrationItem[]? RetiredItems = null);
 public sealed record RegistrationDiff(string[] LocalAssemblies, string[] CurrentAssemblies, RegistrationItem[] Added, RegistrationItem[] Removed, RegistrationChange[] Changed, RegistrationItem[] LocalItems, RegistrationItem[] CurrentItems)
 {
     public DiffSummary Summary { get; init; } = new DiffSummary(Added.Length, Removed.Length, Changed.Length);
 }
 
-public sealed record RegistrationChange(string Kind, string Type, JsonElement Before, JsonElement After);
+public sealed record RegistrationChange(string Kind, string Type, JsonElement Before, JsonElement After)
+{
+    /// <summary>A Custom API implemented by a plugin type of a retired assembly (RegistrationState.RetiredAssemblies):
+    /// apply detaches it before the package update and points it at the local type afterwards, as for a renamed
+    /// class. Not part of the JSON output.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool MovesFromRetiredAssembly { get; init; }
+}
 public sealed record DiffSummary(int Added, int Removed, int Changed);
 /// <summary>
 /// The plan/apply JSON document (see docs/reference/machine-readable-output.md). <see cref="SchemaVersion"/> is
 /// serialized first; it changes only when an existing field changes meaning or shape, never for an added field.
 /// <c>diagnostics</c> are warnings (<c>--strict</c> fails on them); <c>info</c> and <c>unmanaged</c> are information.
 /// </summary>
-public sealed record PlanPreview(string Mode, string? Environment, bool HasChanges, DiffSummary Summary, ApplyOperation[] Operations, RegistrationDiff Diff, string[] Diagnostics, string[] Notes, ExecutedCounts? Executed = null, string[]? Unmanaged = null, string[]? Info = null, ManagedIdentityPlan? ManagedIdentity = null)
+public sealed record PlanPreview(string Mode, string? Environment, bool HasChanges, DiffSummary Summary, ApplyOperation[] Operations, RegistrationDiff Diff, string[] Diagnostics, string[] Notes, ExecutedCounts? Executed = null, string[]? Unmanaged = null, string[]? Info = null, ManagedIdentityPlan? ManagedIdentity = null, ApplyFailure? Failure = null)
 {
     [System.Text.Json.Serialization.JsonPropertyOrder(-1)]
     public int SchemaVersion { get; init; } = MachineOutput.SchemaVersion;
@@ -111,6 +147,12 @@ public sealed record ExecutedCounts(int Created, int Updated, int Deleted, bool 
         return new ExecutedCounts(diff.Added.Length, diff.Changed.Length, diff.Removed.Length, packageRepublished, byKind);
     }
 }
+
+/// <summary>
+/// What an <c>apply-failed</c> run did before it stopped: the error, and every planned operation under exactly one of
+/// <see cref="Completed"/>, <see cref="Failed"/> and <see cref="NotApplied"/> (the resume report printed on stderr).
+/// </summary>
+public sealed record ApplyFailure(string Error, string[] Completed, string[] Failed, string[] NotApplied);
 
 /// <summary>The executed create/update/delete counts for one component kind (step / custom-api / web-resource).</summary>
 public sealed record ExecutedByKind(string Kind, int Created, int Updated, int Deleted);

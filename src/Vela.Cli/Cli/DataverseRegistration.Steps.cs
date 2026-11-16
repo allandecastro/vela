@@ -165,73 +165,43 @@ internal static partial class DataverseRegistration
     }
 }
 
-    // Deletes a removed step, resolved ONLY within the plugin types of the assemblies being applied
-    // (ourPluginTypeIds, see GetPluginTypeIdByNameForAssemblies). A removed step always comes from the live read of
-    // those assemblies, so its type is in the map; a type that is not (renamed or already gone) is not ours to touch
-    // and nothing is deleted. There is no environment-wide name fallback: a same-named type or step in another
-    // assembly is never matched.
-    internal static void DeleteStepByDefinition(IOrganizationService service, JsonElement definitionElement, IReadOnlyDictionary<string, Guid> ourPluginTypeIds)
+    // Deletes a removed step by the row id the live read gave it (RegistrationItem.LiveId), never by a lookup on its
+    // key, trigger or name, which can match another row (several steps can share a trigger, and a name is not unique).
+    // The row is re-read first: it is deleted only while its handler is still a plugin type of the assemblies being
+    // applied (ourPluginTypeIds), so a step moved to another assembly since the read is left alone. A removed step
+    // always comes from the live read, so a missing id is a programming error, not a reason to search.
+    internal static void DeleteRemovedStep(IOrganizationService service, RegistrationItem item, IReadOnlyCollection<Guid> ourPluginTypeIds)
 {
-    StepApplyDefinition definition = ParseStepDefinition(definitionElement);
-    if (!ourPluginTypeIds.TryGetValue(definition.PluginTypeName, out Guid pluginTypeId))
-    {
-        return;
-    }
-
-    // FindStepId matches on the stable step key (or message/entity/stage/mode); the name fallback is scoped to the
-    // same plugin type, so a step of an unrelated plugin type sharing the display name is never deleted.
-    Guid? stepId = FindStepId(service, pluginTypeId, definition);
-    if (stepId.HasValue)
-    {
-        DeleteStep(service, stepId.Value);
-        return;
-    }
-
-    string? stepName = TryGetString(definitionElement, "name");
-    if (!string.IsNullOrWhiteSpace(stepName))
-    {
-        Guid? byName = FindStepByName(service, stepName, pluginTypeId);
-        if (byName.HasValue)
-        {
-            DeleteStep(service, byName.Value);
-        }
-    }
+    Guid stepId = item.LiveId
+        ?? throw new InvalidOperationException($"Cannot delete step '{TryGetString(item.Definition, "name") ?? item.Type}': the live read gave it no id.");
+    DeleteStep(service, stepId, ourPluginTypeIds);
 }
 
     // Deletes a step and then its secure configuration row: Dataverse does not cascade the delete to
     // sdkmessageprocessingstepsecureconfig, so without this the secret would outlive the step as an orphan.
-    private static void DeleteStep(IOrganizationService service, Guid stepId)
+    private static void DeleteStep(IOrganizationService service, Guid stepId, IReadOnlyCollection<Guid> ourPluginTypeIds)
 {
-    EntityReference? secureConfig;
+    Entity step;
     try
     {
-        secureConfig = service.Retrieve("sdkmessageprocessingstep", stepId, new ColumnSet("sdkmessageprocessingstepsecureconfigid"))?
-            .GetAttributeValue<EntityReference>("sdkmessageprocessingstepsecureconfigid");
+        step = service.Retrieve("sdkmessageprocessingstep", stepId, new ColumnSet("eventhandler", "sdkmessageprocessingstepsecureconfigid"));
     }
     catch (FaultException<OrganizationServiceFault> ex) when (ex.Detail?.ErrorCode == ObjectDoesNotExistErrorCode)
     {
         return; // already gone
     }
 
+    if (step.GetAttributeValue<EntityReference>("eventhandler") is not { } handler || !ourPluginTypeIds.Contains(handler.Id))
+    {
+        return; // no longer one of ours
+    }
+
+    EntityReference? secureConfig = step.GetAttributeValue<EntityReference>("sdkmessageprocessingstepsecureconfigid");
     DeleteIfExists(service, "sdkmessageprocessingstep", stepId);
     if (secureConfig != null)
     {
         DeleteIfExists(service, "sdkmessageprocessingstepsecureconfig", secureConfig.Id);
     }
-}
-
-    // Name lookup scoped to a plugin type (eventhandler), so a same-named step of a different plugin type is
-    // never matched.
-    internal static Guid? FindStepByName(IOrganizationService service, string stepName, Guid pluginTypeId)
-{
-    QueryExpression query = new QueryExpression("sdkmessageprocessingstep")
-    {
-        ColumnSet = new ColumnSet("sdkmessageprocessingstepid"),
-        TopCount = 1
-    };
-    query.Criteria.AddCondition("name", ConditionOperator.Equal, stepName);
-    query.Criteria.AddCondition("eventhandler", ConditionOperator.Equal, pluginTypeId);
-    return service.RetrieveMultiple(query).Entities.FirstOrDefault()?.Id;
 }
 
     internal static Guid? FindStepId(IOrganizationService service, Guid pluginTypeId, StepApplyDefinition definition)

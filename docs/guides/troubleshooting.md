@@ -76,6 +76,16 @@ Custom API of the package or of the environment, and for a step on a table, that
 on it before any write, so nothing was written. A step on a Custom API that the same run creates is not affected. See
 [Plan and apply](plan-apply.md#errors-that-stop-the-preview).
 
+## `The plugin package update removes plugin type '...'` (exit 4)
+
+The package no longer contains a plugin type that is registered in the environment (its class was deleted or renamed,
+or the assembly was renamed), and steps that Vela does not manage are still registered on it, for example steps added
+with the Plugin Registration Tool. Dataverse does not remove a plugin type that has steps, even disabled ones, so the
+package update would fail. The message names each plugin type and its steps. Delete those steps, or register them on
+another plugin type, then run `plan` again. `plan` and `apply` stop on it before any write, so nothing was written.
+Vela's own steps on that type do not block the run: `apply` deletes them before the package update. See
+[Plan and apply](plan-apply.md#errors-that-stop-the-preview).
+
 ## `plan` shows no changes
 
 Check the `.nupkg` path or `--packages-dir`, the package version, and the environment you connect to.
@@ -119,8 +129,10 @@ the class under that full name, and run `vela plan` to compare it with the envir
 
 ## `apply` fails partway (exit 7)
 
-The resume report on stderr lists what completed. Every operation is idempotent: fix the cause and run `apply`
-again.
+The resume report on stderr lists what completed. With `--json` or `--out`, the `failure` object of the
+`apply-failed` document holds the same lists (see
+[Machine-readable output](../reference/machine-readable-output.md#plan-and-apply)). Every operation is idempotent: fix
+the cause and run `apply` again.
 
 ## The step does not fire, or you need its trace
 

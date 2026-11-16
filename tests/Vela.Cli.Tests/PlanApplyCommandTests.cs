@@ -531,7 +531,37 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Equal("apply-failed", json.GetProperty("mode").GetString());
         Assert.Contains(json.GetProperty("notes").EnumerateArray(), n => n.GetString()!.Contains("message lookup failed"));
         Assert.Contains("apply failed mid-run", _error.ToString());
+        // What was written and what was not, as in the resume report: the publish landed, the step create failed.
+        JsonElement failure = json.GetProperty("failure");
+        Assert.Contains("message lookup failed", failure.GetProperty("error").GetString());
+        Assert.Equal(["publish plugin package(s) and resolve plugin types"], Strings(failure.GetProperty("completed")));
+        Assert.Equal([$"create step {Plugin} (main)"], Strings(failure.GetProperty("failed")));
+        Assert.Empty(Strings(failure.GetProperty("notApplied")));
     }
+
+    [Fact]
+    public void A_failure_after_the_registration_writes_still_reports_them_as_completed()
+    {
+        // Every registration write landed; adding the unchanged assembly to the solution fails.
+        FakeOrgService org = Org();
+        Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
+        bool written = false;
+        org.OnRetrieveMultiple = q =>
+        {
+            written |= org.Created.Exists(e => e.LogicalName == "sdkmessageprocessingstep");
+            return q.EntityName == "solutioncomponent" && written ? throw new InvalidOperationException("solution read failed") : inner(q);
+        };
+
+        int exit = Run("apply", Options(autoApprove: true, solution: "ZavaSales"), Host(org, Local([LocalStep()])));
+
+        Assert.Equal(CliExitCodes.ExitPartialApply, exit);
+        JsonElement failure = StdoutJson().GetProperty("failure");
+        Assert.Contains($"create step {Plugin} (main)", Strings(failure.GetProperty("completed")));
+        Assert.Equal(["add unchanged components to solution ZavaSales"], Strings(failure.GetProperty("failed")));
+        Assert.Empty(Strings(failure.GetProperty("notApplied")));
+    }
+
+    private static string[] Strings(JsonElement array) => array.EnumerateArray().Select(e => e.GetString()!).ToArray();
 
     [Fact]
     public void Plan_with_a_solution_lists_an_unchanged_component_missing_from_it()

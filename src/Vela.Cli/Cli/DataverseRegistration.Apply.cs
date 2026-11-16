@@ -22,7 +22,7 @@ namespace Vela.Cli;
 /// <summary> Applies a registration diff: ordering, package/assembly/type sync, resume report. </summary>
 internal static partial class DataverseRegistration
 {
-    internal static void ApplyDiff(IOrganizationService service, RegistrationDiff diff, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose, IReadOnlyDictionary<string, string>? secureConfigByStepKey = null, int batchChunkSize = DefaultBatchChunkSize, ManagedIdentityPlan? managedIdentity = null)
+    internal static void ApplyDiff(IOrganizationService service, RegistrationDiff diff, PluginPackagePayload[] packagePayloads, string? solutionUniqueName, List<string> tempDirectories, bool verbose, IReadOnlyDictionary<string, string>? secureConfigByStepKey = null, int batchChunkSize = DefaultBatchChunkSize, ManagedIdentityPlan? managedIdentity = null, ApplyRun? run = null)
 {
     // When a solution is given, route every create/update through it so all components (package, assembly, types,
     // steps, images, secure config, Custom APIs and their parameters) are added to it — not just the package.
@@ -83,6 +83,10 @@ internal static partial class DataverseRegistration
     // Stryker restore all
 
     ApplyProgress progress = new(planned);
+    if (run != null)
+    {
+        run.Progress = progress;
+    }
     try
     {
         // Delete obsolete steps and custom APIs BEFORE uploading the new package.
@@ -101,9 +105,11 @@ internal static partial class DataverseRegistration
 
         HashSet<string> requiredPluginTypes = GetRequiredPluginTypeNames(diff);
         Dictionary<string, Guid> pluginTypeIds = GetPluginTypeIdByNameForAssemblies(service, diff.LocalAssemblies);
-        // The platform materializes plugin types from the published package, asynchronously. Every local input is a
-        // plugin package (the scan reads nothing else), so there is no direct assembly upload to fall back on: wait
-        // for the package's types, then fail below if any is still missing.
+        // The package import writes its plugin types in the same request (verified live: the plugintype rows exist as
+        // soon as the publish returns), so a type missing here is normally missing from the package itself. The poll
+        // below is a bounded safety net (60 s) for a slower import, not a wait the platform requires; the types still
+        // missing after it fail the run. It does not cover the ~15 s after an update during which executions may still
+        // run the previous build (see troubleshooting).
         if (packagePayloads.Length > 0 && requiredPluginTypes.Any(x => !pluginTypeIds.ContainsKey(x)))
         {
             WaitForRequiredPluginTypes(service, diff.LocalAssemblies, requiredPluginTypes);
@@ -213,7 +219,7 @@ internal static partial class DataverseRegistration
     {
         foreach (string line in progress.BuildReport(OutputWriter.RedactSecrets(ex.Message)))
         {
-            Console.Error.WriteLine(line);
+            Console.Error.WriteLine(OutputWriter.EscapeControl(line));
         }
 
         throw;
@@ -222,11 +228,12 @@ internal static partial class DataverseRegistration
 
     // True when a changed Custom API keeps its uniqueName but is now implemented by another plugin type (its class
     // was renamed or moved): its live row still points at the old type until it is detached.
+    // A Custom API of a retired assembly moves to the local type even when the class kept its name.
     internal static bool IsCustomApiImplementationChange(RegistrationChange change)
     {
         string? before = TryGetString(change.Before, "pluginTypeName");
         return !string.IsNullOrWhiteSpace(before)
-            && !string.Equals(before, TryGetString(change.After, "pluginTypeName"), StringComparison.Ordinal);
+            && (change.MovesFromRetiredAssembly || !string.Equals(before, TryGetString(change.After, "pluginTypeName"), StringComparison.Ordinal));
     }
 
     // Clears the Custom API's plugintypeid so the package upload can remove the old plugin type. If the apply stops
@@ -904,6 +911,20 @@ internal static partial class DataverseRegistration
     }
 }
 
+
+    internal static HashSet<Guid> GetPluginTypeIdsForAssemblies(IOrganizationService service, string[] sourceAssemblies)
+{
+    HashSet<Guid> ids = [];
+    foreach (string assemblyName in sourceAssemblies.Distinct(StringComparer.OrdinalIgnoreCase))
+    {
+        if (GetPluginAssembly(service, assemblyName) is { } pluginAssembly)
+        {
+            ids.UnionWith(GetPluginTypes(service, pluginAssembly.Id).Keys);
+        }
+    }
+
+    return ids;
+}
 
     internal static Dictionary<string, Guid> GetPluginTypeIdByNameForAssemblies(IOrganizationService service, string[] sourceAssemblies)
 {

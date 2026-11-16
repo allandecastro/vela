@@ -1008,16 +1008,18 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // step (its sdkmessage lookup). The resume report must label every planned operation and split the
         // completed/pending lists at exactly the failure boundary (delete + publish done, creates/update not).
         const string plugin = "Zava.Plugins.AccountPlugin";
+        Guid pluginTypeId = Guid.NewGuid();
         var svc = new TestSupport.FakeOrgService
         {
             OnRetrieveMultiple = q => q.EntityName switch
             {
-                "sdkmessageprocessingstep" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", Guid.NewGuid())), // removed step found → deleted
                 "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
-                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = plugin }),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", pluginTypeId) { ["typename"] = plugin }),
                 "sdkmessage" => throw new InvalidOperationException("boom-at-first-added-step"),
                 _ => new EntityCollection(),
             },
+            // The removed step, re-read by its id before the delete, is still on our plugin type.
+            OnRetrieve = (e, id, _) => new Entity(e, id) { ["eventhandler"] = new EntityReference("plugintype", pluginTypeId) },
         };
 
         JsonElement removed = Json(new { pluginTypeName = plugin, message = "Update", stage = 40, mode = 0, stepKey = "dv-old", name = "OldStep" });
@@ -1028,7 +1030,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
             LocalAssemblies: ["Zava.Plugins"],
             CurrentAssemblies: ["Zava.Plugins"],
             Added: [new RegistrationItem("step", plugin, add1), new RegistrationItem("step", plugin, add2)],
-            Removed: [new RegistrationItem("step", plugin, removed)],
+            Removed: [new RegistrationItem("step", plugin, removed) { LiveId = Guid.NewGuid() }],
             Changed: [new RegistrationChange("step", plugin, changed, changed)],
             LocalItems: [],
             CurrentItems: []);
@@ -1161,18 +1163,20 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         {
             OnRetrieveMultiple = q => q.EntityName switch
             {
-                "sdkmessageprocessingstep" => throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Invalid plug-in registration stage."),
                 "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
                 "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = "Zava.Plugins.AccountPlugin" }),
                 _ => new EntityCollection(),
             },
+            OnRetrieve = (e, _, _) => e == "sdkmessageprocessingstep"
+                ? throw new FaultException<OrganizationServiceFault>(new OrganizationServiceFault(), "Invalid plug-in registration stage.")
+                : throw new InvalidOperationException("unexpected retrieve"),
         };
         JsonElement removed = Json(new { pluginTypeName = "Zava.Plugins.AccountPlugin", message = "Update", stage = 40, mode = 0, stepKey = "dv-x", name = "ManagedStep" });
         var diff = new RegistrationDiff(
             LocalAssemblies: ["Zava.Plugins"],
             CurrentAssemblies: ["Zava.Plugins"],
             Added: [],
-            Removed: [new RegistrationItem("step", "Zava.Plugins.AccountPlugin", removed)],
+            Removed: [new RegistrationItem("step", "Zava.Plugins.AccountPlugin", removed) { LiveId = Guid.NewGuid() }],
             Changed: [],
             LocalItems: [],
             CurrentItems: []);
@@ -1236,23 +1240,22 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         // completed (not the creates), and name the step that threw as the failure. Before the fix, done advanced during
         // capture and the creates were falsely reported as applied.
         const string plugin = "Zava.Plugins.AccountPlugin";
+        Guid pluginTypeId = Guid.NewGuid();
         var svc = new TestSupport.FakeOrgService
         {
             OnRetrieveMultiple = q => q.EntityName switch
             {
-                // Removed-step delete looks up by name; added/changed FindStepId filters by eventhandler.
-                "sdkmessageprocessingstep" => q.Criteria.Conditions.Any(c => c.AttributeName == "name")
-                    ? TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", Guid.NewGuid()))
-                    : new EntityCollection(),
+                // The removed step is deleted by its id; added/changed FindStepId finds no live step.
+                "sdkmessageprocessingstep" => new EntityCollection(),
                 "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
-                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = plugin }),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", pluginTypeId) { ["typename"] = plugin }),
                 // "Update" resolves; the changed step's "Delete" message does not → ResolveMessageId throws.
                 "sdkmessage" => (string)q.Criteria.Conditions.Single().Values.Single() == "Update"
                     ? TestSupport.FakeOrgService.Collection(new Entity("sdkmessage", Guid.NewGuid()))
                     : new EntityCollection(),
                 _ => new EntityCollection(),
             },
-            OnRetrieve = (e, id, _) => new Entity(e, id),
+            OnRetrieve = (e, id, _) => new Entity(e, id) { ["eventhandler"] = new EntityReference("plugintype", pluginTypeId) },
         };
 
         JsonElement removed = Json(new { pluginTypeName = plugin, message = "Update", entityLogicalName = "", stage = 40, mode = 0, stepKey = "dv-old", name = "OldStep" });
@@ -1263,7 +1266,7 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
             LocalAssemblies: ["Zava.Plugins"],
             CurrentAssemblies: ["Zava.Plugins"],
             Added: [new RegistrationItem("step", plugin, add1), new RegistrationItem("step", plugin, add2)],
-            Removed: [new RegistrationItem("step", plugin, removed)],
+            Removed: [new RegistrationItem("step", plugin, removed) { LiveId = Guid.NewGuid() }],
             Changed: [new RegistrationChange("step", plugin, changed, changed)],
             LocalItems: [],
             CurrentItems: []);

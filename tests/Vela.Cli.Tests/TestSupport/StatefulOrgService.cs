@@ -194,17 +194,61 @@ internal sealed class StatefulOrgService : IOrganizationService
     }
 
     // The platform side of a package import: the uploaded .nupkg moves to the stored `package` file and `content`
-    // reads back empty (verified live); the package's assembly and plugin types appear (or are refreshed).
+    // reads back empty (verified live); the package's assembly and plugin types appear (or are refreshed). A plugin type
+    // the new content no longer has is deleted, and the import is refused, before any change, while such a type still has
+    // a step (verified live: 0x80040265 "Unable to delete '<type>' plugintype due to N step(s)", even for a disabled
+    // step). An assembly of the package the new content no longer has (a renamed assembly) is modelled the same way,
+    // removed with its types: that part is NOT verified live.
     private void ImportPackage(Entity package)
     {
-        _packageFiles.StoreUpload(package.Id, package);
-        package["content"] = string.Empty;
-
         string name = package.GetAttributeValue<string>("name");
         if (!_packageContents.TryGetValue(name, out (string AssemblyName, string[] TypeNames) contents))
         {
             throw Fault($"The plugin package '{name}' is not defined in this fake (call DefinePackage).");
         }
+
+        Entity[] packageAssemblies = Table("pluginassembly").Values
+            .Where(a => a.GetAttributeValue<EntityReference>("packageid")?.Id == package.Id)
+            .ToArray();
+        Entity[] droppedTypes = Table("plugintype").Values
+            .Where(t => packageAssemblies.Any(a => a.Id == t.GetAttributeValue<EntityReference>("pluginassemblyid")?.Id))
+            .Where(t =>
+            {
+                Entity assembly = packageAssemblies.First(a => a.Id == t.GetAttributeValue<EntityReference>("pluginassemblyid")!.Id);
+                return !TextEquals(assembly.GetAttributeValue<string>("name"), contents.AssemblyName)
+                    || !contents.TypeNames.Any(n => TextEquals(n, t.GetAttributeValue<string>("typename")));
+            })
+            .ToArray();
+        foreach (Entity type in droppedTypes)
+        {
+            int steps = Table("sdkmessageprocessingstep").Values.Count(step => step.GetAttributeValue<EntityReference>("eventhandler")?.Id == type.Id);
+            if (steps > 0)
+            {
+                throw new FaultException<OrganizationServiceFault>(
+                    new OrganizationServiceFault { ErrorCode = unchecked((int)0x80040265), Message = $"Unable to delete '{type.GetAttributeValue<string>("typename")}' plugintype due to {steps} step(s) registered." },
+                    "plugintype has steps");
+            }
+
+            // Dataverse also refuses to delete a plugin type a Custom API references (the reason apply detaches a moved
+            // Custom API first); the code and text here are the fake's, not captured live.
+            if (Table("customapi").Values.Any(api => api.GetAttributeValue<EntityReference>("plugintypeid")?.Id == type.Id))
+            {
+                throw Fault($"Unable to delete '{type.GetAttributeValue<string>("typename")}' plugintype: a Custom API references it.");
+            }
+        }
+
+        foreach (Entity type in droppedTypes)
+        {
+            Table("plugintype").Remove(type.Id);
+        }
+
+        foreach (Entity retired in packageAssemblies.Where(a => !TextEquals(a.GetAttributeValue<string>("name"), contents.AssemblyName)))
+        {
+            Table("pluginassembly").Remove(retired.Id);
+        }
+
+        _packageFiles.StoreUpload(package.Id, package);
+        package["content"] = string.Empty;
 
         Entity? assembly = Table("pluginassembly").Values.FirstOrDefault(a => TextEquals(a.GetAttributeValue<string>("name"), contents.AssemblyName));
         Guid assemblyId = assembly?.Id ?? Insert(new Entity("pluginassembly")

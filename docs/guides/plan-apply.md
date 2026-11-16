@@ -126,6 +126,11 @@ with every problem on stderr, writes no JSON document, and writes nothing to Dat
   table the message has no filter for (`no message filter exists for entity ...`) is reported. A step on the message
   of a Custom API that the same run creates is not checked here, since that Custom API is not in the environment yet:
   `apply` writes the Custom APIs before the steps (see [Batched writes](#batched-writes)).
+- **Plugin types the package update removes.** When the package update removes a registered plugin type (its class
+  was deleted or renamed, or the assembly was renamed, see [Rename the plugin assembly](#rename-the-plugin-assembly)),
+  Dataverse refuses the update while steps are still registered on that type, even disabled ones. `apply` deletes the
+  steps Vela manages on that type before the package update. Any other step on it (for example one added with the
+  Plugin Registration Tool) is reported with its plugin type: delete it or move it to another plugin type first.
 
 ### What the plan contains
 
@@ -219,8 +224,29 @@ a resume report: every planned operation under exactly one of `completed`, `fail
 by their step key). Because a batch continues past a failure, a step planned after the failed one can still be listed
 as completed.
 
+With `--json` or `--out`, the `apply-failed` document carries the same lists in its `failure` object (see
+[Machine-readable output](../reference/machine-readable-output.md#plan-and-apply)).
+
+A removed step is deleted by the id `apply` read from the environment, never looked up again by name or trigger.
+
 Every operation is an idempotent upsert or a safe delete. Fix the cause and run `apply` again (with `--auto-approve`
 in CI): the operations that already succeeded do nothing, the failed ones are retried, and the next `plan` is clean.
+
+### Rename the plugin assembly
+
+When the plugins project changes its `<AssemblyName>` but keeps its package id, the deployed plugin package still
+holds the old assembly. `plan` and `apply` read that old assembly through the package and list it under `info`:
+
+- its Vela steps are deleted before the package update and created again on the new assembly's plugin types, so the
+  plan shows them as removed and added;
+- a Custom API it implements that the package still declares is moved to the new plugin type (an `update`), and any
+  other one is deleted;
+- a step of the old assembly that Vela did not write stops the run (see
+  [Errors that stop the preview](#errors-that-stop-the-preview)).
+
+A step that is deleted and created again loses its secure configuration. When such a step declares one and the run
+supplies no value, `plan` reports a warning: pass the value with `--secure-config` or `VELA_SECURE_CONFIG_<NAME>` (see
+[Secure configuration](#secure-configuration)).
 
 ### Custom APIs owned by another assembly
 
@@ -280,7 +306,8 @@ See [Managed identity](managed-identity.md) and [Signing](signing.md).
 
 To read a package's steps and Custom APIs, Vela loads its plugin types and calls their definition methods, so the
 scan runs code from the package. `plan`, `apply`, `inspect` and `vela models --package` run the scan in a child
-`vela` process. This keeps package code away from the CLI's own memory: the open Dataverse connection, the access
+`vela` process. The packages are extracted into a new temp directory per run, readable only by your user on Linux and
+macOS. This keeps package code away from the CLI's own memory: the open Dataverse connection, the access
 token, the client secret and the secure configuration values. The child starts with an allowlisted environment
 (system paths, locale and .NET runtime variables), so `DATAVERSE_*`, `VELA_SECURE_CONFIG_*`, `AZURE_*`,
 managed-identity and CI token variables are not passed to it. Its output goes to stderr.

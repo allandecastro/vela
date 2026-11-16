@@ -285,23 +285,24 @@ public class ApplyEngineTests
     public void ApplyDiff_deletes_removed_step_through_the_service_seam()
     {
         // Demonstrates the apply orchestration is fully drivable through the IOrganizationService seam
-        // (no live org): a removed step is located under its plugin type (resolved from the applied assembly only)
-        // and deleted via a batched DeleteRequest.
+        // (no live org): a removed step is deleted by its live id, while its handler is a plugin type of the applied
+        // assembly, via a batched DeleteRequest.
         Guid stepId = Guid.NewGuid();
         Guid assemblyId = Guid.NewGuid();
+        Guid pluginTypeId = Guid.NewGuid();
         var svc = new TestSupport.FakeOrgService
         {
             OnRetrieveMultiple = q => q.EntityName switch
             {
                 "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", assemblyId)),
-                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = PluginType }),
-                "sdkmessageprocessingstep" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", stepId)),
+                "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", pluginTypeId) { ["typename"] = PluginType }),
                 _ => new EntityCollection(),
             },
+            OnRetrieve = (e, id, _) => new Entity(e, id) { ["eventhandler"] = new EntityReference("plugintype", pluginTypeId) },
         };
 
         var removed = new RegistrationItem("step", PluginType,
-            Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x", name = "MyStep" }));
+            Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x", name = "MyStep" })) { LiveId = stepId };
         var diff = new RegistrationDiff(
             LocalAssemblies: ["Zava.Plugins"],
             CurrentAssemblies: ["Zava.Plugins"],
@@ -322,20 +323,20 @@ public class ApplyEngineTests
     [Fact]
     public void ApplyDiff_does_not_delete_a_removed_step_of_a_type_outside_the_applied_assemblies()
     {
-        // The removed step's plugin type is not in the assembly being applied (it lives elsewhere in the environment):
-        // apply must not hunt for it environment-wide, so nothing is deleted.
+        // The removed step's handler is no longer a plugin type of the assembly being applied (it moved elsewhere in
+        // the environment since the read): nothing is deleted.
         var svc = new TestSupport.FakeOrgService
         {
             OnRetrieveMultiple = q => q.EntityName switch
             {
                 "pluginassembly" => TestSupport.FakeOrgService.Collection(new Entity("pluginassembly", Guid.NewGuid())),
                 "plugintype" => TestSupport.FakeOrgService.Collection(new Entity("plugintype", Guid.NewGuid()) { ["typename"] = "Zava.Plugins.Other" }),
-                "sdkmessageprocessingstep" => TestSupport.FakeOrgService.Collection(new Entity("sdkmessageprocessingstep", Guid.NewGuid())),
                 _ => new EntityCollection(),
             },
+            OnRetrieve = (e, id, _) => new Entity(e, id) { ["eventhandler"] = new EntityReference("plugintype", Guid.NewGuid()) },
         };
         var removed = new RegistrationItem("step", PluginType,
-            Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x", name = "MyStep" }));
+            Json(new { pluginTypeName = PluginType, message = "Update", stage = 40, mode = 0, stepKey = "dv-x", name = "MyStep" })) { LiveId = Guid.NewGuid() };
         var diff = new RegistrationDiff(["Zava.Plugins"], ["Zava.Plugins"], [], [removed], [], [], []);
 
         DataverseRegistration.ApplyDiff(svc, diff, [], null, [], verbose: false);

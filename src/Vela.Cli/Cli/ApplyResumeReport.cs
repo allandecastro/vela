@@ -97,11 +97,18 @@ internal sealed class ApplyProgress(IReadOnlyList<string> planned)
     /// </summary>
     public IReadOnlyList<string> BuildReport(string failureMessage)
     {
+        (List<string> completed, List<string> failed, List<string> remaining) = Outcomes();
+        return ApplyResumeReport.Build(failed.Count > 0 ? failed : ["(unknown operation)"], failureMessage, completed, remaining);
+    }
+
+    /// <summary>
+    /// Every planned operation under exactly one of completed, failed and not applied. When no operation was recorded as
+    /// failed (a synchronous throw), the operation at the cursor is the one that failed.
+    /// </summary>
+    public (List<string> Completed, List<string> Failed, List<string> NotApplied) Outcomes()
+    {
         IEnumerable<int> failedIndexes = _failed.Count > 0 ? _failed : Cursor < Planned.Count ? [Cursor] : [];
         HashSet<int> failed = [.. failedIndexes];
-        List<string> failedOps = failed.Count > 0
-            ? failed.OrderBy(i => i).Select(i => Planned[i]).ToList()
-            : ["(unknown operation)"];
         List<string> completed = [];
         List<string> remaining = [];
         for (int i = 0; i < Planned.Count; i++)
@@ -114,6 +121,34 @@ internal sealed class ApplyProgress(IReadOnlyList<string> planned)
             (_completed.Contains(i) ? completed : remaining).Add(Planned[i]);
         }
 
-        return ApplyResumeReport.Build(failedOps, failureMessage, completed, remaining);
+        return (completed, failed.OrderBy(i => i).Select(i => Planned[i]).ToList(), remaining);
+    }
+}
+
+/// <summary>
+/// What an apply run did, filled while it runs so a failure can still report it (the apply-failed JSON): the progress of
+/// <see cref="DataverseRegistration.ApplyDiff"/> and the step that runs after it (adding components to the solution).
+/// </summary>
+internal sealed class ApplyRun
+{
+    public ApplyProgress? Progress { get; set; }
+
+    /// <summary>The operation running after ApplyDiff completed, if any (it is the one that failed).</summary>
+    public string? Pending { get; set; }
+
+    public ApplyFailure ToFailure(string error)
+    {
+        if (Progress == null)
+        {
+            return new ApplyFailure(error, [], Pending == null ? [] : [Pending], []);
+        }
+
+        (List<string> completed, List<string> failed, List<string> notApplied) = Progress.Outcomes();
+        if (Pending != null)
+        {
+            failed.Add(Pending);
+        }
+
+        return new ApplyFailure(error, [.. completed], [.. failed], [.. notApplied]);
     }
 }

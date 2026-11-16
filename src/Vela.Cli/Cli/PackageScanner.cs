@@ -42,6 +42,9 @@ internal static class PackageScanner
     Dictionary<string, string> secureConfigNameByStepKey = new(StringComparer.Ordinal);
     List<string> unmanagedPluginTypes = [];
     List<string> typedCustomApis = [];
+    // Every class Dataverse registers as a plugin type: a live type missing from this list is removed by the package
+    // update, which Dataverse refuses while the type still has steps (see FindPluginTypeRemovalBlockers).
+    List<string> pluginTypeNames = [];
 
     // An isolated load context that resolves the package's assemblies (and their siblings) from the temp
     // folders by *bytes*, so no .dll file is ever locked - on Windows Assembly.LoadFrom would hold the file
@@ -75,7 +78,13 @@ internal static class PackageScanner
             if (IsUnmanagedPluginType(type))
             {
                 unmanagedPluginTypes.Add(type.FullName ?? type.Name);
+                pluginTypeNames.Add(type.FullName ?? type.Name);
                 continue;
+            }
+
+            if (IsPluginType(type, "EntityPluginBase") || IsPluginType(type, "CustomApiBase"))
+            {
+                pluginTypeNames.Add(type.FullName ?? type.Name);
             }
 
             if (IsPluginType(type, "EntityPluginBase"))
@@ -166,7 +175,8 @@ internal static class PackageScanner
         Diagnostics: [],
         SecureConfigNameByStepKey: secureConfigNameByStepKey,
         UnmanagedPluginTypes: [.. unmanagedPluginTypes.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)],
-        TypedCustomApiUniqueNames: [.. typedCustomApis.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.Ordinal)]);
+        TypedCustomApiUniqueNames: [.. typedCustomApis.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.Ordinal)],
+        PluginTypeNames: [.. pluginTypeNames.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal)]);
     }
     finally
     {
@@ -264,6 +274,12 @@ internal static class PackageScanner
     // ExtractPackage / DataverseRegistration.ReadPackageBytesForImport). Failures are surfaced to stderr rather
     // than silently swallowed so a leaked directory is visible. Shared by Program (plan/apply/inspect) and
     // `vela models` so the cleanup lives in one place.
+    // A new directory for one run's extracted package (or scan request): a random name created atomically, readable
+    // only by the current user on Unix (0700), under the user's temp folder. A fixed shared parent such as
+    // <tmp>/vela-tools let another local user pre-create it and plant or swap the extracted assemblies the scan then
+    // loads and runs.
+    internal static string CreatePrivateTempDirectory(string prefix) => Directory.CreateTempSubdirectory(prefix).FullName;
+
     internal static void CleanupTempDirectories(List<string> tempDirectories)
 {
     foreach (string directory in tempDirectories)
@@ -382,8 +398,7 @@ internal static class PackageScanner
 
     internal static ExtractedPackage ExtractPackage(string packagePath, string? preferredAssemblyName, List<string> tempDirectories)
 {
-    string tempRoot = Path.Combine(Path.GetTempPath(), "vela-tools", Guid.NewGuid().ToString("N"));
-    Directory.CreateDirectory(tempRoot);
+    string tempRoot = CreatePrivateTempDirectory("vela-pkg-");
     tempDirectories.Add(tempRoot);
 
     using ZipArchive archive = ZipFile.OpenRead(packagePath);

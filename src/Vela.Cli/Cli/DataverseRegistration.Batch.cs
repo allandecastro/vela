@@ -45,6 +45,9 @@ internal static partial class DataverseRegistration
         IReadOnlyDictionary<string, Guid> ourPluginTypeIds = removedSteps.Count == 0 && removedApis.Count == 0
             ? new Dictionary<string, Guid>()
             : GetPluginTypeIdByNameForAssemblies(service, currentAssemblies);
+        // Every plugin type id of those assemblies (two assemblies can hold a same-named type, which the by-name map
+        // keeps once): a removed step is deleted only while its handler is still one of them.
+        HashSet<Guid> ourPluginTypeIdSet = removedSteps.Count == 0 ? [] : GetPluginTypeIdsForAssemblies(service, currentAssemblies);
 
         // Nothing is written to Dataverse during capture; the recorded operations flush only at ExecuteBatchTier
         // below. So no owner is recorded as completed here - a synchronous validation throw mid-capture would
@@ -60,7 +63,7 @@ internal static partial class DataverseRegistration
             CaptureOwner(capturing, owner, owners, progress, () =>
             {
                 LogOperation("step", "delete", stepKey, verbose: verbose);
-                DeleteStepByDefinition(capturing, item.Definition, ourPluginTypeIds);
+                DeleteRemovedStep(capturing, item, ourPluginTypeIdSet);
             });
 
             planned++;
@@ -254,7 +257,7 @@ internal static partial class DataverseRegistration
         }
         catch (Exception ex) when (owner.IgnorableWarning != null && IsIgnorableCustomApiStageException(ex))
         {
-            Console.Error.WriteLine($"Warning: {owner.IgnorableWarning}: {OutputWriter.RedactSecrets(ex.Message)}");
+            Console.Error.WriteLine(OutputWriter.EscapeControl($"Warning: {owner.IgnorableWarning}: {OutputWriter.RedactSecrets(ex.Message)}"));
         }
         catch
         {
@@ -559,12 +562,12 @@ internal static partial class DataverseRegistration
                 }
             }
 
-            Console.Error.WriteLine($"[apply] {group}: {string.Join(", ", parts)}");
+            Console.Error.WriteLine(OutputWriter.EscapeControl($"[apply] {group}: {string.Join(", ", parts)}"));
         }
 
         foreach ((CapturedOperation op, OrganizationServiceFault fault) in report.Failures)
         {
-            Console.Error.WriteLine($"  - {op.Owner.ReportGroup} {op.Category}: {OutputWriter.RedactSecrets(fault.Message)} (code {fault.ErrorCode})");
+            Console.Error.WriteLine(OutputWriter.EscapeControl($"  - {op.Owner.ReportGroup} {op.Category}: {OutputWriter.RedactSecrets(fault.Message)} (code {fault.ErrorCode})"));
         }
     }
 

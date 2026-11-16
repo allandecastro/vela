@@ -382,7 +382,8 @@ internal static partial class DataverseRegistration
             jsonOptions,
             step.GetAttributeValue<bool?>("asyncautodelete") ?? false);
 
-        items.Add(new RegistrationItem("step", pluginTypeName, shape));
+        // The row id travels with the item (outside the diffed shape), so a removed step is deleted by id (M1).
+        items.Add(new RegistrationItem("step", pluginTypeName, shape) { LiveId = step.Id });
     }
 
     return items;

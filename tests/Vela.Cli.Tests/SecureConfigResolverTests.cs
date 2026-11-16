@@ -229,18 +229,18 @@ public class SecureConfigResolverTests
     [Fact]
     public void Deleting_a_step_also_deletes_its_secure_config_row()
     {
-        Guid stepId = Guid.NewGuid(), configId = Guid.NewGuid();
+        Guid stepId = Guid.NewGuid(), configId = Guid.NewGuid(), pluginTypeId = Guid.NewGuid();
         var mock = new Mock<IOrganizationService>(MockBehavior.Loose);
-        mock.Setup(s => s.RetrieveMultiple(It.IsAny<QueryBase>()))
-            .Returns((QueryBase q) => (q as QueryExpression)?.EntityName == "sdkmessageprocessingstep"
-                ? new EntityCollection([new Entity("sdkmessageprocessingstep", stepId)])
-                : new EntityCollection());
         mock.Setup(s => s.Retrieve("sdkmessageprocessingstep", stepId, It.IsAny<ColumnSet>()))
-            .Returns(new Entity("sdkmessageprocessingstep", stepId) { ["sdkmessageprocessingstepsecureconfigid"] = new EntityReference("sdkmessageprocessingstepsecureconfig", configId) });
+            .Returns(new Entity("sdkmessageprocessingstep", stepId)
+            {
+                ["eventhandler"] = new EntityReference("plugintype", pluginTypeId),
+                ["sdkmessageprocessingstepsecureconfigid"] = new EntityReference("sdkmessageprocessingstepsecureconfig", configId),
+            });
 
-        DataverseRegistration.DeleteStepByDefinition(mock.Object,
-            JsonSerializer.SerializeToElement(new { pluginTypeName = PluginA, name = "MyStep", message = "Update", stage = 40, mode = 0, stepKey = "k" }, Web),
-            new Dictionary<string, Guid> { [PluginA] = Guid.NewGuid() });
+        DataverseRegistration.DeleteRemovedStep(mock.Object,
+            new RegistrationItem("step", PluginA, JsonSerializer.SerializeToElement(new { pluginTypeName = PluginA, name = "MyStep", message = "Update", stage = 40, mode = 0, stepKey = "k" }, Web)) { LiveId = stepId },
+            [pluginTypeId]);
 
         mock.Verify(s => s.Delete("sdkmessageprocessingstep", stepId), Times.Once);
         mock.Verify(s => s.Delete("sdkmessageprocessingstepsecureconfig", configId), Times.Once);
