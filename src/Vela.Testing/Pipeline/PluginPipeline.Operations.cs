@@ -92,9 +92,12 @@ namespace Vela.Testing
 
         // Assign, as the platform runs it (verified live): Assign PreValidation and PreOperation, then the main
         // operation, an ownerid Update at the same depth firing the Update steps at PreOperation and PostOperation
-        // only, then Assign PostOperation. (An Update of ownerid, conversely, never fires the Assign steps.)
+        // only (their ParentContext is the Assign main operation), then Assign PostOperation. (An Update of ownerid,
+        // conversely, never fires the Assign steps.) The steps work on a copy of the request, and the owner written is
+        // the Assignee as the pre stages left it.
         internal void ExecuteAssign(AssignRequest request, ParameterCollection? sharedVariables = null)
         {
+            OrganizationRequest inputs = CopyRequest(request);
             RunOperation<object?>(asyncQueue =>
             {
                 EntityReference record = new EntityReference(request.Target.LogicalName, _store.ResolveReference(request.Target));
@@ -102,7 +105,7 @@ namespace Vela.Testing
 
                 foreach (PluginStages stage in new[] { PluginStages.PreValidation, PluginStages.PreOperation })
                 {
-                    StageInvocation invocation = GenericInvocation(PluginMessages.Assign, stage, record.LogicalName, record.Id, request.Parameters, null);
+                    StageInvocation invocation = GenericInvocation(PluginMessages.Assign, stage, record.LogicalName, record.Id, inputs.Parameters, null);
                     invocation.PreState = pre;
                     FireStage(invocation, asyncQueue);
                     if (stage == PluginStages.PreValidation)
@@ -111,10 +114,14 @@ namespace Vela.Testing
                     }
                 }
 
-                UpdateBatch(new[] { new Entity(record.LogicalName, record.Id) { ["ownerid"] = request.Assignee } }, platformUpdate: true, asyncQueue);
+                EntityReference assignee = inputs.Parameters.TryGetValue("Assignee", out object? value) && value is EntityReference reference
+                    ? reference
+                    : throw new InvalidPluginExecutionException("Assign: a pre-stage step left InputParameters[\"Assignee\"] without an EntityReference.");
+                MarkPlatformUpdate(PluginMessages.Assign, inputs.Parameters);
+                UpdateBatch(new[] { new Entity(record.LogicalName, record.Id) { ["ownerid"] = assignee } }, platformUpdate: true, asyncQueue);
 
                 _store.TryGet(record.LogicalName, record.Id, out Entity? post);
-                StageInvocation postInvocation = GenericInvocation(PluginMessages.Assign, PluginStages.PostOperation, record.LogicalName, record.Id, request.Parameters, null);
+                StageInvocation postInvocation = GenericInvocation(PluginMessages.Assign, PluginStages.PostOperation, record.LogicalName, record.Id, inputs.Parameters, null);
                 postInvocation.PreState = pre;
                 postInvocation.PostState = post;
                 FireStage(postInvocation, asyncQueue);
@@ -146,6 +153,7 @@ namespace Vela.Testing
                 }
             }
 
+            MarkPlatformUpdate(PluginMessages.SetStateDynamicEntity, inputs);
             mainOperation(inputs);
 
             _store.TryGet(record.LogicalName, record.Id, out Entity? post);
@@ -153,6 +161,16 @@ namespace Vela.Testing
             postInvocation.PreState = pre;
             postInvocation.PostState = post;
             FireStage(postInvocation, asyncQueue);
+        }
+
+        // Records that the current operation's main operation is a platform Update: the Update steps it fires get
+        // this message's stage-30 context (with these inputs) as their ParentContext, not an Update one (verified live
+        // for Assign and Merge; SetState follows Assign until probed).
+        private void MarkPlatformUpdate(string message, ParameterCollection inputs)
+        {
+            OperationFrame frame = _frames.Peek();
+            frame.MainMessage = message;
+            frame.MainInputs = inputs;
         }
 
         // The main operation of an Update row. A row that changes statecode runs the state change as the platform

@@ -226,6 +226,30 @@ namespace Vela.Testing
             return this;
         }
 
+        /// <summary>
+        /// Sets the environment id every step's context carries (<c>IPluginExecutionContext6.EnvironmentId</c>, a string
+        /// on the platform). Empty by default.
+        /// </summary>
+        public PluginPipeline WithEnvironmentId(string environmentId)
+        {
+            _environmentId = environmentId ?? string.Empty;
+            return this;
+        }
+
+        /// <summary>Sets the tenant id every step's context carries (<c>TenantId</c>). <see cref="Guid.Empty"/> by default.</summary>
+        public PluginPipeline WithTenantId(Guid tenantId)
+        {
+            _tenantId = tenantId;
+            return this;
+        }
+
+        /// <summary>Marks the caller as an application (S2S) user: every step's context has <c>IsApplicationUser</c> set.</summary>
+        public PluginPipeline AsApplicationUser(bool value = true)
+        {
+            _isApplicationUser = value;
+            return this;
+        }
+
         /// <summary>Declares a table as organization-owned (audit columns only, no owner columns).</summary>
         public PluginPipeline AsOrganizationOwned(string entityLogicalName)
         {

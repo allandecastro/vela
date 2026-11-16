@@ -98,6 +98,13 @@ namespace Vela.Testing
             new KeyValuePair<Type, string>(typeof(IExecutionContext), "The pipeline builds each step's execution context from the request it runs."),
         };
 
+        // The context values the test sets for every step (WithEnvironmentId, WithTenantId, AsApplicationUser).
+        private string _environmentId = string.Empty;
+
+        private Guid _tenantId;
+
+        private bool _isApplicationUser;
+
         // The managed-identity service handed to every plugin the pipeline runs (WithManagedIdentityService); null
         // leaves it out of the provider, as on an environment without one.
         private IManagedIdentityService? _managedIdentityService;
@@ -196,12 +203,24 @@ namespace Vela.Testing
             return Register(typeof(TPlugin));
         }
 
-        /// <summary>Registers a single plugin (or Custom API) type explicitly.</summary>
+        /// <summary>
+        /// Registers a single plugin (or Custom API) type explicitly. A type already registered (by an earlier
+        /// <c>Register</c>, or by <see cref="FromAssembly"/>) throws an <see cref="InvalidOperationException"/>: its
+        /// steps would otherwise fire twice.
+        /// </summary>
         public PluginPipeline Register(Type pluginType)
         {
             if (pluginType == null)
             {
                 throw new ArgumentNullException(nameof(pluginType));
+            }
+
+            if (_registrations.Any(registration => registration.PluginType == pluginType) || _customApis.ContainsValue(pluginType))
+            {
+                throw new InvalidOperationException(
+                    $"Plugin '{pluginType.FullName}' is already registered on this pipeline (by FromAssembly or an earlier Register), " +
+                    "so registering it again would fire each of its steps twice. Register it once, or start from PluginPipeline.Empty() " +
+                    "to name the plugins of the test.");
             }
 
             ConstructorInfo constructor = PluginActivator.RequireConfigurationConstructor(pluginType, "to be registered");

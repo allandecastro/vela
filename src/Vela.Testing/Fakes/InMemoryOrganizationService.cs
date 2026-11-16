@@ -1253,7 +1253,7 @@ namespace Vela.Testing
 
                 case MergeRequest merge:
                 {
-                    Merge(merge);
+                    Merge(merge, null);
                     return new MergeResponse();
                 }
 
@@ -1741,8 +1741,9 @@ namespace Vela.Testing
         // Merge (account/contact/lead/incident): moves the subordinate's non-conflicting data onto the target without
         // overwriting the target's own values, applies UpdateContent to the target (ignored for incident), reparents
         // the subordinate's 1:N children (Merge = Cascade) and moves its N:N associations to the target, then
-        // deactivates the subordinate. All-or-nothing.
-        private void Merge(MergeRequest request)
+        // deactivates the subordinate. All-or-nothing. The pipeline passes writeMaster to run the master's Update
+        // through its Update steps; without it the store writes the master itself.
+        internal void Merge(MergeRequest request, Action<Entity>? writeMaster)
         {
             EntityReference target = request.Target ?? throw new ArgumentNullException(nameof(request), "Merge Target is required.");
             string entity = target.LogicalName;
@@ -1796,7 +1797,14 @@ namespace Vela.Testing
 
                 if (merged.Attributes.Count > 0)
                 {
-                    Update(merged);
+                    if (writeMaster != null)
+                    {
+                        writeMaster(merged);
+                    }
+                    else
+                    {
+                        Update(merged);
+                    }
                 }
 
                 // 3. Reparent the subordinate's 1:N children to the target, except over a relationship whose Merge

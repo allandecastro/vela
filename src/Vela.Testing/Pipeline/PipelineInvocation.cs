@@ -69,7 +69,6 @@ namespace Vela.Testing
         public Entity? SubordinatePreState;
         public Entity? SubordinatePostState;
         public IDictionary<string, object>? ExtraInputs;
-        public ISet<string>? ChangedAttributes;
         // For a generic modelled message (no dedicated data simulation): the whole request parameter set to
         // expose as InputParameters, and the response Results to expose as OutputParameters (Post stage).
         public ParameterCollection? AllInputs;
@@ -82,6 +81,8 @@ namespace Vela.Testing
         public bool OutsideTransaction;
         public ParameterCollection? SharedVariables;
         public FakePluginExecutionContext? ParentContext;
+        // The record whose stage-30 context the steps get as ParentContext (a batch row); null = the primary record.
+        public object? RecordKey;
     }
 
     // The simulated database transaction: the store snapshot to restore on rollback, the asynchronous steps queued
@@ -109,27 +110,21 @@ namespace Vela.Testing
         public bool FromSandbox { get; set; }
 
         // Create/Update/Delete: the shared variables of the PreOperation/PostOperation steps (those set at
-        // PreValidation are not in them) and the stage-30 context that exposes the PreValidation ones as their
-        // ParentContext. Created on first use.
+        // PreValidation are not in them), created on first use, and the stage-30 context that exposes the PreValidation
+        // ones as their ParentContext. There is one stage-30 context per record (StageInvocation.RecordKey): a Delete
+        // cascade or a batch does not lend one record's context to another.
         public ParameterCollection? MainStageShared { get; set; }
 
-        public FakePluginExecutionContext? MainStageContext { get; set; }
+        public Dictionary<object, FakePluginExecutionContext> MainStageContexts { get; } = new Dictionary<object, FakePluginExecutionContext>();
+
+        // Set when the operation's main operation is a platform Update (Assign, SetState, Merge): the Update steps'
+        // stage-30 ParentContext is then this message's main operation, with these inputs (verified live for Assign
+        // and Merge).
+        public string? MainMessage { get; set; }
+
+        public ParameterCollection? MainInputs { get; set; }
 
         // The operation's shared variables as they were before its PreValidation stage ran.
         public ParameterCollection? InitialShared { get; set; }
-    }
-
-    // A transaction scope spanning several operations started at Depth; it owns the transaction its first direct
-    // operation opens (see PluginPipeline.RunInOneTransaction).
-    internal sealed class TransactionClaim
-    {
-        public TransactionClaim(int depth)
-        {
-            Depth = depth;
-        }
-
-        public int Depth { get; }
-
-        public PipelineTransaction? Transaction { get; set; }
     }
 }
