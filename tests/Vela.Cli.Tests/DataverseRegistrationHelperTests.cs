@@ -220,10 +220,11 @@ public class DataverseRegistrationHelperTests
                 () => DataverseRegistration.ReadPackageBytesForImport(path, "MyPackage", "zava_MyPackage"));
             Assert.Contains("signed", ex.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("zava_MyPackage", ex.Message);
-            // The actionable parts: why it fails (the platform error) and the two ways out.
+            // The actionable parts: why it fails (the platform error) and the way out.
             Assert.Contains("to 'zava_MyPackage' (to add the publisher prefix)", ex.Message);
             Assert.Contains("rejected by Dataverse (0x80040265)", ex.Message);
-            Assert.Contains("or apply without --solution.", ex.Message);
+            Assert.Contains("prefix ('zava_MyPackage').", ex.Message);
+            Assert.DoesNotContain("without --solution", ex.Message);
         }
         finally
         {

@@ -37,6 +37,11 @@ All notable changes to Vela are documented here. The format is based on
   generated code names `Account`. They emitted the value as given, e.g. `EntityPluginBase<account>`, which did not
   compile. With no generated model to map it, an all-lower-case `--entity` is refused with the invalid-arguments exit
   code; a class name is still used as given.
+- `vela apply` with a signed plugin package that must be renamed for the solution publisher prefix no longer suggests
+  applying without `--solution`, which is now required; it says to build and sign the package already named with the
+  prefix.
+- `vela help --json` describes exit code `5` as drift from `models --verify` or an apply that did not converge, as the
+  text help does.
 
 ### Docs
 
