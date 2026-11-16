@@ -10,7 +10,7 @@ Taking part in this project means following the [Code of Conduct](CODE_OF_CONDUC
 vulnerability? Do not open an issue: report it privately as described in [SECURITY.md](SECURITY.md).
 
 A pull request runs `ci.yml` (and `docs.yml` / `mutation.yml` when it touches their paths) on GitHub-hosted Windows
-runners, forks included; the [pull request template](.github/pull_request_template.md) lists what a change needs
+runners, forks included, plus the [changelog check](#changelog); the [pull request template](.github/pull_request_template.md) lists what a change needs
 before review.
 
 ## Solution layout
@@ -143,6 +143,19 @@ $env:VELA_BUILD_SMOKE = "1"
 dotnet test .\tests\Vela.Cli.Tests --filter Generate_ThenDotnetBuild_Succeeds
 ```
 
+## Changelog
+
+Every user-visible change gets **one entry** in [`CHANGELOG.md`](CHANGELOG.md) under `## [Unreleased]`: framework
+API or behaviour, CLI behaviour or output, analyzers, docs pages. Put it under the existing heading of its kind and
+line, in this order: `Changed (Framework, breaking)`, `Added (Framework)`, `Changed (Framework)`, `Fixed (Framework)`,
+`Changed (CLI, breaking)`, `Added (CLI)`, `Changed (CLI)`, `Fixed (CLI)`, `Docs`. CI, tests, internal refactors and
+dependencies that aren't shipped need no entry; a change to a shipped dependency floor (e.g. `Newtonsoft.Json` in
+`Vela.Plugins`) does.
+
+The `Changelog` workflow fails a pull request that changes `src/` or `docs/` without touching `CHANGELOG.md`. When
+no entry is needed, a maintainer adds the `no-changelog` label, which re-runs the check. Releases are cut by the
+maintainer (see [RELEASING.md](RELEASING.md)): don't bump versions or move entries out of `## [Unreleased]`.
+
 ## Release
 
 Release artifacts are produced by the release pipeline and should include only the framework packages
@@ -150,6 +163,6 @@ Release artifacts are produced by the release pipeline and should include only t
 
 The packages follow [Semantic Versioning](https://semver.org/) and ship as two independent release lines: the
 **framework** (`Vela.Messages` + `Vela.Plugins` + `Vela.Testing`, versioned together) and the **CLI** (`Vela.Cli`). Record every
-notable change in [`CHANGELOG.md`](CHANGELOG.md) under **Unreleased** as you merge it; cutting a release means
+notable change in [`CHANGELOG.md`](CHANGELOG.md) under **Unreleased** as you merge it (see [Changelog](#changelog)); cutting a release means
 renaming that section (with a date) and pushing the line's tag - `framework-vX.Y.Z` or `cli-vX.Y.Z` - which
 packs and publishes only that line. See the changelog's *Versioning policy* section for the pre-1.0 rules.
