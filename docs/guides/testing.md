@@ -21,13 +21,15 @@ dotnet add package Vela.Testing
 
 ## Which one to use
 
-Test with `PluginPipeline` by default. It runs what Dataverse runs for a request: every registered step with its
+Test with `PluginPipeline` by default. Registered with every plugin of the assembly
+(`PluginPipeline.FromAssemblyOf<T>()`), it is an integration-style test of your plugins together. It runs what
+Dataverse runs for a request: every registered step with its
 filtering attributes and images, in stage and execution order across plugins, the cascade of the plugins' own writes,
 the rollback of a synchronous failure, and the asynchronous steps after the commit. When several steps of one plugin
 share a trigger and differ only by their filter, images or step key, test them with the pipeline:
 `PluginContext` does not choose between them.
 
-Use `PluginContext` for the edge cases the pipeline does not easily produce, as a unit test of one handler:
+Use `PluginContext` for unit tests of one handler, in the edge cases the pipeline does not easily produce:
 
 - a `Depth` of 2 or more, or a crafted `ParentContext`;
 - shared variables set by another plugin;
@@ -115,8 +117,10 @@ The pipeline follows the platform's
   `pipeline.AsyncStepFailures`, and the step's own writes are rolled back.
 - `ctx.IsInTransaction` is `false` for asynchronous steps, read steps and a depth-1 PreValidation step, and `true`
   otherwise (a PreValidation step inside an `ExecuteTransaction` is in its transaction).
-- The cascade depth is capped at 8, the Dataverse default (`WithMaxDepth` changes it), on top of the plugin's own
-  depth guard. The one-hour window of the platform's loop detection is not modelled.
+- The cascade depth is capped at 8 (`PluginBase.DefaultMaxDepth`), on top of the plugin's own depth guard.
+  `WithMaxDepth(n)` changes it. The platform's default is also 8 (see
+  [`IExecutionContext.Depth`](https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.iexecutioncontext.depth)).
+  The one-hour window of the platform's loop detection is not modelled.
 
 ### The execution context
 
@@ -216,9 +220,13 @@ The pipeline follows the platform's
   the response reports `RecordCreated` and `Target`. An `Update` or `Delete` addressed by `KeyAttributes` resolves
   the key first, so its steps see the real record id. The `KeyAttributes` must be exactly one declared key: any
   other set of columns faults with `0x80060889`, and a declared key that matches nothing with `0x80060891`.
-- **Other messages** (`QualifyLead`, `SendEmail`, `AddToQueue` and the like) fire their steps but have no data effect
-  (see [What the harness does not simulate](#what-the-harness-does-not-simulate)). A message the store models (an
-  invalid `Merge`, a missing record) still fails as it would, even when steps are registered on it.
+- **Business messages** (`WinOpportunity`, `QualifyLead`, `CloseIncident`, `SendEmail`, `AddToQueue` and the like).
+  The harness does not reproduce the server logic of these messages. The steps registered on them fire at
+  PreValidation, PreOperation and PostOperation, with the typed `ctx.Request` and, in PostOperation, the
+  `OutputParameters`, but the main operation is a no-op unless the store models the request. You test your plugins'
+  reaction to the message, not the message itself. A message with no registered step that the store does not model
+  throws `MessageNotModelledException`. A message the store models (an invalid `Merge`, a missing record) still
+  fails as it would, even when steps are registered on it.
 
 ## Run a plugin against a fake context
 
@@ -608,15 +616,17 @@ An `ExecuteMultiple` child fault keeps its inner fault's code. Any other excepti
 
 ## What the harness does not simulate
 
-- **The data effect of non-CRUD messages** (`QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident` and the
+- **The data effect of business messages** (`QualifyLead`, `WinOpportunity`, `SendEmail`, `CloseIncident` and the
   like). The harness fires the steps registered on them, so you can test your own logic, but it does not make the
-  record changes the platform would make. As on the platform, it fires the steps of the SDK message the request runs
+  record changes the platform would make (see [Messages](#messages)). As on the platform, it fires the steps of the SDK message the request runs
   as (`Send` for a `SendEmailRequest`), on the table the message runs on (`queueitem` for `AddToQueue`, whatever its
   `Target`), with an empty `ctx.PrimaryEntityId`, so a step registered on the wrong message or table does not fire in
   a test either.
 - **Query hints and paging cookies.** `no-lock` and the other hints are accepted and ignored, and paging uses the
   page number only.
 - **Formula, rollup and calculated columns, business rules and duplicate detection.**
+- **Custom workflow activities.** The harness runs no workflows, so a `CodeActivity` is not supported (see
+  [Limitations](../reference/limitations.md#velatesting)).
 
 For anything else, pass your own `IOrganizationService`. For the limits of the whole framework (runtime, CLI and
 this harness), see [Limitations](../reference/limitations.md).
