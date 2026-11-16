@@ -72,7 +72,9 @@ The same check exists in code: `FrameworkManifestScanner` takes `Strict = true` 
 
 `plan`, `apply` and `inspect` accept `--environment <label>`, which names the target in the summary and in the JSON
 `environment` field (the heading reads, for example, `plan production`). It is a display label only, useful when a
-pipeline runs the same command against several environments. Without it, the output shows `--url`.
+pipeline runs the same command against several environments. Without it, the output shows `--url`. The `apply`
+confirmation prompt names the label and the URL of the organization the connection reached, so a label cannot hide
+which environment is about to be written.
 
 ## Read the output in a pipeline
 

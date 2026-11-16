@@ -102,7 +102,9 @@ shape, or is removed. A new field is added without a version change, so read the
 
 On `apply-failed`, the document is the pre-apply plan with mode `apply-failed`, plus a `failure` object: the `error`
 message and every planned operation under exactly one of `completed` (written), `failed` and `notApplied` (not
-attempted). The same report is on stderr. Re-run `apply` to converge.
+attempted). The same report is on stderr. A failure after the last registration write (adding unchanged components
+to the solution, or reading the environment back to check that it converged) is reported the same way, with every
+write under `completed`. Re-run `apply` to converge.
 
 ```json
 "failure": {

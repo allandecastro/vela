@@ -113,10 +113,10 @@ public sealed class PlanApplyCommandTests : IDisposable
         }
     }
 
-    private static PlanApplyHost Host(FakeOrgService org, RegistrationState local, bool inputRedirected = true, string? answer = null) => new()
+    private static PlanApplyHost Host(FakeOrgService org, RegistrationState local, bool inputRedirected = true, string? answer = null, string? orgUrl = null) => new()
     {
         ScanLocal = (_, _, _) => local,
-        Connect = _ => new OrganizationConnection(org),
+        Connect = _ => new OrganizationConnection(org, url: orgUrl),
         IsInputRedirected = () => inputRedirected,
         IsOutputRedirected = () => true,
         ReadLine = () => answer,
@@ -418,6 +418,27 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Equal(!writes, _error.ToString().Contains("Apply cancelled."));
     }
 
+    // The prompt names the organization the connection reached, not only the --environment label: a label (or a
+    // connection string, which leaves no --url to show) cannot hide which environment is about to be written.
+    [Fact]
+    public void The_confirmation_prompt_names_the_connected_organization_url()
+    {
+        SharedOptions options = Options() with { Environment = "production" };
+
+        Run("apply", options, Host(Org(), Local([LocalStep()]), inputRedirected: false, answer: "no", orgUrl: "https://zava-dev.crm.dynamics.com"));
+
+        Assert.Contains("against production (https://zava-dev.crm.dynamics.com)?", _error.ToString());
+    }
+
+    [Theory]
+    [InlineData("production", "https://zava.crm.dynamics.com", "production (https://zava.crm.dynamics.com)")]
+    [InlineData("https://zava.crm.dynamics.com/", "https://zava.crm.dynamics.com", "https://zava.crm.dynamics.com")]
+    [InlineData(null, "https://zava.crm.dynamics.com", "https://zava.crm.dynamics.com")]
+    [InlineData("production", null, "production")]
+    [InlineData(null, null, "Dataverse")]
+    public void The_apply_target_combines_the_label_and_the_organization_url(string? label, string? url, string expected) =>
+        Assert.Equal(expected, PlanApplyCommand.DescribeTarget(label, url));
+
     [Fact]
     public void Apply_reports_what_it_executed()
     {
@@ -561,6 +582,33 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Empty(Strings(failure.GetProperty("notApplied")));
     }
 
+    [Fact]
+    public void A_failure_of_the_read_back_after_apply_exits_7_with_an_apply_failed_document()
+    {
+        // Every write landed (the step and the solution add); reading the environment back to check convergence fails.
+        // The run still ends with the apply-failed document and the partial-apply exit, not a generic error.
+        FakeOrgService org = Org();
+        Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
+        org.OnRetrieveMultiple = q =>
+            q.EntityName == "sdkmessageprocessingstep" && org.Executed.Any(r => r is Microsoft.Crm.Sdk.Messages.AddSolutionComponentRequest)
+                ? throw new InvalidOperationException("read-back failed")
+                : inner(q);
+
+        int exit = Run("apply", Options(autoApprove: true, solution: "ZavaSales"), Host(org, Local([LocalStep()])));
+
+        Assert.Equal(CliExitCodes.ExitPartialApply, exit);
+        JsonElement json = StdoutJson();
+        Assert.Equal("apply-failed", json.GetProperty("mode").GetString());
+        JsonElement failure = json.GetProperty("failure");
+        Assert.Contains("read-back failed", failure.GetProperty("error").GetString());
+        string[] completed = Strings(failure.GetProperty("completed"));
+        Assert.Contains($"create step {Plugin} (main)", completed);
+        Assert.Contains("add unchanged components to solution ZavaSales", completed);
+        Assert.Equal([PlanApplyCommand.ReadBackOperation], Strings(failure.GetProperty("failed")));
+        Assert.Empty(Strings(failure.GetProperty("notApplied")));
+        Assert.Contains("read-back failed", _error.ToString());
+    }
+
     private static string[] Strings(JsonElement array) => array.EnumerateArray().Select(e => e.GetString()!).ToArray();
 
     [Fact]
@@ -682,6 +730,35 @@ public sealed class PlanApplyCommandTests : IDisposable
         JsonElement executed = StdoutJson().GetProperty("executed");
         Assert.False(executed.GetProperty("packageRepublished").GetBoolean());
         Assert.Contains(org.Executed.OfType<Microsoft.Crm.Sdk.Messages.AddSolutionComponentRequest>(), r => r.ComponentId == packageId);
+    }
+
+    // The publisher prefix of the --solution is read once per run. The preview (package actions, retired assemblies,
+    // solution membership), the publish and the read-back each needed it, and each used to query the solution and
+    // retrieve its publisher again.
+    [Fact]
+    public void An_apply_with_a_solution_resolves_its_publisher_prefix_once()
+    {
+        string package = WritePackage("zava_Plugins");
+        FakeOrgService org = Org();
+        Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
+        org.OnRetrieveMultiple = q => q.EntityName switch
+        {
+            "solution" => FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["publisherid"] = new EntityReference("publisher", Guid.NewGuid()) }),
+            _ => inner(q),
+        };
+        int publisherReads = 0;
+        org.OnRetrieve = (e, id, _) =>
+        {
+            publisherReads += e == "publisher" ? 1 : 0;
+            return new Entity(e, id) { ["customizationprefix"] = "zava" };
+        };
+        RegistrationState local = Local([LocalStep()], packages: [new PluginPackagePayload("zava_Plugins", "1.0.0", package)]);
+
+        int exit = Run("apply", Options(solution: "ZavaSales", autoApprove: true), Host(org, local));
+
+        Assert.Equal(CliExitCodes.ExitSuccess, exit);
+        Assert.Contains(org.Created, e => e.LogicalName == "pluginpackage");
+        Assert.Equal(1, publisherReads);
     }
 
     [Fact]

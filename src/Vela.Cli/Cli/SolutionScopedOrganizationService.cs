@@ -17,6 +17,9 @@ internal sealed class SolutionScopedOrganizationService(IOrganizationService inn
     private readonly IOrganizationService _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly string _solutionUniqueName = solutionUniqueName ?? throw new ArgumentNullException(nameof(solutionUniqueName));
 
+    /// <summary>The service this one wraps (the connection).</summary>
+    public IOrganizationService Inner => _inner;
+
     public Guid Create(Entity entity)
     {
         CreateRequest request = new() { Target = entity };

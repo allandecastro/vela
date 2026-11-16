@@ -1,14 +1,18 @@
-# Mutation area: the apply reconciliation core (DataverseRegistration.Apply): package/assembly/type sync, the resume
-# report, the stale-assembly-version guard and the ApplyDiff orchestration, driven through the IOrganizationService
-# seam. Run from tests/Vela.Cli.Tests. The web-resource branches (a work-in-progress preview) are excluded with
-# Stryker comments. Full run on the self-hosted Windows runner (2026-10-11, Stryker 4.15): 83.84%; break ratcheted
-# to 81 (~2 pts below; it was first measured at ~80.3% and held at the 80 floor). The remaining survivors are
-# equivalent (log-arg/culture/version fallbacks, polling-loop timing bounds, temp-dir path strings, columnsets the
-# fake ignores).
+# Mutation area: the apply reconciliation core (DataverseRegistration.Apply and its Apply.* partials: preflight checks,
+# package publish, managed identity link, plugin type resolution) plus DataverseRegistration.PluginTypeRemoval (the
+# retired-assembly read and the plugin-type-removal blockers): the resume report and the ApplyDiff orchestration,
+# driven through the IOrganizationService seam. Run from tests/Vela.Cli.Tests. The web-resource branches (a
+# work-in-progress preview) are excluded with Stryker comments. Full run on the self-hosted Windows runner
+# (2026-10-11, Stryker 4.15, Apply.cs before the split): 83.84%; break ratcheted to 81 (~2 pts below; it was first
+# measured at ~80.3% and held at the 80 floor). The remaining survivors are equivalent (log-arg/culture/version
+# fallbacks, polling-loop timing bounds, temp-dir path strings, columnsets the fake ignores). PluginTypeRemoval.cs
+# joined the area in 2026-11 and is not measured yet.
 stryker-config:
   project: Vela.Cli.csproj
   mutate:
     - "**/DataverseRegistration.Apply.cs"
+    - "**/DataverseRegistration.Apply.*.cs"
+    - "**/DataverseRegistration.PluginTypeRemoval.cs"
   reporters: [cleartext, markdown, html, json]
   thresholds:
     high: 88

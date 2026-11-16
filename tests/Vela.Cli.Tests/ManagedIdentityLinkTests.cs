@@ -200,7 +200,7 @@ public sealed class ManagedIdentityLinkTests : IDisposable
             new ManagedIdentityPackageLink("zava_Other", ManagedIdentityPackageLink.Linked),
         ]);
 
-        DataverseRegistration.ApplyDiff(org, EmptyDiff(), [], "ZavaSales", [], verbose: false, managedIdentity: plan);
+        DataverseRegistration.ApplyDiff(org, EmptyDiff(), [], "ZavaSales", verbose: false, managedIdentity: plan);
 
         UpdateRequest request = Assert.Single(org.Executed.OfType<UpdateRequest>());
         Assert.Equal("ZavaSales", request["SolutionUniqueName"]);
@@ -222,7 +222,7 @@ public sealed class ManagedIdentityLinkTests : IDisposable
                 : new EntityCollection(),
         };
 
-        DataverseRegistration.ApplyDiff(org, EmptyDiff(), [], null, [], verbose: false,
+        DataverseRegistration.ApplyDiff(org, EmptyDiff(), [], null, verbose: false,
             managedIdentity: new ManagedIdentityPlan(Dev, [new ManagedIdentityPackageLink("zava_Plugins", ManagedIdentityPackageLink.Change, Test)]));
 
         Assert.Empty(org.Executed.OfType<UpdateRequest>());
@@ -235,7 +235,7 @@ public sealed class ManagedIdentityLinkTests : IDisposable
     {
         FakeOrgService org = new();
 
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.ApplyDiff(org, EmptyDiff(), [], null, [], verbose: false,
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.ApplyDiff(org, EmptyDiff(), [], null, verbose: false,
             managedIdentity: new ManagedIdentityPlan(Dev, [new ManagedIdentityPackageLink("zava_Plugins", ManagedIdentityPackageLink.Link)])));
 
         Assert.Equal($"Plugin package 'zava_Plugins' was not found after the publish, so it cannot be linked to managed identity {Dev}.", ex.Message);
