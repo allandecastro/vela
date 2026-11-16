@@ -227,9 +227,19 @@ namespace Vela.Testing
             OrganizationResponseCollection responses = RunInOneTransaction(() =>
             {
                 OrganizationResponseCollection collected = new OrganizationResponseCollection();
-                foreach (OrganizationRequest child in request.Requests)
+                for (int index = 0; index < request.Requests.Count; index++)
                 {
-                    OrganizationResponse childResponse = ExecuteRequest(child);
+                    OrganizationResponse childResponse;
+                    try
+                    {
+                        childResponse = ExecuteRequest(request.Requests[index]);
+                    }
+                    catch (Exception ex) when (PlatformFault.ExecuteTransactionFailed(ex, index) is { } wrapped)
+                    {
+                        // Verified live: a failing child surfaces as an ExecuteTransactionFault naming its index.
+                        throw wrapped;
+                    }
+
                     if (request.ReturnResponses == true)
                     {
                         collected.Add(childResponse);

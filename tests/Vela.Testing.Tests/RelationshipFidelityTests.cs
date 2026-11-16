@@ -93,15 +93,15 @@ namespace Vela.Testing.Tests
             Guid a = svc.Create(new Entity("contact") { ["firstname"] = "Ada" });
             Guid b = svc.Create(new Entity("contact") { ["firstname"] = "Bob" });
 
-            svc.Associate("contact", a, new Relationship("contact_referrals"),
+            svc.Associate("contact", a, new Relationship("contact_referrals") { PrimaryEntityRole = EntityRole.Referencing },
                 new EntityReferenceCollection { new EntityReference("contact", b) });
 
-            // The intersect row maps positionally for a self-referential relationship: caller -> first column.
+            // A Referencing caller goes in the first column of a self-referential relationship.
             Entity intersect = Assert.Single(svc.GetAll("contactreferral"));
             Assert.Equal(a, intersect.GetAttributeValue<EntityReference>("contactidone").Id);
             Assert.Equal(b, intersect.GetAttributeValue<EntityReference>("contactidtwo").Id);
 
-            svc.Disassociate("contact", a, new Relationship("contact_referrals"),
+            svc.Disassociate("contact", a, new Relationship("contact_referrals") { PrimaryEntityRole = EntityRole.Referencing },
                 new EntityReferenceCollection { new EntityReference("contact", b) });
             Assert.Empty(svc.GetAll("contactreferral"));
         }

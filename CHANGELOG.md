@@ -47,6 +47,32 @@ All notable changes to Vela are documented here. The format is based on
   silently: a user or team in a business unit not declared (once any `BusinessUnit(...)` is declared), a `Manager`,
   `Position` or `FieldPermission` naming a principal that is not declared, two roles with the same id, and an id
   declared both as a user and as a team.
+- `Vela.Testing`: `createdon`, `createdby`, `modifiedon`, `modifiedby` and `owningbusinessunit` supplied on a Create
+  or Update are ignored and stamped from the clock, the caller and the owner, as on Dataverse (verified live). They
+  were kept on Create, and `createdon`/`createdby`/`owningbusinessunit` on Update. `overriddencreatedon` still
+  backdates `createdon`, and now holds the actual creation time. Use `Seed(...)` to arrange records with given audit
+  values.
+- `Vela.Testing`: a Create that sets `statecode` without `statuscode` creates an active record (`statecode` 0,
+  `statuscode` 1), as on Dataverse (verified live). It kept the `statecode` before. Set both to create in another
+  state.
+- `Vela.Testing`: `Merge` no longer copies the subordinate's columns into the master: only `UpdateContent` is
+  written, as on Dataverse (verified live). Merging a subordinate that is already inactive faults with `0x80045304`.
+- `Vela.Testing`: an `ExecuteTransaction` whose child raises a platform fault now faults with an
+  `ExecuteTransactionFault` detail carrying the child's `ErrorCode` and message and its `FaultedRequestIndex`
+  (verified live), on `InMemoryOrganizationService` and `PluginPipeline`. The child's own fault surfaced before.
+- `Vela.Testing`: a write through the SYSTEM service (`ctx.SystemService`) is stamped with SYSTEM as `createdby`,
+  `modifiedby` and `ownerid`, the calling user as `createdonbehalfby` and the root business unit as
+  `owningbusinessunit` (verified live). It recorded the calling user before. `WhoAmI` called from inside a plugin
+  returns SYSTEM on every service, as on Dataverse; from the test it still returns the configured user. Read the
+  caller from `ctx.UserId` or `ctx.InitiatingUserId`.
+- `Vela.Testing`: on a table declared organization-owned (`AsOrganizationOwned`) or registered so by its metadata, a
+  Create or Update that sets `ownerid` faults with `0x80041103`, and `Assign` faults with `0x80040800` (verified
+  live). Both succeeded before.
+- `Vela.Testing`: `Associate`/`Disassociate` over a self-referential relationship (N:N or 1:N) without
+  `Relationship.PrimaryEntityRole` fault with `0x80040203` (verified live); with a role, `Referenced` makes the
+  calling record the parent (1:N) or puts it in the second intersect column (N:N). An undeclared relationship name
+  faults with `0x80040216` (verified live) instead of throwing `InvalidOperationException`; the message still says
+  how to declare it.
 
 ### Added (Framework)
 

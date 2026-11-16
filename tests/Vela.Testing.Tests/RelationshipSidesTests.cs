@@ -92,7 +92,7 @@ namespace Vela.Testing.Tests
         {
             PluginPipeline pipeline = Pipeline();
 
-            pipeline.Service.Associate("contact", ContactA, new Relationship("contact_peers"), Refs(new EntityReference("contact", ContactB)));
+            pipeline.Service.Associate("contact", ContactA, new Relationship("contact_peers") { PrimaryEntityRole = EntityRole.Referencing }, Refs(new EntityReference("contact", ContactB)));
 
             RelationshipSides sides = Assert.Single(SidesContactPlugin.Seen).Sides;
             Assert.Equal("contact:" + ContactA, Describe(sides.ThisSide));

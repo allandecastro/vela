@@ -204,9 +204,13 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise). Associate and Disassociate
   then persist the intersect rows, and `RetrieveMultiple` joins through them. Associating an existing pair again
   throws a `DuplicateRecord` (`0x80040237`) fault, associating records outside the relationship's two tables throws
-  an invalid argument (`0x80040203`) fault, and a self-referential N:N maps its two columns by position.
+  an invalid argument (`0x80040203`) fault, and an undeclared relationship name faults with `0x80040216`. On a
+  self-referential relationship (N:N or 1:N), set `Relationship.PrimaryEntityRole`, or Associate and Disassociate
+  fault with `0x80040203`. On a self-referential N:N, `Referencing` puts the calling record in the first intersect
+  column and `Referenced` in the second.
   Over a 1:N relationship declared with `WithRelationship(...)`, Associate sets the child's lookup column and
-  Disassociate clears it, from either side. The 1:N relationship is found by the `schemaName` it was declared with,
+  Disassociate clears it, from either side (on a self-referential 1:N, `Referenced` makes the calling record the
+  parent). The 1:N relationship is found by the `schemaName` it was declared with,
   or by `{referenced}_{referencing}` when it was declared without one. `Merge` moves the subordinate's N:N rows and reparents its 1:N
   children, except over a relationship whose Merge behaviour is `NoCascade`.
 - **`RetrieveMultiple` supports a common subset.** No query hints, `NoLock`, `FilterHint=union` or faithful paging
@@ -216,11 +220,13 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
 - **System columns are a simplified model.** `createdon`, `createdby`, `modifiedon`, `modifiedby`, the owner columns
   and `organizationid` are stamped from the configured actor (`WithCurrentUser`, `WithCurrentBusinessUnit`,
   `WithOrganizationId`), not computed by a server. Without `WithCurrentUser`, a stable default user
-  (`DefaultCallingUser`) is used. `statecode`, `statuscode`, `versionnumber` and `overriddencreatedon` backdating are
-  stamped too. `WithClock(...)` and `WithIdSequence(...)` make timestamps and ids deterministic; the same clock
+  (`DefaultCallingUser`) is used. A write through the SYSTEM service is stamped with a stand-in SYSTEM user id.
+  `statecode`, `statuscode`, `versionnumber` and `overriddencreatedon` backdating are stamped too. `WithClock(...)` and `WithIdSequence(...)` make timestamps and ids deterministic; the same clock
   expires the harness's plugin cache. The ownership type is declared explicitly (`AsOrganizationOwned`,
   `AsUserOwned`, `AsVirtual`, `AsElastic`), or read from the `OwnershipType` of registered metadata, or inferred from
-  the early-bound `OwnerId` property; a table with none of these is user-owned. Elastic tables are ownable.
+  the early-bound `OwnerId` property; a table with none of these is user-owned. Elastic tables are ownable. Only a
+  declared or registered organization-owned table rejects `ownerid` and `Assign`: one inferred from an early-bound
+  class without `OwnerId` does not.
   `Seed(...)` stamps nothing, on purpose: it is raw setup.
 - **Virtual tables are partial.** `AsVirtual(...)` turns off system-column population. `AsVirtual(name,
   readOnly: true)` also rejects Create, Update and Delete. A virtual table that is not read-only still stores rows

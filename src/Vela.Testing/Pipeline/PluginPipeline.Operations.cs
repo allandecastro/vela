@@ -79,6 +79,7 @@ namespace Vela.Testing
         // the Assignee as the pre stages left it.
         internal void ExecuteAssign(AssignRequest request, ParameterCollection? sharedVariables = null)
         {
+            _store.DemandAssignable(request.Target.LogicalName);
             OrganizationRequest inputs = CopyRequest(request);
             RunOperation<object?>(asyncQueue =>
             {

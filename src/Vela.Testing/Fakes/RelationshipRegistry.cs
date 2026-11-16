@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Microsoft.Xrm.Sdk;
 
 namespace Vela.Testing
 {
@@ -48,20 +49,6 @@ namespace Vela.Testing
             _relationships[schemaName] = new ManyToMany(intersectEntity, firstEntity, firstAttribute, secondEntity, secondAttribute);
         }
 
-        /// <summary>Returns the declared relationship or throws with guidance to declare it via <c>WithManyToMany</c>.</summary>
-        public ManyToMany Resolve(string schemaName)
-        {
-            if (_relationships.TryGetValue(schemaName, out ManyToMany relationship))
-            {
-                return relationship;
-            }
-
-            throw new InvalidOperationException(
-                $"Many-to-many relationship '{schemaName}' is not declared. Declare it on the in-memory service with " +
-                $"WithManyToMany(\"{schemaName}\", intersectEntity, firstEntity, firstAttribute, secondEntity, secondAttribute) " +
-                $"or register an EntityMetadata carrying the relationship via WithEntityMetadata(...).");
-        }
-
         /// <summary>Looks up a declared relationship without throwing.</summary>
         public bool TryResolve(string schemaName, out ManyToMany relationship) =>
             _relationships.TryGetValue(schemaName, out relationship);
@@ -95,18 +82,17 @@ namespace Vela.Testing
 
             /// <summary>
             /// Returns the intersect attribute for the calling side and for the related side. Non-self-referential
-            /// relationships map by logical name; a self-referential relationship maps positionally
-            /// (caller → first, related → second).
+            /// relationships map by logical name; a self-referential relationship maps by the role of the calling
+            /// record: Referencing (or no role) puts it in the first column, Referenced in the second. Which column
+            /// the platform fills for each role is not verified live.
             /// </summary>
-            public (string callerAttribute, string relatedAttribute) AttributesFor(string callerEntity)
+            public (string callerAttribute, string relatedAttribute) AttributesFor(string callerEntity, EntityRole? role = null)
             {
                 bool selfReferential = string.Equals(FirstEntity, SecondEntity, StringComparison.OrdinalIgnoreCase);
-                if (!selfReferential && string.Equals(callerEntity, SecondEntity, StringComparison.OrdinalIgnoreCase))
-                {
-                    return (SecondAttribute, FirstAttribute);
-                }
-
-                return (FirstAttribute, SecondAttribute);
+                bool callerIsSecond = selfReferential
+                    ? role == EntityRole.Referenced
+                    : string.Equals(callerEntity, SecondEntity, StringComparison.OrdinalIgnoreCase);
+                return callerIsSecond ? (SecondAttribute, FirstAttribute) : (FirstAttribute, SecondAttribute);
             }
         }
     }

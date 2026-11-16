@@ -124,10 +124,12 @@ namespace Vela.Testing.Tests
             Guid contact = Guid.NewGuid();
             InMemoryOrganizationService svc = new InMemoryOrganizationService().Seed(new Entity("account", account), new Entity("contact", contact));
 
-            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+            FaultException<OrganizationServiceFault> ex = Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Disassociate("account", account, new Relationship("nope"), Refs(new EntityReference("contact", contact))));
 
-            Assert.Contains("'nope' is not declared", ex.Message);
+            Assert.Equal(unchecked((int)0x80040216), ex.Detail.ErrorCode);
+            Assert.StartsWith("The Entity Relationship with SchemaName 'nope' was not found in the MetadataCache.", ex.Detail.Message);
+            Assert.Contains("WithManyToMany(\"nope\", ...)", ex.Detail.Message);
         }
 
         // ---- N:N declared through registered metadata ------------------------------------------------------
@@ -275,7 +277,7 @@ namespace Vela.Testing.Tests
 
         // The subordinate's primary key and state columns are never copied onto the target.
         [Fact]
-        public void Merge_does_not_copy_the_subordinates_primary_key_or_state()
+        public void Merge_does_not_copy_any_subordinate_column_to_the_master()
         {
             Guid target = Guid.NewGuid();
             Guid subordinate = Guid.NewGuid();
@@ -292,7 +294,7 @@ namespace Vela.Testing.Tests
             Merge(svc, "account", target, subordinate);
 
             Entity merged = svc.Retrieve("account", target, new ColumnSet(true));
-            Assert.Equal("555", merged.GetAttributeValue<string>("telephone1")); // missing data is filled in
+            Assert.False(merged.Contains("telephone1")); // verified live: the subordinate's data is not copied
             Assert.Equal(target, merged.GetAttributeValue<Guid>("accountid"));
             Assert.False(merged.Contains("statecode"));
             Assert.False(merged.Contains("statuscode"));

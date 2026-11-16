@@ -556,6 +556,7 @@ namespace Vela.Testing
             }
 
             EnsureWritable(entity.LogicalName);
+            DemandOwnerColumn(entity);
             DemandCreate(entity);
 
             // A lookup set by key is resolved first, so the existence and record-scoped AppendTo checks run against
@@ -577,7 +578,7 @@ namespace Vela.Testing
             }
 
             _autoNumbers.Apply(stored);
-            _systemFields.ApplyOnCreate(entity, stored, Actor(), _clock(), NextVersion());
+            _systemFields.ApplyOnCreate(entity, stored, StampingActor(), _clock(), NextVersion());
             RealignOwningBusinessUnit(stored);
             _alternateKeys.Enforce(stored, Table(stored.LogicalName).Values);
             Table(stored.LogicalName)[stored.Id] = stored;
@@ -993,6 +994,7 @@ namespace Vela.Testing
                 throw RecordDoesNotExist(entity.LogicalName, entity.Id);
             }
 
+            DemandOwnerColumn(entity);
             bool changesOwner = entity.Contains(SystemFieldApplier.OwnerId);
             if (changesOwner && entity[SystemFieldApplier.OwnerId] == null)
             {
@@ -1027,7 +1029,10 @@ namespace Vela.Testing
             Entity candidate = EntityValues.Clone(stored);
             foreach (KeyValuePair<string, object> attribute in resolved.Attributes)
             {
-                candidate[attribute.Key] = EntityValues.CloneValue(attribute.Value);
+                if (!IgnoredOnUpdate.Contains(attribute.Key))
+                {
+                    candidate[attribute.Key] = EntityValues.CloneValue(attribute.Value);
+                }
             }
 
             // A state change without a status lands on the state's default status (the platform sets it on the
@@ -1048,7 +1053,7 @@ namespace Vela.Testing
 
             DeriveInheritedAccessIfReparented(stored, previousParents);
 
-            _systemFields.ApplyOnUpdate(entity, stored, Actor(), _clock(), NextVersion());
+            _systemFields.ApplyOnUpdate(entity, stored, StampingActor(), _clock(), NextVersion());
             if (changesOwner)
             {
                 RealignOwningBusinessUnit(stored);
@@ -1062,6 +1067,36 @@ namespace Vela.Testing
 
 
         // The statecode/statuscode Update a SetState request performs (status -1 or missing = the state's default).
+        // Server-managed columns an Update silently ignores (verified live): the creation audit columns and
+        // owningbusinessunit, which follows the owner. modifiedon/modifiedby are restamped by ApplyOnUpdate.
+        private static readonly HashSet<string> IgnoredOnUpdate = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            SystemFieldApplier.CreatedOn,
+            SystemFieldApplier.CreatedBy,
+            SystemFieldApplier.OwningBusinessUnit,
+        };
+
+        // An organization-owned table (declared, or by its registered metadata) has no ownerid column: a Create or
+        // Update that sets it faults (verified live).
+        private void DemandOwnerColumn(Entity entity)
+        {
+            if (entity.Contains(SystemFieldApplier.OwnerId) && _systemFields.IsKnownOrganizationOwned(entity.LogicalName))
+            {
+                throw PlatformFault.Create(PlatformFault.NoSuchAttribute,
+                    $"'{entity.LogicalName}' entity doesn't contain attribute with Name = '{SystemFieldApplier.OwnerId}' and NameMapping = 'Logical' (look up attribute by name is case-sensitive).");
+            }
+        }
+
+        // Assign is not a message of an organization-owned table (verified live).
+        internal void DemandAssignable(string entityLogicalName)
+        {
+            if (_systemFields.IsKnownOrganizationOwned(entityLogicalName))
+            {
+                throw PlatformFault.Create(PlatformFault.MessageNotSupportedForEntity,
+                    $"The 'Assign' method does not support entities of type '{entityLogicalName}'.");
+            }
+        }
+
         internal Entity SetStateUpdate(EntityReference record, OptionSetValue? state, OptionSetValue? status)
         {
             int stateValue = state?.Value ?? 0;
@@ -1272,6 +1307,7 @@ namespace Vela.Testing
 
                 case AssignRequest assign:
                 {
+                    DemandAssignable(assign.Target.LogicalName);
                     // Modern Dataverse models assignment as an ownerid Update; UpdateCore infers the Assign
                     // privilege from the ownerid change, so both paths enforce identically.
                     UpdateCore(new Entity(assign.Target.LogicalName, ResolveReference(assign.Target)) { ["ownerid"] = assign.Assignee });
@@ -1338,7 +1374,7 @@ namespace Vela.Testing
 
                 case WhoAmIRequest:
                 {
-                    SystemActor actor = Actor();
+                    SystemActor actor = WhoAmIActor();
                     WhoAmIResponse response = new WhoAmIResponse();
                     response.Results["UserId"] = actor.UserId;
                     response.Results["BusinessUnitId"] = actor.BusinessUnitId;
@@ -1536,20 +1572,27 @@ namespace Vela.Testing
             StoreSnapshot snapshot = Snapshot();
             OrganizationResponseCollection responses = new OrganizationResponseCollection();
 
+            int index = 0;
             try
             {
-                foreach (OrganizationRequest child in request.Requests)
+                for (; index < request.Requests.Count; index++)
                 {
-                    OrganizationResponse childResponse = Execute(child);
+                    OrganizationResponse childResponse = Execute(request.Requests[index]);
                     if (request.ReturnResponses == true)
                     {
                         responses.Add(childResponse);
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 RestoreTo(snapshot);
+                FaultException<OrganizationServiceFault>? wrapped = PlatformFault.ExecuteTransactionFailed(ex, index);
+                if (wrapped != null)
+                {
+                    throw wrapped;
+                }
+
                 throw;
             }
 
@@ -1675,19 +1718,21 @@ namespace Vela.Testing
             {
                 if (_oneToMany.TryResolveBySchema(relationship.SchemaName, out OneToManyRegistry.OneToMany oneToMany))
                 {
+                    DemandRoleForReflexive(relationship, oneToMany.ReferencedEntity, oneToMany.ReferencingEntity);
                     DemandOneToManyAccess(entityName, entityId, oneToMany, relatedEntities);
                     DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
-                    RunAtomically<object?>(() => { SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: true); return null; });
+                    RunAtomically<object?>(() => { SetOneToManyLink(entityName, entityId, oneToMany, relationship.PrimaryEntityRole, relatedEntities, set: true); return null; });
                     return;
                 }
 
-                _relationships.Resolve(relationship.SchemaName); // not N:N or 1:N -> throws the standard guidance
+                throw UnknownRelationship(relationship.SchemaName);
             }
 
+            DemandRoleForReflexive(relationship, rel.FirstEntity, rel.SecondEntity);
             DemandManyToManyAccess(entityName, entityId, relatedEntities);
             DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
             DemandManyToManySides(relationship.SchemaName, rel, entityName, relatedEntities);
-            (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
+            (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName, relationship.PrimaryEntityRole);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
             EntityReference caller = new EntityReference(entityName, entityId);
 
@@ -1742,12 +1787,35 @@ namespace Vela.Testing
             }
         }
 
+        // A relationship that does not exist faults with 0x80040216 (verified live). The store knows only the
+        // relationships a test declares, so the message also says how to declare it.
+        private static FaultException<OrganizationServiceFault> UnknownRelationship(string schemaName) =>
+            PlatformFault.Create(PlatformFault.UnknownRelationship,
+                $"The Entity Relationship with SchemaName '{schemaName}' was not found in the MetadataCache. Vela.Testing knows " +
+                $"only the relationships a test declares: WithManyToMany(\"{schemaName}\", ...), WithRelationship(..., schemaName: " +
+                $"\"{schemaName}\") (or WithParentalRelationship/WithReferentialRelationship), or an EntityMetadata carrying it " +
+                $"registered with WithEntityMetadata(...).");
+
+        // A self-referential (reflexive) relationship, N:N or 1:N, needs Relationship.PrimaryEntityRole to tell which
+        // side the calling record is on; without it Associate/Disassociate fault (verified live).
+        private static void DemandRoleForReflexive(Relationship relationship, string firstEntity, string secondEntity)
+        {
+            if (relationship.PrimaryEntityRole == null && string.Equals(firstEntity, secondEntity, StringComparison.OrdinalIgnoreCase))
+            {
+                throw PlatformFault.Create(PlatformFault.InvalidArgument,
+                    $"Entity role must be specified for reflexive relationship '{relationship.SchemaName}.'");
+            }
+        }
+
         // Sets (Associate) or clears (Disassociate) a 1:N lookup: the child's ReferencingAttribute points at the
         // parent. Works from either side - entityName may be the parent (referenced) side, with relatedEntities the
-        // children, or the child (referencing) side, with the single related record the parent.
-        private void SetOneToManyLink(string entityName, Guid entityId, OneToManyRegistry.OneToMany relationship, EntityReferenceCollection relatedEntities, bool set)
+        // children, or the child (referencing) side, with the single related record the parent. On a self-referential
+        // relationship the role says which: Referenced makes the calling record the parent (verified live).
+        private void SetOneToManyLink(string entityName, Guid entityId, OneToManyRegistry.OneToMany relationship, EntityRole? role, EntityReferenceCollection relatedEntities, bool set)
         {
-            bool callerIsParent = string.Equals(entityName, relationship.ReferencedEntity, StringComparison.OrdinalIgnoreCase);
+            bool callerIsParent = role.HasValue
+                ? role.Value == EntityRole.Referenced
+                : string.Equals(entityName, relationship.ReferencedEntity, StringComparison.OrdinalIgnoreCase);
             foreach (EntityReference related in relatedEntities)
             {
                 (string childEntity, Guid childId, EntityReference? parentRef) = callerIsParent
@@ -1772,18 +1840,20 @@ namespace Vela.Testing
             {
                 if (_oneToMany.TryResolveBySchema(relationship.SchemaName, out OneToManyRegistry.OneToMany oneToMany))
                 {
+                    DemandRoleForReflexive(relationship, oneToMany.ReferencedEntity, oneToMany.ReferencingEntity);
                     DemandOneToManyAccess(entityName, entityId, oneToMany, relatedEntities);
                     DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
-                    RunAtomically<object?>(() => { SetOneToManyLink(entityName, entityId, oneToMany, relatedEntities, set: false); return null; });
+                    RunAtomically<object?>(() => { SetOneToManyLink(entityName, entityId, oneToMany, relationship.PrimaryEntityRole, relatedEntities, set: false); return null; });
                     return;
                 }
 
-                _relationships.Resolve(relationship.SchemaName); // not N:N or 1:N -> throws the standard guidance
+                throw UnknownRelationship(relationship.SchemaName);
             }
 
+            DemandRoleForReflexive(relationship, rel.FirstEntity, rel.SecondEntity);
             DemandManyToManyAccess(entityName, entityId, relatedEntities);
             DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
-            (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName);
+            (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName, relationship.PrimaryEntityRole);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
             HashSet<Guid> relatedIds = new HashSet<Guid>(relatedEntities.Select(r => r.Id));
 
@@ -1804,10 +1874,10 @@ namespace Vela.Testing
         private static readonly HashSet<string> MergeableEntities =
             new HashSet<string>(new[] { "account", "contact", "lead", "incident" }, StringComparer.OrdinalIgnoreCase);
 
-        // Merge (account/contact/lead/incident): moves the subordinate's non-conflicting data onto the target without
-        // overwriting the target's own values, applies UpdateContent to the target (ignored for incident), reparents
+        // Merge (account/contact/lead/incident): applies UpdateContent to the target (ignored for incident), reparents
         // the subordinate's 1:N children (Merge = Cascade) and moves its N:N associations to the target, then
-        // deactivates the subordinate. All-or-nothing. The pipeline passes writeMaster to run the master's Update
+        // deactivates the subordinate. The subordinate's own columns are NOT copied to the target (verified live, with
+        // UpdateContent null or empty), and an inactive subordinate faults. All-or-nothing. The pipeline passes writeMaster to run the master's Update
         // through its Update steps; without it the store writes the master itself.
         internal void Merge(MergeRequest request, Action<Entity>? writeMaster)
         {
@@ -1831,25 +1901,19 @@ namespace Vela.Testing
                 throw RecordDoesNotExist(entity, subordinateId);
             }
 
+            // Verified live: merging a subordinate that is already inactive (merged before) faults.
+            if (subordinate!.GetAttributeValue<OptionSetValue>(SystemFieldApplier.StateCode)?.Value is int subordinateState && subordinateState != 0)
+            {
+                throw PlatformFault.Create(PlatformFault.MergeSubordinateInactive, $"sub-entity:{subordinateId} of type '{entity}' is deactive");
+            }
+
             bool isIncident = string.Equals(entity, "incident", StringComparison.OrdinalIgnoreCase);
 
             RunAtomically<object?>(() =>
             {
-                // 1. Fill only the target's missing/null columns from the subordinate - the target's own data is never
-                //    overwritten (per the Merge contract).
+                // 1. UpdateContent sets values on the target (ignored when merging incidents). Nothing else is written
+                //    to the target: the subordinate's columns are not copied over (verified live).
                 Entity merged = new Entity(entity, target.Id);
-                foreach (KeyValuePair<string, object> attribute in subordinate.Attributes)
-                {
-                    if (IsMergeSkippedColumn(entity, attribute.Key)
-                        || (targetRecord.Contains(attribute.Key) && targetRecord[attribute.Key] != null))
-                    {
-                        continue;
-                    }
-
-                    merged[attribute.Key] = EntityValues.CloneValue(attribute.Value);
-                }
-
-                // 2. UpdateContent sets/overrides values on the target (ignored when merging incidents).
                 if (request.UpdateContent != null && !isIncident)
                 {
                     foreach (KeyValuePair<string, object> attribute in request.UpdateContent.Attributes)
@@ -1873,7 +1937,7 @@ namespace Vela.Testing
                     }
                 }
 
-                // 3. Reparent the subordinate's 1:N children to the target, except over a relationship whose Merge
+                // 2. Reparent the subordinate's 1:N children to the target, except over a relationship whose Merge
                 //    behaviour is NoCascade (unset counts as Cascade, the platform's referential default), and move
                 //    its N:N associations (verified live).
                 foreach (OneToManyRegistry.OneToMany relationship in _oneToMany.ChildRelationshipsOf(entity)
@@ -1890,7 +1954,7 @@ namespace Vela.Testing
 
                 MoveIntersectRows(entity, subordinateId, target.Id);
 
-                // 4. Deactivate the subordinate (Inactive = statecode 1 / statuscode 2) and point its masterid at the
+                // 3. Deactivate the subordinate (Inactive = statecode 1 / statuscode 2) and point its masterid at the
                 //    target (verified live: the subordinate's post-image carries both).
                 Update(new Entity(entity, subordinateId)
                 {

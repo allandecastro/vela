@@ -776,6 +776,9 @@ namespace Vela.Testing.Security
 
         // The root business unit: the single top of the declared BU hierarchy, or, when no BU is declared, the single
         // business unit the users and teams are in. Null when there is no such single top (ambiguous).
+        /// <summary>The root business unit of the model, or null when there is no single top business unit.</summary>
+        internal Guid? RootBusinessUnitId() => RootBusinessUnit();
+
         private Guid? RootBusinessUnit()
         {
             IEnumerable<Guid> candidates = _businessUnitParents.Count > 0
