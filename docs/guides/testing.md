@@ -221,8 +221,9 @@ The pipeline follows the platform's
   relationship is declared (see [Relationships](#relationships)).
 - **Upsert and alternate keys.** `Execute(new UpsertRequest { ... })` matches the target by id or by an alternate key
   declared with `WithAlternateKey(...)`: an existing record runs the Update steps, a new one the Create steps, and
-  the response reports `RecordCreated` and `Target`. An `Update` or `Delete` addressed by `KeyAttributes` resolves
-  the key first, so its steps see the real record id. The `KeyAttributes` must be exactly one declared key: any
+  the response reports `RecordCreated` and `Target`. An `Update`, `UpdateMultiple`, `Assign` or `Delete` addressed by
+  `KeyAttributes` resolves the key first, on `InMemoryOrganizationService` as through `PluginPipeline`, so its steps
+  see the real record id. The `KeyAttributes` must be exactly one declared key: any
   other set of columns faults with `0x80060889`, and a declared key that matches nothing with `0x80060891`.
 - **Business messages** (`WinOpportunity`, `QualifyLead`, `CloseIncident`, `SendEmail`, `AddToQueue` and the like).
   The harness does not reproduce the server logic of these messages. The steps registered on them fire at
@@ -394,7 +395,17 @@ just **data**: the child carries an `EntityReference` to its parent, and that al
 joins and filtering. Declare the relationship with `WithParentalRelationship(...)`,
 `WithReferentialRelationship(...)` or `WithRelationship(...)` only when the test exercises a **cascade or inherited
 access** (see [Security model in tests](security-model.md)). Once declared, `Associate` and `Disassociate` over it
-set and clear the child's lookup; its schema name is `{referenced}_{referencing}` (`account_contact`).
+set and clear the child's lookup. Pass the relationship's real schema name to find it by that name in `Associate`,
+`Disassociate`, a deep insert and a `RelatedEntitiesQuery`; two relationships cannot share a schema name. Without
+one, the schema name is `{referenced}_{referencing}` (`account_contact`):
+
+```csharp
+var crm = new InMemoryOrganizationService()
+    .WithParentalRelationship("account", "contact", "parentcustomerid", schemaName: "contact_customer_accounts");
+
+crm.Associate("account", accountId, new Relationship("contact_customer_accounts"),
+    new EntityReferenceCollection { new EntityReference("contact", contactId) });
+```
 
 For N:N, declare the relationship once with `WithManyToMany(...)` and use `Associate`/`Disassociate`: they create
 and delete the intersect rows, so `RetrieveMultiple` joins through them as in Dataverse:
@@ -413,7 +424,8 @@ link.LinkCriteria.AddCondition("accountid", ConditionOperator.Equal, accountId);
 crm.RetrieveMultiple(q);
 ```
 
-`Associate` is idempotent (an existing pair is not duplicated); an undeclared relationship throws. With early-bound
+Associating a pair that is already associated faults with `0x80040237`, and the records must belong to the
+relationship's two tables; an undeclared relationship throws. With early-bound
 types, a typed overload takes the table and column names from the types and the property accesses:
 
 ```csharp
@@ -478,9 +490,10 @@ they do online:
 - **Ids** are random `Guid`s. Make them reproducible with `WithIdSequence()` (`00000000-0000-0000-0000-000000000001`,
   `...0002`, ...; assert with `SequentialIds.At(n)`) or `WithIdSequence(() => myGuid)` for your own generator.
 
-The **ownership type** is resolved per table. An early-bound row's is inferred (a generated class has an `OwnerId`
-property only for user- or team-owned tables); late-bound rows default to user-owned. Declare it to override the
-inference or to model the special table types:
+The **ownership type** is resolved per table, in this order: a declaration (below); the `OwnershipType` of metadata
+registered with `WithEntityMetadata(...)`; the early-bound type of the row (a generated class has an `OwnerId`
+property only for user- or team-owned tables), also through `PluginPipeline`; otherwise user-owned. Declare it to
+override the inference or to model the special table types:
 
 ```csharp
 var crm = new InMemoryOrganizationService()
@@ -525,7 +538,7 @@ To derive the metadata from an early-bound type instead, use `FakeEntityMetadata
 - each `[AttributeLogicalName]` property becomes an attribute (its CLR type gives the `AttributeTypeCode`);
 - generated choice enums become picklists;
 - the `{logicalname}id` column is the primary id, and a `name` column the primary name;
-- the ownership is inferred from an `ownerid` column;
+- the ownership is inferred from an `ownerid` column: user-owned with one, organization-owned without;
 - the maximum length comes from the generated `[StringLength]` annotation.
 
 ```csharp
@@ -574,7 +587,8 @@ Supported:
 - ordering (linked columns included), TopCount, paging, Distinct, total record count and column aliases;
 - aggregates (count, countcolumn, sum, avg, min, max, with group-by), on linked columns and over joins too.
 
-Null values and paging follow Dataverse. `ne`, `not-in`, `not-like`, `not-begin-with` and `not-end-with` match a row
+Null values and paging follow Dataverse. A null never matches in a join or an Any/All filter: a row whose link
+column is empty is joined to nothing. `ne`, `not-in`, `not-like`, `not-begin-with` and `not-end-with` match a row
 whose column is null; the comparisons, `not-between`, `like` (even `'%'`) and `ne-userid` do not. Distinct compares
 text without case. A query with no page size returns a page of at most 5,000 rows with `MoreRecords`, and no page is
 larger. The engine pages by page number: the paging cookie is not read (Dataverse also returns the same page again

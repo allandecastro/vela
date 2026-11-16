@@ -100,24 +100,24 @@ namespace Vela.Testing
             return this;
         }
 
-        /// <summary>Declares a 1:N relationship and its cascade behaviour (see the store's <c>WithRelationship</c>).</summary>
-        public PluginPipeline WithRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, Microsoft.Xrm.Sdk.Metadata.CascadeConfiguration cascade)
+        /// <summary>Declares a 1:N relationship and its cascade behaviour, optionally under its real schema name (see the store's <c>WithRelationship</c>).</summary>
+        public PluginPipeline WithRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, Microsoft.Xrm.Sdk.Metadata.CascadeConfiguration cascade, string? schemaName = null)
         {
-            _store.WithRelationship(referencedEntity, referencingEntity, referencingAttribute, cascade);
+            _store.WithRelationship(referencedEntity, referencingEntity, referencingAttribute, cascade, schemaName);
             return this;
         }
 
         /// <summary>Declares a parental 1:N relationship (every action, incl. Delete, cascades to children).</summary>
-        public PluginPipeline WithParentalRelationship(string referencedEntity, string referencingEntity, string referencingAttribute)
+        public PluginPipeline WithParentalRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, string? schemaName = null)
         {
-            _store.WithParentalRelationship(referencedEntity, referencingEntity, referencingAttribute);
+            _store.WithParentalRelationship(referencedEntity, referencingEntity, referencingAttribute, schemaName);
             return this;
         }
 
         /// <summary>Declares a referential 1:N relationship (Delete removes the child link, or Restrict blocks it).</summary>
-        public PluginPipeline WithReferentialRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, bool restrictDelete = false)
+        public PluginPipeline WithReferentialRelationship(string referencedEntity, string referencingEntity, string referencingAttribute, bool restrictDelete = false, string? schemaName = null)
         {
-            _store.WithReferentialRelationship(referencedEntity, referencingEntity, referencingAttribute, restrictDelete);
+            _store.WithReferentialRelationship(referencedEntity, referencingEntity, referencingAttribute, restrictDelete, schemaName);
             return this;
         }
 

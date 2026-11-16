@@ -21,6 +21,14 @@ namespace Vela.Testing
         /// </summary>
         public void Add(OneToMany relationship)
         {
+            // A schema name given by the test is the relationship's identity: no other relationship may carry it. A
+            // synthesized name ({referenced}_{referencing}) may repeat, as before, for two lookups between one pair.
+            if (_relationships.Any(r => (relationship.HasSchemaName || r.HasSchemaName)
+                    && string.Equals(r.SchemaName, relationship.SchemaName, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw InMemoryOrganizationService.DuplicateSchemaName(relationship.SchemaName);
+            }
+
             if (relationship.IsParental)
             {
                 OneToMany? existing = ParentRelationshipsOf(relationship.ReferencingEntity).FirstOrDefault(r =>
@@ -47,19 +55,26 @@ namespace Vela.Testing
         public IEnumerable<OneToMany> ParentRelationshipsOf(string referencingEntity) =>
             _relationships.Where(r => string.Equals(r.ReferencingEntity, referencingEntity, StringComparison.OrdinalIgnoreCase));
 
-        /// <summary>Resolves a declared 1:N relationship by its schema name (used by Associate/Disassociate over 1:N).</summary>
+        /// <summary>
+        /// Resolves a declared 1:N relationship by its schema name (used by Associate/Disassociate over 1:N): a declared
+        /// schema name first, then a synthesized one.
+        /// </summary>
         public bool TryResolveBySchema(string schemaName, out OneToMany relationship)
         {
-            relationship = _relationships.FirstOrDefault(r => string.Equals(r.SchemaName, schemaName, StringComparison.OrdinalIgnoreCase))!;
+            relationship = _relationships
+                .Where(r => string.Equals(r.SchemaName, schemaName, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(r => r.HasSchemaName ? 0 : 1)
+                .FirstOrDefault()!;
             return relationship != null;
         }
 
         /// <summary>A 1:N relationship: a lookup (<see cref="ReferencingAttribute"/>) on the child pointing at the parent.</summary>
         internal sealed class OneToMany
         {
-            public OneToMany(string schemaName, string referencedEntity, string referencingEntity, string referencingAttribute, CascadeConfiguration cascade)
+            public OneToMany(string schemaName, string referencedEntity, string referencingEntity, string referencingAttribute, CascadeConfiguration cascade, bool hasSchemaName = false)
             {
                 SchemaName = schemaName;
+                HasSchemaName = hasSchemaName;
                 ReferencedEntity = referencedEntity;
                 ReferencingEntity = referencingEntity;
                 ReferencingAttribute = referencingAttribute;
@@ -67,6 +82,9 @@ namespace Vela.Testing
             }
 
             public string SchemaName { get; }
+
+            /// <summary>Whether <see cref="SchemaName"/> is the real schema name the test declared, not a synthesized one.</summary>
+            public bool HasSchemaName { get; }
 
             /// <summary>The parent table (the "one" side).</summary>
             public string ReferencedEntity { get; }

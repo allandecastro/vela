@@ -646,7 +646,7 @@ namespace Vela.Testing
 
             object? fromValue = EntityValues.GetValue(source, link.LinkFromAttributeName);
             List<Entity> matched = _table(link.LinkToEntityName)
-                .Where(target => EntityValues.AreEqual(fromValue, EntityValues.GetValue(target, link.LinkToAttributeName)))
+                .Where(target => JoinMatches(fromValue, target, link))
                 .Where(target => EvaluateFilter(target, link.LinkCriteria))
                 .Where(target => _canRead == null || _canRead(target))
                 .ToList();
@@ -884,13 +884,23 @@ namespace Vela.Testing
             return isAnd ? results.All(r => r) : results.Count == 0 || results.Any(r => r);
         }
 
+        // A linked row matches when its LinkTo column equals the source's LinkFrom column. Like a SQL join, a null on
+        // either side matches nothing: a row with an empty lookup is not joined to every row whose column is empty.
+        private static bool JoinMatches(object? fromValue, Entity target, LinkEntity link)
+        {
+            object? toValue = EntityValues.GetValue(target, link.LinkToAttributeName);
+            return EntityValues.Normalize(fromValue) != null
+                && EntityValues.Normalize(toValue) != null
+                && EntityValues.AreEqual(fromValue, toValue);
+        }
+
         // Any/All/NotAny/NotAll filters on related records (FilterExpression.AnyAllFilterLinkEntity). A related
         // record "satisfies" the link when it passes LinkCriteria and its nested link-entities.
         private bool EvaluateAnyAll(Entity parent, LinkEntity link)
         {
             object? fromValue = EntityValues.GetValue(parent, link.LinkFromAttributeName);
             List<Entity> linked = _table(link.LinkToEntityName)
-                .Where(target => EntityValues.AreEqual(fromValue, EntityValues.GetValue(target, link.LinkToAttributeName)))
+                .Where(target => JoinMatches(fromValue, target, link))
                 .Where(target => _canRead == null || _canRead(target)) // an Any/All is evaluated over readable related records
                 .ToList();
             bool anySatisfies = linked.Any(target => EvaluateFilter(target, link.LinkCriteria) && NestedMatch(target, link));
