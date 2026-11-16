@@ -1,65 +1,54 @@
-# Cookbook (common recipes)
+# Cookbook
 
-Short sketches of the patterns you reach for most. Each links to its guide.
+Short recipes for the patterns you reach for most, for developers who already have a scaffolded solution (see the
+[Quickstart](../getting-started/quickstart.md)). Each recipe compiles against the current framework and links to the
+guide that covers it in full.
 
 ## Single-step update plugin
 
-See [Write a plugin](plugins.md).
+A PostOperation step that fires when an Update sends `Name`. See [Write a plugin](plugins.md).
 
-```csharp
-public sealed partial class AccountPostUpdate(string unsecureConfig, string secureConfig)
-    : EntityPluginBase<Account>(unsecureConfig, secureConfig)
-{
-    protected override void RegisterPluginSteps() =>
-        RegisterStep().OnUpdate().PostOperation().Sync()
-            .FilterOn(a => a.Name)
-            .Handle(OnAccountUpdated);
+[!code-csharp[](../samples/Vela.DocSamples/CookbookSample.cs#single-step)]
 
-    private void OnAccountUpdated(OnAccountUpdatedContext ctx) { /* ctx.Request.Target ... */ }
-}
-```
+`vela add plugin AccountPostUpdate --entity Account --message Update --filtering-attributes Name` generates the same
+shape. See [Add a component (`vela add`)](add.md).
 
 ## Several steps in one class
 
-```csharp
-protected override void RegisterPluginSteps()
-{
-    RegisterStep().OnCreate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnCreated);
-    RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).Handle(OnUpdated);
-}
-```
+[!code-csharp[](../samples/Vela.DocSamples/CookbookSample.cs#multi-step)]
 
-Two steps on the **same** trigger need something that tells them apart (filter, images, relationship scope) or a
-`WithStepKey("...")`. See [Several steps in one class](plugins.md#several-steps-in-one-class).
+Two steps on the **same** trigger need something that tells them apart (filtering columns, images, relationship
+scope) or a `WithStepKey("...")`. See [Several steps in one class](plugins.md#several-steps-in-one-class).
+
+## Read a record early-bound
+
+`Retrieve<T>` (namespace `Vela.Context`) reads one record by id, with the table taken from the model and the columns
+from typed selectors. See [Typed queries](queries.md).
+
+[!code-csharp[](../samples/Vela.DocSamples/CookbookSample.cs#typed-read)]
 
 ## Bound Custom API
 
-See [Write a Custom API](custom-apis.md).
+A lightweight Custom API bound to the account table, handled by a method. See [Write a Custom API](custom-apis.md)
+for the typed request and response form.
 
-```csharp
-public sealed class RecalculateApi(string unsecureConfig, string secureConfig)
-    : CustomApiBase(unsecureConfig, secureConfig)
-{
-    protected override void RegisterCustomApi() =>
-        RegisterCustomApi("zava_Recalculate", Recalculate)
-            .Description("Recalculates the bound account.")
-            .AsAction()
-            .BoundTo<Account>();
+[!code-csharp[](../samples/Vela.DocSamples/CookbookSample.cs#custom-api)]
 
-    private void Recalculate(ILocalPluginContext ctx) { /* ... */ }
-}
-```
+## Dependency injection
 
-## Dependency injection and caching
+Register services in `ConfigureServices`:
 
-Register in `ConfigureServices` and resolve with `ctx.GetRequiredService<T>()`. See
-[Dependency injection](dependency-injection.md) and [Caching](caching.md).
+[!code-csharp[](../samples/Vela.DocSamples/CookbookSample.cs#services)]
 
-```csharp
-protected override void ConfigureServices(SimpleServiceResolver services, ILocalPluginContext context) =>
-    services.AddScoped<IPricingService>(r => new PricingService(r.GetRequiredService<IOrganizationService>()));
-```
+Resolve them in a handler with `ctx.GetRequiredService<T>()`:
+
+[!code-csharp[](../samples/Vela.DocSamples/CookbookSample.cs#resolve)]
+
+See [Dependency injection](dependency-injection.md) and [Caching](caching.md).
 
 ## Test without a connection
 
-See [Testing with Vela.Testing](testing.md).
+Register the plugin in a `PluginPipeline`, write through its service, then assert on what ran and on the resulting
+data. See [Testing with Vela.Testing](testing.md).
+
+[!code-csharp[](../samples/Vela.DocSamples/CookbookSample.cs#test)]
