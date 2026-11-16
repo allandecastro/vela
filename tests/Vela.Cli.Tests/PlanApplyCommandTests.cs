@@ -77,6 +77,7 @@ public sealed class PlanApplyCommandTests : IDisposable
         {
             "pluginassembly" => assemblyExists ? FakeOrgService.Collection(new Entity("pluginassembly", assemblyId) { ["name"] = "Zava.Plugins" }) : new EntityCollection(),
             "plugintype" => FakeOrgService.Collection(new Entity("plugintype", pluginTypeId) { ["typename"] = Plugin }),
+            "solution" => FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["ismanaged"] = false }),
             "sdkmessage" => messageResolves
                 ? FakeOrgService.Collection(new Entity("sdkmessage", MessageId((string)q.Criteria.Conditions[0].Values[0])))
                 : throw new InvalidOperationException("message lookup failed"),
@@ -553,6 +554,67 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Equal(DataverseRegistration.PluginAssemblyComponentType, request.ComponentType);
         Assert.Equal("ZavaSales", request.SolutionUniqueName);
         Assert.Equal(1, StdoutJson().GetProperty("executed").GetProperty("addedToSolution").GetInt32());
+    }
+
+    // A --solution that is managed in the target environment means the run points at a test or production
+    // environment: plan and apply refuse it before anything is read or written.
+    [Theory]
+    [InlineData("plan")]
+    [InlineData("apply")]
+    public void A_solution_managed_in_the_environment_is_refused_before_any_read_or_write(string command)
+    {
+        FakeOrgService org = Org();
+        Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
+        List<string> queried = [];
+        org.OnRetrieveMultiple = q =>
+        {
+            queried.Add(q.EntityName);
+            return q.EntityName == "solution"
+                ? FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["ismanaged"] = true })
+                : inner(q);
+        };
+
+        int exit = Run(command, Options(solution: "ZavaSales", autoApprove: true), Host(org, Local([LocalStep()])));
+
+        Assert.Equal(CliExitCodes.ExitError, exit);
+        Assert.Contains("Solution 'ZavaSales' is managed in https://zava.crm.dynamics.com", _error.ToString());
+        Assert.Contains("development environment", _error.ToString());
+        Assert.Equal(["solution"], queried);
+        Assert.Empty(org.Created);
+        Assert.Empty(org.Updated);
+        Assert.Empty(org.Executed);
+        Assert.Equal(string.Empty, _out.ToString());
+    }
+
+    [Theory]
+    [InlineData("plan")]
+    [InlineData("apply")]
+    public void A_solution_missing_from_the_environment_is_refused_before_any_write(string command)
+    {
+        FakeOrgService org = Org();
+        Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
+        org.OnRetrieveMultiple = q => q.EntityName == "solution" ? new EntityCollection() : inner(q);
+
+        int exit = Run(command, Options(solution: "ZavaSales", autoApprove: true), Host(org, Local([LocalStep()])));
+
+        Assert.Equal(CliExitCodes.ExitError, exit);
+        Assert.Contains("Solution not found: ZavaSales", _error.ToString());
+        Assert.Empty(org.Created);
+        Assert.Empty(org.Executed);
+    }
+
+    [Fact]
+    public void Inspect_does_not_check_the_solution()
+    {
+        FakeOrgService org = Org();
+        Func<Microsoft.Xrm.Sdk.Query.QueryExpression, EntityCollection> inner = org.OnRetrieveMultiple;
+        org.OnRetrieveMultiple = q => q.EntityName == "solution"
+            ? FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["ismanaged"] = true })
+            : inner(q);
+
+        int exit = Run("inspect", Options(solution: "ZavaSales"), Host(org, Local()));
+
+        Assert.Equal(CliExitCodes.ExitSuccess, exit);
     }
 
     [Fact]

@@ -137,6 +137,54 @@ public sealed class DataverseRegistrationApplyTests : IDisposable
         Assert.Null(DataverseRegistration.GetPluginPackage(svc, "missing"));
     }
 
+    // ---- EnsureSolutionIsUnmanaged ---------------------------------------------------------------
+
+    [Fact]
+    public void EnsureSolutionIsUnmanaged_accepts_an_unmanaged_solution_and_reads_only_its_managed_flag()
+    {
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["ismanaged"] = false }),
+        };
+
+        DataverseRegistration.EnsureSolutionIsUnmanaged(svc, "ZavaSales", "https://zava.crm.dynamics.com");
+
+        QueryExpression q = Assert.Single(svc.Queries);
+        Assert.Equal("solution", q.EntityName);
+        Assert.Equal(["ismanaged"], q.ColumnSet.Columns);
+        Assert.Equal(1, q.TopCount);
+        ConditionExpression condition = Assert.Single(q.Criteria.Conditions);
+        Assert.Equal("uniquename", condition.AttributeName);
+        Assert.Equal(ConditionOperator.Equal, condition.Operator);
+        Assert.Equal("ZavaSales", Assert.Single(condition.Values));
+    }
+
+    [Theory]
+    [InlineData("https://zava-test.crm.dynamics.com", "Solution 'ZavaSales' is managed in https://zava-test.crm.dynamics.com. Vela deploys")]
+    [InlineData(null, "Solution 'ZavaSales' is managed in this environment. Vela deploys")]
+    public void EnsureSolutionIsUnmanaged_refuses_a_managed_solution(string? environment, string expected)
+    {
+        var svc = new TestSupport.FakeOrgService
+        {
+            OnRetrieveMultiple = _ => TestSupport.FakeOrgService.Collection(new Entity("solution", Guid.NewGuid()) { ["ismanaged"] = true }),
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => DataverseRegistration.EnsureSolutionIsUnmanaged(svc, "ZavaSales", environment));
+
+        Assert.StartsWith(expected, ex.Message);
+        Assert.Contains("unmanaged solution in a development environment", ex.Message);
+        Assert.EndsWith("Nothing was written.", ex.Message);
+    }
+
+    [Fact]
+    public void EnsureSolutionIsUnmanaged_refuses_a_missing_solution()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => DataverseRegistration.EnsureSolutionIsUnmanaged(new TestSupport.FakeOrgService(), "ZavaSales", null));
+
+        Assert.Equal("Solution not found: ZavaSales", ex.Message);
+    }
+
     // ---- ResolveSolutionCustomizationPrefix -----------------------------------------------------
 
     [Fact]

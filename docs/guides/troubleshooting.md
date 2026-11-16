@@ -13,14 +13,18 @@
    - Pass `--solution <uniqueName>`, the existing solution the packages deploy into (`--interactive` prompts for
      it). The CLI never reads `PROJECT.md`, which records it. Dataverse imports a package only when its name carries
      the solution publisher's prefix, and Vela takes the prefix from that solution. See [Plan and apply](plan-apply.md).
-5. **No changes in `plan`**
+5. **`plan` or `apply` fails with "Solution '...' is managed in ..." or "Solution not found"** (exit 4)
+   - The connection points at an environment where the `--solution` solution is managed (a test or production
+     environment that imported it) or absent. Connect to the development environment that holds the unmanaged
+     solution. Nothing was written. See [Plan and apply](plan-apply.md).
+6. **No changes in `plan`**
    - Check the `.nupkg` path or `--packages-dir`, its version, and the environment you connect to.
-6. **`apply` does nothing after a code change**
+7. **`apply` does nothing after a code change**
    - The `.nupkg` may be stale: an incremental build does not always re-run `GeneratePackageOnBuild`. Rebuild
      cleanly (`dotnet clean`, then `dotnet build -c Release`) and re-run `plan`.
    - Build the package with `dotnet build -c Release`, not a bare `dotnet pack`: a cold pack produces a package with
      no assembly (`NU5128`), which `plan`/`apply` reject with `No assemblies found in package` (exit 4).
-7. **`apply` fails with `Plugin type not found in Dataverse after the plugin package publish`**
+8. **`apply` fails with `Plugin type not found in Dataverse after the plugin package publish`**
    - Dataverse did not expose the plugin type from the published package. Dataverse caches plugin assemblies by
      version, so changed code under the same assembly version can keep serving the old assembly: bump the
      assembly version and rebuild. Projects scaffolded by `vela init` use `AssemblyVersion` `1.0.*` for this reason.

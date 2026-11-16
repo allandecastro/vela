@@ -21,6 +21,14 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added (CLI)
+
+- `vela plan` and `vela apply` check the `--solution` solution right after connecting, before reading or writing
+  anything, and exit `4` when it is managed in the target environment ("Solution 'X' is managed in <environment>.
+  Vela deploys to the unmanaged solution in a development environment ..."): a managed solution there usually means
+  the connection points at a test or production environment. A solution that does not exist fails at the same point
+  ("Solution not found"), instead of mid-apply. `vela inspect` is unchanged.
+
 ### Fixed (CLI)
 
 - `vela add plugin`, `add step`, `add test`, `add service` and `add customapi` accept the table logical name in

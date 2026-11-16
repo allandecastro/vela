@@ -83,6 +83,13 @@ internal static class PlanApplyCommand
             using OrganizationConnection connection = ConsoleStatus.Run("Connecting to Dataverse…", () => host.Connect(options));
             IOrganizationService service = connection.Service;
 
+            // plan / apply refuse a --solution that is missing or managed in the target environment (the wrong
+            // environment), before reading or writing anything. inspect is read-only and runs anywhere.
+            if (command != InspectMode && !string.IsNullOrWhiteSpace(options.SolutionUniqueName))
+            {
+                DataverseRegistration.EnsureSolutionIsUnmanaged(service, options.SolutionUniqueName!, options.Environment);
+            }
+
             RegistrationState current = ReadCurrent(service, local, options, jsonOptions, out string[] unmanaged);
             local = ResolveSecureConfigs(local, current, options, jsonOptions);
 
