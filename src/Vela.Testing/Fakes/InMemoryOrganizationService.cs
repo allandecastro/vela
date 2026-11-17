@@ -274,6 +274,9 @@ namespace Vela.Testing
             return this;
         }
 
+        // Whether the table was declared elastic (AsElastic): only an elastic table has an Upsert message filter.
+        internal bool IsElastic(string entityLogicalName) => _systemFields.IsDeclaredElastic(entityLogicalName);
+
         /// <summary>
         /// Declares an alternate key (one or more attributes) whose combined value must be unique. Create/Update
         /// throw when another record carries the same populated key, mirroring the platform's duplicate-key fault.

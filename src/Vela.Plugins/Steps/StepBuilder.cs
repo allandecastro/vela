@@ -30,6 +30,9 @@ public sealed partial class StepBuilder<TEntity>
     private int _setOnce;
     private string[] _requiredEntities = [];
 
+    // The step's request is marked [GlobalCustomApi]: a global Custom API, whose only message filter has no table.
+    private bool _globalCustomApi;
+
     // The single-value modifiers on the fluent chain (SetOnceModifiers.Methods, shared with VELA003): each is a
     // "last wins" overwrite if called twice, which silently drops the earlier value, so a second call throws. FilterOn
     // is included because a second FilterOn(...) replaces the earlier attributes rather than adding to them. One bit
@@ -88,7 +91,9 @@ public sealed partial class StepBuilder<TEntity>
         // "none" (Associate/Disassociate, whose Target can be either end of the relationship and whose handler
         // discriminates on ctx.Request.Relationship, and the other PluginMessages.GlobalMessages). The ctor stamped
         // TEntity's logical name, so clear it here - otherwise apply fails resolving a non-existent per-entity filter.
-        if (PluginMessages.IsGlobalMessage(_definition.Message))
+        // A global Custom API (its request marked [GlobalCustomApi]) is the same: Dataverse creates one message filter
+        // for it, with primary entity "none", and its steps see PrimaryEntityName "none" (verified live).
+        if (PluginMessages.IsGlobalMessage(_definition.Message) || _globalCustomApi)
         {
             _definition.EntityLogicalName = string.Empty;
         }
@@ -259,6 +264,7 @@ public sealed partial class StepBuilder<TEntity>
         }
 
         SetMessage(requestName);
+        _globalCustomApi = typeof(TMessage).IsDefined(typeof(GlobalCustomApiAttribute), inherit: true);
         SdkMessageAttribute? declared = typeof(TMessage).GetCustomAttribute<SdkMessageAttribute>(inherit: true);
         if (declared != null)
         {

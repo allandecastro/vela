@@ -133,6 +133,25 @@
       "secureConfigName": "",
       "supportedDeployment": 0,
       "asyncAutoDelete": false
+    },
+    {
+      "pluginType": "ContractPluginFixture.ContactContractPlugin",
+      "stepKey": "contact-ping",
+      "message": "contract_Ping",
+      "entity": "",
+      "description": "",
+      "stage": 40,
+      "mode": 1,
+      "rank": 1,
+      "filteringAttributes": [],
+      "preImages": [],
+      "postImages": [],
+      "impersonatingUserId": "",
+      "enabled": true,
+      "unsecureConfig": "",
+      "secureConfigName": "",
+      "supportedDeployment": 0,
+      "asyncAutoDelete": false
     }
   ],
   "customApis": [
@@ -148,6 +167,19 @@
       "workflowSdkStepEnabled": false,
       "requestParameters": [ {"name": "Owner", "type": "EntityReference", "isOptional": false, "logicalEntityName": "systemuser"}, {"name": "Ratio", "type": "Float", "isOptional": true, "logicalEntityName": ""}, {"name": "Seed", "type": "EntityCollection", "isOptional": true, "logicalEntityName": "contact"}, {"name": "Tags", "type": "StringArray", "isOptional": true, "logicalEntityName": ""} ],
       "responseProperties": [ {"name": "First", "type": "Entity", "logicalEntityName": "contact"}, {"name": "Rows", "type": "EntityCollection", "logicalEntityName": ""}, {"name": "Warnings", "type": "StringArray", "logicalEntityName": ""} ]
+    },
+    {
+      "pluginType": "ContractPluginFixture.PingApi",
+      "uniqueName": "contract_Ping",
+      "isFunction": false,
+      "bindingType": 0,
+      "boundEntity": "",
+      "isPrivate": false,
+      "executePrivilegeName": "",
+      "allowedCustomProcessingStepType": 2,
+      "workflowSdkStepEnabled": false,
+      "requestParameters": [ ],
+      "responseProperties": [ ]
     },
     {
       "pluginType": "ContractPluginFixture.ScoreAccountApi",

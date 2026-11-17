@@ -84,6 +84,8 @@ namespace Vela.Testing
         public bool FromSandbox;
         // A read's steps report IsInTransaction = false even when the read runs inside a write's transaction.
         public bool OutsideTransaction;
+        // A Custom API's asynchronous steps see an empty PrimaryEntityId, whatever the binding (verified live).
+        public bool AsyncDropsPrimaryId;
         public ParameterCollection? SharedVariables;
         public FakePluginExecutionContext? ParentContext;
     }

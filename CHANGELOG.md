@@ -100,6 +100,26 @@ All notable changes to Vela are documented here. The format is based on
   faults with `0x80040216` (verified live) instead of throwing `InvalidOperationException`; the message still says
   how to declare it.
 
+- A step on a global Custom API now runs. Dataverse gives a global API one message filter, with no table, and its
+  steps see `PrimaryEntityName` `"none"` (verified live); the runtime matched the step's table against it and failed
+  with "no registered step matching ... on entity 'none'". A step now matches any execution whose
+  `PrimaryEntityName` is `"none"`. A step declared from a request marked with the new `[GlobalCustomApi]` attribute
+  (which `vela models --custom-apis` emits on a global API's request) registers with no table, whatever the plugin's
+  `TEntity`, so its `StepDefinition.EntityLogicalName` and derived step key change. Regenerate the models, or add the
+  attribute to a hand-written request of a global API.
+- `Vela.Testing`: `PluginPipeline` gives a Custom API's extra steps the primary entity Dataverse gives them (verified
+  live): `"none"` and an empty id on a global API (they got the step's own table), the bound table and an empty id on
+  a collection-bound API, and an empty `PrimaryEntityId` on every asynchronous step (an entity-bound API's async step
+  got the Target id). A step on a Custom API's message declared on a table the API has no message filter for (any
+  table on a global API, another table than the bound one) fails the call with an `InvalidOperationException`, as
+  `vela plan` refuses it; it ran before. Mark the request `[GlobalCustomApi]`.
+- `Vela.Testing`: a step registered on `Upsert` fires only for a table declared elastic (`AsElastic`). Dataverse has
+  `Upsert` message filters for elastic tables only, and an `Upsert` step never fires for a standard table (verified
+  live on `account`). Declare the table elastic, or move the logic to the inner `Create`/`Update` steps, which still
+  fire.
+- `Vela.Testing`: the PreValidation steps of an `Upsert`'s inner `Create` or `Update` report `IsInTransaction` =
+  `false`, as a depth-1 PreValidation step does (verified live). They reported `true`.
+
 ### Added (Framework)
 
 - `Vela.Testing`: `RoleBuilder.MemberPrivilegeInheritance(TeamPrivilegeInheritance)` sets the member's privilege
@@ -202,6 +222,14 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (CLI)
 
+- `vela plan` and `vela apply` refuse, in the preview (exit `4`, nothing written), a step on a Custom API's message
+  declared on a table the API has no message filter for: any table on a global API, another table than the bound one
+  on a bound API. Dataverse creates exactly one message filter per Custom API (verified live); such a step failed
+  mid-apply when the API was created in the same run, or with a message-filter error naming no cause otherwise. A
+  step on a global API registers with no message filter, and fires (verified live).
+- `vela models --custom-apis` marks the request of a global Custom API `[Vela.Messages.GlobalCustomApi]`, so a step
+  declared from it, through the generated `On<Name><TEntity>()`, registers with no table and runs.
+
 - An empty `VELA_SECURE_CONFIG_<NAME>` environment variable, or an empty `--secure-config NAME=@file`, no longer
   clears the live step secure configuration. In GitHub Actions an undefined secret expands to an empty string, so under
   `--auto-approve` `apply` used to unlink and delete the `sdkmessageprocessingstepsecureconfig` row. An empty variable
@@ -290,6 +318,11 @@ All notable changes to Vela are documented here. The format is based on
   retrieved its publisher again, up to six times per apply.
 
 ### Docs
+
+- Custom APIs: steps on a global API (the `[GlobalCustomApi]` request, any plugin table, a sample), the primary
+  entity an extra step sees by binding and mode, and the table rules `vela plan` enforces. Testing and limitations:
+  Custom API extra steps, `Upsert` steps on elastic tables only, `IsInTransaction` of an `Upsert`'s inner
+  PreValidation.
 
 - The documentation was reviewed page by page against the code and the CLI: examples compile from
   `docs/samples/Vela.DocSamples`, the navigation and titles are consistent, and factual errors are fixed, among them

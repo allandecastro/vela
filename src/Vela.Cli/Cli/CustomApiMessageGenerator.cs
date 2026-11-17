@@ -128,6 +128,12 @@ public static class CustomApiMessageGenerator
         // Request. Derives from CustomApiRequest, which keys the Parameters bag by the plain property name (the
         // Custom API's request parameters carry bare-identifier uniquenames equal to their plain names).
         sb.AppendLine($"    /// <summary>Typed request for the <c>{message.UniqueName}</c> Custom API.</summary>");
+        if (!message.IsBoundToEntity && string.IsNullOrWhiteSpace(message.BoundEntityLogicalName))
+        {
+            // A global API's only message filter has no table: a step declared from this request registers with none.
+            sb.AppendLine("    [Vela.Messages.GlobalCustomApi]");
+        }
+
         sb.AppendLine($"    public partial class {request} : Vela.Messages.CustomApiRequest");
         sb.AppendLine("    {");
         sb.AppendLine($"        public {request}() : base(\"{message.UniqueName}\")");

@@ -251,7 +251,7 @@ public sealed class StepRulesAndIdentityTests
     {
         StepDefinition[] steps = StepDefinitionReader.GetStepDefinitions(typeof(AccountContractPlugin).Assembly).ToArray();
 
-        Assert.Equal(7, steps.Length);
+        Assert.Equal(8, steps.Length);
         Assert.Equal(6, steps.Count(s => s.PluginTypeName == typeof(AccountContractPlugin).FullName));
     }
 

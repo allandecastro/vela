@@ -372,19 +372,32 @@ namespace Vela.Testing
         // pipeline (Update steps fire with the resolved id); no match runs the Create pipeline (Create steps fire; the
         // key columns become real columns of the new row, and a supplied id is kept). The inner Create or Update is the
         // Upsert's main operation, at its depth (verified live). Steps registered on the Upsert message itself fire
-        // around it, and the response carries RecordCreated and Target.
+        // around it, and the response carries RecordCreated and Target. Only on an elastic table (AsElastic), though:
+        // the Upsert message has a message filter for elastic tables only, and an Upsert step, global or not, never
+        // fires for a standard table (verified live on account). Whether a filtered Upsert step fires on an elastic
+        // table was not verified live (the probe environment could not create one); Microsoft Learn says it does.
         private OrganizationResponse ExecuteUpsert(OrganizationRequest request, Entity callerTarget, ParameterCollection shared)
         {
             // The steps work on a copy of the request (the caller's entity is never touched), and the main operation
             // reads the Target the pre stages left, so a step that changes or replaces it is honoured.
             OrganizationRequest inputs = CopyRequest(request);
+            bool upsertSteps = _store.IsElastic(callerTarget.LogicalName);
             return RunOperation(asyncQueue => RunStages<OrganizationResponse>(
-                stage => FireStage(GenericInvocation("Upsert", stage, callerTarget.LogicalName, callerTarget.Id, inputs.Parameters, null), asyncQueue),
+                stage =>
+                {
+                    if (upsertSteps)
+                    {
+                        FireStage(GenericInvocation("Upsert", stage, callerTarget.LogicalName, callerTarget.Id, inputs.Parameters, null), asyncQueue);
+                    }
+                },
                 () => ExecuteUpsertMain(inputs),
                 response =>
                 {
-                    EntityReference affected = (EntityReference)response.Results["Target"];
-                    FireStage(GenericInvocation("Upsert", PluginStages.PostOperation, affected.LogicalName, affected.Id, inputs.Parameters, response.Results), asyncQueue);
+                    if (upsertSteps)
+                    {
+                        EntityReference affected = (EntityReference)response.Results["Target"];
+                        FireStage(GenericInvocation("Upsert", PluginStages.PostOperation, affected.LogicalName, affected.Id, inputs.Parameters, response.Results), asyncQueue);
+                    }
                 }),
                 shared);
         }

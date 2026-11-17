@@ -23,12 +23,14 @@ namespace Vela.Testing
         // primary entity from the request (null or empty entityName); its steps then match by message alone.
         // Likewise an entity-none step (empty logical name, an intentionally global step) matches any entity, and a
         // global message (Associate/Disassociate: sdkmessagefilter "none") fires regardless of the entity the step
-        // was declared on - mirroring the runtime's ResolveSingleMatchingStep and the CLI's registration.
+        // was declared on - mirroring the runtime's ResolveSingleMatchingStep and the CLI's registration. So does an
+        // execution on a table-less filter (entity "none": a global Custom API).
         private static bool StepMatches(StepDefinition step, string message, string? entityName)
         {
             return step.Enabled
                 && string.Equals(step.Message, message, StringComparison.OrdinalIgnoreCase)
                 && (string.IsNullOrEmpty(entityName)
+                    || string.Equals(entityName, PluginMessages.NoPrimaryEntity, StringComparison.OrdinalIgnoreCase)
                     || PluginMessages.IsGlobalMessage(message)
                     || string.IsNullOrEmpty(step.EntityLogicalName)
                     || string.Equals(step.EntityLogicalName, entityName, StringComparison.OrdinalIgnoreCase));
@@ -315,7 +317,11 @@ namespace Vela.Testing
                     : string.IsNullOrEmpty(invocation.EntityLogicalName)
                         ? registration.Step.EntityLogicalName
                         : invocation.EntityLogicalName,
-                PrimaryEntityId = globalMessage ? Guid.Empty : invocation.PrimaryId,
+                // A Custom API's asynchronous step sees an empty PrimaryEntityId, even on an entity-bound API whose
+                // synchronous steps see the Target id (verified live; the Target input is still there).
+                PrimaryEntityId = globalMessage || (invocation.AsyncDropsPrimaryId && registration.Step.Mode == ExecutionMode.Asynchronous)
+                    ? Guid.Empty
+                    : invocation.PrimaryId,
                 CorrelationId = _correlationId,
                 SharedVariables = invocation.SharedVariables ?? _sharedVariables
             };

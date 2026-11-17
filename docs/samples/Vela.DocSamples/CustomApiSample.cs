@@ -2,6 +2,7 @@
 namespace Vela.DocSamples
 {
     using Microsoft.Xrm.Sdk;
+    using Vela.DocSamples.Models;
     #region typed
     using System;
     using Vela.Context;
@@ -28,6 +29,7 @@ namespace Vela.DocSamples
             => new ScoreResponse { Score = request.AccountId == Guid.Empty ? 0 : 42 };
     }
 
+    [GlobalCustomApi]   // a global API: a step declared from this request registers with no table
     public sealed class ScoreRequest : CustomApiRequest
     {
         public ScoreRequest() : base("zava_CalculateAccountScore") { }
@@ -118,6 +120,23 @@ namespace Vela.DocSamples
     }
     #endregion
 
+    #region global-step
+    public sealed partial class AfterScore(string unsecureConfig, string secureConfig)
+        : Vela.Plugin.EntityPluginBase<Account>(unsecureConfig, secureConfig)   // any table: the step takes none
+    {
+        protected override void RegisterPluginSteps()
+            => RegisterStep().On<ScoreRequest>()    // ScoreRequest is [GlobalCustomApi]
+                .PostOperation().Async()
+                .Handle(OnScored);
+
+        private void OnScored(OnScoredContext ctx)
+        {
+            var request = ctx.Request;                                   // ScoreRequest, typed
+            string table = ctx.PluginExecutionContext.PrimaryEntityName; // "none"
+        }
+    }
+    #endregion
+
     public static class CustomApiCallSample
     {
         public static int Call(IOrganizationService service, Guid accountId)
@@ -144,6 +163,22 @@ namespace Vela.DocSamples
             Xunit.Assert.True(response.Results.ContainsKey("Created"));
             Xunit.Assert.Null(response["Created"]);
             Xunit.Assert.True(Xunit.Assert.Single(pipeline.ExecutionLog).HandlerInvoked);
+        }
+
+        [Xunit.Fact]
+        public void A_step_on_a_global_api_registers_with_no_table_and_runs_on_table_none()
+        {
+            Vela.Steps.StepDefinition step = Xunit.Assert.Single(new AfterScore(string.Empty, string.Empty).GetStepDefinitions());
+            Xunit.Assert.Equal(string.Empty, step.EntityLogicalName);
+
+            Vela.Testing.PluginPipeline pipeline = Vela.Testing.PluginPipeline.Empty()
+                .Register<CalculateAccountScore>()
+                .Register<AfterScore>();
+
+            pipeline.Service.Execute(new ScoreRequest { AccountId = Guid.NewGuid() });
+
+            Vela.Testing.PipelineExecutionEntry entry = Xunit.Assert.Single(pipeline.ExecutionLog, e => e.PluginTypeName == typeof(AfterScore).FullName);
+            Xunit.Assert.True(entry.HandlerInvoked);
         }
 
         [Xunit.Fact]

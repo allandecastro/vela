@@ -31,7 +31,7 @@ public sealed class PlanApplyRoundTripTests : IDisposable
         Assert.Equal(ExitChangesPending, Run("plan", detailedExitCode: true));
         JsonElement firstPlan = Output();
         Assert.True(firstPlan.GetProperty("hasChanges").GetBoolean());
-        AssertSummary(firstPlan, added: 9, changed: 0, removed: 0);
+        AssertSummary(firstPlan, added: 11, changed: 0, removed: 0);
 
         Assert.Equal(ExitSuccess, Run("apply"));
         JsonElement applied = Output();
@@ -39,7 +39,7 @@ public sealed class PlanApplyRoundTripTests : IDisposable
         // The summary of an apply is the diff left AFTER it re-read the environment: nothing.
         AssertSummary(applied, added: 0, changed: 0, removed: 0);
         JsonElement executed = applied.GetProperty("executed");
-        Assert.Equal((9, 0, 0, true), (executed.GetProperty("created").GetInt32(), executed.GetProperty("updated").GetInt32(),
+        Assert.Equal((11, 0, 0, true), (executed.GetProperty("created").GetInt32(), executed.GetProperty("updated").GetInt32(),
             executed.GetProperty("deleted").GetInt32(), executed.GetProperty("packageRepublished").GetBoolean()));
 
         Assert.Equal(ExitSuccess, Run("plan", detailedExitCode: true));
@@ -59,7 +59,7 @@ public sealed class PlanApplyRoundTripTests : IDisposable
         Assert.Equal(ExitSuccess, Run("apply"));
 
         Entity[] steps = _org.Rows("sdkmessageprocessingstep").ToArray();
-        Assert.Equal(7, steps.Length);
+        Assert.Equal(8, steps.Length);
 
         Entity sync = Step(steps, "account-sync");
         Assert.Equal(40, sync.GetAttributeValue<OptionSetValue>("stage").Value);
@@ -84,6 +84,9 @@ public sealed class PlanApplyRoundTripTests : IDisposable
 
         // The global Associate step carries no message filter: apply clears the lookup explicitly (#445).
         Assert.Null(Step(steps, "contact-associate").GetAttributeValue<EntityReference>("sdkmessagefilterid"));
+        // So does the step on the global Custom API contract_Ping, created in the same run: its request is
+        // [GlobalCustomApi], so the step carries no table whatever the plugin's.
+        Assert.Null(Step(steps, "contact-ping").GetAttributeValue<EntityReference>("sdkmessagefilterid"));
 
         Entity[] images = _org.Rows("sdkmessageprocessingstepimage").ToArray();
         Assert.Equal(
@@ -91,7 +94,7 @@ public sealed class PlanApplyRoundTripTests : IDisposable
             images.Select(i => $"{i.GetAttributeValue<string>("entityalias")}:{i.GetAttributeValue<OptionSetValue>("imagetype").Value}:{i.GetAttributeValue<string>("attributes")}")
                 .OrderBy(x => x, StringComparer.Ordinal).ToArray());
 
-        Assert.Equal(new[] { "contract_ExportContacts", "contract_ScoreAccount" },
+        Assert.Equal(new[] { "contract_ExportContacts", "contract_Ping", "contract_ScoreAccount" },
             _org.Rows("customapi").Select(a => a.GetAttributeValue<string>("uniquename")).OrderBy(x => x, StringComparer.Ordinal).ToArray());
         Assert.Equal(12, _org.Rows("customapirequestparameter").Count);
         Assert.Equal(5, _org.Rows("customapiresponseproperty").Count);
@@ -144,8 +147,8 @@ public sealed class PlanApplyRoundTripTests : IDisposable
     public void Removing_every_plugin_from_the_package_unregisters_the_deployed_steps_and_custom_apis(bool isolatedScan)
     {
         Assert.Equal(ExitSuccess, Run("apply"));
-        Assert.Equal(7, _org.Rows("sdkmessageprocessingstep").Count);
-        Assert.Equal(2, _org.Rows("customapi").Count);
+        Assert.Equal(8, _org.Rows("sdkmessageprocessingstep").Count);
+        Assert.Equal(3, _org.Rows("customapi").Count);
 
         // The same package, rebuilt after every plugin class was deleted: the assembly keeps its name but holds no type.
         File.Delete(_nupkg);
@@ -154,7 +157,7 @@ public sealed class PlanApplyRoundTripTests : IDisposable
 
         Assert.Equal(ExitChangesPending, Run("plan", detailedExitCode: true, isolatedScan));
         JsonElement plan = Output();
-        AssertSummary(plan, added: 0, changed: 0, removed: 9);
+        AssertSummary(plan, added: 0, changed: 0, removed: 11);
 
         Assert.Equal(ExitSuccess, Run("apply", isolatedScan: isolatedScan));
         Assert.Empty(_org.Rows("sdkmessageprocessingstep"));
@@ -177,7 +180,8 @@ public sealed class PlanApplyRoundTripTests : IDisposable
             AccountPlugin,
             "ContractPluginFixture.ContactContractPlugin",
             "ContractPluginFixture.ScoreAccountApi",
-            "ContractPluginFixture.ExportContactsApi");
+            "ContractPluginFixture.ExportContactsApi",
+            "ContractPluginFixture.PingApi");
         return org;
     }
 

@@ -103,6 +103,9 @@ binding, in the harness as on Dataverse:
 | `BoundTo<T>()` | the bound table | the `Target` record's id |
 | `BoundToCollection<T>()` | the bound table | `Guid.Empty` |
 
+A plugin step on the API's message sees the same values, except that an asynchronous step's `PrimaryEntityId` is
+always `Guid.Empty`.
+
 ## React with a plugin step
 
 `vela models --custom-apis` writes an `On<Name>()` step extension next to the generated request and response. Its
@@ -140,10 +143,20 @@ image, `ctx.PreImage` / `ctx.PostImage` typed to the captured columns.
 - **Table.** A bound or collection-bound API's extension exists on `IStepTrigger<TEntity>` for its table only,
   when that table is generated in the same `vela models` run (`--entities account --custom-apis ...`). Otherwise,
   and for a global API, the extension is a generic `On<Name><TEntity>()`.
+- **Global API.** Dataverse gives a global API one message filter, with no table. The generated request of a global
+  API is marked `[GlobalCustomApi]`, so a step declared from it registers with no table, whatever the plugin's
+  `TEntity`, and runs when `PrimaryEntityName` is `"none"`. A step on a global API that carries a table (a
+  hand-written request without the attribute) has no filter to register on: `vela plan` and `vela apply` refuse it
+  (exit code 4). Add `[GlobalCustomApi]` to such a request. A step on a bound API registers on its bound table, and a
+  step on another table is refused the same way.
 - **Allowed step type.** An AsyncOnly API offers only `PostOperation().Async()`. An API that allows no custom
   processing step, or a private API, gets no extension.
 - **Without the extension.** `On<TRequest>()` stays available, unchecked; `OnAsyncOnly<TRequest>()` gives the
   async-only stages by hand.
+
+A step on a global API, declared from its `[GlobalCustomApi]` request in a plugin of any table:
+
+[!code-csharp[](../samples/Vela.DocSamples/CustomApiSample.cs#global-step)]
 
 The method name is the unique name without its publisher prefix, in PascalCase (`zava_AccountEstimateValue` becomes
 `OnAccountEstimateValue`). When two APIs would produce the same name (`zava_Calc` and `acme_Calc`), both keep their

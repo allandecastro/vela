@@ -317,12 +317,20 @@ internal static partial class DataverseRegistration
         IEnumerable<JsonElement> written = diff.Added.Where(IsStep).Select(item => item.Definition)
             .Concat(diff.Changed.Where(change => string.Equals(change.Kind, "step", StringComparison.OrdinalIgnoreCase)).Select(change => change.After));
 
+        Dictionary<string, (int BindingType, string? BoundEntity)> apiBindings = CustomApiBindings(diff);
         Dictionary<string, Guid?> messageIds = new(StringComparer.OrdinalIgnoreCase);
         StepMetadataCache filters = new StepMetadataCache();
         List<string> problems = [];
         foreach (JsonElement element in written)
         {
             StepApplyDefinition definition = ParseStepDefinition(element);
+            if (apiBindings.TryGetValue(definition.Message, out (int BindingType, string? BoundEntity) binding)
+                && CustomApiStepTableProblem(definition, binding.BindingType, binding.BoundEntity) is string tableProblem)
+            {
+                problems.Add(tableProblem);
+                continue;
+            }
+
             if (createdApiMessages.Contains(definition.Message))
             {
                 continue;
@@ -346,6 +354,50 @@ internal static partial class DataverseRegistration
         }
 
         return problems;
+    }
+
+    // The binding of each Custom API Vela deploys or manages, by unique name: what this run deploys, else what is live.
+    private static Dictionary<string, (int BindingType, string? BoundEntity)> CustomApiBindings(RegistrationDiff diff)
+    {
+        Dictionary<string, (int, string?)> bindings = new(StringComparer.OrdinalIgnoreCase);
+        foreach (RegistrationItem item in diff.LocalItems.Concat(diff.CurrentItems).Where(item => !IsStep(item) && !IsWebResource(item)))
+        {
+            if (TryGetString(item.Definition, "uniqueName") is string uniqueName && !bindings.ContainsKey(uniqueName))
+            {
+                CustomApiApplyDefinition api = ParseCustomApiDefinition(item.Definition);
+                bindings[uniqueName] = (api.BindingType, api.BoundEntityLogicalName);
+            }
+        }
+
+        return bindings;
+    }
+
+    /// <summary>
+    /// Why a step cannot be registered on a Custom API's message with its table, or null when it can. Dataverse creates
+    /// exactly one message filter per Custom API (verified live): with no table (primary entity "none") for a global API,
+    /// the bound table for an entity- or collection-bound one. A step with another table has no filter to register on
+    /// (one created with another message's filter is accepted but never fires). A step with no table registers with no
+    /// filter, and fires (verified live).
+    /// </summary>
+    internal static string? CustomApiStepTableProblem(StepApplyDefinition definition, int bindingType, string? boundEntity)
+    {
+        string table = definition.EntityLogicalName;
+        if (string.IsNullOrWhiteSpace(table))
+        {
+            return null;
+        }
+
+        if (bindingType == 0 || string.IsNullOrWhiteSpace(boundEntity))
+        {
+            return $"Cannot register step '{BuildStepName(definition)}': Custom API '{definition.Message}' is global, so its only message filter " +
+                $"has no table and a step on it cannot be scoped to '{table}'. Declare the step from a request marked " +
+                "[Vela.Messages.GlobalCustomApi] (vela models --custom-apis emits it); the step then registers with no table.";
+        }
+
+        return string.Equals(table, boundEntity, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : $"Cannot register step '{BuildStepName(definition)}': Custom API '{definition.Message}' is bound to '{boundEntity}', its only " +
+              $"message filter, so a step on it cannot be scoped to '{table}'.";
     }
 
     internal static Guid? ResolveMessageFilterId(IOrganizationService service, Guid messageId, string entityLogicalName)

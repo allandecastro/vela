@@ -82,6 +82,7 @@ public sealed class PluginContractScanTests : IDisposable
                 "ContractPluginFixture.AccountContractPlugin - PostOpSync: dv-e2d046d3a07c",
                 "ContractPluginFixture.AccountContractPlugin - PreOpSync: account-normalize",
                 "ContractPluginFixture.AccountContractPlugin - PreValSync: account-guard-delete",
+                "ContractPluginFixture.ContactContractPlugin - PostOpAsync: contact-ping",
                 "ContractPluginFixture.ContactContractPlugin - PostOpSync: contact-associate",
             },
             names);
@@ -109,7 +110,7 @@ public sealed class PluginContractScanTests : IDisposable
 
         Assert.Equal(new[] { "contract_ScoreAccount" }, state.TypedCustomApiUniqueNames);
         Assert.Equal(new[] { "contract_ScoreAccount" }, CustomApiReader.TypedAuthoredCustomApiUniqueNames(state).ToArray());
-        Assert.Equal(new[] { "contract_ExportContacts" }, CustomApiReader.LightweightAuthoredCustomApiUniqueNames(state).ToArray());
+        Assert.Equal(new[] { "contract_ExportContacts", "contract_Ping" }, CustomApiReader.LightweightAuthoredCustomApiUniqueNames(state).ToArray());
     }
 
     private RegistrationState Scan() =>

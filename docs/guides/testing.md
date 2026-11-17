@@ -122,8 +122,9 @@ The pipeline follows the platform's
   it rolls back. An asynchronous step's exception does not reach the caller: it is recorded on
   `pipeline.AsyncStepFailures`. An asynchronous step runs outside any transaction, so the writes it made before
   failing stay, and the asynchronous steps they queued run.
-- `ctx.IsInTransaction` is `false` for asynchronous steps, read steps and a depth-1 PreValidation step, and `true`
-  otherwise (a PreValidation step inside an `ExecuteTransaction` is in its transaction).
+- `ctx.IsInTransaction` is `false` for asynchronous steps, read steps, a depth-1 PreValidation step (a Custom API's
+  included) and the PreValidation step of an `Upsert`'s inner `Create` or `Update`, and `true` otherwise (a
+  PreValidation step inside an `ExecuteTransaction` is in its transaction).
 - The cascade depth is capped at 8 (`PluginBase.DefaultMaxDepth`), on top of the plugin's own depth guard.
   `WithMaxDepth(n)` changes it. The platform's default is also 8 (see
   [`IExecutionContext.Depth`](https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.iexecutioncontext.depth)).
@@ -212,9 +213,12 @@ The pipeline follows the platform's
   the API's own plugin (the MainOperation stage, under a step named `CustomApi '<uniquename>' implementation`), as
   far as its `AllowedCustomProcessingSteps(...)` allows: a step it does not allow fails the call. The request is
   checked before any step runs: a missing required input throws `0x80040203` ("Required field 'X' is missing for
-  RequestName='...'"), and an input of the wrong type or an undeclared input throws `0x80040315`. A bound API's
-  context has the bound table as `PrimaryEntityName` and the Target id as `PrimaryEntityId`; a global API's main
-  operation sees `"none"`.
+  RequestName='...'"), and an input of the wrong type or an undeclared input throws `0x80040315`. The API's main
+  operation and the steps on its message see the primary entity of its binding: `"none"` and an empty id for a
+  global API, the bound table and the Target id for an entity-bound API, the bound table and an empty id for a
+  collection-bound one. An asynchronous step's `PrimaryEntityId` is always empty. A step declared on a table the API
+  has no message filter for fails the call, as `vela plan` refuses it: a global API's steps take no table (declare
+  them from a request marked `[GlobalCustomApi]`), a bound API's steps its bound table.
 - **Bulk (`CreateMultiple`/`UpdateMultiple`).** A bulk request runs your single `Create`/`Update` steps **once per
   row**, and a step registered with `OnCreateMultiple()`/`OnUpdateMultiple()` runs **once with the whole batch**
   (read it through `ctx.BulkTargets`, with per-row images in `ctx.BulkPreEntityImagesCollection` and
@@ -250,7 +254,9 @@ The pipeline follows the platform's
   relationship is declared (see [Relationships](#relationships)).
 - **Upsert and alternate keys.** `Execute(new UpsertRequest { ... })` matches the target by id or by an alternate key
   declared with `WithAlternateKey(...)`: an existing record runs the Update steps, a new one the Create steps, and
-  the response reports `RecordCreated` and `Target`. An `Update`, `UpdateMultiple`, `Assign` or `Delete` addressed by
+  the response reports `RecordCreated` and `Target`. The steps registered on `Upsert` itself fire only for a table
+  declared elastic with `AsElastic(...)`: Dataverse has `Upsert` message filters for elastic tables only, so an
+  `Upsert` step never fires for a standard table. An `Update`, `UpdateMultiple`, `Assign` or `Delete` addressed by
   `KeyAttributes` resolves the key first, on `InMemoryOrganizationService` as through `PluginPipeline`, so its steps
   see the real record id. The `KeyAttributes` must be exactly one declared key: any
   other set of columns faults with `0x80060889`, and a declared key that matches nothing with `0x80060891`.

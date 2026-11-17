@@ -142,6 +142,61 @@ public sealed class ApplyPreWriteChecksTests : IDisposable
         Assert.Single(_org.Rows("sdkmessageprocessingstep"));
     }
 
+    [Theory]
+    [InlineData("plan")]
+    [InlineData("apply")]
+    public void A_step_with_a_table_on_a_global_custom_api_fails_the_preview_with_exit_4_before_any_write(string command)
+    {
+        // Dataverse gives a global API one message filter, with no table (verified live): a step scoped to a table has
+        // nothing to register on. The API is created in the same run, so its message cannot be checked in the org.
+        int exit = Run(command, [Api("zava_MyApi"), Step("myapi-post", message: "zava_MyApi", entity: "account", plugin: ApiPlugin)]);
+
+        Assert.Equal(ExitError, exit);
+        Assert.Empty(_org.Writes);
+        Assert.Contains("Custom API 'zava_MyApi' is global", _error.ToString());
+        Assert.Contains("cannot be scoped to 'account'", _error.ToString());
+        Assert.Contains("[Vela.Messages.GlobalCustomApi]", _error.ToString());
+    }
+
+    [Fact]
+    public void A_step_with_a_table_on_an_existing_global_custom_api_fails_the_preview()
+    {
+        AssertExit(ExitSuccess, Run("apply", [Api("zava_MyApi")]));
+        int writes = _org.Writes.Count;
+
+        int exit = Run("plan", [Api("zava_MyApi"), Step("myapi-post", message: "zava_MyApi", entity: "account", plugin: ApiPlugin)]);
+
+        Assert.Equal(ExitError, exit);
+        Assert.Equal(writes, _org.Writes.Count);
+        Assert.Contains("Custom API 'zava_MyApi' is global", _error.ToString());
+    }
+
+    [Fact]
+    public void A_step_on_a_global_custom_api_registers_with_no_message_filter()
+    {
+        AssertExit(ExitSuccess, Run("apply", [Api("zava_MyApi"), Step("myapi-post", message: "zava_MyApi", entity: null, plugin: ApiPlugin)]));
+
+        Entity step = Assert.Single(_org.Rows("sdkmessageprocessingstep"));
+        Assert.Null(step.GetAttributeValue<EntityReference>("sdkmessagefilterid"));
+    }
+
+    [Fact]
+    public void A_step_on_a_bound_custom_api_registers_on_the_bound_table_filter_and_another_table_is_blocked()
+    {
+        RegistrationItem api = Api("zava_MyApi", boundEntity: "account");
+
+        int blocked = Run("plan", [api, Step("myapi-post", message: "zava_MyApi", entity: "contact", plugin: ApiPlugin)]);
+        Assert.Equal(ExitError, blocked);
+        Assert.Empty(_org.Writes);
+        Assert.Contains("Custom API 'zava_MyApi' is bound to 'account'", _error.ToString());
+        Assert.Contains("cannot be scoped to 'contact'", _error.ToString());
+
+        AssertExit(ExitSuccess, Run("apply", [api, Step("myapi-post", message: "zava_MyApi", entity: "account", plugin: ApiPlugin)]));
+        Entity step = Assert.Single(_org.Rows("sdkmessageprocessingstep"));
+        Entity filter = Assert.Single(_org.Rows("sdkmessagefilter"), f => f.Id == step.GetAttributeValue<EntityReference>("sdkmessagefilterid").Id);
+        Assert.Equal("account", filter.GetAttributeValue<string>("primaryobjecttypecode"));
+    }
+
     [Fact]
     public void FindUnregistrableSteps_exempts_only_the_messages_of_custom_apis_the_run_creates()
     {
@@ -189,10 +244,11 @@ public sealed class ApplyPreWriteChecksTests : IDisposable
             filteringAttributes = entity == null ? Array.Empty<string>() : ["name"],
         }), Web));
 
-    private static RegistrationItem Api(string uniqueName, string plugin = ApiPlugin) =>
+    private static RegistrationItem Api(string uniqueName, string plugin = ApiPlugin, string? boundEntity = null) =>
         new("custom-api", plugin, DefinitionNormalizer.NormalizeCustomApiDefinition(JsonSerializer.SerializeToElement(new
         {
             pluginTypeName = plugin, uniqueName, isFunction = false,
+            isBound = boundEntity != null, boundEntityLogicalName = boundEntity, bindingType = boundEntity != null ? 1 : 0,
             inputParameters = new object[] { new { name = "Input" } },
         }), Web));
 
