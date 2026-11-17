@@ -48,7 +48,9 @@ uploads an HTML report.
   area.
 
 Every job runs on a GitHub-hosted Windows runner (`windows-latest`, like `ci.yml`), because the `net462` projects
-build only on Windows. Each area is its own job, so the areas run in parallel.
+build only on Windows. Each area is its own job, so the areas run in parallel. When the `WINDOWS_RUNNER` repository
+variable names another runner (e.g. a self-hosted one), the jobs run there instead and pull requests from forks are
+skipped.
 
 ## Policy: measure first, then ratchet
 
