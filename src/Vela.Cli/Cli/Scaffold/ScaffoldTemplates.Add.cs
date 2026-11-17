@@ -161,6 +161,7 @@ namespace {{ns}}
         string relationship =
             $"{I}// TODO: your relationship. WithManyToMany declares it (schema name, intersect table, both sides) to the in-memory store.\n" +
             $"{I}const string RelationshipName = \"todo_relationship\";\n" +
+            $"{I}// A relationship between two rows of the same table needs PrimaryEntityRole, as on Dataverse.\n" +
             $"{I}pipeline.WithManyToMany(RelationshipName, \"todo_intersect\", {logical}, \"todo_firstid\", {logical}, \"todo_secondid\");\n" +
             $"{I}Guid id = Guid.NewGuid();\n{I}Guid relatedId = Guid.NewGuid();\n" +
             $"{I}pipeline.Seed(new {entityType} {{ Id = id }}, new {entityType} {{ Id = relatedId }});\n" +
@@ -191,12 +192,12 @@ namespace {{ns}}
                 $"{I}Guid ownerId = Guid.NewGuid();\n{I}pipeline.Seed(new Entity(\"systemuser\", ownerId));\n" +
                 $"{I}pipeline.Service.Execute(new Microsoft.Crm.Sdk.Messages.AssignRequest\n{I}{{\n" +
                 $"{I}    Target = new EntityReference({logical}, id),\n{I}    Assignee = new EntityReference(\"systemuser\", ownerId),\n{I}}});\n",
-            "Associate" => relationship + $"{I}pipeline.Service.Associate({logical}, id, new Relationship(RelationshipName), related);\n",
+            "Associate" => relationship + $"{I}pipeline.Service.Associate({logical}, id, new Relationship(RelationshipName) {{ PrimaryEntityRole = EntityRole.Referencing }}, related);\n",
             // The existing link is seeded straight into the intersect table, so only Disassociate runs through the pipeline.
             "Disassociate" => relationship +
                 $"{I}pipeline.Seed(new Entity(\"todo_intersect\", Guid.NewGuid())\n{I}{{\n" +
                 $"{I}    [\"todo_firstid\"] = new EntityReference({logical}, id),\n{I}    [\"todo_secondid\"] = new EntityReference({logical}, relatedId),\n{I}}});\n" +
-                $"{I}pipeline.Service.Disassociate({logical}, id, new Relationship(RelationshipName), related);\n",
+                $"{I}pipeline.Service.Disassociate({logical}, id, new Relationship(RelationshipName) {{ PrimaryEntityRole = EntityRole.Referencing }}, related);\n",
             _ => null!,
         };
 

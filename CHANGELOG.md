@@ -289,6 +289,10 @@ All notable changes to Vela are documented here. The format is based on
 - `vela plan` and `vela apply` with `--solution` read the solution's publisher prefix once per connection. Each phase
   (package actions, retired assemblies, solution membership, the publish, the read-back) queried the solution and
   retrieved its publisher again, up to six times per apply.
+- The Associate and Disassociate tests that `vela add test` (and `vela init`) generate set
+  `PrimaryEntityRole = EntityRole.Referencing` on their placeholder relationship, which joins two rows of the same
+  table. `Vela.Testing` now faults such a call without a role (`0x80040203`), as Dataverse does, so the generated tests
+  failed.
 
 ### Docs
 
