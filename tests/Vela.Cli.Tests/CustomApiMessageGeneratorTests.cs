@@ -183,27 +183,6 @@ public class CustomApiMessageGeneratorTests
             code);
     }
 
-    [Theory]
-    [InlineData(false, null, true)]          // global
-    [InlineData(true, "account", false)]     // entity-bound
-    [InlineData(false, "account", false)]    // collection-bound
-    public void Only_a_global_api_request_is_marked_GlobalCustomApi(bool boundToEntity, string? boundEntity, bool marked)
-    {
-        // A global API's only message filter has no table (verified live): the marker makes a step declared from the
-        // request register with no table, whatever the plugin's TEntity.
-        string code = Generate(new CustomApiMessage(
-            "zava_Ping",
-            IsBoundToEntity: boundToEntity,
-            RequestParameters: Array.Empty<CustomApiParameter>(),
-            ResponseProperties: Array.Empty<CustomApiParameter>(),
-            AllowedStepType: 2,
-            BoundEntityLogicalName: boundEntity));
-
-        const string Marker = "    [Vela.Messages.GlobalCustomApi]\n    public partial class zava_PingRequest : Vela.Messages.CustomApiRequest";
-        Assert.Equal(marked, code.Replace("\r\n", "\n").Contains(Marker));
-        Assert.Equal(marked, code.Contains("GlobalCustomApi"));
-    }
-
     [Fact]
     public void None_EmitsNoExtension_ButExplanatoryComment()
     {

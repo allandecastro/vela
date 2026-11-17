@@ -143,18 +143,19 @@ image, `ctx.PreImage` / `ctx.PostImage` typed to the captured columns.
 - **Table.** A bound or collection-bound API's extension exists on `IStepTrigger<TEntity>` for its table only,
   when that table is generated in the same `vela models` run (`--entities account --custom-apis ...`). Otherwise,
   and for a global API, the extension is a generic `On<Name><TEntity>()`.
-- **Global API.** Dataverse gives a global API one message filter, with no table. The generated request of a global
-  API is marked `[GlobalCustomApi]`, so a step declared from it registers with no table, whatever the plugin's
-  `TEntity`, and runs when `PrimaryEntityName` is `"none"`. A step on a global API that carries a table (a
-  hand-written request without the attribute) has no filter to register on: `vela plan` and `vela apply` refuse it
-  (exit code 4). Add `[GlobalCustomApi]` to such a request. A step on a bound API registers on its bound table, and a
-  step on another table is refused the same way.
+- **Global API.** Dataverse gives a global API one message filter, with no table. Declare the step from a plugin of
+  any table: `vela plan` and `vela apply` read the API's binding (from its `RegisterCustomApi` in the package, or
+  from the live Custom API) and register the step with no table, with an info line saying the plugin's table is
+  ignored. The step runs with `PrimaryEntityName` `"none"`.
+- **Bound API.** A step on a bound or collection-bound API registers on the bound table. A step declared from a plugin
+  of another table has no filter to register on: `vela plan` and `vela apply` refuse it (exit code 4) before any
+  write.
 - **Allowed step type.** An AsyncOnly API offers only `PostOperation().Async()`. An API that allows no custom
   processing step, or a private API, gets no extension.
 - **Without the extension.** `On<TRequest>()` stays available, unchecked; `OnAsyncOnly<TRequest>()` gives the
   async-only stages by hand.
 
-A step on a global API, declared from its `[GlobalCustomApi]` request in a plugin of any table:
+A step on a global API, declared in a plugin of any table:
 
 [!code-csharp[](../samples/Vela.DocSamples/CustomApiSample.cs#global-step)]
 

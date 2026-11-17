@@ -10,12 +10,12 @@ using Xunit;
 
 namespace Vela.Testing.Tests
 {
-    [Vela.Constants.CustomMessage("vela_XsGlobal"), Vela.Messages.GlobalCustomApi]
+    [Vela.Constants.CustomMessage("vela_XsGlobal")]
     public sealed class XsGlobalMessage { }
 
-    // A global API's message declared without [GlobalCustomApi]: the step keeps the plugin's table.
-    [Vela.Constants.CustomMessage("vela_XsGlobal")]
-    public sealed class XsGlobalUnmarkedMessage { }
+    // A Custom API no Custom API plugin of the pipeline defines (deployed from another assembly).
+    [Vela.Constants.CustomMessage("vela_XsElsewhere")]
+    public sealed class XsElsewhereMessage { }
 
     [Vela.Constants.CustomMessage("vela_XsBound")]
     public sealed class XsBoundMessage { }
@@ -82,17 +82,28 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void A_step_with_a_table_on_a_global_api_fails_the_call()
+        public void A_step_on_a_global_api_keeps_its_plugin_table_and_fires_on_table_none()
         {
-            PluginPipeline pipeline = PluginPipeline.Empty().Register<XsGlobalApi>().Register<XsGlobalUnmarkedStep>();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<XsGlobalApi>().Register<XsGlobalSteps>().Register<XsGlobalTaskStep>();
 
-            InvalidOperationException error = Assert.Throws<InvalidOperationException>(
-                () => pipeline.Service.Execute(new OrganizationRequest("vela_XsGlobal")));
+            pipeline.Service.Execute(new OrganizationRequest("vela_XsGlobal"));
 
-            Assert.Contains("Custom API 'vela_XsGlobal' is global", error.Message);
-            Assert.Contains("'account'", error.Message);
-            Assert.Contains("GlobalCustomApi", error.Message);
-            Assert.Empty(XsTrace.Lines);
+            // vela plan registers both without a table, so both fire, whatever their plugin's table (account, task).
+            Assert.Equal("account", Assert.Single(new XsGlobalSteps(string.Empty, string.Empty).GetStepDefinitions(), s => s.Mode == Vela.Steps.ExecutionMode.Asynchronous).EntityLogicalName);
+            Assert.Equal("task", Assert.Single(new XsGlobalTaskStep(string.Empty, string.Empty).GetStepDefinitions()).EntityLogicalName);
+            Assert.Equal(2, XsTrace.Lines.FindAll(line => line.StartsWith("40/sync none", StringComparison.Ordinal)).Count);
+        }
+
+        [Fact]
+        public void A_step_on_a_custom_api_the_pipeline_does_not_define_runs_as_on_a_global_api()
+        {
+            // No Custom API plugin defines vela_XsElsewhere: with no Target, the message runs on table "none", like a
+            // global API, and the step declared from an account plugin fires.
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<XsElsewhereStep>();
+
+            pipeline.Service.Execute(new OrganizationRequest("vela_XsElsewhere"));
+
+            Assert.Equal(new[] { $"40/sync none {Guid.Empty} tx=True" }, XsTrace.Lines);
         }
 
         [Fact]
@@ -191,7 +202,7 @@ namespace Vela.Testing.Tests
                 .AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType.SyncAndAsync);
     }
 
-    // Declared from an account plugin: the [GlobalCustomApi] message registers the steps with no table.
+    // Declared from an account plugin: the steps keep the account table, and run on "none".
     public sealed class XsGlobalSteps : EntityPluginBase<FakeAccount>
     {
         public XsGlobalSteps(string u, string s) : base(u, s) { }
@@ -205,12 +216,20 @@ namespace Vela.Testing.Tests
         }
     }
 
-    public sealed class XsGlobalUnmarkedStep : EntityPluginBase<FakeAccount>
+    public sealed class XsGlobalTaskStep : EntityPluginBase<FakeTask>
     {
-        public XsGlobalUnmarkedStep(string u, string s) : base(u, s) { }
+        public XsGlobalTaskStep(string u, string s) : base(u, s) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnMessage<XsGlobalUnmarkedMessage>().PostOperation().Sync().Handle(ctx => XsTrace.Record(ctx));
+            => RegisterStep().OnMessage<XsGlobalMessage>().PostOperation().Sync().Handle(ctx => XsTrace.Record(ctx));
+    }
+
+    public sealed class XsElsewhereStep : EntityPluginBase<FakeAccount>
+    {
+        public XsElsewhereStep(string u, string s) : base(u, s) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMessage<XsElsewhereMessage>().PostOperation().Sync().Handle(ctx => XsTrace.Record(ctx));
     }
 
     public sealed class XsBoundSteps : EntityPluginBase<FakeAccount>

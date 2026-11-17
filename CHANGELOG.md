@@ -103,16 +103,15 @@ All notable changes to Vela are documented here. The format is based on
 - A step on a global Custom API now runs. Dataverse gives a global API one message filter, with no table, and its
   steps see `PrimaryEntityName` `"none"` (verified live); the runtime matched the step's table against it and failed
   with "no registered step matching ... on entity 'none'". A step now matches any execution whose
-  `PrimaryEntityName` is `"none"`. A step declared from a request marked with the new `[GlobalCustomApi]` attribute
-  (which `vela models --custom-apis` emits on a global API's request) registers with no table, whatever the plugin's
-  `TEntity`, so its `StepDefinition.EntityLogicalName` and derived step key change. Regenerate the models, or add the
-  attribute to a hand-written request of a global API.
+  `PrimaryEntityName` is `"none"`. The step definition still carries the plugin's table; `vela plan` registers it
+  without one.
 - `Vela.Testing`: `PluginPipeline` gives a Custom API's extra steps the primary entity Dataverse gives them (verified
   live): `"none"` and an empty id on a global API (they got the step's own table), the bound table and an empty id on
   a collection-bound API, and an empty `PrimaryEntityId` on every asynchronous step (an entity-bound API's async step
-  got the Target id). A step on a Custom API's message declared on a table the API has no message filter for (any
-  table on a global API, another table than the bound one) fails the call with an `InvalidOperationException`, as
-  `vela plan` refuses it; it ran before. Mark the request `[GlobalCustomApi]`.
+  got the Target id). A step on a global API runs whatever its plugin's table. A step on a bound API declared on
+  another table than the bound one fails the call with an `InvalidOperationException`, as `vela plan` refuses it; it
+  ran before. A message the pipeline knows no Custom API for, with no `Target`, now runs on `"none"` (its steps got
+  their own table), as a global API's does.
 - `Vela.Testing`: a step registered on `Upsert` fires only for a table declared elastic (`AsElastic`). Dataverse has
   `Upsert` message filters for elastic tables only, and an `Upsert` step never fires for a standard table (verified
   live on `account`). Declare the table elastic, or move the logic to the inner `Create`/`Update` steps, which still
@@ -223,13 +222,14 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (CLI)
 
-- `vela plan` and `vela apply` refuse, in the preview (exit `4`, nothing written), a step on a Custom API's message
-  declared on a table the API has no message filter for: any table on a global API, another table than the bound one
-  on a bound API. Dataverse creates exactly one message filter per Custom API (verified live); such a step failed
-  mid-apply when the API was created in the same run, or with a message-filter error naming no cause otherwise. A
-  step on a global API registers with no message filter, and fires (verified live).
-- `vela models --custom-apis` marks the request of a global Custom API `[Vela.Messages.GlobalCustomApi]`, so a step
-  declared from it, through the generated `On<Name><TEntity>()`, registers with no table and runs.
+- A step on a global Custom API registers with no message filter, whatever its plugin's table, and fires (verified
+  live). Dataverse creates exactly one message filter per Custom API, with no table for a global one (verified live),
+  so such a step failed with a message-filter error. The binding comes from the API's `RegisterCustomApi` in the
+  package, else from the live Custom API; `vela plan` prints an info line per step (`... is a global Custom API,
+  registered without a table (account ignored)`), and the deployed step does not show as changed on the next plan.
+- `vela plan` and `vela apply` refuse, in the preview (exit `4`, nothing written), a step on a bound Custom API
+  declared on another table than the bound one. It failed mid-apply when the API was created in the same run, or
+  with a message-filter error naming no cause otherwise.
 
 - An empty `VELA_SECURE_CONFIG_<NAME>` environment variable, or an empty `--secure-config NAME=@file`, no longer
   clears the live step secure configuration. In GitHub Actions an undefined secret expands to an empty string, so under
@@ -324,8 +324,8 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Docs
 
-- Custom APIs: steps on a global API (the `[GlobalCustomApi]` request, any plugin table, a sample), the primary
-  entity an extra step sees by binding and mode, and the table rules `vela plan` enforces. Testing and limitations:
+- Custom APIs: steps on a global API (any plugin table, registered without one, a sample), the primary entity an
+  extra step sees by binding and mode, and the table rule `vela plan` enforces on a bound API. Testing and limitations:
   Custom API extra steps, `Upsert` steps on elastic tables only, `IsInTransaction` of an `Upsert`'s inner
   PreValidation.
 

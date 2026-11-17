@@ -138,7 +138,7 @@
       "pluginType": "ContractPluginFixture.ContactContractPlugin",
       "stepKey": "contact-ping",
       "message": "contract_Ping",
-      "entity": "",
+      "entity": "contact",
       "description": "",
       "stage": 40,
       "mode": 1,

@@ -11,17 +11,9 @@ using Xunit;
 
 namespace Vela.Tests
 {
-    // Stand-ins for the requests `vela models --custom-apis` generates: a global API's request is marked
-    // [GlobalCustomApi]; a hand-written one may not be.
-    [GlobalCustomApi]
     public sealed class GlobalExportRequest : CustomApiRequest
     {
         public GlobalExportRequest() : base("zava_GlobalExport") { }
-    }
-
-    public sealed class UnmarkedExportRequest : CustomApiRequest
-    {
-        public UnmarkedExportRequest() : base("zava_UnmarkedExport") { }
     }
 
     public sealed class BoundScoreRequest : CustomApiRequest
@@ -30,20 +22,21 @@ namespace Vela.Tests
     }
 
     // Verified live (2026-11-16): a global Custom API has one message filter, with no table, and the steps on its
-    // message see PrimaryEntityName "none" and an empty PrimaryEntityId at every stage and mode.
+    // message see PrimaryEntityName "none" and an empty PrimaryEntityId at every stage and mode. The step definition keeps
+    // the plugin's table (vela plan registers it without one); the runtime matches it on "none".
     public sealed class GlobalCustomApiStepTests
     {
         private sealed class GlobalSteps : EntityPluginBase<TestAccount>
         {
-            public int Marked;
-            public int Unmarked;
+            public int Sync;
+            public int Async;
 
             public GlobalSteps() : base(string.Empty, string.Empty) { }
 
             protected override void RegisterPluginSteps()
             {
-                RegisterStep().On<GlobalExportRequest>().PostOperation().Sync().Handle(ctx => Marked++);
-                RegisterStep().On<UnmarkedExportRequest>().PostOperation().Async().Handle(ctx => Unmarked++);
+                RegisterStep().On<GlobalExportRequest>().PostOperation().Sync().Handle(ctx => Sync++);
+                RegisterStep().On<GlobalExportRequest>().PostOperation().Async().Handle(ctx => Async++);
                 RegisterStep().On<BoundScoreRequest>().PostOperation().Sync().Handle(ctx => { });
             }
         }
@@ -56,14 +49,11 @@ namespace Vela.Tests
                 .BuildServiceProvider();
 
         [Fact]
-        public void A_step_on_a_request_marked_GlobalCustomApi_registers_with_no_table_whatever_the_plugin_table()
+        public void A_step_on_a_custom_api_keeps_the_plugin_table_in_its_definition()
         {
             StepDefinition[] steps = new GlobalSteps().GetStepDefinitions();
 
-            Assert.Equal(string.Empty, Array.Find(steps, s => s.Message == "zava_GlobalExport")!.EntityLogicalName);
-            // Not marked: the plugin's table stays (vela plan blocks it on a global API, the harness fails the call).
-            Assert.Equal("account", Array.Find(steps, s => s.Message == "zava_UnmarkedExport")!.EntityLogicalName);
-            Assert.Equal("account", Array.Find(steps, s => s.Message == "zava_BoundScore")!.EntityLogicalName);
+            Assert.All(steps, step => Assert.Equal("account", step.EntityLogicalName));
         }
 
         [Fact]
@@ -71,12 +61,12 @@ namespace Vela.Tests
         {
             GlobalSteps plugin = new GlobalSteps();
 
+            // Before the fix: "no registered step matching message 'zava_GlobalExport' ... on entity 'none'".
             plugin.Execute(Context("zava_GlobalExport", ExecutionMode.Synchronous, "none"));
-            // Before the fix: "no registered step matching message 'zava_UnmarkedExport' ... on entity 'none'".
-            plugin.Execute(Context("zava_UnmarkedExport", ExecutionMode.Asynchronous, "none"));
+            plugin.Execute(Context("zava_GlobalExport", ExecutionMode.Asynchronous, "none"));
 
-            Assert.Equal(1, plugin.Marked);
-            Assert.Equal(1, plugin.Unmarked);
+            Assert.Equal(1, plugin.Sync);
+            Assert.Equal(1, plugin.Async);
         }
 
         [Fact]

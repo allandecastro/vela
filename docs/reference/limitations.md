@@ -196,9 +196,9 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   run in one sequence sorted by execution order, then registration order. Give the steps explicit execution orders
   when a test depends on which runs first.
 - **Steps on a global Custom API.** A global API's main operation and the steps on its message see
-  `PrimaryEntityName` = `"none"`. A step declared from a request marked `[GlobalCustomApi]` (the generated one is)
-  carries no table, whatever the plugin's `TEntity`. A step on a global API that carries a table fails the call, as
-  `vela plan` refuses it.
+  `PrimaryEntityName` = `"none"`. A step on its message keeps its plugin's table in its `StepDefinition`; `vela plan`
+  registers it without one, and the harness runs it whatever that table is. When the pipeline registers no Custom
+  API for a message, it cannot know the binding: a request with no `Target` runs on `"none"`, as on a global API.
 - **`Upsert` steps fire only on elastic tables.** A step registered on `Upsert` fires only for a table declared with
   `AsElastic(...)`. Dataverse has no `Upsert` message filter for a standard table, and an `Upsert` step never fires
   for one. On an elastic table the harness still runs the inner `Create` or `Update` and its steps; whether Dataverse

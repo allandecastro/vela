@@ -13,8 +13,7 @@ using Xunit;
 
 namespace Vela.Testing.Tests
 {
-    // A global Custom API: a step on it registers with no table ([GlobalCustomApi]), as it must on Dataverse.
-    [Vela.Constants.CustomMessage("vela_RiApi"), Vela.Messages.GlobalCustomApi]
+    [Vela.Constants.CustomMessage("vela_RiApi")]
     public sealed class RiApiMessage { }
 
     // Review follow-ups on #432: steps work on a deep copy of the request, their changes (removals included) flow to

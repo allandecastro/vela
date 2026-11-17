@@ -29,7 +29,6 @@ namespace Vela.DocSamples
             => new ScoreResponse { Score = request.AccountId == Guid.Empty ? 0 : 42 };
     }
 
-    [GlobalCustomApi]   // a global API: a step declared from this request registers with no table
     public sealed class ScoreRequest : CustomApiRequest
     {
         public ScoreRequest() : base("zava_CalculateAccountScore") { }
@@ -122,10 +121,10 @@ namespace Vela.DocSamples
 
     #region global-step
     public sealed partial class AfterScore(string unsecureConfig, string secureConfig)
-        : Vela.Plugin.EntityPluginBase<Account>(unsecureConfig, secureConfig)   // any table: the step takes none
+        : Vela.Plugin.EntityPluginBase<Account>(unsecureConfig, secureConfig)   // any table: vela plan registers none
     {
         protected override void RegisterPluginSteps()
-            => RegisterStep().On<ScoreRequest>()    // ScoreRequest is [GlobalCustomApi]
+            => RegisterStep().On<ScoreRequest>()    // zava_CalculateAccountScore is a global API
                 .PostOperation().Async()
                 .Handle(OnScored);
 
@@ -166,10 +165,10 @@ namespace Vela.DocSamples
         }
 
         [Xunit.Fact]
-        public void A_step_on_a_global_api_registers_with_no_table_and_runs_on_table_none()
+        public void A_step_on_a_global_api_keeps_its_plugin_table_and_runs_on_table_none()
         {
             Vela.Steps.StepDefinition step = Xunit.Assert.Single(new AfterScore(string.Empty, string.Empty).GetStepDefinitions());
-            Xunit.Assert.Equal(string.Empty, step.EntityLogicalName);
+            Xunit.Assert.Equal("account", step.EntityLogicalName);   // vela plan registers it without a table
 
             Vela.Testing.PluginPipeline pipeline = Vela.Testing.PluginPipeline.Empty()
                 .Register<CalculateAccountScore>()

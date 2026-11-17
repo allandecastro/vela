@@ -76,8 +76,8 @@ namespace ContractPluginFixture
                 .WithExecutionOrder(2)
                 .Handle(_ => { });
 
-            // A global Custom API (its request marked [GlobalCustomApi]): registered with no primary entity, whatever
-            // TEntity is, as the API's only message filter has no table.
+            // A step on a global Custom API: its definition keeps TEntity's table (contact); vela plan registers it
+            // with no primary entity, as the API's only message filter has no table.
             RegisterStep().On<PingRequest>().PostOperation().Async()
                 .WithStepKey("contact-ping")
                 .Handle(_ => { });

@@ -10,13 +10,13 @@ using Xunit;
 
 namespace Vela.Testing.Tests
 {
-    [Vela.Constants.CustomMessage("vela_StagedGreet"), Vela.Messages.GlobalCustomApi]
+    [Vela.Constants.CustomMessage("vela_StagedGreet")]
     public sealed class StagedGreetMessage { }
 
-    [Vela.Constants.CustomMessage("vela_ClosedGreet"), Vela.Messages.GlobalCustomApi]
+    [Vela.Constants.CustomMessage("vela_ClosedGreet")]
     public sealed class ClosedGreetMessage { }
 
-    [Vela.Constants.CustomMessage("vela_AsyncOnly"), Vela.Messages.GlobalCustomApi]
+    [Vela.Constants.CustomMessage("vela_AsyncOnly")]
     public sealed class AsyncOnlyMessage { }
 
     // A-60: a Custom API runs the whole pipeline in the harness. Steps registered on its message fire around the

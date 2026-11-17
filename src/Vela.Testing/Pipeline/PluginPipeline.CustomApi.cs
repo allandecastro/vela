@@ -99,9 +99,10 @@ namespace Vela.Testing
 
         // A step registered on the Custom API's message fires only if the API allows it: None allows no step, AsyncOnly
         // allows asynchronous steps only. The platform refuses to register such a step; the harness fails the call
-        // naming it, so a test cannot rely on a step that could never be deployed. The same goes for a step's table: the
-        // API has one message filter (verified live), with no table for a global API and the bound table otherwise, so
-        // a step on another table cannot be registered (vela plan blocks it).
+        // naming it, so a test cannot rely on a step that could never be deployed. The same goes for a step's table on a
+        // bound API: the API has one message filter (verified live), on its bound table, so a step on another table
+        // cannot be registered (vela plan blocks it). A global API's steps register without a table and run whatever
+        // their plugin's table.
         private void EnsureCustomProcessingStepsAllowed(CustomApiDefinition definition)
         {
             foreach (PipelineRegistration registration in _registrations)
@@ -130,26 +131,20 @@ namespace Vela.Testing
             }
         }
 
-        // Why a step declared on this table cannot be registered on the Custom API's message, or null when it can.
+        // Why a step declared on this table cannot be registered on the Custom API's message, or null when it can. A
+        // global API's only filter has no table: vela plan registers its steps without their plugin's table, and they
+        // run on "none" whatever that table is, as here. A bound API's only filter is on its bound table.
         private static string? CustomApiStepTableProblem(CustomApiDefinition definition, string? stepTable)
         {
-            if (string.IsNullOrEmpty(stepTable))
+            bool global = definition.BindingType == CustomApiBindingType.Global || string.IsNullOrEmpty(definition.BoundEntityLogicalName);
+            if (string.IsNullOrEmpty(stepTable) || global
+                || string.Equals(stepTable, definition.BoundEntityLogicalName, StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
 
-            bool global = definition.BindingType == CustomApiBindingType.Global || string.IsNullOrEmpty(definition.BoundEntityLogicalName);
-            if (global)
-            {
-                return $"Custom API '{definition.UniqueName}' is global: its only message filter has no table, so a step on it cannot be " +
-                    $"registered on '{stepTable}'. Mark the request class [Vela.Messages.GlobalCustomApi] (vela models --custom-apis does) " +
-                    "so the step registers with no table.";
-            }
-
-            return string.Equals(stepTable, definition.BoundEntityLogicalName, StringComparison.OrdinalIgnoreCase)
-                ? null
-                : $"Custom API '{definition.UniqueName}' is bound to '{definition.BoundEntityLogicalName}': its only message filter is on that " +
-                  $"table, so a step on it cannot be registered on '{stepTable}'.";
+            return $"Custom API '{definition.UniqueName}' is bound to '{definition.BoundEntityLogicalName}': its only message filter is on that " +
+                $"table, so a step on it cannot be registered on '{stepTable}' (vela plan refuses it).";
         }
     }
 }

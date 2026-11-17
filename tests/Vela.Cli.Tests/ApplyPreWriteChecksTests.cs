@@ -142,42 +142,64 @@ public sealed class ApplyPreWriteChecksTests : IDisposable
         Assert.Single(_org.Rows("sdkmessageprocessingstep"));
     }
 
-    [Theory]
-    [InlineData("plan")]
-    [InlineData("apply")]
-    public void A_step_with_a_table_on_a_global_custom_api_fails_the_preview_with_exit_4_before_any_write(string command)
+    [Fact]
+    public void A_step_with_a_table_on_a_global_custom_api_registers_without_it_with_an_info_line_and_does_not_drift()
     {
-        // Dataverse gives a global API one message filter, with no table (verified live): a step scoped to a table has
-        // nothing to register on. The API is created in the same run, so its message cannot be checked in the org.
-        int exit = Run(command, [Api("zava_MyApi"), Step("myapi-post", message: "zava_MyApi", entity: "account", plugin: ApiPlugin)]);
+        // Dataverse gives a global API one message filter, with no table (verified live): the step's table (the
+        // plugin's TEntity) is dropped. The API is created in the same run, so its binding comes from the local definition.
+        RegistrationItem[] local = [Api("zava_MyApi"), Step("myapi-post", message: "zava_MyApi", entity: "account", plugin: ApiPlugin)];
 
-        Assert.Equal(ExitError, exit);
+        AssertExit(ExitChangesPending, Run("plan", local, detailedExitCode: true));
+        const string Info = "step Zava.Plugins.MyApiPlugin on zava_MyApi: zava_MyApi is a global Custom API, registered without a table (account ignored)";
+        Assert.Contains(Info, Output().GetProperty("info").EnumerateArray().Select(line => line.GetString()));
         Assert.Empty(_org.Writes);
-        Assert.Contains("Custom API 'zava_MyApi' is global", _error.ToString());
-        Assert.Contains("cannot be scoped to 'account'", _error.ToString());
-        Assert.Contains("[Vela.Messages.GlobalCustomApi]", _error.ToString());
-    }
 
-    [Fact]
-    public void A_step_with_a_table_on_an_existing_global_custom_api_fails_the_preview()
-    {
-        AssertExit(ExitSuccess, Run("apply", [Api("zava_MyApi")]));
-        int writes = _org.Writes.Count;
-
-        int exit = Run("plan", [Api("zava_MyApi"), Step("myapi-post", message: "zava_MyApi", entity: "account", plugin: ApiPlugin)]);
-
-        Assert.Equal(ExitError, exit);
-        Assert.Equal(writes, _org.Writes.Count);
-        Assert.Contains("Custom API 'zava_MyApi' is global", _error.ToString());
-    }
-
-    [Fact]
-    public void A_step_on_a_global_custom_api_registers_with_no_message_filter()
-    {
-        AssertExit(ExitSuccess, Run("apply", [Api("zava_MyApi"), Step("myapi-post", message: "zava_MyApi", entity: null, plugin: ApiPlugin)]));
-
+        AssertExit(ExitSuccess, Run("apply", local));
         Entity step = Assert.Single(_org.Rows("sdkmessageprocessingstep"));
         Assert.Null(step.GetAttributeValue<EntityReference>("sdkmessagefilterid"));
+
+        // The live step (no filter) matches the local step (account): no perpetual update.
+        AssertExit(ExitSuccess, Run("plan", local, detailedExitCode: true));
+        JsonElement replan = Output();
+        Assert.False(replan.GetProperty("hasChanges").GetBoolean());
+        Assert.Contains(Info, replan.GetProperty("info").EnumerateArray().Select(line => line.GetString()));
+    }
+
+    [Fact]
+    public void A_step_with_a_table_on_a_live_global_custom_api_defined_elsewhere_registers_without_it()
+    {
+        // The API is deployed by another package (no plugin type of this one): the binding comes from its live row.
+        _org.Create(new Entity("customapi") { ["uniquename"] = "zava_MyApi", ["bindingtype"] = new OptionSetValue(0) });
+        RegistrationItem[] local = [Step("myapi-post", message: "zava_MyApi", entity: "account", plugin: AccountPlugin)];
+
+        AssertExit(ExitSuccess, Run("apply", local));
+        Entity step = Assert.Single(_org.Rows("sdkmessageprocessingstep"));
+        Assert.Null(step.GetAttributeValue<EntityReference>("sdkmessagefilterid"));
+
+        AssertExit(ExitSuccess, Run("plan", local, detailedExitCode: true));
+        Assert.False(Output().GetProperty("hasChanges").GetBoolean());
+    }
+
+    [Fact]
+    public void UnscopeGlobalCustomApiSteps_keeps_a_step_on_a_bound_api_or_a_platform_message_and_renames_a_keyless_step()
+    {
+        RegistrationItem keyless = Step(string.Empty, message: "zava_Global", entity: "account");
+        RegistrationState state = State([Step("bound", message: "zava_Bound", entity: "account"), Step("update"), keyless]);
+        Dictionary<string, (int, string?)> bindings = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["zava_Bound"] = (1, "account"),
+            ["ZAVA_GLOBAL"] = (0, null),
+        };
+
+        RegistrationState unscoped = DataverseRegistration.UnscopeGlobalCustomApiSteps(state, bindings, Web);
+
+        Assert.Equal(new[] { "account", "account", string.Empty },
+            unscoped.Items.Select(item => item.Definition.GetProperty("entityLogicalName").GetString()).ToArray());
+        JsonElement renamed = unscoped.Items[2].Definition;
+        Assert.DoesNotContain("account", renamed.GetProperty("name").GetString());
+        Assert.Equal(renamed.GetProperty("name").GetString(), renamed.GetProperty("description").GetString());
+        Assert.Single(unscoped.Info!);
+        Assert.Same(state, DataverseRegistration.UnscopeGlobalCustomApiSteps(state, new Dictionary<string, (int, string?)>(), Web));
     }
 
     [Fact]

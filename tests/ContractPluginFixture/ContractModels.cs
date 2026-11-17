@@ -38,9 +38,8 @@ namespace ContractPluginFixture
         public string? LastName { get => GetAttributeValue<string>("lastname"); set => SetAttributeValue("lastname", value); }
     }
 
-    // A global Custom API's request, marked as `vela models --custom-apis` marks it: a step declared from it
-    // registers with no table, whatever the plugin's table.
-    [GlobalCustomApi]
+    // A global Custom API's request: a step declared from it keeps its plugin's table in its StepDefinition; vela plan
+    // registers it without one, as the API's only message filter has no table.
     public sealed class PingRequest : CustomApiRequest
     {
         public PingRequest() : base("contract_Ping") { }

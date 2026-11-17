@@ -216,9 +216,11 @@ The pipeline follows the platform's
   RequestName='...'"), and an input of the wrong type or an undeclared input throws `0x80040315`. The API's main
   operation and the steps on its message see the primary entity of its binding: `"none"` and an empty id for a
   global API, the bound table and the Target id for an entity-bound API, the bound table and an empty id for a
-  collection-bound one. An asynchronous step's `PrimaryEntityId` is always empty. A step declared on a table the API
-  has no message filter for fails the call, as `vela plan` refuses it: a global API's steps take no table (declare
-  them from a request marked `[GlobalCustomApi]`), a bound API's steps its bound table.
+  collection-bound one. An asynchronous step's `PrimaryEntityId` is always empty. A global API's steps run whatever
+  their plugin's table, as `vela plan` registers them without one. A step on a bound API declared on another table
+  than the bound one fails the call, as `vela plan` refuses it. A message no registered Custom API defines (an API
+  deployed from another assembly) runs on the table of its `Target`, or on `"none"` with no `Target`, as a global
+  API's does.
 - **Bulk (`CreateMultiple`/`UpdateMultiple`).** A bulk request runs your single `Create`/`Update` steps **once per
   row**, and a step registered with `OnCreateMultiple()`/`OnUpdateMultiple()` runs **once with the whole batch**
   (read it through `ctx.BulkTargets`, with per-row images in `ctx.BulkPreEntityImagesCollection` and

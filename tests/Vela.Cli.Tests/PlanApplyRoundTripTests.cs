@@ -84,8 +84,8 @@ public sealed class PlanApplyRoundTripTests : IDisposable
 
         // The global Associate step carries no message filter: apply clears the lookup explicitly (#445).
         Assert.Null(Step(steps, "contact-associate").GetAttributeValue<EntityReference>("sdkmessagefilterid"));
-        // So does the step on the global Custom API contract_Ping, created in the same run: its request is
-        // [GlobalCustomApi], so the step carries no table whatever the plugin's.
+        // So does the step on the global Custom API contract_Ping, created in the same run: the API is
+        // global, so vela plan registers it without the plugin's table.
         Assert.Null(Step(steps, "contact-ping").GetAttributeValue<EntityReference>("sdkmessagefilterid"));
 
         Entity[] images = _org.Rows("sdkmessageprocessingstepimage").ToArray();
