@@ -75,12 +75,15 @@ namespace Vela.CodeFixes
                 return null;
             }
 
-            // A partial method's two declarations must agree; leave it to the developer.
-            ImmutableArray<SyntaxReference> declarations = method.DeclaringSyntaxReferences;
-            return declarations.Length == 1 && declarations[0].GetSyntax(cancellationToken) is MethodDeclarationSyntax declaration
-                && declaration.Modifiers.Any(SyntaxKind.StaticKeyword)
-                ? declaration
-                : null;
+            // A partial method's two declarations must agree; leave it to the developer. The bound symbol is the
+            // defining part, whose DeclaringSyntaxReferences lists only its own declaration, so ask for the other part.
+            if (method.PartialImplementationPart != null || method.PartialDefinitionPart != null)
+            {
+                return null;
+            }
+
+            // A static local function is a method symbol too, but no member declaration of the class.
+            return method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax(cancellationToken) as MethodDeclarationSyntax;
         }
 
         private static bool IsSelfOrBase(INamedTypeSymbol candidate, INamedTypeSymbol type)

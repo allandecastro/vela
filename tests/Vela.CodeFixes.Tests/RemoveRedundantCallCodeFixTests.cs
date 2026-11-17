@@ -142,4 +142,26 @@ namespace Demo
             .WithLocation(0).WithArguments("FilterOn");
         await VerifyDup.VerifyCodeFixAsync(before, expected, after);
     }
+
+    private static DiagnosticResult DuplicateFilterOn(int location) =>
+        new DiagnosticResult(Vela.Analyzers.DuplicateModifierAnalyzer.DiagnosticId, DiagnosticSeverity.Error)
+            .WithLocation(location).WithArguments("FilterOn");
+
+    [Fact]
+    public async Task Merges_into_the_first_FilterOn_through_parentheses_and_a_null_forgiving_operator_VELA003()
+    {
+        string before = DupHarness.Replace("BODY", "(RegisterStep().FilterOn(\"a\"))!.{|#0:FilterOn|}(\"b\").Handle();");
+        string after = DupHarness.Replace("BODY", "(RegisterStep().FilterOn(\"a\", \"b\"))!.Handle();");
+        await VerifyDup.VerifyCodeFixAsync(before, DuplicateFilterOn(0), after);
+    }
+
+    [Fact]
+    public async Task Compares_selectors_that_read_no_column_of_their_parameter_by_text_VELA003()
+    {
+        // A block body, the parameter itself and another variable's member are no column of the parameter: each is
+        // kept unless the very same text is already listed.
+        string before = DupHarness.Replace("BODY", "var other = new Account(); RegisterStep().FilterOn(a => a, a => other.Name).{|#0:FilterOn|}(a => a, a => other.Name, a => { return a.Name; }, b => other.Name).Handle();");
+        string after = DupHarness.Replace("BODY", "var other = new Account(); RegisterStep().FilterOn(a => a, a => other.Name, a => { return a.Name; }, b => other.Name).Handle();");
+        await VerifyDup.VerifyCodeFixAsync(before, DuplicateFilterOn(0), after);
+    }
 }
