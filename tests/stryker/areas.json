@@ -1,6 +1,6 @@
 [
   { "area": "diff-engine", "tests": "tests/Vela.Cli.Tests", "timeout": 60, "sources": "^src/Vela\\.Cli/Cli/(DiffEngine|DefinitionNormalizer)\\.cs$" },
-  { "area": "cli-apply", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/DataverseRegistration\\.(Apply(\\.[A-Za-z]+)?|PluginTypeRemoval)\\.cs$" },
+  { "area": "cli-apply", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/DataverseRegistration\\.(Apply(\\.[A-Za-z]+)?|PluginTypeRemoval|PackageAssemblySet)\\.cs$" },
   { "area": "cli-customapi", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/DataverseRegistration\\.CustomApi\\.cs$" },
   { "area": "cli-reader", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/DataverseRegistration\\.cs$" },
   { "area": "cli-steps", "tests": "tests/Vela.Cli.Tests", "timeout": 30, "sources": "^src/Vela\\.Cli/Cli/DataverseRegistration\\.Steps\\.cs$" },
