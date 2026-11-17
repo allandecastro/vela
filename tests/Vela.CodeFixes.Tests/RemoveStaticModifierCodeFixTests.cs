@@ -183,4 +183,203 @@ namespace Demo
 }";
         await Verify.VerifyCodeFixAsync(source, Static("OnCreated"), source);
     }
+
+    [Fact]
+    public async Task Removes_static_from_a_handler_passed_as_a_named_argument()
+    {
+        string before = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public class Use
+    {
+        private IFakeStep RegisterStep() => null!;
+        public void M() => RegisterStep().Handle(handler: {|#0:OnCreated|});
+        private static void OnCreated(int ctx) { }
+    }
+}";
+        string after = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public class Use
+    {
+        private IFakeStep RegisterStep() => null!;
+        public void M() => RegisterStep().Handle(handler: OnCreated);
+        private void OnCreated(int ctx) { }
+    }
+}";
+        await Verify.VerifyCodeFixAsync(before, Static("OnCreated"), after);
+    }
+
+    [Fact]
+    public async Task Removes_static_when_the_call_is_in_an_instance_local_function()
+    {
+        // A non-static local function of an instance method still reaches the implicit this.
+        string before = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public class Use
+    {
+        private IFakeStep RegisterStep() => null!;
+        public void M() { Register(); void Register() => RegisterStep().Handle({|#0:OnCreated|}); }
+        private static void OnCreated(int ctx) { }
+    }
+}";
+        string after = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public class Use
+    {
+        private IFakeStep RegisterStep() => null!;
+        public void M() { Register(); void Register() => RegisterStep().Handle(OnCreated); }
+        private void OnCreated(int ctx) { }
+    }
+}";
+        await Verify.VerifyCodeFixAsync(before, Static("OnCreated"), after);
+    }
+
+    [Fact]
+    public async Task No_fix_when_the_calling_class_is_static()
+    {
+        // A static class has no instance: the handler cannot become an instance method of it.
+        string source = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public static class Use
+    {
+        private static IFakeStep Step() => null!;
+        public static void M() => Step().Handle({|#0:OnCreated|});
+        private static void OnCreated(int ctx) { }
+    }
+}";
+        await Verify.VerifyCodeFixAsync(source, Static("OnCreated"), source);
+    }
+
+    [Fact]
+    public async Task No_fix_for_a_handler_of_an_enclosing_static_class()
+    {
+        // OnCreated is in scope through the enclosing static class, which cannot hold an instance method.
+        string source = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public static class Outer
+    {
+        private static void OnCreated(int ctx) { }
+        public class Use
+        {
+            private IFakeStep RegisterStep() => null!;
+            public void M() => RegisterStep().Handle({|#0:OnCreated|});
+        }
+    }
+}";
+        await Verify.VerifyCodeFixAsync(source, Static("OnCreated"), source);
+    }
+
+    [Fact]
+    public async Task No_fix_for_a_handler_of_an_enclosing_class()
+    {
+        // The nested class does not derive from Outer: an instance OnCreated of Outer would be out of reach.
+        string source = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public class Outer
+    {
+        private static void OnCreated(int ctx) { }
+        public class Use
+        {
+            private IFakeStep RegisterStep() => null!;
+            public void M() => RegisterStep().Handle({|#0:OnCreated|});
+        }
+    }
+}";
+        await Verify.VerifyCodeFixAsync(source, Static("OnCreated"), source);
+    }
+
+    [Fact]
+    public async Task No_fix_when_the_call_is_in_a_static_lambda()
+    {
+        // A static lambda has no implicit this, even inside an instance method.
+        string source = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public class Use
+    {
+        private static IFakeStep Step() => null!;
+        public void M() { System.Action register = static () => Step().Handle({|#0:OnCreated|}); register(); }
+        private static void OnCreated(int ctx) { }
+    }
+}";
+        await Verify.VerifyCodeFixAsync(source, Static("OnCreated"), source);
+    }
+
+    [Fact]
+    public async Task No_fix_for_a_static_local_function_handler()
+    {
+        // A local function is no method declaration of the class: nothing to edit.
+        string source = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public class Use
+    {
+        private IFakeStep RegisterStep() => null!;
+        public void M() { RegisterStep().Handle({|#0:OnCreated|}); static void OnCreated(int ctx) { } }
+    }
+}";
+        await Verify.VerifyCodeFixAsync(source, Static("OnCreated"), source);
+    }
+
+    [Fact]
+    public async Task No_fix_for_a_partial_handler()
+    {
+        // A partial method's defining and implementing declarations must agree: left to the developer.
+        string source = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public partial class Use
+    {
+        private IFakeStep RegisterStep() => null!;
+        public void M() => RegisterStep().Handle({|#0:OnCreated|});
+        static partial void OnCreated(int ctx);
+        static partial void OnCreated(int ctx) { }
+    }
+}";
+        await Verify.VerifyCodeFixAsync(source, Static("OnCreated"), source);
+    }
+
+    [Fact]
+    public async Task Removes_static_when_it_is_the_only_modifier_keeping_indentation()
+    {
+        string before = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public class Use
+    {
+        private IFakeStep RegisterStep() => null!;
+        public void M() => RegisterStep().Handle({|#0:OnCreated|});
+        static void OnCreated(int ctx) { }
+    }
+}";
+        string after = Preamble + @"
+namespace Demo
+{
+    using Vela.Steps;
+    public class Use
+    {
+        private IFakeStep RegisterStep() => null!;
+        public void M() => RegisterStep().Handle(OnCreated);
+        void OnCreated(int ctx) { }
+    }
+}";
+        await Verify.VerifyCodeFixAsync(before, Static("OnCreated"), after);
+    }
 }
