@@ -59,10 +59,16 @@ jobs:
       # The page list of llms.txt is generated from the toc.yml files and each page's _description front matter.
       # Regenerate it, and fail when the committed file differs.
       - name: Check that llms.txt matches the tables of contents
-        shell: bash
+        # Windows PowerShell: the self-hosted runner has no bash.
+        shell: powershell
         run: |
           dotnet run docs/tools/UpdateLlmsTxt.cs
-          git diff --exit-code -- docs/llms.txt || { echo "::error file=docs/llms.txt::docs/llms.txt is out of date. Run 'dotnet run docs/tools/UpdateLlmsTxt.cs' and commit the result."; exit 1; }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --exit-code -- docs/llms.txt
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error file=docs/llms.txt::docs/llms.txt is out of date. Run 'dotnet run docs/tools/UpdateLlmsTxt.cs' and commit the result."
+            exit 1
+          }
       - name: Install DocFX (pinned in .config/dotnet-tools.json)
         run: dotnet tool restore
       - name: Build the docs site
