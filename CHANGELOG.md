@@ -205,7 +205,8 @@ All notable changes to Vela are documented here. The format is based on
 - The VELA004 code fix is offered only for a handler named without a qualifier and declared in the registering class
   or one of its base classes, from a non-static member of a non-static class. It used to edit a same-named static
   method of the file when the handler belonged to another class, or make a static helper class's method an instance
-  method that no longer compiled.
+  method that no longer compiled. It is no longer offered for a `static partial` handler, where it removed `static`
+  from the defining declaration only and the two declarations no longer compiled.
 - A typed request or response property read (`Get<T>()` on `TypedRequest` / `TypedResponse`) whose parameter holds
   another type throws `InvalidPluginExecutionException` (it threw `InvalidCastException`), so the caller sees the
   message naming the parameter. The base `Entity` to early-bound conversion is bound once per type instead of through
@@ -316,6 +317,10 @@ All notable changes to Vela are documented here. The format is based on
 - `vela plan` and `vela apply` with `--solution` read the solution's publisher prefix once per connection. Each phase
   (package actions, retired assemblies, solution membership, the publish, the read-back) queried the solution and
   retrieved its publisher again, up to six times per apply.
+- The Associate and Disassociate tests that `vela add test` (and `vela init`) generate set
+  `PrimaryEntityRole = EntityRole.Referencing` on their placeholder relationship, which joins two rows of the same
+  table. `Vela.Testing` now faults such a call without a role (`0x80040203`), as Dataverse does, so the generated tests
+  failed.
 
 ### Docs
 
