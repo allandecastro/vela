@@ -19,10 +19,19 @@ concurrency:
 permissions:
   contents: read
 
+# Runner: GitHub-hosted ubuntu-latest unless the WINDOWS_RUNNER repository variable names another runner as a JSON
+# label array (as in ci.yml), e.g. `gh variable set WINDOWS_RUNNER --body '["self-hosted","Windows"]'`. The check is
+# Windows PowerShell 5.1-compatible, so the same script runs under pwsh on ubuntu and under powershell on the Windows
+# runner (whose service account can't execute pwsh). While the variable is set, a fork pull request is skipped, so fork
+# code never runs on that machine.
 jobs:
   changelog:
-    runs-on: ubuntu-latest
+    if: ${{ !vars.WINDOWS_RUNNER || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 5
+    defaults:
+      run:
+        shell: ${{ vars.WINDOWS_RUNNER && 'powershell' || 'pwsh' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -34,39 +43,46 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           NO_CHANGELOG: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
         run: |
-          if [ "$NO_CHANGELOG" = "true" ]; then
-            echo "Labelled no-changelog: no entry required."
+          if ($env:NO_CHANGELOG -eq 'true') {
+            Write-Host 'Labelled no-changelog: no entry required.'
             exit 0
-          fi
+          }
           # Three dots: the changes of the PR since it branched, whatever has landed on the base branch since.
-          changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
-          shipped=$(printf '%s\n' "$changed" \
-            | grep -E '^(src|docs)/|^Directory\.(Packages|Build)\.props$|(^|/)NUGET\.md$' || true)
-          if [ -z "$shipped" ]; then
-            echo "No shipped file changed: no entry required."
+          $changed = @(git diff --name-only "$($env:BASE_SHA)...$($env:HEAD_SHA)")
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Case-sensitive, as git paths are.
+          $shipped = @($changed | Where-Object { $_ -cmatch '^(src|docs)/|^Directory\.(Packages|Build)\.props$|(^|/)NUGET\.md$' })
+          if ($shipped.Count -eq 0) {
+            Write-Host 'No shipped file changed: no entry required.'
             exit 0
-          fi
+          }
           # The line range of `## [Unreleased]` in the PR head, up to the next `## [` heading.
-          range=$(git show "$HEAD_SHA:CHANGELOG.md" 2>/dev/null | awk '
-            /^## \[Unreleased\]/ { start = NR; next }
-            start && /^## \[/ { print start, NR - 1; found = 1; exit }
-            END { if (start && !found) print start, NR }')
-          if [ -n "$range" ]; then
-            from=${range% *}
-            to=${range#* }
+          $lines = @(git show "$($env:HEAD_SHA):CHANGELOG.md" 2>$null)
+          $from = 0; $to = 0
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($from -eq 0) { if ($lines[$i] -cmatch '^## \[Unreleased\]') { $from = $i + 1 } }
+            elseif ($lines[$i] -cmatch '^## \[') { $to = $i; break }
+          }
+          if ($from -gt 0 -and $to -eq 0) { $to = $lines.Count }
+          $added = 0
+          if ($from -gt 0) {
             # Count the added `- ` lines of the diff that land in that range (new-file line numbers, from the -U0
             # hunk headers).
-            added=$(git diff -U0 "$BASE_SHA...$HEAD_SHA" -- CHANGELOG.md | awk -v from="$from" -v to="$to" '
-              /^@@/ { split($3, a, ","); line = substr(a[1], 2) + 0; next }
-              /^\+\+\+/ { next }
-              /^\+/ { if (line >= from && line <= to && substr($0, 2, 2) == "- ") n++; line++; next }
-              END { print n + 0 }')
-            if [ "$added" -gt 0 ]; then
-              echo "CHANGELOG.md adds $added entry line(s) under ## [Unreleased]."
-              exit 0
-            fi
-          fi
-          echo "Shipped files changed without a new entry under ## [Unreleased] in CHANGELOG.md:"
-          printf '%s\n' "$shipped" | sed 's/^/  /'
-          echo "::error title=CHANGELOG.md not updated::This pull request changes shipped files (src/, docs/, Directory.*.props, NUGET.md) but adds no '- ' line under '## [Unreleased]' in CHANGELOG.md. Add one entry there, in the existing heading of its kind (e.g. '### Fixed (CLI)'); see CONTRIBUTING.md#changelog. If the change is not user-visible (CI, tests, an internal refactor), a maintainer adds the 'no-changelog' label instead."
+            $line = 0
+            foreach ($d in @(git diff -U0 "$($env:BASE_SHA)...$($env:HEAD_SHA)" -- CHANGELOG.md)) {
+              if ($d -cmatch '^@@ -\S+ \+(\d+)') { $line = [int]$Matches[1]; continue }
+              if ($d.StartsWith('+++')) { continue }
+              if ($d.StartsWith('+')) {
+                if ($line -ge $from -and $line -le $to -and $d.Length -ge 3 -and $d.Substring(1, 2) -ceq '- ') { $added++ }
+                $line++
+              }
+            }
+          }
+          if ($added -gt 0) {
+            Write-Host "CHANGELOG.md adds $added entry line(s) under ## [Unreleased]."
+            exit 0
+          }
+          Write-Host 'Shipped files changed without a new entry under ## [Unreleased] in CHANGELOG.md:'
+          foreach ($file in $shipped) { Write-Host "  $file" }
+          Write-Host "::error title=CHANGELOG.md not updated::This pull request changes shipped files (src/, docs/, Directory.*.props, NUGET.md) but adds no '- ' line under '## [Unreleased]' in CHANGELOG.md. Add one entry there, in the existing heading of its kind (e.g. '### Fixed (CLI)'); see CONTRIBUTING.md#changelog. If the change is not user-visible (CI, tests, an internal refactor), a maintainer adds the 'no-changelog' label instead."
           exit 1
