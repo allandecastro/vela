@@ -76,6 +76,8 @@ public sealed class PackageScannerBuildStateTests : IDisposable
         Assert.Empty(state.Items);
         // The assembly is still a source assembly, so its live steps are read (and deleted once gone).
         Assert.Equal(new[] { "xunit.abstractions" }, state.SourceAssemblies);
+        // The package names its plugin assembly: plan/apply compare it with the deployed package's assemblies.
+        Assert.Equal("xunit.abstractions", payload.AssemblyName);
     }
 
     [Fact]

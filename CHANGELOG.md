@@ -252,18 +252,19 @@ All notable changes to Vela are documented here. The format is based on
   from 1.0), and uses that built-in version when nuget.org is unreachable or lists none. `--core-version` still pins
   any version.
 - `vela plan` and `vela apply` stop with exit `4`, before any write, when the plugin package update would remove a
-  plugin type (its class was deleted or renamed, or its assembly was renamed) that still has steps Vela does not
-  delete in the same run. Dataverse refuses that update, even for a disabled step (`0x80040265` "Unable to delete
+  plugin type (its class was deleted or renamed) that still has steps Vela does not delete in the same run. Dataverse refuses that update, even for a disabled step (`0x80040265` "Unable to delete
   '<type>' plugintype due to N step(s)", verified live), so `apply` used to fail with exit `7` after its deletes. The
   message names each plugin type and its steps. Vela's own steps on such a type are deleted before the package update,
   as before.
-- `vela apply` handles a renamed plugin assembly (the project's `<AssemblyName>` changed, the package id did not). It
-  read only the assemblies the local package builds, so it did not see the steps of the old assembly: the package
-  update failed on them (exit `7`), or would have left them running the old code. `plan` and `apply` now read the old
-  assembly through its plugin package: its Vela steps are deleted before the package update and created again on the
-  new assembly's plugin types, and its Custom APIs are moved to the new plugin types. A moved step loses its secure
-  configuration unless the run supplies the value, which `plan` reports as a warning. Whether Dataverse deletes the
-  old assembly with the package update is not verified live.
+- `vela plan` and `vela apply` stop with exit `4`, before any write, when a plugin package update would change the
+  package's set of assemblies: an assembly renamed (the project's `<AssemblyName>` changed, the package id did not),
+  dropped or added. A package keeps the assemblies it was created with (verified live): Dataverse refuses an update that
+  renames or drops one (`0x80040265`, "Unable to delete plug-in assembly as it is part of plugin package" once no step
+  is left), and accepts an update that adds one without registering it. `apply` used to fail with exit `7` after
+  deleting its steps, or report success with the new assembly missing. The message names the package and the
+  assemblies, and the way out: keep the assembly name, or delete the steps and the package by hand and run `apply`
+  again, which creates the package. See
+  [Rename the plugin assembly](docs/guides/plan-apply.md#rename-the-plugin-assembly).
 - `vela apply` deletes a removed step by the id read from the environment. It looked the step up again by step key,
   trigger or name, and took the first match, which could be another step sharing that trigger or name.
 - When `vela apply` fails partway (exit `7`), the `apply-failed` JSON document carries a `failure` object: the
@@ -286,7 +287,7 @@ All notable changes to Vela are documented here. The format is based on
   `--environment` label (`against production (https://contoso.crm.dynamics.com)?`). It showed only the label, which is
   free text, or `Dataverse` for a connection string, so the prompt did not say which environment would be written.
 - `vela plan` and `vela apply` with `--solution` read the solution's publisher prefix once per connection. Each phase
-  (package actions, retired assemblies, solution membership, the publish, the read-back) queried the solution and
+  (package actions, package assembly set, solution membership, the publish, the read-back) queried the solution and
   retrieved its publisher again, up to six times per apply.
 
 ### Docs

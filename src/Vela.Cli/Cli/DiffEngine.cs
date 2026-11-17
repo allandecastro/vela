@@ -389,29 +389,6 @@ internal static class DiffEngine
             }
         }
 
-        // A retired assembly (the deployed package's assembly the local package no longer builds) is never paired: its
-        // Vela steps are deleted, before the package update removes their plugin types, and the local steps are created
-        // on the new types. Its Custom API with the same unique name as a local one is moved (detached before the update,
-        // pointed at the local type after it); any other is deleted.
-        foreach (RegistrationItem retired in current.RetiredItems ?? [])
-        {
-            if (IsStep(retired))
-            {
-                removed.Add(retired);
-                continue;
-            }
-
-            string key = GetIdentityKey(retired);
-            if (localCustomApiMap.TryGetValue(key, out RegistrationItem? moved) && !currentCustomApiMap.ContainsKey(key) && added.Remove(moved))
-            {
-                changed.Add(new RegistrationChange(moved.Kind, moved.Type, retired.Definition, moved.Definition) { MovesFromRetiredAssembly = true });
-            }
-            else
-            {
-                removed.Add(retired);
-            }
-        }
-
         // Web resources reconcile independently of plugins/Custom APIs: match by name (path), change by content
         // hash. Scope safety (a plugin-only run never touches web resources and vice versa) is upstream - the
         // current state only carries web resources when a web-resources scan is requested, so plugin-only runs
@@ -456,8 +433,7 @@ internal static class DiffEngine
 
         return new RegistrationDiff(
             LocalAssemblies: local.SourceAssemblies,
-            // The retired assemblies are read too: the delete phase resolves their plugin types.
-            CurrentAssemblies: [.. current.SourceAssemblies, .. (current.RetiredAssemblies ?? []).Except(current.SourceAssemblies, StringComparer.OrdinalIgnoreCase)],
+            CurrentAssemblies: current.SourceAssemblies,
             Added: added.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
             Removed: removed.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),
             Changed: changed.OrderBy(x => x.Kind, StringComparer.Ordinal).ThenBy(x => x.Type, StringComparer.Ordinal).ToArray(),

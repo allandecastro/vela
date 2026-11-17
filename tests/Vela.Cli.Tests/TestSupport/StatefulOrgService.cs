@@ -59,7 +59,7 @@ internal sealed class StatefulOrgService : IOrganizationService
         Guid id = Insert(entity);
         if (string.Equals(entity.LogicalName, "pluginpackage", StringComparison.OrdinalIgnoreCase))
         {
-            ImportPackage(Table("pluginpackage")[id]);
+            ImportPackage(Table("pluginpackage")[id], isCreate: true);
         }
         else if (string.Equals(entity.LogicalName, "customapi", StringComparison.OrdinalIgnoreCase))
         {
@@ -92,7 +92,7 @@ internal sealed class StatefulOrgService : IOrganizationService
         row["modifiedon"] = Tick();
         if (string.Equals(entity.LogicalName, "pluginpackage", StringComparison.OrdinalIgnoreCase) && entity.Contains("content"))
         {
-            ImportPackage(row);
+            ImportPackage(row, isCreate: false);
         }
     }
 
@@ -100,7 +100,36 @@ internal sealed class StatefulOrgService : IOrganizationService
     {
         Writes.Add("delete:" + entityName);
         Existing(entityName, id);
+        if (string.Equals(entityName, "pluginpackage", StringComparison.OrdinalIgnoreCase))
+        {
+            DeletePackageComponents(id);
+        }
+
         Table(entityName).Remove(id);
+    }
+
+    // Deleting a package deletes its assemblies and their plugin types (verified live once the steps were deleted). With
+    // a step left on one of its types the fake refuses with the type error; that case was not captured live.
+    private void DeletePackageComponents(Guid packageId)
+    {
+        Entity[] assemblies = Table("pluginassembly").Values.Where(a => a.GetAttributeValue<EntityReference>("packageid")?.Id == packageId).ToArray();
+        Entity[] types = Table("plugintype").Values
+            .Where(t => assemblies.Any(a => a.Id == t.GetAttributeValue<EntityReference>("pluginassemblyid")?.Id))
+            .ToArray();
+        foreach (Entity type in types)
+        {
+            ThrowIfTypeHasSteps(type);
+        }
+
+        foreach (Entity type in types)
+        {
+            Table("plugintype").Remove(type.Id);
+        }
+
+        foreach (Entity assembly in assemblies)
+        {
+            Table("pluginassembly").Remove(assembly.Id);
+        }
     }
 
     public Entity Retrieve(string entityName, Guid id, ColumnSet columnSet) => Clone(Existing(entityName, id));
@@ -197,9 +226,11 @@ internal sealed class StatefulOrgService : IOrganizationService
     // reads back empty (verified live); the package's assembly and plugin types appear (or are refreshed). A plugin type
     // the new content no longer has is deleted, and the import is refused, before any change, while such a type still has
     // a step (verified live: 0x80040265 "Unable to delete '<type>' plugintype due to N step(s)", even for a disabled
-    // step). An assembly of the package the new content no longer has (a renamed assembly) is modelled the same way,
-    // removed with its types: that part is NOT verified live.
-    private void ImportPackage(Entity package)
+    // step). The set of assemblies is fixed at create (verified live): an update whose content no longer has a
+    // registered assembly (renamed or dropped) is refused atomically, with the type error while one of its types has a
+    // step and "Unable to delete plug-in assembly as it is part of plugin package" (0x80040265) otherwise; an update whose
+    // content adds an assembly succeeds but registers nothing for it.
+    private void ImportPackage(Entity package, bool isCreate)
     {
         string name = package.GetAttributeValue<string>("name");
         if (!_packageContents.TryGetValue(name, out (string AssemblyName, string[] TypeNames) contents))
@@ -210,24 +241,30 @@ internal sealed class StatefulOrgService : IOrganizationService
         Entity[] packageAssemblies = Table("pluginassembly").Values
             .Where(a => a.GetAttributeValue<EntityReference>("packageid")?.Id == package.Id)
             .ToArray();
-        Entity[] droppedTypes = Table("plugintype").Values
-            .Where(t => packageAssemblies.Any(a => a.Id == t.GetAttributeValue<EntityReference>("pluginassemblyid")?.Id))
-            .Where(t =>
+        foreach (Entity dropped in packageAssemblies.Where(a => !TextEquals(a.GetAttributeValue<string>("name"), contents.AssemblyName)))
+        {
+            foreach (Entity type in Table("plugintype").Values.Where(t => t.GetAttributeValue<EntityReference>("pluginassemblyid")?.Id == dropped.Id))
             {
-                Entity assembly = packageAssemblies.First(a => a.Id == t.GetAttributeValue<EntityReference>("pluginassemblyid")!.Id);
-                return !TextEquals(assembly.GetAttributeValue<string>("name"), contents.AssemblyName)
-                    || !contents.TypeNames.Any(n => TextEquals(n, t.GetAttributeValue<string>("typename")));
-            })
-            .ToArray();
+                ThrowIfTypeHasSteps(type);
+            }
+
+            throw new FaultException<OrganizationServiceFault>(
+                new OrganizationServiceFault { ErrorCode = PluginTypeHasStepsErrorCode, Message = "Unable to delete plug-in assembly as it is part of plugin package" },
+                "plugin assembly is part of a plugin package");
+        }
+
+        // A test may seed the assembly row without its package link: that row is the package's assembly.
+        Entity? assembly = packageAssemblies.FirstOrDefault(a => TextEquals(a.GetAttributeValue<string>("name"), contents.AssemblyName))
+            ?? Table("pluginassembly").Values.FirstOrDefault(a => !a.Contains("packageid") && TextEquals(a.GetAttributeValue<string>("name"), contents.AssemblyName));
+        Entity[] droppedTypes = assembly == null
+            ? []
+            : Table("plugintype").Values
+                .Where(t => t.GetAttributeValue<EntityReference>("pluginassemblyid")?.Id == assembly.Id)
+                .Where(t => !contents.TypeNames.Any(n => TextEquals(n, t.GetAttributeValue<string>("typename"))))
+                .ToArray();
         foreach (Entity type in droppedTypes)
         {
-            int steps = Table("sdkmessageprocessingstep").Values.Count(step => step.GetAttributeValue<EntityReference>("eventhandler")?.Id == type.Id);
-            if (steps > 0)
-            {
-                throw new FaultException<OrganizationServiceFault>(
-                    new OrganizationServiceFault { ErrorCode = unchecked((int)0x80040265), Message = $"Unable to delete '{type.GetAttributeValue<string>("typename")}' plugintype due to {steps} step(s) registered." },
-                    "plugintype has steps");
-            }
+            ThrowIfTypeHasSteps(type);
 
             // Dataverse also refuses to delete a plugin type a Custom API references (the reason apply detaches a moved
             // Custom API first); the code and text here are the fake's, not captured live.
@@ -242,15 +279,15 @@ internal sealed class StatefulOrgService : IOrganizationService
             Table("plugintype").Remove(type.Id);
         }
 
-        foreach (Entity retired in packageAssemblies.Where(a => !TextEquals(a.GetAttributeValue<string>("name"), contents.AssemblyName)))
-        {
-            Table("pluginassembly").Remove(retired.Id);
-        }
-
         _packageFiles.StoreUpload(package.Id, package);
         package["content"] = string.Empty;
 
-        Entity? assembly = Table("pluginassembly").Values.FirstOrDefault(a => TextEquals(a.GetAttributeValue<string>("name"), contents.AssemblyName));
+        // An assembly the update adds is not registered: the update succeeds and nothing appears.
+        if (assembly == null && !isCreate)
+        {
+            return;
+        }
+
         Guid assemblyId = assembly?.Id ?? Insert(new Entity("pluginassembly")
         {
             ["name"] = contents.AssemblyName,
@@ -272,6 +309,19 @@ internal sealed class StatefulOrgService : IOrganizationService
                     ["pluginassemblyid"] = new EntityReference("pluginassembly", assemblyId),
                 });
             }
+        }
+    }
+
+    private const int PluginTypeHasStepsErrorCode = unchecked((int)0x80040265);
+
+    private void ThrowIfTypeHasSteps(Entity type)
+    {
+        int steps = Table("sdkmessageprocessingstep").Values.Count(step => step.GetAttributeValue<EntityReference>("eventhandler")?.Id == type.Id);
+        if (steps > 0)
+        {
+            throw new FaultException<OrganizationServiceFault>(
+                new OrganizationServiceFault { ErrorCode = PluginTypeHasStepsErrorCode, Message = $"Unable to delete '{type.GetAttributeValue<string>("typename")}' plugintype due to {steps} step(s) registered." },
+                "plugintype has steps");
         }
     }
 

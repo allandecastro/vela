@@ -76,10 +76,18 @@ Custom API of the package or of the environment, and for a step on a table, that
 on it before any write, so nothing was written. A step on a Custom API that the same run creates is not affected. See
 [Plan and apply](plan-apply.md#errors-that-stop-the-preview).
 
+## `Plugin package '...' changes its set of assemblies` (exit 4)
+
+The local package builds a plugin assembly the deployed package does not have, or no longer builds one it has: the
+plugins project's `<AssemblyName>` changed, for example. An existing plugin package keeps the assemblies it was created
+with, so `plan` and `apply` stop before any write. Set `<AssemblyName>` back to the name the environment has, or delete
+the steps on the package's plugin types and the package, then run `apply` again. See
+[Rename the plugin assembly](plan-apply.md#rename-the-plugin-assembly).
+
 ## `The plugin package update removes plugin type '...'` (exit 4)
 
-The package no longer contains a plugin type that is registered in the environment (its class was deleted or renamed,
-or the assembly was renamed), and steps that Vela does not manage are still registered on it, for example steps added
+The package no longer contains a plugin type that is registered in the environment (its class was deleted or renamed),
+and steps that Vela does not manage are still registered on it, for example steps added
 with the Plugin Registration Tool. Dataverse does not remove a plugin type that has steps, even disabled ones, so the
 package update would fail. The message names each plugin type and its steps. Delete those steps, or register them on
 another plugin type, then run `plan` again. `plan` and `apply` stop on it before any write, so nothing was written.

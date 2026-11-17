@@ -732,7 +732,7 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Contains(org.Executed.OfType<Microsoft.Crm.Sdk.Messages.AddSolutionComponentRequest>(), r => r.ComponentId == packageId);
     }
 
-    // The publisher prefix of the --solution is read once per run. The preview (package actions, retired assemblies,
+    // The publisher prefix of the --solution is read once per run. The preview (package actions, package assembly set,
     // solution membership), the publish and the read-back each needed it, and each used to query the solution and
     // retrieve its publisher again.
     [Fact]
