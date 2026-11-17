@@ -78,7 +78,7 @@ public class AddTestCommandTests
             string content = File.ReadAllText(Path.Combine(testsDir, "Account", "Plugins", "AccountLinkedTests.cs"));
             Assert.DoesNotContain("WithTarget(", content);
             Assert.Contains("pipeline.WithManyToMany(RelationshipName, ", content);
-            Assert.Contains($"pipeline.Service.{message}(Account.EntityLogicalNameValue, id, new Relationship(RelationshipName), related);", content);
+            Assert.Contains($"pipeline.Service.{message}(Account.EntityLogicalNameValue, id, new Relationship(RelationshipName) {{ PrimaryEntityRole = EntityRole.Referencing }}, related);", content);
             Assert.Contains($"e.Message == \"{message}\"", content);
         });
     }
