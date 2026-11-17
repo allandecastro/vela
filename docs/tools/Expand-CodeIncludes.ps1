@@ -1,12 +1,13 @@
 # Writes a docs page with every docfx code include ([!code-csharp[](path#region)]) replaced by a fenced block holding
 # that region of the sample file, dedented, so the Markdown copies listed in llms.txt read like the rendered pages.
-# A path without #region includes the whole file. Fails when the file or the region is missing.
+# A path without #region includes the whole file. Fails when the file or the region is missing. An include written
+# as inline code (`[!code-csharp[](...)]`, a page describing the syntax) is left as text.
 param([Parameter(Mandatory)] [string] $Page, [Parameter(Mandatory)] [string] $Destination)
 $ErrorActionPreference = 'Stop'
 
 $pageDir = Split-Path -Parent (Resolve-Path $Page)
 $text = Get-Content -Raw -Encoding UTF8 $Page
-$expanded = [regex]::Replace($text, '\[!code-(?<lang>[a-z]+)\[\]\((?<path>[^)#]+)(#(?<region>[^)]+))?\)\]', {
+$expanded = [regex]::Replace($text, '(?<!`)\[!code-(?<lang>[a-z]+)\[\]\((?<path>[^)#]+)(#(?<region>[^)]+))?\)\]', {
     param($match)
     $file = Join-Path $pageDir $match.Groups['path'].Value
     if (-not (Test-Path $file)) { throw "$Page includes a missing file: $($match.Groups['path'].Value)" }
