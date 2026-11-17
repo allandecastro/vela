@@ -15,11 +15,20 @@ permissions:
   id-token: write
   contents: write
 
+# Runner: GitHub-hosted windows-latest unless the WINDOWS_RUNNER repository variable names another runner as a JSON
+# label array, e.g. `gh variable set WINDOWS_RUNNER --body '["self-hosted","Windows"]'` (as ci.yml).
+
 jobs:
   pack-and-publish:
-    # GitHub-hosted Windows runner (as ci.yml): net462 (the harness) only builds on Windows, so packing must run there.
-    runs-on: windows-latest
+    # Windows runner (as ci.yml): net462 (the harness) only builds on Windows, so packing must run there. Only tag
+    # pushes trigger this workflow, so it needs no fork guard.
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"windows-latest"') }}
     timeout-minutes: 30 # cap a hung restore/build/publish
+    env:
+      # Self-hosted only (empty on a hosted runner, which leaves setup-dotnet on its default): the runner's service
+      # account can't write to 'C:\Program Files\dotnet', so setup-dotnet installs into the workspace instead (it adds
+      # this to PATH for the run steps). Same as ci.yml.
+      DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/.dotnet', github.workspace) || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -61,6 +70,7 @@ jobs:
 
       - name: Pack cli (Vela.Cli)
         if: env.LINE == 'cli'
+        shell: pwsh
         run: dotnet pack .\src\Vela.Cli\Vela.Cli.csproj -c Release -o .\artifacts --no-build -p:Version=${{ env.VERSION }}
 
       - name: Publish artifacts
