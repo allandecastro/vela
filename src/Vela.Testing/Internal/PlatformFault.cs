@@ -25,6 +25,19 @@ namespace Vela.Testing
         /// <summary>0x80045304: the Merge subordinate is already inactive (verified live).</summary>
         public const int MergeSubordinateInactive = unchecked((int)0x80045304);
 
+        // Marks a fault raised by the Read check a write makes before writing (an Update of a row the caller cannot
+        // read). The platform treats it like a failed read: a plugin that catches it can carry on (verified live).
+        private const string ReadCheckKey = "Vela.Testing.ReadCheck";
+
+        public static T AsReadCheck<T>(T fault)
+            where T : Exception
+        {
+            fault.Data[ReadCheckKey] = true;
+            return fault;
+        }
+
+        public static bool IsReadCheck(Exception exception) => exception.Data.Contains(ReadCheckKey);
+
         public static FaultException<OrganizationServiceFault> Create(int errorCode, string message)
             => new FaultException<OrganizationServiceFault>(
                 new OrganizationServiceFault { ErrorCode = errorCode, Message = message },

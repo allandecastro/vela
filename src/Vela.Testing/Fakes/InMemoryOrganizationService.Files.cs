@@ -78,7 +78,7 @@ namespace Vela.Testing
             };
 
             // The File column stores its fileid; the content is fetched via the download messages.
-            Update(new Entity(session.EntityLogicalName, session.RecordId) { [session.AttributeName] = fileId });
+            PlatformUpdate(new Entity(session.EntityLogicalName, session.RecordId) { [session.AttributeName] = fileId });
             _uploads.Remove(token);
 
             OrganizationResponse response = new OrganizationResponse { ResponseName = "CommitFileBlocksUpload" };

@@ -332,12 +332,16 @@ namespace Vela.Testing
             return projected;
         }
 
-        public void Update(Entity entity) => UpdateCore(entity);
+        public void Update(Entity entity) => UpdateCore(entity, readCheck: true);
+
+        // A write the platform makes as part of another message (Associate's lookup, Merge, a file commit, the Update
+        // inside Assign / SetState): no Update message, so no Read check on the row.
+        internal void PlatformUpdate(Entity entity) => UpdateCore(entity, readCheck: false);
 
         // Shared by Update and Assign (assignment is an ownerid update): the required privilege follows the
         // content — Write for field changes, Assign for an ownership change — so both message paths enforce the
         // same rules (mirroring Dataverse, where setting ownerid needs prvAssign, not Write).
-        private void UpdateCore(Entity entity)
+        private void UpdateCore(Entity entity, bool readCheck)
         {
             if (entity == null)
             {
@@ -365,6 +369,20 @@ namespace Vela.Testing
             EntityReference? previousOwner = changesOwner ? stored.GetAttributeValue<EntityReference>(SystemFieldApplier.OwnerId) : null;
             if (entity.Attributes.Keys.Any(key => !string.Equals(key, SystemFieldApplier.OwnerId, StringComparison.OrdinalIgnoreCase)))
             {
+                // Verified live: the Update message checks Read on the row before Write. A caller that cannot read it gets the
+                // read fault (0x80040220 for no Read privilege, 0x80048306 for a row out of reach), not a Write fault.
+                if (readCheck)
+                {
+                    try
+                    {
+                        DemandRecordRead(entity.LogicalName, stored);
+                    }
+                    catch (FaultException<OrganizationServiceFault> fault)
+                    {
+                        throw PlatformFault.AsReadCheck(fault);
+                    }
+                }
+
                 DemandAccess(entity.LogicalName, Privilege.Write, stored);
             }
 
