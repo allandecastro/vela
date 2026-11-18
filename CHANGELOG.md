@@ -118,6 +118,11 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (Framework)
 
+- `Vela.Testing`: an `Update` checks Read on the record before Write, as on Dataverse (verified live). A caller
+  that cannot read the record gets the read fault (`0x80040220` with no Read privilege, `0x80048306` for a record
+  out of reach) instead of a Write fault. A plugin that catches that fault inside the transaction carries on, as
+  after a failed read; the save failed with `0x8009000C` before. A caught Write denial still ends the transaction.
+  The updates the platform makes inside Associate, Merge, Assign, SetState and a file upload are unchanged.
 - `Vela.Testing`: a row created through `PluginPipeline` from an early-bound class without an `OwnerId` property is
   organization-owned, as it already was through `InMemoryOrganizationService`. It got `ownerid`, `owninguser` and
   `owningbusinessunit` before, because the pipeline's copy of the target lost its type. The `OwnershipType` of

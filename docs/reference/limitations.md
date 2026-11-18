@@ -177,7 +177,9 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   `SendEmailRequest`), on the message's table, with an empty `ctx.PrimaryEntityId`.
 - **Transactions are simulated with store snapshots.** The stage model follows Dataverse: PreValidation of the
   initial operation runs outside the transaction, reads are not transactional, asynchronous steps run after the
-  commit, and a swallowed failed write ends the transaction while a swallowed failed read does not. There is no
+  commit, and a swallowed failed write ends the transaction while a swallowed failed read (or an `Update` denied by
+  its Read check) does not. The harness makes that Read check for the `Update` message only, not for the updates
+  inside Associate, Merge, Assign, SetState and a file upload (not verified live). There is no
   locking, isolation level or concurrency: operations run one at a time. Which messages count as reads is a name
   rule (`Retrieve*`, `WhoAmI`, file downloads). A read that a plugin issues inside a write's transaction runs within
   it, and its steps report `IsInTransaction` = `false`, as a top-level read's steps do. `InputParameters["FromSandbox"]`

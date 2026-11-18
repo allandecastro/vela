@@ -116,8 +116,10 @@ The pipeline follows the platform's
 - Reads (`Retrieve`, `RetrieveMultiple`) are not transactional.
 - A plugin that catches the failure of one of its **writes** cannot carry on: its next service call fails with
   "There is no active transaction" (`-2147220911`), and returning normally fails the operation with "ISV code
-  reduced the open transaction count" (`0x8009000C`, `-2146893812`). A caught failed **read** (a `Retrieve` of a
-  record that does not exist) does not end the transaction.
+  reduced the open transaction count" (`0x8009000C`, `-2146893812`). A caught failed **read** does not end the
+  transaction: a missing record, a missing Read privilege, a record out of the role's depth. An `Update` checks
+  Read on the record before Write, so an `Update` the caller cannot read fails with the read fault (`0x80040220`
+  or `0x80048306`) and, caught, does not end the transaction either.
 - **Asynchronous** steps run once the outermost operation (or `ExecuteTransaction` batch) commits, and never when
   it rolls back. An asynchronous step's exception does not reach the caller: it is recorded on
   `pipeline.AsyncStepFailures`. An asynchronous step runs outside any transaction, so the writes it made before

@@ -158,7 +158,13 @@ namespace Vela.Testing
         // the owner. A platform-generated Update (inside Assign / SetState) is a plain write.
         private void WriteUpdateRow(Entity row, bool platformUpdate, List<Action> asyncQueue)
         {
-            if (platformUpdate || row.GetAttributeValue<OptionSetValue>("statecode") is not OptionSetValue state)
+            if (platformUpdate)
+            {
+                _store.PlatformUpdate(row);
+                return;
+            }
+
+            if (row.GetAttributeValue<OptionSetValue>("statecode") is not OptionSetValue state)
             {
                 _store.Update(row);
                 return;

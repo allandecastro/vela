@@ -112,7 +112,7 @@ namespace Vela.Testing
                 {
                     foreach (Entity child in Children(relationship, subordinateId).ToList())
                     {
-                        Update(new Entity(child.LogicalName, child.Id)
+                        PlatformUpdate(new Entity(child.LogicalName, child.Id)
                         {
                             [relationship.ReferencingAttribute] = new EntityReference(entity, target.Id),
                         });
@@ -123,7 +123,7 @@ namespace Vela.Testing
 
                 // 3. Deactivate the subordinate (Inactive = statecode 1 / statuscode 2) and point its masterid at the
                 //    target (verified live: the subordinate's post-image carries both).
-                Update(new Entity(entity, subordinateId)
+                PlatformUpdate(new Entity(entity, subordinateId)
                 {
                     ["statecode"] = new OptionSetValue(1),
                     ["statuscode"] = new OptionSetValue(2),
