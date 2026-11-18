@@ -197,9 +197,14 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   `CreateMultiple` or `UpdateMultiple`, the `Create`/`Update` steps and the `CreateMultiple`/`UpdateMultiple` steps
   run in one sequence sorted by execution order, then registration order. Give the steps explicit execution orders
   when a test depends on which runs first.
-- **Steps on a global Custom API.** A global API's main operation sees `PrimaryEntityName` = `"none"`. A step on its
-  message is declared through `EntityPluginBase<TEntity>` and so carries a table; the harness gives that step's
-  context the step's table so the runtime still matches it.
+- **Steps on a global Custom API.** A global API's main operation and the steps on its message see
+  `PrimaryEntityName` = `"none"`. A step on its message keeps its plugin's table in its `StepDefinition`; `vela plan`
+  registers it without one, and the harness runs it whatever that table is. When the pipeline registers no Custom
+  API for a message, it cannot know the binding: a request with no `Target` runs on `"none"`, as on a global API.
+- **`Upsert` steps fire only on elastic tables.** A step registered on `Upsert` fires only for a table declared with
+  `AsElastic(...)`. Dataverse has no `Upsert` message filter for a standard table, and an `Upsert` step never fires
+  for one. On an elastic table the harness still runs the inner `Create` or `Update` and its steps; whether Dataverse
+  does was not verified.
 - **Fault codes are partial.** The faults the harness raises itself carry the platform code: for example, not found
   `0x80040217`, duplicate record `0x80040237`, duplicate alternate-key value `0x80060892`, missing privilege
   `0x80040220`, record out of the caller's reach `0x80048306`, undeclared key `0x80060889`, no record for a key

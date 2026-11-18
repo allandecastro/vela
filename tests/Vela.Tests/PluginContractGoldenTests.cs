@@ -61,8 +61,8 @@ namespace Vela.Tests
 
             Assert.Equal(stepIds.Length, stepIds.Distinct(StringComparer.Ordinal).Count());
             Assert.Equal(apiNames.Length, apiNames.Distinct(StringComparer.Ordinal).Count());
-            Assert.Equal(7, stepIds.Length);
-            Assert.Equal(2, apiNames.Length);
+            Assert.Equal(8, stepIds.Length);
+            Assert.Equal(3, apiNames.Length);
         }
 
         // Row by row, so a failure prints the one differing row in full rather than a truncated collection.

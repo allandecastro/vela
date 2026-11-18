@@ -75,6 +75,25 @@ namespace ContractPluginFixture
                 .ForRelationship("contact_customer_accounts")
                 .WithExecutionOrder(2)
                 .Handle(_ => { });
+
+            // A step on a global Custom API: its definition keeps TEntity's table (contact); vela plan registers it
+            // with no primary entity, as the API's only message filter has no table.
+            RegisterStep().On<PingRequest>().PostOperation().Async()
+                .WithStepKey("contact-ping")
+                .Handle(_ => { });
+        }
+    }
+
+    // Lightweight global Custom API that allows steps of both modes.
+    public sealed class PingApi : CustomApiBase
+    {
+        public PingApi(string unsecureConfig, string secureConfig) : base(unsecureConfig, secureConfig) { }
+
+        protected override void RegisterCustomApi()
+        {
+            RegisterCustomApi("contract_Ping", _ => { })
+                .AsAction()
+                .AllowedCustomProcessingSteps(CustomApiAllowedCustomProcessingStepType.SyncAndAsync);
         }
     }
 

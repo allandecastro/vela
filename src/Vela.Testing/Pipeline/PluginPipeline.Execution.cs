@@ -430,7 +430,10 @@ namespace Vela.Testing
             context.BusinessUnitId = businessUnitId;
             context.OrganizationId = organizationId;
             context.ParentContext = parentContext ?? (_contextStack.Count > 0 ? _contextStack.Peek() : null);
-            context.IsInTransaction = _transaction != null && !outsideTransaction;
+            // The PreValidation steps of an Upsert's inner Create or Update report IsInTransaction = false, as a
+            // depth-1 PreValidation step does, although the Upsert's transaction is open (verified live).
+            bool innerPreValidation = context.Stage == (int)PluginStages.PreValidation && _frames.Count > 0 && _frames.Peek().ParentContext != null;
+            context.IsInTransaction = _transaction != null && !outsideTransaction && !innerPreValidation;
 
             // Verified live: every step reports the sandbox isolation mode (2) and "none" as SecondaryEntityName; a sync
             // step's OperationId is the request id, an async step's is its own system job id.

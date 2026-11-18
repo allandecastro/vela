@@ -445,7 +445,11 @@ namespace Vela.Testing
                 }
             }
 
-            return (string.Empty, Guid.Empty);
+            // No table: the message runs on a filter with no table, as a global Custom API does (verified live), so
+            // its steps see PrimaryEntityName "none" and match whatever their plugin's table. This is also the default
+            // for a Custom API the pipeline does not know (defined in another assembly): with no Target, it is taken as
+            // global.
+            return (PluginMessages.NoPrimaryEntity, Guid.Empty);
         }
 
         // The store simulates a subset of messages (grant/modify/revoke access, sharing reads, ...). For a message
