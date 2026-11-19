@@ -335,12 +335,12 @@ namespace Vela.Testing
         public void Update(Entity entity) => UpdateCore(entity, readCheck: true);
 
         // A write the platform makes as part of another message (Associate's lookup, Merge, a file commit, the Update
-        // inside Assign / SetState): no Update message, so no Update Read check on the row. SetState, Merge and
-        // Associate make their own (DemandPlatformRead).
+        // inside Assign / SetState): no Update message, so no Update Read check on the row. SetState, Merge,
+        // Associate and Disassociate make their own (DemandPlatformRead).
         internal void PlatformUpdate(Entity entity) => UpdateCore(entity, readCheck: false);
 
-        // Verified live: SetState, Merge and Associate (1:N) check Read on the row they write, before writing it
-        // (Assign, Delete and a file commit do not). Unlike the Update message's Read check, the fault is an ordinary
+        // Verified live: SetState, Merge and a 1:N Associate or Disassociate check Read on the row they write, in the
+        // main operation, before writing it (Assign, Delete and a file commit do not). Unlike the Update message's Read check, the fault is an ordinary
         // write failure: caught by a plugin inside the transaction, it still ends the transaction.
         internal void DemandPlatformRead(string entityName, Guid id)
         {

@@ -75,8 +75,9 @@ The harness checks the Read privilege first, then whether the record is in reach
 
 Owning a record (directly or through a team) satisfies the User depth. Changing `ownerid` (with `AssignRequest` or a
 plain `Update`) needs the **Assign** privilege, and the owning business unit follows the new owner. A new owner the
-security model knows must hold Read on the table (User level is enough, Business Unit level when a user's Read comes
-only from a "Team privileges only" team), whoever sets it, a PreOperation plugin included; otherwise the Create, Update or Assign fails with `0x80040299` (`0x80042f0a` when an owner team has no role,
+security model knows must hold Read on the table (User level is enough; when a user's Read comes only from a "Team
+privileges only" team, the level must reach the user's business unit from the team's), whoever sets it, a
+PreOperation plugin included; otherwise the Create, Update or Assign fails with `0x80040299` (`0x80042f0a` when an owner team has no role,
 on Update or Assign). See [Record ownership](https://learn.microsoft.com/power-platform/admin/update-record-owner#record-ownership).
 
 ## Sharing
@@ -143,7 +144,8 @@ and [inherited access](https://learn.microsoft.com/troubleshoot/power-platform/d
 on a record with `AddUserToRecordTeamRequest`, and removes them with `RemoveUserFromRecordTeamRequest`. They are
 added to role and shared access. Like a share, a right from an access team counts only when the user's roles hold
 that privilege on the table at some depth: reading the record still needs the Read privilege on the table (see
-[Reads](#reads)), and updating it the Write privilege.
+[Reads](#reads)), and updating it the Write privilege. `AddUserToRecordTeamRequest` fails with `0x80048342` for a
+user whose roles lack one of the template's privileges.
 
 ## Hierarchy security
 

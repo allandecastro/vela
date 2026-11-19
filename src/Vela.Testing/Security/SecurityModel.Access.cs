@@ -28,6 +28,29 @@ namespace Vela.Testing.Security
             return rights;
         }
 
+        /// <summary>
+        /// The first privilege an access-team template grants that the user holds in no role, at any depth, or null.
+        /// Users unknown to the model are not checked.
+        /// </summary>
+        public Privilege? MissingTemplatePrivilege(Guid userId, string entity, AccessRights rights)
+        {
+            if (!_users.ContainsKey(userId))
+            {
+                return null;
+            }
+
+            foreach (Privilege privilege in ShareablePrivileges)
+            {
+                AccessRights right = ToAccessRight(privilege);
+                if ((rights & right) == right && right != AccessRights.None && !HoldsPrivilege(userId, entity, privilege))
+                {
+                    return privilege;
+                }
+            }
+
+            return null;
+        }
+
         // The user itself plus every team it belongs to — the set of principals a PoA grant can target.
         private IEnumerable<Guid> PrincipalIds(Guid userId)
         {

@@ -178,9 +178,9 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
 - **Transactions are simulated with store snapshots.** The stage model follows Dataverse: PreValidation of the
   initial operation runs outside the transaction, reads are not transactional, asynchronous steps run after the
   commit, and a swallowed failed write ends the transaction while a swallowed failed read (or an `Update` denied by
-  its Read check) does not. `SetState`, `Merge` and a 1:N `Associate` check Read too, and that failure, swallowed,
-  ends the transaction like a failed write; `Assign`, `Delete` and a file upload do not check Read. A 1:N
-  `Disassociate` does not check Read in the harness (not verified live). There is no
+  its Read check) does not. `SetState`, `Merge` (on both records) and a 1:N `Associate` or `Disassociate` check Read
+  too, in their main operation, and that failure, swallowed, ends the transaction like a failed write; `Assign`,
+  `Delete` and a file upload do not check Read. There is no
   locking, isolation level or concurrency: operations run one at a time. Which messages count as reads is a name
   rule (`Retrieve*`, `WhoAmI`, file downloads). A read that a plugin issues inside a write's transaction runs within
   it, and its steps report `IsInTransaction` = `false`, as a top-level read's steps do. `InputParameters["FromSandbox"]`
@@ -265,9 +265,10 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
     `0x80040220`), and record trimming on joins: a join to a record the caller cannot read drops the primary row on
     an inner join, or omits the linked columns on a left outer join, recursively through nested joins;
   - the Read privilege a new record owner must hold, for owners declared in the model; an owner id the model does not
-    know is not checked. A user owner whose Read comes only from a "Team privileges only" team needs it at
-    Business Unit level or more (verified live with the owner and the record in the same business unit); Read from
-    the user's own roles counts at any level.
+    know is not checked. A user owner whose Read comes only from a "Team privileges only" team needs a level that
+    reaches the owner's business unit from the team's: Business Unit or Parent: Child when they share it, only
+    Organization when the team is in a child business unit. A user in a child business unit of such a team was not
+    verified live. Read from the user's own roles counts at any level.
 
   A role with "Team privileges only" inheritance assigned to a user directly keeps all its grants in the harness.
 

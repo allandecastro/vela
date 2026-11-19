@@ -5,15 +5,17 @@ using System.ServiceModel;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Client;
+using Vela.Constants;
 using Vela.Plugin;
 using Vela.Testing.Security;
 using Xunit;
 
 namespace Vela.Testing.Tests
 {
-    // Verified live (2026-11-18): SetState, Merge and Associate (1:N) check Read on the row they write before writing
-    // it, and that fault, caught by a plugin inside the transaction, ends the transaction (unlike the Update message's
-    // Read check). Assign does not check Read.
+    // Verified live (2026-11-18 and 2026-11-19): SetState, Merge and a 1:N Associate or Disassociate check Read on the
+    // row they write (Merge: on both rows), in the main operation, before writing it. 0x80040220 without the Read
+    // privilege, 0x80048306 for a row out of reach. Caught by a plugin inside the transaction, that fault ends the
+    // transaction (unlike the Update message's Read check). Assign does not check Read.
     public sealed class PlatformReadCheckTests
     {
         private const int PrincipalPrivilegeDenied = unchecked((int)0x80040220);
@@ -26,7 +28,10 @@ namespace Vela.Testing.Tests
         internal static readonly Guid Master = new Guid("c0000000-0000-0000-0000-000000000304");
         internal static readonly Guid Subordinate = new Guid("c0000000-0000-0000-0000-000000000305");
 
-        private static PluginPipeline PipelineFor(bool contactRead) =>
+        private const int RecordAccessDenied = unchecked((int)0x80048306);
+        private const int MergePrivilegeDenied = unchecked((int)0x80045301);
+
+        private static PluginPipeline PipelineFor(bool contactRead, AccessLevel readLevel = AccessLevel.Organization, Guid? masterOwner = null, Guid? subordinateOwner = null, bool linked = false, Privilege[]? withoutContact = null) =>
             PluginPipeline.Empty()
                 .WithCurrentUser(Alice)
                 .WithParentalRelationship("account", "contact", "parentcustomerid", "contact_customer_accounts")
@@ -36,35 +41,46 @@ namespace Vela.Testing.Tests
                     {
                         r.Grant(PlatformProbe.LogicalNameValue, AccessLevel.Organization, Privilege.Create, Privilege.Read);
                         r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write, Privilege.Append, Privilege.AppendTo);
-                        r.Grant("contact", AccessLevel.Organization, Privilege.Write, Privilege.Append, Privilege.AppendTo, Privilege.Assign, Privilege.Share);
+                        r.Grant("contact", AccessLevel.Organization, new[] { Privilege.Write, Privilege.Append, Privilege.AppendTo, Privilege.Assign, Privilege.Share }
+                            .Except(withoutContact ?? new Privilege[0]).ToArray());
                         if (contactRead)
                         {
-                            r.Grant("contact", AccessLevel.Organization, Privilege.Read);
+                            r.Grant("contact", readLevel, Privilege.Read);
                         }
                     })
                     .User(Alice, SalesBu, "tester")
                     .User(Bob, SalesBu, "tester"))
                 .Seed(
                     new Entity("account", Account) { ["name"] = "a", ["ownerid"] = new EntityReference("systemuser", Bob), ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu) },
-                    Contact(Master),
-                    Contact(Subordinate))
+                    Contact(Master, masterOwner ?? Bob),
+                    Contact(Subordinate, subordinateOwner ?? Bob, linked))
                 .Register<PlatformProbeRunsMessage>();
 
-        private static Entity Contact(Guid id) => new Entity("contact", id)
+        private static Entity Contact(Guid id, Guid? owner = null, bool linked = false)
         {
-            ["statecode"] = new OptionSetValue(0),
-            ["statuscode"] = new OptionSetValue(1),
-            ["ownerid"] = new EntityReference("systemuser", Bob),
-            ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
-        };
+            Entity contact = new Entity("contact", id)
+            {
+                ["statecode"] = new OptionSetValue(0),
+                ["statuscode"] = new OptionSetValue(1),
+                ["ownerid"] = new EntityReference("systemuser", owner ?? Bob),
+                ["owningbusinessunit"] = new EntityReference("businessunit", SalesBu),
+            };
+            if (linked)
+            {
+                contact["parentcustomerid"] = new EntityReference("account", Account);
+            }
+
+            return contact;
+        }
 
         [Theory]
         [InlineData("setstate")]
         [InlineData("merge")]
         [InlineData("associate")]
+        [InlineData("disassociate")]
         public void A_caught_Read_check_fault_of_a_platform_write_ends_the_transaction(string message)
         {
-            PluginPipeline pipeline = PipelineFor(contactRead: false);
+            PluginPipeline pipeline = PipelineFor(contactRead: false, linked: message == "disassociate");
 
             FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => pipeline.Service.Create(new PlatformProbe { Name = message }));
@@ -78,9 +94,10 @@ namespace Vela.Testing.Tests
         [InlineData("setstate")]
         [InlineData("merge")]
         [InlineData("associate")]
+        [InlineData("disassociate")]
         public void A_platform_write_without_Read_on_the_row_fails_with_the_read_privilege_fault(string message)
         {
-            PluginPipeline pipeline = PipelineFor(contactRead: false);
+            PluginPipeline pipeline = PipelineFor(contactRead: false, linked: message == "disassociate");
 
             FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => PlatformProbeRunsMessage.Run(pipeline.Service, message));
@@ -107,6 +124,82 @@ namespace Vela.Testing.Tests
             {
                 Assert.Equal(Account, subordinate.GetAttributeValue<EntityReference>("parentcustomerid").Id);
             }
+        }
+
+        [Theory]
+        [InlineData("setstate")]
+        [InlineData("merge")]
+        [InlineData("associate")]
+        [InlineData("disassociate")]
+        public void A_platform_write_on_a_row_out_of_reach_fails_with_the_record_fault_and_ends_the_transaction(string message)
+        {
+            PluginPipeline pipeline = PipelineFor(contactRead: true, readLevel: AccessLevel.User, masterOwner: Alice, linked: message == "disassociate");
+
+            FaultException<OrganizationServiceFault> direct = Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => PlatformProbeRunsMessage.Run(pipeline.Service, message));
+            FaultException<OrganizationServiceFault> caught = Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => pipeline.Service.Create(new PlatformProbe { Name = message }));
+
+            Assert.Equal(RecordAccessDenied, direct.Detail.ErrorCode);
+            Assert.Contains(Subordinate.ToString(), direct.Detail.Message);
+            Assert.Equal(IsvReducedTransactionCount, caught.Detail.ErrorCode);
+            Assert.Equal(new[] { "caught:" + RecordAccessDenied }, PlatformProbeRunsMessage.Events);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Merge_checks_Read_on_both_the_target_and_the_subordinate(bool targetInReach)
+        {
+            PluginPipeline pipeline = PipelineFor(contactRead: true, readLevel: AccessLevel.User,
+                masterOwner: targetInReach ? Alice : Bob, subordinateOwner: targetInReach ? Bob : Alice);
+
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => PlatformProbeRunsMessage.Run(pipeline.Service, "merge"));
+
+            Assert.Equal(RecordAccessDenied, fault.Detail.ErrorCode);
+            Assert.Contains((targetInReach ? Subordinate : Master).ToString(), fault.Detail.Message);
+        }
+
+        [Theory]
+        [InlineData(Privilege.Write, MergePrivilegeDenied)]
+        [InlineData(Privilege.AppendTo, MergePrivilegeDenied)]
+        [InlineData(Privilege.Share, MergePrivilegeDenied)]
+        [InlineData(Privilege.Append, PrincipalPrivilegeDenied)]
+        public void Merge_needs_write_appendto_share_and_append_on_the_table(Privilege missing, int errorCode)
+        {
+            PluginPipeline pipeline = PipelineFor(contactRead: true, withoutContact: new[] { missing });
+
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => PlatformProbeRunsMessage.Run(pipeline.Service, "merge"));
+
+            Assert.Equal(errorCode, fault.Detail.ErrorCode);
+            Assert.Contains("prv" + missing + "contact", fault.Detail.Message);
+        }
+
+        [Fact]
+        public void Merge_does_not_need_delete_or_assign()
+        {
+            // The role grants no Delete on contact either.
+            PluginPipeline pipeline = PipelineFor(contactRead: true, withoutContact: new[] { Privilege.Assign });
+
+            PlatformProbeRunsMessage.Run(pipeline.Service, "merge");
+
+            Assert.Equal(1, pipeline.GetAll("contact").Single(c => c.Id == Subordinate).GetAttributeValue<OptionSetValue>("statecode").Value);
+        }
+
+        [Theory]
+        [InlineData("merge", "Merge")]
+        [InlineData("associate", "Associate")]
+        [InlineData("disassociate", "Disassociate")]
+        public void The_pre_stage_steps_fire_before_the_Read_check_fails(string message, string sdkMessage)
+        {
+            PluginPipeline pipeline = PipelineFor(contactRead: false, linked: message == "disassociate").Register<PlatformProbePreSteps>();
+
+            Assert.Throws<FaultException<OrganizationServiceFault>>(() => PlatformProbeRunsMessage.Run(pipeline.Service, message));
+
+            Assert.Equal(new[] { PluginStages.PreValidation, PluginStages.PreOperation },
+                pipeline.ExecutionLog.Where(entry => entry.Message == sdkMessage).Select(entry => entry.Stage).ToArray());
         }
 
         [Fact]
@@ -152,7 +245,23 @@ namespace Vela.Testing.Tests
         }
     }
 
-    // Runs SetState, Merge or Associate (1:N) on contacts as the calling user and swallows the fault.
+    // Logs the pre stages of Merge, Associate and Disassociate (through the pipeline's execution log).
+    public sealed class PlatformProbePreSteps : EntityPluginBase<SidesContact>
+    {
+        public PlatformProbePreSteps(string u, string s) : base(u, s) { }
+
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnMerge().PreValidation().Sync().Handle(ctx => { });
+            RegisterStep().OnMerge().PreOperation().Sync().Handle(ctx => { });
+            RegisterStep().OnAssociate().PreValidation().Sync().Handle(ctx => { });
+            RegisterStep().OnAssociate().PreOperation().Sync().Handle(ctx => { });
+            RegisterStep().OnDisassociate().PreValidation().Sync().Handle(ctx => { });
+            RegisterStep().OnDisassociate().PreOperation().Sync().Handle(ctx => { });
+        }
+    }
+
+    // Runs SetState, Merge or a 1:N Associate or Disassociate on contacts as the calling user and swallows the fault.
     public sealed class PlatformProbeRunsMessage : EntityPluginBase<PlatformProbe>
     {
         public PlatformProbeRunsMessage(string u, string s) : base(u, s) { }
@@ -178,6 +287,10 @@ namespace Vela.Testing.Tests
                         SubordinateId = PlatformReadCheckTests.Subordinate,
                         UpdateContent = new Entity("contact"),
                     });
+                    break;
+                case "disassociate":
+                    service.Disassociate("account", PlatformReadCheckTests.Account, new Relationship("contact_customer_accounts"),
+                        new EntityReferenceCollection { new EntityReference("contact", PlatformReadCheckTests.Subordinate) });
                     break;
                 default:
                     service.Associate("account", PlatformReadCheckTests.Account, new Relationship("contact_customer_accounts"),

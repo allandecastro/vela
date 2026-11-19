@@ -10,7 +10,8 @@ namespace Vela.Testing.Tests
 {
     // Access teams: adding a user to a record's access team (from a template) grants that user the template's
     // rights on that record — unioned with role and shared access, and removed per template. A right counts only
-    // when the user's roles hold the privilege on the table at some depth (verified live).
+    // when the user's roles hold the privilege on the table at some depth, and a user whose roles lack one of the
+    // template's privileges cannot be added (both verified live).
     public sealed class AccessTeamTests
     {
         private static readonly Guid Alice = new Guid("a11ce000-0000-0000-0000-000000000801");
@@ -52,7 +53,7 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void An_access_team_right_needs_the_table_privilege_at_some_depth()
+        public void A_user_without_the_templates_privileges_cannot_be_added_to_the_access_team()
         {
             Guid record = Guid.NewGuid();
             Guid template = Guid.NewGuid();
@@ -61,11 +62,35 @@ namespace Vela.Testing.Tests
                 .WithAccessTeamTemplate(template, AccessRights.ReadAccess | AccessRights.WriteAccess)
                 .WithSecurity(s => s.BusinessUnit(SalesBu).Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.AppendTo)).User(Alice, SalesBu, "reader"))
                 .Seed(AccountOwnedBy(record, Bob));
-            AddToTeam(svc, record, Alice, template);
 
-            // Verified live: the team grants Write on the record, but no role holds prvWriteAccount at any depth.
+            // Verified live: the user's roles must hold every privilege the template grants, at some depth.
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() => AddToTeam(svc, record, Alice, template));
+
+            Assert.Equal(unchecked((int)0x80048342), fault.Detail.ErrorCode);
+            Assert.Contains("prvWriteaccount", fault.Detail.Message);
+        }
+
+        [Fact]
+        public void An_access_team_right_needs_the_table_privilege_at_some_depth()
+        {
+            Guid record = Guid.NewGuid();
+            Guid template = Guid.NewGuid();
+            SecurityConfiguration? security = null;
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithAccessTeamTemplate(template, AccessRights.ReadAccess | AccessRights.WriteAccess)
+                .WithSecurity(s => security = s.BusinessUnit(SalesBu)
+                    .Role("writer", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.AppendTo).Grant("account", AccessLevel.User, Privilege.Write))
+                    .Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.AppendTo))
+                    .User(Alice, SalesBu, "writer"))
+                .Seed(AccountOwnedBy(record, Bob));
+            AddToTeam(svc, record, Alice, template);
+            svc.Update(new Entity("account", record) { ["name"] = "edited" }); // the team reaches Bob's record
+
+            // Verified live: with the role privilege removed afterwards, the team's Write right alone is denied.
+            security!.User(Alice, SalesBu, "reader");
             FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(
-                () => svc.Update(new Entity("account", record) { ["name"] = "edited" }));
+                () => svc.Update(new Entity("account", record) { ["name"] = "again" }));
             Assert.Equal(unchecked((int)0x80040220), fault.Detail.ErrorCode);
             Assert.Contains("prvWriteaccount", fault.Detail.Message);
         }
@@ -217,7 +242,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(template, AccessRights.ReadAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo)).User(Alice, SalesBu, "appender"))
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo).Grant("account", AccessLevel.User, Privilege.Read)).User(Alice, SalesBu, "appender"))
                 .Seed(AccountOwnedBy(record, Bob));
 
             Guid first = ((AddUserToRecordTeamResponse)svc.Execute(new AddUserToRecordTeamRequest

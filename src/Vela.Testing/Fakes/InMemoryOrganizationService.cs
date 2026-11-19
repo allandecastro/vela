@@ -766,6 +766,7 @@ namespace Vela.Testing
 
                     // Managing a record's access team needs AppendTo on the record, like relating to it.
                     DemandAccess(addToTeam.Record.LogicalName, Privilege.AppendTo, StoredOrThrow(addToTeam.Record));
+                    DemandTemplatePrivileges(addToTeam.Record.LogicalName, addToTeam.SystemUserId, rights);
                     _accessTeams.Add(addToTeam.Record, addToTeam.SystemUserId, addToTeam.TeamTemplateId, rights);
                     AddUserToRecordTeamResponse addResponse = new AddUserToRecordTeamResponse();
                     addResponse.Results["AccessTeamId"] = DeterministicGuid.From("accessteam", addToTeam.Record.Id, addToTeam.TeamTemplateId);
