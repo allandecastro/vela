@@ -621,9 +621,11 @@ namespace Vela.Testing
             return MatchesEntity(definition);
         }
 
-        // The entity check the runtime dispatch applies: a global message (Associate, ...) matches any entity.
+        // The entity check the runtime dispatch applies: a global message (Associate, ...) and a context on a table-less
+        // filter (PrimaryEntityName "none": a global Custom API) match any entity.
         private bool MatchesEntity(StepDefinition definition)
             => PluginMessages.IsGlobalMessage(definition.Message)
+                || string.Equals(Context.PrimaryEntityName, PluginMessages.NoPrimaryEntity, StringComparison.OrdinalIgnoreCase)
                 || string.IsNullOrWhiteSpace(definition.EntityLogicalName)
                 || string.Equals(definition.EntityLogicalName, Context.PrimaryEntityName, StringComparison.OrdinalIgnoreCase);
 

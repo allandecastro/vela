@@ -97,9 +97,10 @@ jobs:
         include: ${{ fromJSON(needs.plan.outputs.areas) }}
     env:
       # Self-hosted only (empty on a hosted runner, which leaves setup-dotnet on its default): the runner's service
-      # account can't write to 'C:\Program Files\dotnet', so setup-dotnet installs into the workspace instead (it adds
-      # this to PATH for the run steps).
-      DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/.dotnet', github.workspace) || '' }}
+      # account can't write to 'C:\Program Files\dotnet', so setup-dotnet installs into the runner's tool cache
+      # (<work>/_tool, next to the <work>/<repo>/<repo> workspace) and adds it to PATH for the run steps. The tool cache
+      # survives the checkout's clean, so the SDK is downloaded once, not on every job.
+      DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/../../_tool/dotnet', github.workspace) || '' }}
     steps:
       - uses: actions/checkout@v7
         with:

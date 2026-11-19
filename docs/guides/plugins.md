@@ -590,7 +590,8 @@ private void OnCreditLimit(OnCreditLimitContext ctx)
   full. [VELA012](../reference/analyzers.md#vela012) flags such throws. Override
   `FormatUnexpectedErrorMessage(context, exception)` for a more detailed message.
 - Don't swallow an exception in a synchronous step: the operation would commit without the work. A swallowed failed
-  **write** fails the operation anyway (`0x8009000C`); a swallowed failed read is harmless. Catch only for
+  **write** fails the operation anyway (`0x8009000C`); a swallowed failed read is harmless, and so is an `Update`
+  that failed its Read check on the record. Catch only for
   deliberate best-effort work, and trace it. [VELA027](../reference/analyzers.md#vela027) flags an empty `catch`
   block.
 

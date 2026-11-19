@@ -27,9 +27,10 @@ namespace Vela.Testing
         // - The transaction opens before PreOperation; an operation triggered from inside it (a plugin's write, at any
         //   stage, including its PreValidation) joins it rather than opening its own.
         // - Any synchronous failure inside the transaction rolls the whole transaction back. A plugin that catches the
-        //   failure of one of its own service calls cannot carry on: the transaction has ended, so its next service call
+        //   failure of one of its own writes cannot carry on: the transaction has ended, so its next service call
         //   fails ("There is no active transaction") and returning normally fails ("ISV code reduced the open
-        //   transaction count"), as on the platform.
+        //   transaction count"), as on the platform. A caught failed read, or a write denied by its Read check, does
+        //   not end it (verified live).
         // - Asynchronous steps are queued in the transaction and run only after it commits (outside any transaction,
         //   once the outermost service call returns); a rolled-back transaction discards them.
 
@@ -323,9 +324,10 @@ namespace Vela.Testing
             }
             catch (Exception ex)
             {
-                // Only a failed write ends the transaction; a plugin may catch a failed read (a Retrieve of a record
-                // that does not exist) and carry on (verified live).
-                if (isWrite && enclosing != null && enclosing.AbortedBy == null)
+                // Only a failed write ends the transaction; a plugin may catch a failed read (a missing row, a missing
+                // Read privilege, a row out of reach) and carry on, and so a write that failed its Read check (verified
+                // live).
+                if (isWrite && !PlatformFault.IsReadCheck(ex) && enclosing != null && enclosing.AbortedBy == null)
                 {
                     enclosing.AbortedBy = ex;
                 }
@@ -428,7 +430,10 @@ namespace Vela.Testing
             context.BusinessUnitId = businessUnitId;
             context.OrganizationId = organizationId;
             context.ParentContext = parentContext ?? (_contextStack.Count > 0 ? _contextStack.Peek() : null);
-            context.IsInTransaction = _transaction != null && !outsideTransaction;
+            // The PreValidation steps of an Upsert's inner Create or Update report IsInTransaction = false, as a
+            // depth-1 PreValidation step does, although the Upsert's transaction is open (verified live).
+            bool innerPreValidation = context.Stage == (int)PluginStages.PreValidation && _frames.Count > 0 && _frames.Peek().ParentContext != null;
+            context.IsInTransaction = _transaction != null && !outsideTransaction && !innerPreValidation;
 
             // Verified live: every step reports the sandbox isolation mode (2) and "none" as SecondaryEntityName; a sync
             // step's OperationId is the request id, an async step's is its own system job id.

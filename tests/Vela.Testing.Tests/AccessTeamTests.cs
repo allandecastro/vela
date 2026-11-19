@@ -98,10 +98,18 @@ namespace Vela.Testing.Tests
                 TeamTemplateId = readTemplate,
             });
 
-            // Read is gone, but the write team's grant remains.
+            // Read is gone, but the write team's grant remains. An Update checks Read on the row first (verified
+            // live), so the remaining grant shows in the principal's access, not in an Update.
             Assert.Throws<FaultException<OrganizationServiceFault>>(
                 () => svc.Retrieve("account", record, new ColumnSet(true)));
-            svc.Update(new Entity("account", record) { ["name"] = "still writable" });
+            RetrievePrincipalAccessResponse access = (RetrievePrincipalAccessResponse)svc.Execute(
+                new RetrievePrincipalAccessRequest
+                {
+                    Target = new EntityReference("account", record),
+                    Principal = new EntityReference("systemuser", Alice),
+                });
+            Assert.True(access.AccessRights.HasFlag(AccessRights.WriteAccess));
+            Assert.False(access.AccessRights.HasFlag(AccessRights.ReadAccess));
         }
 
         [Fact]

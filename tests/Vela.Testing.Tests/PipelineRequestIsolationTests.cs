@@ -28,7 +28,7 @@ namespace Vela.Testing.Tests
         [Fact]
         public void An_Upsert_pre_step_that_edits_the_Target_in_place_reaches_the_store_but_not_the_callers_entity()
         {
-            PluginPipeline pipeline = PluginPipeline.Empty().Register<RiUpsertEditsTarget>();
+            PluginPipeline pipeline = PluginPipeline.Empty().AsElastic(RiRecord.LogicalNameValue).Register<RiUpsertEditsTarget>();
             RiRecord target = new RiRecord { Id = Guid.NewGuid(), Name = "original" };
 
             pipeline.Service.Execute(new UpsertRequest { Target = target });
@@ -40,7 +40,7 @@ namespace Vela.Testing.Tests
         [Fact]
         public void An_Upsert_pre_step_that_replaces_the_Target_is_honoured_by_the_main_operation()
         {
-            PluginPipeline pipeline = PluginPipeline.Empty().Register<RiUpsertReplacesTarget>();
+            PluginPipeline pipeline = PluginPipeline.Empty().AsElastic(RiRecord.LogicalNameValue).Register<RiUpsertReplacesTarget>();
             Guid id = Guid.NewGuid();
 
             UpsertResponse response = (UpsertResponse)pipeline.Service.Execute(new UpsertRequest { Target = new RiRecord { Id = id, Name = "original" } });
