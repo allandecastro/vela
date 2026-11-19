@@ -208,15 +208,17 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
 - **Fault codes are partial.** The faults the harness raises itself carry the platform code: for example, not found
   `0x80040217`, duplicate record `0x80040237`, duplicate alternate-key value `0x80060892`, missing privilege
   `0x80040220`, record out of the caller's reach `0x80048306`, undeclared key `0x80060889`, no record for a key
-  `0x80060891`, delete blocked by Restrict `0x80040227`, invalid argument `0x80040203`, the transaction faults and
+  `0x80060891`, delete blocked by Restrict `0x80040227`, invalid argument `0x80040203`, an N:N related record of the
+  wrong table `0x80048D21`, the transaction faults and
   the Custom API input checks. Any other exception surfaces as an `OrganizationServiceFault` with no `ErrorCode`.
 - **No server-side logic.** Formula, rollup and calculated columns, business rules and duplicate detection are not
   simulated.
 - **N:N `Associate` and `Disassociate` need a declared relationship.** Declare it with `WithManyToMany(...)` or a
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise). Associate and Disassociate
   then persist the intersect rows, and `RetrieveMultiple` joins through them. Associating an existing pair again
-  throws a `DuplicateRecord` (`0x80040237`) fault, associating records outside the relationship's two tables throws
-  an invalid argument (`0x80040203`) fault, and an undeclared relationship name faults with `0x80040216`. On a
+  throws a `DuplicateRecord` (`0x80040237`) fault. A calling record outside the relationship's two tables throws an
+  invalid argument (`0x80040203`) fault, a related record of the wrong table a SQL constraint (`0x80048D21`) fault,
+  and an undeclared relationship name faults with `0x80040216`. On a
   self-referential relationship (N:N or 1:N), set `Relationship.PrimaryEntityRole`, or Associate and Disassociate
   fault with `0x80040203`. On a self-referential N:N, `Referencing` puts the calling record in the first intersect
   column and `Referenced` in the second.

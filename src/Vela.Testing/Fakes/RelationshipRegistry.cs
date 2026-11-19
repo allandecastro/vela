@@ -83,8 +83,7 @@ namespace Vela.Testing
             /// <summary>
             /// Returns the intersect attribute for the calling side and for the related side. Non-self-referential
             /// relationships map by logical name; a self-referential relationship maps by the role of the calling
-            /// record: Referencing (or no role) puts it in the first column, Referenced in the second. Which column
-            /// the platform fills for each role is not verified live.
+            /// record: Referencing (or no role) puts it in the first column, Referenced in the second (verified live).
             /// </summary>
             public (string callerAttribute, string relatedAttribute) AttributesFor(string callerEntity, EntityRole? role = null)
             {
