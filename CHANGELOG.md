@@ -100,6 +100,25 @@ All notable changes to Vela are documented here. The format is based on
   faults with `0x80040216` (verified live) instead of throwing `InvalidOperationException`; the message still says
   how to declare it.
 
+- A step on a global Custom API now runs. Dataverse gives a global API one message filter, with no table, and its
+  steps see `PrimaryEntityName` `"none"` (verified live); the runtime matched the step's table against it and failed
+  with "no registered step matching ... on entity 'none'". A step now matches any execution whose
+  `PrimaryEntityName` is `"none"`. The step definition still carries the plugin's table; `vela plan` registers it
+  without one.
+- `Vela.Testing`: `PluginPipeline` gives a Custom API's extra steps the primary entity Dataverse gives them (verified
+  live): `"none"` and an empty id on a global API (they got the step's own table), the bound table and an empty id on
+  a collection-bound API, and an empty `PrimaryEntityId` on every asynchronous step (an entity-bound API's async step
+  got the Target id). A step on a global API runs whatever its plugin's table. A step on a bound API declared on
+  another table than the bound one fails the call with an `InvalidOperationException`, as `vela plan` refuses it; it
+  ran before. A message the pipeline knows no Custom API for, with no `Target`, now runs on `"none"` (its steps got
+  their own table), as a global API's does.
+- `Vela.Testing`: a step registered on `Upsert` fires only for a table declared elastic (`AsElastic`). Dataverse has
+  `Upsert` message filters for elastic tables only, and an `Upsert` step never fires for a standard table (verified
+  live on `account`). Declare the table elastic, or move the logic to the inner `Create`/`Update` steps, which still
+  fire.
+- `Vela.Testing`: the PreValidation steps of an `Upsert`'s inner `Create` or `Update` report `IsInTransaction` =
+  `false`, as a depth-1 PreValidation step does (verified live). They reported `true`.
+
 ### Added (Framework)
 
 - `Vela.Testing`: `RoleBuilder.MemberPrivilegeInheritance(TeamPrivilegeInheritance)` sets the member's privilege
@@ -118,6 +137,11 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (Framework)
 
+- `Vela.Testing`: an `Update` checks Read on the record before Write, as on Dataverse (verified live). A caller
+  that cannot read the record gets the read fault (`0x80040220` with no Read privilege, `0x80048306` for a record
+  out of reach) instead of a Write fault. A plugin that catches that fault inside the transaction carries on, as
+  after a failed read; the save failed with `0x8009000C` before. A caught Write denial still ends the transaction.
+  The updates the platform makes inside Associate, Merge, Assign, SetState and a file upload are unchanged.
 - `Vela.Testing`: a row created through `PluginPipeline` from an early-bound class without an `OwnerId` property is
   organization-owned, as it already was through `InMemoryOrganizationService`. It got `ownerid`, `owninguser` and
   `owningbusinessunit` before, because the pipeline's copy of the target lost its type. The `OwnershipType` of
@@ -202,6 +226,15 @@ All notable changes to Vela are documented here. The format is based on
   ("Solution not found"), instead of mid-apply. `vela inspect` is unchanged.
 
 ### Fixed (CLI)
+
+- A step on a global Custom API registers with no message filter, whatever its plugin's table, and fires (verified
+  live). Dataverse creates exactly one message filter per Custom API, with no table for a global one (verified live),
+  so such a step failed with a message-filter error. The binding comes from the API's `RegisterCustomApi` in the
+  package, else from the live Custom API; `vela plan` prints an info line per step (`... is a global Custom API,
+  registered without a table (account ignored)`), and the deployed step does not show as changed on the next plan.
+- `vela plan` and `vela apply` refuse, in the preview (exit `4`, nothing written), a step on a bound Custom API
+  declared on another table than the bound one. It failed mid-apply when the API was created in the same run, or
+  with a message-filter error naming no cause otherwise.
 
 - An empty `VELA_SECURE_CONFIG_<NAME>` environment variable, or an empty `--secure-config NAME=@file`, no longer
   clears the live step secure configuration. In GitHub Actions an undefined secret expands to an empty string, so under
@@ -296,6 +329,11 @@ All notable changes to Vela are documented here. The format is based on
   failed.
 
 ### Docs
+
+- Custom APIs: steps on a global API (any plugin table, registered without one, a sample), the primary entity an
+  extra step sees by binding and mode, and the table rule `vela plan` enforces on a bound API. Testing and limitations:
+  Custom API extra steps, `Upsert` steps on elastic tables only, `IsInTransaction` of an `Upsert`'s inner
+  PreValidation.
 
 - The documentation was reviewed page by page against the code and the CLI: examples compile from
   `docs/samples/Vela.DocSamples`, the navigation and titles are consistent, and factual errors are fixed, among them

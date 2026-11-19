@@ -176,6 +176,9 @@ namespace Vela.Testing
         /// so it has no <c>ownerid</c> column. The early-bound inference is left out: a hand-written test class without an
         /// <c>OwnerId</c> property does not make a write fail.
         /// </summary>
+        public bool IsDeclaredElastic(string logicalName) =>
+            _declared.TryGetValue(logicalName, out OwnershipKind declared) && declared == OwnershipKind.Elastic;
+
         public bool IsKnownOrganizationOwned(string logicalName) =>
             (_declared.TryGetValue(logicalName, out OwnershipKind declared)
                 || _registered.TryGetValue(logicalName, out declared))

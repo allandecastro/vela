@@ -211,6 +211,12 @@ namespace Vela.Constants
         public const string RemoveProductFromKit = "RemoveProductFromKit";
 
         /// <summary>
+        /// The <c>PrimaryEntityName</c> of an execution on a message filter with no table: a global message
+        /// (<see cref="GlobalMessages"/>) or a global Custom API.
+        /// </summary>
+        internal const string NoPrimaryEntity = "none";
+
+        /// <summary>
         /// The messages that are not bound to a primary entity: their only sdkmessagefilter has primaryobjecttypecode
         /// "none", so a step registered on them fires regardless of the entity it was declared on (Associate and
         /// Disassociate for every relationship; UnlockSalesOrderPricing, UnlockInvoicePricing and RemoveProductFromKit).

@@ -377,7 +377,11 @@ namespace Vela.Plugin
                 // but their runtime context has no matching single primary entity, so an entity filter here would never
                 // match and the step would be dropped. Skip the entity check for these messages. (For sync steps
                 // this previously surfaced as "no registered step matching message 'Associate'"; async hid it.)
-                bool relationshipMessage = PluginMessages.IsGlobalMessage(ctx.MessageName);
+                // Likewise, PrimaryEntityName "none" means the execution runs on the message's table-less filter (a
+                // global Custom API's extra steps, verified live): there is no table to tell steps apart, so a step
+                // declared from an EntityPluginBase<TEntity> still matches.
+                bool relationshipMessage = PluginMessages.IsGlobalMessage(ctx.MessageName)
+                    || string.Equals(ctx.PrimaryEntityName, PluginMessages.NoPrimaryEntity, StringComparison.OrdinalIgnoreCase);
 
                 if (!relationshipMessage &&
                     !string.IsNullOrWhiteSpace(definition.EntityLogicalName) &&

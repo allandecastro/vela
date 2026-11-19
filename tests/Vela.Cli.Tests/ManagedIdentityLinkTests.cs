@@ -427,7 +427,8 @@ public sealed class ManagedIdentityLinkTests : IDisposable
             "ContractPluginFixture.AccountContractPlugin",
             "ContractPluginFixture.ContactContractPlugin",
             "ContractPluginFixture.ScoreAccountApi",
-            "ContractPluginFixture.ExportContactsApi");
+            "ContractPluginFixture.ExportContactsApi",
+            "ContractPluginFixture.PingApi");
         // The managedidentity records of this environment (created by the admin, outside Vela).
         org.Create(new Entity("managedidentity", Dev) { ["name"] = "dev" });
         org.Create(new Entity("managedidentity", Test) { ["name"] = "test" });

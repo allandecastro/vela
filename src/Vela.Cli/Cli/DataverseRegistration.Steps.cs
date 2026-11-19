@@ -317,12 +317,22 @@ internal static partial class DataverseRegistration
         IEnumerable<JsonElement> written = diff.Added.Where(IsStep).Select(item => item.Definition)
             .Concat(diff.Changed.Where(change => string.Equals(change.Kind, "step", StringComparison.OrdinalIgnoreCase)).Select(change => change.After));
 
+        // The binding of each Custom API this run deploys, else of the live one Vela manages. A step on a Custom API
+        // defined elsewhere is checked by its message filter below.
+        Dictionary<string, (int BindingType, string? BoundEntity)> apiBindings = LocalCustomApiBindings(diff.LocalItems.Concat(diff.CurrentItems));
         Dictionary<string, Guid?> messageIds = new(StringComparer.OrdinalIgnoreCase);
         StepMetadataCache filters = new StepMetadataCache();
         List<string> problems = [];
         foreach (JsonElement element in written)
         {
             StepApplyDefinition definition = ParseStepDefinition(element);
+            if (apiBindings.TryGetValue(definition.Message, out (int BindingType, string? BoundEntity) binding)
+                && CustomApiStepTableProblem(definition, binding.BindingType, binding.BoundEntity) is string tableProblem)
+            {
+                problems.Add(tableProblem);
+                continue;
+            }
+
             if (createdApiMessages.Contains(definition.Message))
             {
                 continue;

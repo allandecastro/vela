@@ -96,6 +96,10 @@ internal static class PlanApplyCommand
                 DataverseRegistration.EnsureSolutionIsUnmanaged(service, options.SolutionUniqueName!, options.Environment);
             }
 
+            // A step on a global Custom API registers without its plugin's table (the API's only message filter has
+            // none), from the local definition of the API or its live row. Done before the live read, the rank check
+            // and the diff, so all of them see the step as apply writes it.
+            local = DataverseRegistration.UnscopeGlobalCustomApiSteps(local, DataverseRegistration.ResolveCustomApiBindings(service, local), jsonOptions);
             RegistrationState current = ReadCurrent(service, local, options, jsonOptions, out string[] unmanaged);
             local = ResolveSecureConfigs(local, current, options, jsonOptions);
 

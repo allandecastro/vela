@@ -274,6 +274,9 @@ namespace Vela.Testing
             return this;
         }
 
+        // Whether the table was declared elastic (AsElastic): only an elastic table has an Upsert message filter.
+        internal bool IsElastic(string entityLogicalName) => _systemFields.IsDeclaredElastic(entityLogicalName);
+
         /// <summary>
         /// Declares an alternate key (one or more attributes) whose combined value must be unique. Create/Update
         /// throw when another record carries the same populated key, mirroring the platform's duplicate-key fault.
@@ -638,7 +641,7 @@ namespace Vela.Testing
                     DemandAssignable(assign.Target.LogicalName);
                     // Modern Dataverse models assignment as an ownerid Update; UpdateCore infers the Assign
                     // privilege from the ownerid change, so both paths enforce identically.
-                    UpdateCore(new Entity(assign.Target.LogicalName, ResolveReference(assign.Target)) { ["ownerid"] = assign.Assignee });
+                    UpdateCore(new Entity(assign.Target.LogicalName, ResolveReference(assign.Target)) { ["ownerid"] = assign.Assignee }, readCheck: false);
                     return new AssignResponse();
                 }
 
@@ -646,7 +649,7 @@ namespace Vela.Testing
                 {
                     // The platform runs SetState as an Update of statecode/statuscode, with status -1 resolved to the
                     // state's default status.
-                    UpdateCore(SetStateUpdate(setState.EntityMoniker, setState.State, setState.Status));
+                    UpdateCore(SetStateUpdate(setState.EntityMoniker, setState.State, setState.Status), readCheck: false);
                     return new SetStateResponse();
                 }
 
