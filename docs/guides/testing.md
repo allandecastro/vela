@@ -124,9 +124,10 @@ The pipeline follows the platform's
   it rolls back. An asynchronous step's exception does not reach the caller: it is recorded on
   `pipeline.AsyncStepFailures`. An asynchronous step runs outside any transaction, so the writes it made before
   failing stay, and the asynchronous steps they queued run.
-- `ctx.IsInTransaction` is `false` for asynchronous steps, read steps, a depth-1 PreValidation step (a Custom API's
-  included) and the PreValidation step of an `Upsert`'s inner `Create` or `Update`, and `true` otherwise (a
-  PreValidation step inside an `ExecuteTransaction` is in its transaction).
+- `ctx.IsInTransaction` is `false` for asynchronous steps, the steps of a top-level read, a depth-1 PreValidation
+  step (a Custom API's included), the PreValidation step of an `Upsert`'s inner `Create` or `Update`, and the steps
+  of an `Upsert` on an elastic table. It is `true` otherwise: a PreValidation step inside an `ExecuteTransaction` is
+  in its transaction, and so are the steps of a read a plugin issues inside a write's transaction, at every stage.
 - The cascade depth is capped at 8 (`PluginBase.DefaultMaxDepth`), on top of the plugin's own depth guard.
   `WithMaxDepth(n)` changes it. The platform's default is also 8 (see
   [`IExecutionContext.Depth`](https://learn.microsoft.com/dotnet/api/microsoft.xrm.sdk.iexecutioncontext.depth)).
@@ -260,7 +261,8 @@ The pipeline follows the platform's
   declared with `WithAlternateKey(...)`: an existing record runs the Update steps, a new one the Create steps, and
   the response reports `RecordCreated` and `Target`. The steps registered on `Upsert` itself fire only for a table
   declared elastic with `AsElastic(...)`: Dataverse has `Upsert` message filters for elastic tables only, so an
-  `Upsert` step never fires for a standard table. An `Update`, `UpdateMultiple`, `Assign` or `Delete` addressed by
+  `Upsert` step never fires for a standard table. On an elastic table, the `Upsert` runs outside any transaction and
+  fires its own steps only, not the inner `Create` or `Update` steps. An `Update`, `UpdateMultiple`, `Assign` or `Delete` addressed by
   `KeyAttributes` resolves the key first, on `InMemoryOrganizationService` as through `PluginPipeline`, so its steps
   see the real record id. The `KeyAttributes` must be exactly one declared key: any
   other set of columns faults with `0x80060889`, and a declared key that matches nothing with `0x80060891`.

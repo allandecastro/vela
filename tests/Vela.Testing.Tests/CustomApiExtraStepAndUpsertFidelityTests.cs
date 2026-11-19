@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Vela.Constants;
@@ -129,15 +130,38 @@ namespace Vela.Testing.Tests
             Assert.Contains("Create/10 tx=False", XsTrace.Lines);
         }
 
-        [Fact]
-        public void An_Upsert_step_fires_for_a_table_declared_elastic()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void An_Upsert_on_an_elastic_table_fires_its_steps_outside_a_transaction_and_no_inner_step(bool exists)
         {
-            PluginPipeline pipeline = PluginPipeline.Empty().AsElastic(FakeAccount.EntityLogicalNameValue).Register<XsUpsertSteps>();
+            // Verified live (msdyn_simulationtracker): the Upsert steps fire with IsInTransaction = false and
+            // PrimaryEntityId = Guid.Empty; the inner Create or Update fires none of its steps.
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().AsElastic(FakeAccount.EntityLogicalNameValue).Register<XsUpsertSteps>().Register<XsUpsertIds>();
+            if (exists)
+            {
+                pipeline.Seed(new FakeAccount { Id = id, Name = "old" });
+            }
 
-            pipeline.Service.Execute(new UpsertRequest { Target = new FakeAccount { Id = Guid.NewGuid(), Name = "u" } });
+            UpsertResponse response = (UpsertResponse)pipeline.Service.Execute(new UpsertRequest { Target = new FakeAccount { Id = id, Name = "u" } });
 
-            Assert.Contains("Upsert/20 tx=True", XsTrace.Lines);
-            Assert.Contains("Upsert/40 tx=True", XsTrace.Lines);
+            Assert.Equal(new[] { "Upsert/20 tx=False", "id/20 " + Guid.Empty, "Upsert/40 tx=False", "id/40 " + Guid.Empty }, XsTrace.Lines);
+            Assert.Equal(!exists, response.RecordCreated);
+            Assert.Equal(id, response.Target.Id);
+            Assert.Equal("u", pipeline.GetAll(FakeAccount.EntityLogicalNameValue).Single()["name"]);
+        }
+
+        [Fact]
+        public void A_failing_Upsert_step_on_an_elastic_table_does_not_roll_back_the_write()
+        {
+            // Elastic writes are not transactional (verified live: IsInTransaction = false at PostOperation).
+            PluginPipeline pipeline = PluginPipeline.Empty().AsElastic(FakeAccount.EntityLogicalNameValue).Register<XsUpsertThrows>();
+
+            Assert.Throws<InvalidPluginExecutionException>(
+                () => pipeline.Service.Execute(new UpsertRequest { Target = new FakeAccount { Id = Guid.NewGuid(), Name = "u" } }));
+
+            Assert.Single(pipeline.GetAll(FakeAccount.EntityLogicalNameValue));
         }
 
         [Theory]
@@ -259,6 +283,25 @@ namespace Vela.Testing.Tests
 
         protected override void RegisterPluginSteps()
             => RegisterStep().OnMessage<XsCollectionMessage>().PostOperation().Sync().Handle(ctx => XsTrace.Record(ctx));
+    }
+
+    public sealed class XsUpsertIds : EntityPluginBase<FakeAccount>
+    {
+        public XsUpsertIds(string u, string s) : base(u, s) { }
+
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnMessage<UpsertRequest>().PreOperation().Sync().WithExecutionOrder(2).Handle(ctx => XsTrace.Lines.Add("id/20 " + ctx.PluginExecutionContext.PrimaryEntityId));
+            RegisterStep().OnMessage<UpsertRequest>().PostOperation().Sync().WithExecutionOrder(2).Handle(ctx => XsTrace.Lines.Add("id/40 " + ctx.PluginExecutionContext.PrimaryEntityId));
+        }
+    }
+
+    public sealed class XsUpsertThrows : EntityPluginBase<FakeAccount>
+    {
+        public XsUpsertThrows(string u, string s) : base(u, s) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnMessage<UpsertRequest>().PostOperation().Sync().Handle(ctx => throw new InvalidPluginExecutionException("no"));
     }
 
     public sealed class XsUpsertSteps : EntityPluginBase<FakeAccount>

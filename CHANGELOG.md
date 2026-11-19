@@ -137,6 +137,13 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (Framework)
 
+- `Vela.Testing`: the steps of a read a plugin issues inside a write's transaction report `IsInTransaction` = `true`
+  at every stage, as on Dataverse (verified live). They reported `false` before; a top-level read's steps still do.
+- `Vela.Testing`: an `Upsert` on an elastic table (`AsElastic`) runs as on Dataverse (verified live): its steps see
+  an empty `PrimaryEntityId` and `IsInTransaction` = `false`, a failing step does not roll the write back, and the
+  inner `Create` or `Update` fires no step. It ran the inner steps inside a transaction before.
+- `Vela.Testing`: an `Update` addressed by alternate key reaches its steps with the primary id attribute in the
+  `Target` (verified live).
 - `Vela.Testing`: an `Update` checks Read on the record before Write, as on Dataverse (verified live). A caller
   that cannot read the record gets the read fault (`0x80040220` with no Read privilege, `0x80048306` for a record
   out of reach) instead of a Write fault. A plugin that catches that fault inside the transaction carries on, as

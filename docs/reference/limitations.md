@@ -182,7 +182,7 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   inside Associate, Merge, Assign, SetState and a file upload (not verified live). There is no
   locking, isolation level or concurrency: operations run one at a time. Which messages count as reads is a name
   rule (`Retrieve*`, `WhoAmI`, file downloads). A read that a plugin issues inside a write's transaction runs within
-  it, and its steps report `IsInTransaction` = `false`, as a top-level read's steps do. `InputParameters["FromSandbox"]`
+  it, and its steps report `IsInTransaction` = `true`. `InputParameters["FromSandbox"]`
   is set only on the PreValidation stage of a plugin's own operation.
 - **Formatted values are partial.** Reads fill `FormattedValues` for lookups (the referenced record's primary name)
   and for choices whose labels are registered as metadata, in the registered label language only. Money, dates,
@@ -203,8 +203,12 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   API for a message, it cannot know the binding: a request with no `Target` runs on `"none"`, as on a global API.
 - **`Upsert` steps fire only on elastic tables.** A step registered on `Upsert` fires only for a table declared with
   `AsElastic(...)`. Dataverse has no `Upsert` message filter for a standard table, and an `Upsert` step never fires
-  for one. On an elastic table the harness still runs the inner `Create` or `Update` and its steps; whether Dataverse
-  does was not verified.
+  for one. On an elastic table the `Upsert` steps fire whatever their filtering attributes, with an empty
+  `PrimaryEntityId`, outside any transaction, and the inner `Create` or `Update` fires no step. A plain `Create` or
+  `Update` on an elastic table still runs in a transaction in the harness, and its steps report
+  `IsInTransaction` = `true`; on Dataverse, elastic writes are not transactional.
+- **An `Update` by alternate key** reaches its steps with `Target.Id` set, no `KeyAttributes` and the primary id
+  attribute in the `Target`. An `Update` by id gets no primary id attribute added to its `Target`.
 - **Fault codes are partial.** The faults the harness raises itself carry the platform code: for example, not found
   `0x80040217`, duplicate record `0x80040237`, duplicate alternate-key value `0x80060892`, missing privilege
   `0x80040220`, record out of the caller's reach `0x80048306`, undeclared key `0x80060889`, no record for a key

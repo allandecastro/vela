@@ -414,7 +414,7 @@ namespace Vela.Testing
         // of the service that issued the triggering call; InitiatingUserId is always the outermost caller. Links the
         // ParentContext for a cascaded (nested) execution, and keeps the context on the stack while the plugin runs
         // so a write it triggers sees it as the parent.
-        private void ExecuteWithContext(FakePluginExecutionContext context, IPlugin plugin, PipelineExecutionEntry entry, StepDefinition? step = null, FakePluginExecutionContext? parentContext = null, bool outsideTransaction = false)
+        private void ExecuteWithContext(FakePluginExecutionContext context, IPlugin plugin, PipelineExecutionEntry entry, StepDefinition? step = null, FakePluginExecutionContext? parentContext = null)
         {
             (Guid actingUserId, Guid businessUnitId, Guid organizationId) = _store.CurrentActor();
             Guid caller = _callerUserId ?? actingUserId;
@@ -433,7 +433,7 @@ namespace Vela.Testing
             // The PreValidation steps of an Upsert's inner Create or Update report IsInTransaction = false, as a
             // depth-1 PreValidation step does, although the Upsert's transaction is open (verified live).
             bool innerPreValidation = context.Stage == (int)PluginStages.PreValidation && _frames.Count > 0 && _frames.Peek().ParentContext != null;
-            context.IsInTransaction = _transaction != null && !outsideTransaction && !innerPreValidation;
+            context.IsInTransaction = _transaction != null && !innerPreValidation;
 
             // Verified live: every step reports the sandbox isolation mode (2) and "none" as SecondaryEntityName; a sync
             // step's OperationId is the request id, an async step's is its own system job id.
