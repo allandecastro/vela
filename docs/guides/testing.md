@@ -126,7 +126,7 @@ The pipeline follows the platform's
   failing stay, and the asynchronous steps they queued run.
 - `ctx.IsInTransaction` is `false` for asynchronous steps, the steps of a top-level read, a depth-1 PreValidation
   step (a Custom API's included), the PreValidation step of an `Upsert`'s inner `Create` or `Update`, and the steps
-  of an `Upsert` on an elastic table. It is `true` otherwise: a PreValidation step inside an `ExecuteTransaction` is
+  of an `Upsert`, `Create` or `Update` on an elastic table. It is `true` otherwise: a PreValidation step inside an `ExecuteTransaction` is
   in its transaction, and so are the steps of a read a plugin issues inside a write's transaction, at every stage.
 - The cascade depth is capped at 8 (`PluginBase.DefaultMaxDepth`), on top of the plugin's own depth guard.
   `WithMaxDepth(n)` changes it. The platform's default is also 8 (see
@@ -262,7 +262,8 @@ The pipeline follows the platform's
   the response reports `RecordCreated` and `Target`. The steps registered on `Upsert` itself fire only for a table
   declared elastic with `AsElastic(...)`: Dataverse has `Upsert` message filters for elastic tables only, so an
   `Upsert` step never fires for a standard table. On an elastic table, the `Upsert` runs outside any transaction and
-  fires its own steps only, not the inner `Create` or `Update` steps. An `Update`, `UpdateMultiple`, `Assign` or `Delete` addressed by
+  fires its own steps only, not the inner `Create` or `Update` steps; a plain `Create` or `Update` there also runs
+  outside any transaction. An `Update`, `UpdateMultiple`, `Assign` or `Delete` addressed by
   `KeyAttributes` resolves the key first, on `InMemoryOrganizationService` as through `PluginPipeline`, so its steps
   see the real record id. The `KeyAttributes` must be exactly one declared key: any
   other set of columns faults with `0x80060889`, and a declared key that matches nothing with `0x80060891`.

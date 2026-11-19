@@ -205,10 +205,11 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   `AsElastic(...)`. Dataverse has no `Upsert` message filter for a standard table, and an `Upsert` step never fires
   for one. On an elastic table the `Upsert` steps fire whatever their filtering attributes, with an empty
   `PrimaryEntityId`, outside any transaction, and the inner `Create` or `Update` fires no step. A plain `Create` or
-  `Update` on an elastic table still runs in a transaction in the harness, and its steps report
-  `IsInTransaction` = `true`; on Dataverse, elastic writes are not transactional.
-- **An `Update` by alternate key** reaches its steps with `Target.Id` set, no `KeyAttributes` and the primary id
-  attribute in the `Target`. An `Update` by id gets no primary id attribute added to its `Target`.
+  `Update` on an elastic table also runs outside any transaction: a failing PostOperation step leaves the row
+  written. An elastic `Upsert` that updates a row merges the new values into it, as on a standard table; whether
+  Dataverse replaces the whole row was not verified.
+- **An `Update`'s `Target` carries the primary id attribute**, whether the row is addressed by id or by alternate key
+  (then with `Target.Id` set and no `KeyAttributes`).
 - **Fault codes are partial.** The faults the harness raises itself carry the platform code: for example, not found
   `0x80040217`, duplicate record `0x80040237`, duplicate alternate-key value `0x80060892`, missing privilege
   `0x80040220`, record out of the caller's reach `0x80048306`, undeclared key `0x80060889`, no record for a key

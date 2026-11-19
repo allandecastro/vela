@@ -247,7 +247,8 @@ namespace Vela.Testing
 
                         return ids;
                     },
-                    _ => FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue));
+                    _ => FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue),
+                    transactional: !_store.IsElastic(entityName));
             }, sharedVariables, bulkRequest ? PluginMessages.CreateMultiple : null, innerOf);
         }
 
@@ -262,9 +263,10 @@ namespace Vela.Testing
             }
 
             // A target addressed by alternate key is resolved to the record's id before any step fires, as Dataverse
-            // does: the steps see Target.Id / PrimaryEntityId set to the resolved record, no KeyAttributes, and the
-            // primary id attribute in the Target (verified live).
-            entities = entities.Select(entity => ResolveKeyTarget(EntityValues.CloneTarget(entity))).ToArray();
+            // does: the steps see Target.Id / PrimaryEntityId set to the resolved record and no KeyAttributes. Whether
+            // addressed by key or by id, the Target carries the primary id attribute (verified live for both, Web API
+            // and SDK).
+            entities = entities.Select(entity => WithPrimaryId(_store.ResolveWriteTarget(EntityValues.CloneTarget(entity)))).ToArray();
             RunOperation<object?>(asyncQueue =>
             {
                 UpdateBatch(entities, platformUpdate: false, asyncQueue);
@@ -272,20 +274,15 @@ namespace Vela.Testing
             }, sharedVariables, bulkRequest ? PluginMessages.UpdateMultiple : null, innerOf);
         }
 
-        private Entity ResolveKeyTarget(Entity target)
+        private Entity WithPrimaryId(Entity target)
         {
-            bool byKey = target.Id == Guid.Empty && target.KeyAttributes?.Count > 0;
-            Entity resolved = _store.ResolveWriteTarget(target);
-            if (byKey)
+            string primaryId = _store.PrimaryIdAttribute(target.LogicalName);
+            if (target.Id != Guid.Empty && !target.Contains(primaryId))
             {
-                string primaryId = _store.PrimaryIdAttribute(resolved.LogicalName);
-                if (!resolved.Contains(primaryId))
-                {
-                    resolved[primaryId] = resolved.Id;
-                }
+                target[primaryId] = target.Id;
             }
 
-            return resolved;
+            return target;
         }
 
         // The stages of an Update batch inside the current operation. A platform-generated Update (the main operation
@@ -323,6 +320,7 @@ namespace Vela.Testing
                     return null;
                 },
                 _ => FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue),
+                transactional: !_store.IsElastic(entityName),
                 preValidation: !platformUpdate);
         }
 

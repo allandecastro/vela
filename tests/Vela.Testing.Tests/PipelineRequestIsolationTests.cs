@@ -175,6 +175,20 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
+        public void An_Update_by_id_reaches_the_steps_with_the_primary_id_attribute()
+        {
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<RiUpdateLogsTarget>().Seed(new RiRecord { Id = id, Name = "x" });
+            Entity target = new Entity(RiRecord.LogicalNameValue, id) { ["vela_name"] = "y" };
+
+            pipeline.Service.Update(target);
+
+            // Verified live (SDK Update and UpdateRequest by id): the Target carries the primary id attribute.
+            Assert.Equal(new[] { $"10:{id}:keys=0:pk={id}", $"20:{id}:keys=0:pk={id}" }, RiProbe.Events);
+            Assert.False(target.Contains("vela_rirecordid"));
+        }
+
+        [Fact]
         public void A_top_level_reads_steps_report_no_transaction()
         {
             PluginPipeline pipeline = PluginPipeline.Empty().Register<RiReadLogs>();
