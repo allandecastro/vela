@@ -243,9 +243,10 @@ namespace Vela.Testing.Security
                     return null;
                 }
 
-                // Learn says a user whose Read comes only from a "team privileges only" team needs it at Organization
-                // level; that is unverified live, so a user owner takes Read at any level from any of its roles.
-                canRead = HoldsPrivilege(owner.Id, table, Privilege.Read);
+                // A Basic-level Read from a "team privileges only" team does not count (verified live: 0x80040299);
+                // Business Unit level already does (Learn says Organization; Business Unit was enough live, with the
+                // owner and the record in the same business unit). Read from the user's own roles counts at any level.
+                canRead = GrantedLevels(owner.Id, table, Privilege.Read).Any(grant => grant.RestrictToTeamOwned == null);
             }
 
             if (canRead)

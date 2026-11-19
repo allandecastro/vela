@@ -141,7 +141,18 @@ All notable changes to Vela are documented here. The format is based on
   that cannot read the record gets the read fault (`0x80040220` with no Read privilege, `0x80048306` for a record
   out of reach) instead of a Write fault. A plugin that catches that fault inside the transaction carries on, as
   after a failed read; the save failed with `0x8009000C` before. A caught Write denial still ends the transaction.
-  The updates the platform makes inside Associate, Merge, Assign, SetState and a file upload are unchanged.
+  The updates the platform makes inside Assign and a file upload check no Read.
+- `Vela.Testing`: `SetState`, `Merge` and a 1:N `Associate` check Read on the record they write before writing it,
+  as on Dataverse (verified live). That fault, caught by a plugin inside the transaction, ends the transaction like
+  a failed write (`0x8009000C`), unlike the `Update` message's Read check. They wrote without Read before.
+- `Vela.Testing`: a right from an access team counts only when the user's roles hold that privilege on the table at
+  some depth, as for a share (verified live: an access team with Write and no Write privilege on the table is denied
+  with `0x80040220`). Access-team rights alone granted it before; a test that relied on that needs the privilege at
+  User level in the role.
+- `Vela.Testing`: the images of a step that impersonates a user are filtered by that user's field security, not the
+  calling user's (verified live). A secured column the impersonated user cannot read is now absent.
+- `Vela.Testing`: a user owner whose Read comes only from a "Team privileges only" team needs it at Business Unit
+  level or more; User level fails with `0x80040299` (verified live). Any level was accepted before.
 - `Vela.Testing`: a row created through `PluginPipeline` from an early-bound class without an `OwnerId` property is
   organization-owned, as it already was through `InMemoryOrganizationService`. It got `ownerid`, `owninguser` and
   `owningbusinessunit` before, because the pipeline's copy of the target lost its type. The `OwnershipType` of

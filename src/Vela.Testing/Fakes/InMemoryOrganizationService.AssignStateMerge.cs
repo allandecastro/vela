@@ -74,6 +74,11 @@ namespace Vela.Testing
                 throw PlatformFault.Create(PlatformFault.MergeSubordinateInactive, $"sub-entity:{subordinateId} of type '{entity}' is deactive");
             }
 
+            // Verified live for a caller without Read on the table: Merge checks Read before writing anything. Which
+            // of the two rows it checks was not isolated, so both are.
+            DemandPlatformRead(entity, target.Id);
+            DemandPlatformRead(entity, subordinateId);
+
             bool isIncident = string.Equals(entity, "incident", StringComparison.OrdinalIgnoreCase);
 
             RunAtomically<object?>(() =>

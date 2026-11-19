@@ -48,16 +48,14 @@ namespace Vela.Testing.Security
 
             // Record-level access is unioned with role access: an explicit share or an inherited grant (PoA, to the
             // user or any of its teams) or an access-team grant (to the user) also confers the privilege. Create is
-            // never record-scoped. A PoA grant only counts when the user holds the privilege on the table at some
-            // depth (Learn: sharing can't give rights the user's role doesn't have for that table; inherited access
-            // was verified live to need at least User-level privilege on the child table too).
+            // never record-scoped. Either only counts when the user holds the privilege on the table at some depth
+            // (Learn: sharing can't give rights the user's role doesn't have for that table; verified live for
+            // inherited access and for an access team's Write).
             AccessRights right = ToAccessRight(privilege);
-            if (record != null && right != AccessRights.None)
+            if (record != null && right != AccessRights.None && granted.Count > 0)
             {
-                AccessRights poa = granted.Count > 0
-                    ? _sharing.RightsFor(table, record.Id, PrincipalIds(userId))
-                    : AccessRights.None;
-                AccessRights shared = poa | _accessTeams.RightsFor(table, record.Id, userId);
+                AccessRights shared = _sharing.RightsFor(table, record.Id, PrincipalIds(userId))
+                    | _accessTeams.RightsFor(table, record.Id, userId);
                 if ((shared & right) == right)
                 {
                     return true;

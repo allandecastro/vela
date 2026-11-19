@@ -215,6 +215,12 @@ namespace Vela.Testing
                     ? (related.LogicalName, related.Id, set ? new EntityReference(entityName, entityId) : null)
                     : (entityName, entityId, set ? related : null);
 
+                if (set)
+                {
+                    // Verified live for Associate (Disassociate not probed): Read on the child row first.
+                    DemandPlatformRead(childEntity, childId);
+                }
+
                 PlatformUpdate(new Entity(childEntity, childId) { [relationship.ReferencingAttribute] = parentRef });
             }
         }

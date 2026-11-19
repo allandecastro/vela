@@ -9,7 +9,8 @@ using Xunit;
 namespace Vela.Testing.Tests
 {
     // Access teams: adding a user to a record's access team (from a template) grants that user the template's
-    // rights on that record — unioned with role and shared access, and removed per template.
+    // rights on that record — unioned with role and shared access, and removed per template. A right counts only
+    // when the user's roles hold the privilege on the table at some depth (verified live).
     public sealed class AccessTeamTests
     {
         private static readonly Guid Alice = new Guid("a11ce000-0000-0000-0000-000000000801");
@@ -38,7 +39,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(template, AccessRights.ReadAccess | AccessRights.WriteAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo).Grant("account", AccessLevel.User, Privilege.Read)).User(Alice, SalesBu, "appender")) // Read on her own accounts only: Bob's is out of reach
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo).Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write)).User(Alice, SalesBu, "appender")) // Read on her own accounts only: Bob's is out of reach
                 .Seed(AccountOwnedBy(record, Bob));
 
             Assert.Throws<FaultException<OrganizationServiceFault>>(
@@ -48,6 +49,25 @@ namespace Vela.Testing.Tests
 
             Assert.NotNull(svc.Retrieve("account", record, new ColumnSet(true)));       // template granted Read
             svc.Update(new Entity("account", record) { ["name"] = "edited" });          // ...and Write
+        }
+
+        [Fact]
+        public void An_access_team_right_needs_the_table_privilege_at_some_depth()
+        {
+            Guid record = Guid.NewGuid();
+            Guid template = Guid.NewGuid();
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithAccessTeamTemplate(template, AccessRights.ReadAccess | AccessRights.WriteAccess)
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("reader", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.AppendTo)).User(Alice, SalesBu, "reader"))
+                .Seed(AccountOwnedBy(record, Bob));
+            AddToTeam(svc, record, Alice, template);
+
+            // Verified live: the team grants Write on the record, but no role holds prvWriteAccount at any depth.
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(
+                () => svc.Update(new Entity("account", record) { ["name"] = "edited" }));
+            Assert.Equal(unchecked((int)0x80040220), fault.Detail.ErrorCode);
+            Assert.Contains("prvWriteaccount", fault.Detail.Message);
         }
 
         [Fact]
@@ -84,7 +104,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(readTemplate, AccessRights.ReadAccess)
                 .WithAccessTeamTemplate(writeTemplate, AccessRights.WriteAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo).Grant("account", AccessLevel.User, Privilege.Read)).User(Alice, SalesBu, "appender")) // Read on her own accounts only: Bob's is reached through the read team alone
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo).Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write)).User(Alice, SalesBu, "appender")) // Read on her own accounts only: Bob's is reached through the read team alone
                 .Seed(AccountOwnedBy(record, Bob));
             AddToTeam(svc, record, Alice, readTemplate);
             AddToTeam(svc, record, Alice, writeTemplate);
@@ -120,7 +140,7 @@ namespace Vela.Testing.Tests
             InMemoryOrganizationService svc = new InMemoryOrganizationService()
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(template, AccessRights.ReadAccess | AccessRights.DeleteAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo)).User(Alice, SalesBu, "appender"))
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo).Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write, Privilege.Delete)).User(Alice, SalesBu, "appender"))
                 .Seed(AccountOwnedBy(record, Bob));
             AddToTeam(svc, record, Alice, template);
 
@@ -146,7 +166,7 @@ namespace Vela.Testing.Tests
                 .WithCurrentUser(Alice)
                 .WithAccessTeamTemplate(readWrite, AccessRights.ReadAccess | AccessRights.WriteAccess)
                 .WithAccessTeamTemplate(readDelete, AccessRights.ReadAccess | AccessRights.DeleteAccess)
-                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo)).User(Alice, SalesBu, "appender"))
+                .WithSecurity(s => s.BusinessUnit(SalesBu).Role("appender", r => r.Grant("account", AccessLevel.Organization, Privilege.AppendTo).Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write, Privilege.Delete)).User(Alice, SalesBu, "appender"))
                 .Seed(AccountOwnedBy(record, Bob));
             AddToTeam(svc, record, Alice, readWrite);
             AddToTeam(svc, record, Alice, readDelete);

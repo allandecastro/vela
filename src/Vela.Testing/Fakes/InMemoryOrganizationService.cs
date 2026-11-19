@@ -649,6 +649,7 @@ namespace Vela.Testing
                 {
                     // The platform runs SetState as an Update of statecode/statuscode, with status -1 resolved to the
                     // state's default status.
+                    DemandPlatformRead(setState.EntityMoniker.LogicalName, ResolveReference(setState.EntityMoniker));
                     UpdateCore(SetStateUpdate(setState.EntityMoniker, setState.State, setState.Status), readCheck: false);
                     return new SetStateResponse();
                 }

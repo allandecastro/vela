@@ -61,6 +61,7 @@ namespace Vela.Testing
                     status ?? new OptionSetValue(-1),
                     inputs =>
                     {
+                        _store.DemandPlatformRead(record.LogicalName, record.Id);
                         Entity update = _store.SetStateUpdate(record, OptionSetInput(inputs, "State"), OptionSetInput(inputs, "Status"));
                         UpdateBatch(new[] { update }, platformUpdate: true, asyncQueue);
                     },

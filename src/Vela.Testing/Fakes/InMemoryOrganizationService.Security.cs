@@ -267,8 +267,9 @@ namespace Vela.Testing
             }
         }
 
-        // Step images are masked like a Retrieve by the calling user: a secured column that user cannot read is absent
-        // from the pre- and post-images (verified live, 2026-10-11).
+        // Step images are masked like a Retrieve by the current user (the pipeline switches to the impersonated user
+        // first, when the step has one): a secured column that user cannot read is absent from the pre- and
+        // post-images (verified live, 2026-10-11 and 2026-11-18).
         internal void MaskSecuredImageColumns(Entity image) => MaskSecuredColumns(image);
 
         // Field-level security: drop field-secured columns the current user may not read from a returned record.

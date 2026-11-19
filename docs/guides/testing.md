@@ -119,7 +119,8 @@ The pipeline follows the platform's
   reduced the open transaction count" (`0x8009000C`, `-2146893812`). A caught failed **read** does not end the
   transaction: a missing record, a missing Read privilege, a record out of the role's depth. An `Update` checks
   Read on the record before Write, so an `Update` the caller cannot read fails with the read fault (`0x80040220`
-  or `0x80048306`) and, caught, does not end the transaction either.
+  or `0x80048306`) and, caught, does not end the transaction either. `SetState`, `Merge` and a 1:N `Associate`
+  also check Read on the record they write, but that failure, caught, ends the transaction like a failed write.
 - **Asynchronous** steps run once the outermost operation (or `ExecuteTransaction` batch) commits, and never when
   it rolls back. An asynchronous step's exception does not reach the caller: it is recorded on
   `pipeline.AsyncStepFailures`. An asynchronous step runs outside any transaction, so the writes it made before

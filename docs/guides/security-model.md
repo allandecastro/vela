@@ -75,8 +75,8 @@ The harness checks the Read privilege first, then whether the record is in reach
 
 Owning a record (directly or through a team) satisfies the User depth. Changing `ownerid` (with `AssignRequest` or a
 plain `Update`) needs the **Assign** privilege, and the owning business unit follows the new owner. A new owner the
-security model knows must hold Read on the table (User level is enough), whoever sets it, a PreOperation plugin
-included; otherwise the Create, Update or Assign fails with `0x80040299` (`0x80042f0a` when an owner team has no role,
+security model knows must hold Read on the table (User level is enough, Business Unit level when a user's Read comes
+only from a "Team privileges only" team), whoever sets it, a PreOperation plugin included; otherwise the Create, Update or Assign fails with `0x80040299` (`0x80042f0a` when an owner team has no role,
 on Update or Assign). See [Record ownership](https://learn.microsoft.com/power-platform/admin/update-record-owner#record-ownership).
 
 ## Sharing
@@ -141,7 +141,9 @@ and [inherited access](https://learn.microsoft.com/troubleshoot/power-platform/d
 
 `WithAccessTeamTemplate(templateId, rights)` registers a template's rights. A plugin then grants a user those rights
 on a record with `AddUserToRecordTeamRequest`, and removes them with `RemoveUserFromRecordTeamRequest`. They are
-added to role and shared access. Reading the record still needs the Read privilege on the table (see [Reads](#reads)).
+added to role and shared access. Like a share, a right from an access team counts only when the user's roles hold
+that privilege on the table at some depth: reading the record still needs the Read privilege on the table (see
+[Reads](#reads)), and updating it the Write privilege.
 
 ## Hierarchy security
 
@@ -165,7 +167,8 @@ create:)` grants it to a user or team, as a column security profile does. The th
 - without `update`, an Update that sets the column throws;
 - without `create`, a Create that sets the column throws. `update: true` alone does not allow it.
 
-These checks apply whatever the record access. See
+These checks apply whatever the record access. Step images are filtered the same way, for the user the step
+impersonates when it has one, otherwise for the calling user. See
 [Column-level security](https://learn.microsoft.com/power-platform/admin/field-level-security).
 
 ## Role membership
