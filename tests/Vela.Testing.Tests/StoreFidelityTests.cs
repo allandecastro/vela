@@ -296,17 +296,20 @@ namespace Vela.Testing.Tests
                 svc.Associate("lead", lead, new Relationship("account_contacts"), new EntityReferenceCollection { new EntityReference("contact", contact) }));
 
             Assert.Equal(unchecked((int)0x80040203), fault.Detail.ErrorCode);
+            Assert.Contains("does not play a role in many-to-many relationship", fault.Detail.Message);
             Assert.Empty(svc.GetAll("account_contact"));
         }
 
         [Fact]
-        public void N_to_n_associate_to_a_record_of_the_wrong_table_faults()
+        public void N_to_n_associate_to_a_record_of_the_wrong_table_faults_with_the_sql_constraint_code()
         {
             InMemoryOrganizationService svc = AccountContacts(out Guid account, out _, out Guid lead);
 
-            Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
+            // Verified live: the related side is not validated, the intersect row's foreign key fails in SQL.
+            FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() =>
                 svc.Associate("account", account, new Relationship("account_contacts"), new EntityReferenceCollection { new EntityReference("lead", lead) }));
 
+            Assert.Equal(unchecked((int)0x80048D21), fault.Detail.ErrorCode);
             Assert.Empty(svc.GetAll("account_contact"));
         }
 
