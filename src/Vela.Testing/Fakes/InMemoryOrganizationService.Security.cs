@@ -267,8 +267,9 @@ namespace Vela.Testing
             }
         }
 
-        // Step images are masked like a Retrieve by the calling user: a secured column that user cannot read is absent
-        // from the pre- and post-images (verified live, 2026-10-11).
+        // Step images are masked like a Retrieve by the current user (the pipeline switches to the impersonated user
+        // first, when the step has one): a secured column that user cannot read is absent from the pre- and
+        // post-images (verified live, 2026-10-11 and 2026-11-18).
         internal void MaskSecuredImageColumns(Entity image) => MaskSecuredColumns(image);
 
         // Field-level security: drop field-secured columns the current user may not read from a returned record.
@@ -410,6 +411,17 @@ namespace Vela.Testing
 
         // The full access decision for the current user: role access plus record-level access (explicit shares,
         // inherited grants, access teams), all evaluated by the security model. Assumes security is configured.
+        // Verified live: AddUserToRecordTeam refuses a user whose roles lack a privilege the template grants
+        // (0x80048342), at any depth. Off is a no-op.
+        private void DemandTemplatePrivileges(string entityName, Guid userId, AccessRights rights)
+        {
+            if (Enforcing?.MissingTemplatePrivilege(userId, entityName, rights) is Privilege missing)
+            {
+                throw PlatformFault.Create(PlatformFault.AccessTeamMemberLacksPrivilege,
+                    $"The user can't be added to the team because the user doesn't have the 'prv{missing}{entityName}' privilege.");
+            }
+        }
+
         private bool CanAccess(string entityName, Privilege privilege, Entity? record) =>
             _security!.IsGranted(_currentUserId, entityName, privilege, record);
 

@@ -336,7 +336,8 @@ namespace Vela.Testing.Tests
                     .User(Alice, SalesBu, "admin")
                     .Role("basic", r => r.Grant("account", AccessLevel.User, Privilege.Read, Privilege.Write)) // a share needs the table privilege
                     .User(Bob, SalesBu, "basic")
-                    .User(Stranger, SalesBu))
+                    .Role("appendto", r => r.Grant("account", AccessLevel.User, Privilege.AppendTo)) // an access-team right needs it too
+                    .User(Stranger, SalesBu, "appendto"))
                 .Seed(AccountOwnedBy(record, Alice, SalesBu))
                 .WithSharedRecord(new EntityReference("account", record), new EntityReference("systemuser", Bob), AccessRights.ReadAccess);
             svc.Execute(new AddUserToRecordTeamRequest

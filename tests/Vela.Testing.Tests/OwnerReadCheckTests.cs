@@ -11,7 +11,9 @@ namespace Vela.Testing.Tests
 {
     // Fidelity (verified live): a record's owner must hold Read on its table. Create with ownerid, an Update of
     // ownerid, Assign and a PreOperation plugin writing Target["ownerid"] all fail with 0x80040299, or 0x80042f0a for
-    // an owner team with no role on Update/Assign, and an Update writes nothing. Read at User level is enough.
+    // an owner team with no role on Update/Assign, and an Update writes nothing. Read at User level is enough, except
+    // for a user owner whose Read comes only from a "team privileges only" team: its level must reach the owner's
+    // business unit from the team's.
     public sealed class OwnerReadCheckTests
     {
         private const int TargetPrincipalLacksReadPrivilege = unchecked((int)0x80040299);
@@ -77,6 +79,48 @@ namespace Vela.Testing.Tests
             svc.Create(new Entity("account") { ["ownerid"] = TeamRef(ReaderTeam) }); // inheritance mode does not matter
 
             Assert.Equal(3, svc.GetAll("account").Count);
+        }
+
+        // Verified live: the level is counted from the team's business unit. Same business unit: Business Unit and
+        // Parent: Child suffice. Team in a child business unit of the owner's: only Organization does.
+        [Theory]
+        [InlineData(AccessLevel.User, false, false)]
+        [InlineData(AccessLevel.BusinessUnit, false, true)]
+        [InlineData(AccessLevel.ParentChild, false, true)]
+        [InlineData(AccessLevel.Organization, false, true)]
+        [InlineData(AccessLevel.User, true, false)]
+        [InlineData(AccessLevel.BusinessUnit, true, false)]
+        [InlineData(AccessLevel.ParentChild, true, false)]
+        [InlineData(AccessLevel.Organization, true, true)]
+        public void A_user_owner_whose_read_comes_from_a_team_privileges_only_team_needs_a_level_reaching_its_business_unit(AccessLevel level, bool teamInChildBu, bool succeeds)
+        {
+            Guid carol = new Guid("ca401000-0000-0000-0000-000000000c06");
+            Guid team = new Guid("7ea00000-0000-0000-0000-000000000c07");
+            Guid childBu = new Guid("b0000000-0000-0000-0000-000000000cb2");
+            InMemoryOrganizationService svc = new InMemoryOrganizationService()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s => s
+                    .BusinessUnit(SalesBu)
+                    .BusinessUnit(childBu, SalesBu)
+                    .Role("admin", r => r.Grant("account", AccessLevel.Organization, Privilege.Create, Privilege.Read, Privilege.Write, Privilege.Assign))
+                    .Role("teamreader", r => r.Grant("account", level, Privilege.Read))
+                    .User(Alice, SalesBu, "admin")
+                    .User(carol, SalesBu)
+                    .Team(team, teamInChildBu ? childBu : SalesBu, TeamPrivilegeInheritance.TeamOnly, "teamreader")
+                    .Member(carol, team));
+
+            Action create = () => svc.Create(new Entity("account") { ["ownerid"] = new EntityReference("systemuser", carol) });
+
+            if (succeeds)
+            {
+                create();
+                Assert.Single(svc.GetAll("account"));
+            }
+            else
+            {
+                Assert.Equal(TargetPrincipalLacksReadPrivilege, Fault(create).ErrorCode);
+                Assert.Empty(svc.GetAll("account"));
+            }
         }
 
         [Fact]

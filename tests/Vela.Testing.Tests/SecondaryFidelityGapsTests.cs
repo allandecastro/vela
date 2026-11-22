@@ -22,6 +22,7 @@ namespace Vela.Testing.Tests
     {
         private static readonly Guid Alice = new Guid("a11ce000-0000-0000-0000-000000000451");
         private static readonly Guid SalesBu = new Guid("b0000000-0000-0000-0000-000000000451");
+        internal static readonly Guid Bob = new Guid("b0b00000-0000-0000-0000-000000000452");
 
         private static Guid UploadFile(InMemoryOrganizationService crm, string entity, Guid id, string column)
         {
@@ -157,6 +158,40 @@ namespace Vela.Testing.Tests
             pipeline.Service.Update(new Entity("account", account) { ["name"] = "Renamed" });
 
             Assert.Equal(expected, string.Join("|", GapSecuredImages.Seen));
+        }
+
+        [Theory]
+        [InlineData(false, "s40 pre:absent post:absent")]
+        [InlineData(true, "s40 pre:50000 post:50000")]
+        public void Impersonated_step_images_mask_for_the_impersonated_user_not_the_caller(bool impersonatedCanRead, string expected)
+        {
+            // Verified live: the mask follows the user the step impersonates, even when the caller can read the column.
+            Guid account = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .WithCurrentUser(Alice)
+                .WithSecurity(s =>
+                {
+                    s.BusinessUnit(SalesBu)
+                        .Role("editor", r => r.Grant("account", AccessLevel.Organization, Privilege.Read, Privilege.Write))
+                        .User(Alice, SalesBu, "editor")
+                        .User(Bob, SalesBu, "editor")
+                        .SecureColumn("account", "creditlimit");
+                    if (impersonatedCanRead)
+                    {
+                        s.FieldPermission(Bob, "account", "creditlimit", read: true);
+                    }
+                    else
+                    {
+                        s.FieldPermission(Alice, "account", "creditlimit", read: true);
+                    }
+                })
+                .Register<GapImpersonatedSecuredImages>()
+                .Seed(OwnedBy(new Entity("account", account) { ["name"] = "Zava", ["creditlimit"] = new Money(50000m) }, Alice));
+            GapImpersonatedSecuredImages.Seen.Clear();
+
+            pipeline.Service.Update(new Entity("account", account) { ["name"] = "Renamed" });
+
+            Assert.Equal(expected, string.Join("|", GapImpersonatedSecuredImages.Seen));
         }
 
         [Fact]
@@ -524,6 +559,24 @@ namespace Vela.Testing.Tests
                 .Handle(ctx => Seen.Add("s40 pre:" + Secured(ctx.PluginExecutionContext.PreEntityImages)
                     + " post:" + Secured(ctx.PluginExecutionContext.PostEntityImages)));
         }
+
+        private static string Secured(EntityImageCollection images)
+        {
+            Entity image = images.Values.Single();
+            return image.Contains("creditlimit") ? image.GetAttributeValue<Money>("creditlimit").Value.ToString("0", System.Globalization.CultureInfo.InvariantCulture) : "absent";
+        }
+    }
+
+    public sealed class GapImpersonatedSecuredImages : EntityPluginBase<FakeAccount>
+    {
+        public static readonly List<string> Seen = new List<string>();
+
+        public GapImpersonatedSecuredImages(string u, string s) : base(u, s) { }
+
+        protected override void RegisterPluginSteps()
+            => RegisterStep().OnUpdate().PostOperation().Sync().FilterOn(a => a.Name).WithImpersonation(SecondaryFidelityGapsTests.Bob).WithPreImage().WithPostImage()
+                .Handle(ctx => Seen.Add("s40 pre:" + Secured(ctx.PluginExecutionContext.PreEntityImages)
+                    + " post:" + Secured(ctx.PluginExecutionContext.PostEntityImages)));
 
         private static string Secured(EntityImageCollection images)
         {

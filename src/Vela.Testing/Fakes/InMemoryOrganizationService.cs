@@ -649,6 +649,7 @@ namespace Vela.Testing
                 {
                     // The platform runs SetState as an Update of statecode/statuscode, with status -1 resolved to the
                     // state's default status.
+                    DemandPlatformRead(setState.EntityMoniker.LogicalName, ResolveReference(setState.EntityMoniker));
                     UpdateCore(SetStateUpdate(setState.EntityMoniker, setState.State, setState.Status), readCheck: false);
                     return new SetStateResponse();
                 }
@@ -765,6 +766,7 @@ namespace Vela.Testing
 
                     // Managing a record's access team needs AppendTo on the record, like relating to it.
                     DemandAccess(addToTeam.Record.LogicalName, Privilege.AppendTo, StoredOrThrow(addToTeam.Record));
+                    DemandTemplatePrivileges(addToTeam.Record.LogicalName, addToTeam.SystemUserId, rights);
                     _accessTeams.Add(addToTeam.Record, addToTeam.SystemUserId, addToTeam.TeamTemplateId, rights);
                     AddUserToRecordTeamResponse addResponse = new AddUserToRecordTeamResponse();
                     addResponse.Results["AccessTeamId"] = DeterministicGuid.From("accessteam", addToTeam.Record.Id, addToTeam.TeamTemplateId);

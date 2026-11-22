@@ -22,6 +22,12 @@ namespace Vela.Testing
         /// <summary>0x80040800: the message is not supported for the table (verified live for Assign on an org-owned table).</summary>
         public const int MessageNotSupportedForEntity = unchecked((int)0x80040800);
 
+        /// <summary>0x80048342: AddUserToRecordTeam for a user without the template's privileges (verified live).</summary>
+        public const int AccessTeamMemberLacksPrivilege = unchecked((int)0x80048342);
+
+        /// <summary>0x80045301: Merge without Write, AppendTo or Share on the table (verified live).</summary>
+        public const int MergePrivilegeDenied = unchecked((int)0x80045301);
+
         /// <summary>0x80048D21: a SQL constraint failed (verified live for an N:N related record of the wrong table).</summary>
         public const int SqlConstraint = unchecked((int)0x80048D21);
 
