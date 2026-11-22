@@ -124,7 +124,7 @@ namespace Vela.Testing
             DemandRoleForReflexive(relationship, rel.FirstEntity, rel.SecondEntity);
             DemandManyToManyAccess(entityName, entityId, relatedEntities);
             DemandAssociationTargetsExist(entityName, entityId, relatedEntities);
-            DemandManyToManySides(relationship.SchemaName, rel, entityName, relatedEntities);
+            DemandManyToManySides(relationship.SchemaName, rel, entityName, entityId, relatedEntities);
             (string callerAttribute, string relatedAttribute) = rel.AttributesFor(entityName, relationship.PrimaryEntityRole);
             Dictionary<Guid, Entity> intersect = Table(rel.IntersectEntity);
             EntityReference caller = new EntityReference(entityName, entityId);
@@ -157,16 +157,17 @@ namespace Vela.Testing
         }
 
         // An N:N Associate links the relationship's two tables: the calling record must be one side and every related
-        // record the other (the same table for a self-referential relationship). Anything else would write an intersect
-        // row naming a table the relationship does not join. The fault code is not verified live.
-        private static void DemandManyToManySides(string schemaName, RelationshipRegistry.ManyToMany relationship, string entityName, EntityReferenceCollection relatedEntities)
+        // record the other (the same table for a self-referential relationship). Verified live: a calling record of
+        // another table faults with 0x80040203; a related record of the wrong table is not validated, and the
+        // intersect row's foreign key fails in SQL (0x80048D21).
+        private static void DemandManyToManySides(string schemaName, RelationshipRegistry.ManyToMany relationship, string entityName, Guid entityId, EntityReferenceCollection relatedEntities)
         {
             bool isFirst = string.Equals(entityName, relationship.FirstEntity, StringComparison.OrdinalIgnoreCase);
             bool isSecond = string.Equals(entityName, relationship.SecondEntity, StringComparison.OrdinalIgnoreCase);
             if (!isFirst && !isSecond)
             {
                 throw PlatformFault.Create(PlatformFault.InvalidArgument,
-                    $"Cannot associate a {entityName} record over the relationship '{schemaName}': it links {relationship.FirstEntity} and {relationship.SecondEntity}.");
+                    $"The entity with id {entityId} does not play a role in many-to-many relationship '{schemaName}' (it links {relationship.FirstEntity} and {relationship.SecondEntity}).");
             }
 
             string otherSide = isFirst ? relationship.SecondEntity : relationship.FirstEntity;
@@ -174,8 +175,9 @@ namespace Vela.Testing
             {
                 if (!string.Equals(related.LogicalName, otherSide, StringComparison.OrdinalIgnoreCase))
                 {
-                    throw PlatformFault.Create(PlatformFault.InvalidArgument,
-                        $"Cannot associate {entityName} with a {related.LogicalName} record over the relationship '{schemaName}': it links {relationship.FirstEntity} and {relationship.SecondEntity}.");
+                    throw PlatformFault.Create(PlatformFault.SqlConstraint,
+                        $"Sql error: Statement conflicted with a constraint. The INSERT statement conflicted with the FOREIGN KEY constraint of '{schemaName}': " +
+                        $"a {related.LogicalName} record cannot be associated with {entityName} over it (it links {relationship.FirstEntity} and {relationship.SecondEntity}).");
                 }
             }
         }

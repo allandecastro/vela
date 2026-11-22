@@ -28,6 +28,9 @@ namespace Vela.Testing
         /// <summary>0x80045301: Merge without Write, AppendTo or Share on the table (verified live).</summary>
         public const int MergePrivilegeDenied = unchecked((int)0x80045301);
 
+        /// <summary>0x80048D21: a SQL constraint failed (verified live for an N:N related record of the wrong table).</summary>
+        public const int SqlConstraint = unchecked((int)0x80048D21);
+
         /// <summary>0x80045304: the Merge subordinate is already inactive (verified live).</summary>
         public const int MergeSubordinateInactive = unchecked((int)0x80045304);
 
