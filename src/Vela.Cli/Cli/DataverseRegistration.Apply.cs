@@ -220,12 +220,11 @@ internal static partial class DataverseRegistration
 
     // True when a changed Custom API keeps its uniqueName but is now implemented by another plugin type (its class
     // was renamed or moved): its live row still points at the old type until it is detached.
-    // A Custom API of a retired assembly moves to the local type even when the class kept its name.
     internal static bool IsCustomApiImplementationChange(RegistrationChange change)
     {
         string? before = TryGetString(change.Before, "pluginTypeName");
         return !string.IsNullOrWhiteSpace(before)
-            && (change.MovesFromRetiredAssembly || !string.Equals(before, TryGetString(change.After, "pluginTypeName"), StringComparison.Ordinal));
+            && !string.Equals(before, TryGetString(change.After, "pluginTypeName"), StringComparison.Ordinal);
     }
 
     // Clears the Custom API's plugintypeid so the package upload can remove the old plugin type. If the apply stops

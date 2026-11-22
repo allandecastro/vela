@@ -82,7 +82,10 @@ is left untouched.
   images, and Custom APIs with their request and response parameters. Web resources (`--webresources`) are a
   work-in-progress preview and will change.
 - **What they do not manage:** solutions, SDK message filters (read only), security roles, field security and
-  environment variables. Assemblies are created or updated, never deleted. A step's secure configuration is written
+  environment variables. Assemblies are created or updated, never deleted. A deployed plugin package keeps the
+  assemblies it was created with: when the local package renames, drops or adds one, `plan` and `apply` stop and the
+  package must be deleted by hand and created again (see
+  [Rename the plugin assembly](../guides/plan-apply.md#rename-the-plugin-assembly)). A step's secure configuration is written
   only when `apply` is given its value (`--secure-config`); otherwise the environment keeps it (see
   [Write a plugin](../guides/plugins.md)).
 - **One existing, unmanaged solution per run.** `plan` and `apply` require `--solution`. The solution must already

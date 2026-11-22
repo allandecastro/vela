@@ -74,7 +74,7 @@ internal static partial class DataverseRegistration
     }
 
     // The publisher prefix of each solution, per connection: plan and apply need it in the preview (package actions,
-    // retired assemblies, solution membership, Custom API names), the publish and the read-back, and it does not change
+    // package assembly set, solution membership, Custom API names), the publish and the read-back, and it does not change
     // during a run. Keyed by the connection (a solution-scoped wrapper shares its inner service's entry), so a new
     // connection reads it again. A failed lookup is not cached.
     private static readonly ConditionalWeakTable<IOrganizationService, Dictionary<string, string>> SolutionPrefixes = new();
