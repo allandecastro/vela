@@ -382,7 +382,7 @@ namespace Vela.Testing
             PipelineExecutionEntry entry = new PipelineExecutionEntry(registration.Step.PluginTypeName, invocation.Message, invocation.Stage, registration.Step.Mode, invocation.EntityLogicalName, _depth);
             _log.Add(entry);
             IPlugin plugin = registration.GetInstance(SecureConfigFor(registration.Step));
-            ExecuteWithContext(context, plugin, entry, registration.Step, invocation.ParentContext, invocation.OutsideTransaction);
+            ExecuteWithContext(context, plugin, entry, registration.Step, invocation.ParentContext);
 
             // A synchronous step changes the message as it flows: a PreValidation/PreOperation step that replaces an
             // input (a Retrieve's ColumnSet, a RetrieveMultiple's Query, ...) changes what the main operation runs, and

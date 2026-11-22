@@ -39,9 +39,9 @@ namespace Vela.Testing
 
             return RunOperation<OrganizationResponse>(asyncQueue =>
             {
-                // A read is not transactional: IsInTransaction is false at every stage (verified live for a top-level
-                // read). A read issued from inside a write's transaction still runs within it (its data and its
-                // rollback), but its steps also report false: that nested case was NOT verified live.
+                // A read opens no transaction: a top-level read's steps report IsInTransaction = false at every stage.
+                // A read issued from inside a write's transaction runs within it, and its steps report true at every
+                // stage, PreValidation included (both verified live).
                 ParameterCollection outputs = RunStages(
                     stage => FireStage(ReadInvocation(PluginMessages.Retrieve, stage, entityName, id, inputs.Parameters, null), asyncQueue),
                     () => new ParameterCollection { [RetrieveOutput] = (Entity)_store.Execute(inputs).Results["Entity"] },
@@ -86,13 +86,8 @@ namespace Vela.Testing
             }, shared);
         }
 
-        // One stage of a read: its steps report IsInTransaction = false, even inside a write's transaction.
         private static StageInvocation ReadInvocation(string message, PluginStages stage, string entityName, Guid entityId, ParameterCollection inputs, ParameterCollection? outputs)
-        {
-            StageInvocation invocation = GenericInvocation(message, stage, entityName, entityId, inputs, outputs);
-            invocation.OutsideTransaction = true;
-            return invocation;
-        }
+            => GenericInvocation(message, stage, entityName, entityId, inputs, outputs);
 
         // Whether an enabled step would fire for the message on this entity, by FireStage's rules. A null or empty
         // entity name asks whether the message has any step at all.

@@ -137,6 +137,14 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (Framework)
 
+- `Vela.Testing`: the steps of a read a plugin issues inside a write's transaction report `IsInTransaction` = `true`
+  at every stage, as on Dataverse (verified live). They reported `false` before; a top-level read's steps still do.
+- `Vela.Testing`: writes on an elastic table (`AsElastic`) run outside any transaction, as on Dataverse (verified
+  live): their steps report `IsInTransaction` = `false`, and a failing PostOperation step does not roll the write
+  back. An `Upsert` there fires its own steps only (with an empty `PrimaryEntityId`), not the inner `Create` or
+  `Update` steps. Before, they ran in a transaction and the `Upsert` fired the inner steps.
+- `Vela.Testing`: an `Update`'s `Target` carries the primary id attribute, whether addressed by id or by alternate
+  key, as on Dataverse (verified live). A test that asserts the exact `Target` columns gets that column too.
 - `Vela.Testing`: a `Role(...)` declared or redefined on the `SecurityConfiguration` after `WithSecurity`, and a
   `RoleBuilder.MemberPrivilegeInheritance(...)` changed afterwards, apply to the next privilege check, as `Grant`,
   `User`, `Team` and `Member` changes already did. The security model copied the role list and the "team privileges

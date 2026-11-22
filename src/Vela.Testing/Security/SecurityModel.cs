@@ -281,7 +281,7 @@ namespace Vela.Testing.Security
 
                 foreach ((string role, AccessLevel level) in RoleLevels(team.Roles, table, Privilege.Read))
                 {
-                    bool teamOnly = team.Inheritance == TeamPrivilegeInheritance.TeamOnly || _teamOnlyRoles.Contains(role);
+                    bool teamOnly = team.Inheritance == TeamPrivilegeInheritance.TeamOnly || _roles[role].Inheritance == TeamPrivilegeInheritance.TeamOnly;
                     if (!teamOnly
                         || level == AccessLevel.Organization
                         || (level == AccessLevel.ParentChild && IsInSubtree(userBu, team.BusinessUnit))

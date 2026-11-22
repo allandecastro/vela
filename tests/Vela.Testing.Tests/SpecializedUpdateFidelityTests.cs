@@ -80,9 +80,9 @@ namespace Vela.Testing.Tests
             Assert.Equal(
                 new[]
                 {
-                    "Update s10 d1 target=[name,ownerid] pre-owner=a001",
-                    "Update s20 d1 target=[name,ownerid] pre-owner=a001",
-                    "Update s40 d1 target=[name,ownerid] pre-owner=a001 post-owner=a002",
+                    "Update s10 d1 target=[name,ownerid,vela_ownableid] pre-owner=a001",
+                    "Update s20 d1 target=[name,ownerid,vela_ownableid] pre-owner=a001",
+                    "Update s40 d1 target=[name,ownerid,vela_ownableid] pre-owner=a001 post-owner=a002",
                 },
                 RecordSpecializedSteps.Of(id));
         }
@@ -135,12 +135,12 @@ namespace Vela.Testing.Tests
             Assert.Equal(
                 new[]
                 {
-                    "Update s10 d1 target=[statecode] pre-state=0/1",
-                    "Update s20 d1 target=[statecode] pre-state=0/1",
+                    "Update s10 d1 target=[statecode,vela_ownableid] pre-state=0/1",
+                    "Update s20 d1 target=[statecode,vela_ownableid] pre-state=0/1",
                     "SetStateDynamicEntity s10 d2 state=1 status=-1 pre-state=0/1",
                     "SetStateDynamicEntity s20 d2 state=1 status=-1 pre-state=0/1",
                     "SetStateDynamicEntity s40 d2 state=1 status=-1 pre-state=0/1 post-state=1/2",
-                    "Update s40 d1 target=[statecode] pre-state=0/1 post-state=1/2",
+                    "Update s40 d1 target=[statecode,vela_ownableid] pre-state=0/1 post-state=1/2",
                 },
                 RecordSpecializedSteps.Of(id));
         }

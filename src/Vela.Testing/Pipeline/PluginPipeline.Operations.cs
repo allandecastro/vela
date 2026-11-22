@@ -248,7 +248,8 @@ namespace Vela.Testing
 
                         return ids;
                     },
-                    _ => FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue));
+                    _ => FireBatchStage(PluginMessages.Create, PluginMessages.CreateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue),
+                    transactional: !_store.IsElastic(entityName));
             }, sharedVariables, bulkRequest ? PluginMessages.CreateMultiple : null, innerOf);
         }
 
@@ -263,13 +264,26 @@ namespace Vela.Testing
             }
 
             // A target addressed by alternate key is resolved to the record's id before any step fires, as Dataverse
-            // does: the steps see Target.Id / PrimaryEntityId set to the resolved record.
-            entities = entities.Select(entity => _store.ResolveWriteTarget(EntityValues.CloneTarget(entity))).ToArray();
+            // does: the steps see Target.Id / PrimaryEntityId set to the resolved record and no KeyAttributes. Whether
+            // addressed by key or by id, the Target carries the primary id attribute (verified live for both, Web API
+            // and SDK).
+            entities = entities.Select(entity => WithPrimaryId(_store.ResolveWriteTarget(EntityValues.CloneTarget(entity)))).ToArray();
             RunOperation<object?>(asyncQueue =>
             {
                 UpdateBatch(entities, platformUpdate: false, asyncQueue);
                 return null;
             }, sharedVariables, bulkRequest ? PluginMessages.UpdateMultiple : null, innerOf);
+        }
+
+        private Entity WithPrimaryId(Entity target)
+        {
+            string primaryId = _store.PrimaryIdAttribute(target.LogicalName);
+            if (target.Id != Guid.Empty && !target.Contains(primaryId))
+            {
+                target[primaryId] = target.Id;
+            }
+
+            return target;
         }
 
         // The stages of an Update batch inside the current operation. A platform-generated Update (the main operation
@@ -307,6 +321,7 @@ namespace Vela.Testing
                     return null;
                 },
                 _ => FireBatchStage(PluginMessages.Update, PluginMessages.UpdateMultiple, PluginStages.PostOperation, entityName, items, asyncQueue),
+                transactional: !_store.IsElastic(entityName),
                 preValidation: !platformUpdate);
         }
 
@@ -378,34 +393,32 @@ namespace Vela.Testing
         // Upsert, mirroring Dataverse: the target is matched by its id or alternate key. A match runs the Update
         // pipeline (Update steps fire with the resolved id); no match runs the Create pipeline (Create steps fire; the
         // key columns become real columns of the new row, and a supplied id is kept). The inner Create or Update is the
-        // Upsert's main operation, at its depth (verified live). Steps registered on the Upsert message itself fire
-        // around it, and the response carries RecordCreated and Target. Only on an elastic table (AsElastic), though:
-        // the Upsert message has a message filter for elastic tables only, and an Upsert step, global or not, never
-        // fires for a standard table (verified live on account). Whether a filtered Upsert step fires on an elastic
-        // table was not verified live (the probe environment could not create one); Microsoft Learn says it does.
+        // Upsert's main operation, at its depth (verified live). The steps registered on the Upsert message itself fire
+        // only on an elastic table (AsElastic): the Upsert message has a message filter for elastic tables only, and an
+        // Upsert step, global or not, never fires for a standard table (verified live on account).
+        // On an elastic table the Upsert runs as Dataverse runs it there (verified live on msdyn_simulationtracker): its
+        // steps fire whatever their filtering attributes, see PrimaryEntityId = Guid.Empty, and open no transaction;
+        // the inner Create or Update fires no step.
         private OrganizationResponse ExecuteUpsert(OrganizationRequest request, Entity callerTarget, ParameterCollection shared)
         {
             // The steps work on a copy of the request (the caller's entity is never touched), and the main operation
             // reads the Target the pre stages left, so a step that changes or replaces it is honoured.
             OrganizationRequest inputs = CopyRequest(request);
-            bool upsertSteps = _store.IsElastic(callerTarget.LogicalName);
+            if (_store.IsElastic(callerTarget.LogicalName))
+            {
+                string entityName = callerTarget.LogicalName;
+                return RunOperation(asyncQueue => RunStages<OrganizationResponse>(
+                    stage => FireStage(GenericInvocation("Upsert", stage, entityName, Guid.Empty, inputs.Parameters, null), asyncQueue),
+                    () => _store.Execute(inputs),
+                    response => FireStage(GenericInvocation("Upsert", PluginStages.PostOperation, entityName, Guid.Empty, inputs.Parameters, response.Results), asyncQueue),
+                    transactional: false),
+                    shared);
+            }
+
             return RunOperation(asyncQueue => RunStages<OrganizationResponse>(
-                stage =>
-                {
-                    if (upsertSteps)
-                    {
-                        FireStage(GenericInvocation("Upsert", stage, callerTarget.LogicalName, callerTarget.Id, inputs.Parameters, null), asyncQueue);
-                    }
-                },
+                _ => { },
                 () => ExecuteUpsertMain(inputs),
-                response =>
-                {
-                    if (upsertSteps)
-                    {
-                        EntityReference affected = (EntityReference)response.Results["Target"];
-                        FireStage(GenericInvocation("Upsert", PluginStages.PostOperation, affected.LogicalName, affected.Id, inputs.Parameters, response.Results), asyncQueue);
-                    }
-                }),
+                _ => { }),
                 shared);
         }
 

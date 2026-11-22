@@ -17,7 +17,7 @@ namespace Vela.Testing.Tests
     public sealed class RiApiMessage { }
 
     // Review follow-ups on #432: steps work on a deep copy of the request, their changes (removals included) flow to
-    // the next phase, Upsert honours a pre-step's Target, and a nested read's steps report IsInTransaction = false.
+    // the next phase, Upsert honours a pre-step's Target, and a nested read's steps report IsInTransaction = true.
     public sealed class PipelineRequestIsolationTests
     {
         public PipelineRequestIsolationTests()
@@ -145,15 +145,59 @@ namespace Vela.Testing.Tests
         }
 
         [Fact]
-        public void A_read_issued_inside_a_writes_transaction_sees_its_data_and_its_steps_report_no_transaction()
+        public void A_read_issued_inside_a_writes_transaction_sees_its_data_and_its_steps_report_the_transaction()
         {
             PluginPipeline pipeline = PluginPipeline.Empty().Register<RiCreateReadsBack>().Register<RiReadLogs>();
 
             pipeline.Service.Create(new RiRecord { Name = "x" });
 
-            // The read found the record the enclosing (uncommitted) Create wrote, and its step reported false: the
-            // nested value was not verified live, the harness assumes it matches a top-level read.
-            Assert.Equal(new[] { "write-step:True", "read-step:False", "found:True" }, RiProbe.Events);
+            // The read found the record the enclosing (uncommitted) Create wrote, and its steps reported true at every
+            // stage (verified live).
+            Assert.Equal(new[] { "write-step:True", "read-step:10:True", "read-step:20:True", "read-step:40:True", "found:True" }, RiProbe.Events);
+        }
+
+        [Fact]
+        public void An_Update_by_alternate_key_reaches_the_steps_with_the_id_and_the_primary_id_attribute()
+        {
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty()
+                .WithAlternateKey(RiRecord.LogicalNameValue, "vela_code")
+                .Register<RiUpdateLogsTarget>()
+                .Seed(new RiRecord { Id = id, Name = "x", ["vela_code"] = "K1" });
+            Entity target = new Entity(RiRecord.LogicalNameValue) { ["vela_name"] = "y" };
+            target.KeyAttributes.Add("vela_code", "K1");
+
+            pipeline.Service.Update(target);
+
+            // Verified live: Target.Id set, no KeyAttributes, and the primary id attribute in the Target.
+            Assert.Equal(new[] { $"10:{id}:keys=0:pk={id}", $"20:{id}:keys=0:pk={id}" }, RiProbe.Events);
+            Assert.False(target.Contains("vela_rirecordid"));
+        }
+
+        [Fact]
+        public void An_Update_by_id_reaches_the_steps_with_the_primary_id_attribute()
+        {
+            Guid id = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<RiUpdateLogsTarget>().Seed(new RiRecord { Id = id, Name = "x" });
+            Entity target = new Entity(RiRecord.LogicalNameValue, id) { ["vela_name"] = "y" };
+
+            pipeline.Service.Update(target);
+
+            // Verified live (SDK Update and UpdateRequest by id): the Target carries the primary id attribute.
+            Assert.Equal(new[] { $"10:{id}:keys=0:pk={id}", $"20:{id}:keys=0:pk={id}" }, RiProbe.Events);
+            Assert.False(target.Contains("vela_rirecordid"));
+        }
+
+        [Fact]
+        public void A_top_level_reads_steps_report_no_transaction()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<RiReadLogs>();
+            Guid id = Guid.NewGuid();
+            pipeline.Seed(new RiRecord { Id = id, Name = "x" });
+
+            pipeline.Service.Retrieve(RiRecord.LogicalNameValue, id, new ColumnSet("vela_name"));
+
+            Assert.Equal(new[] { "read-step:10:False", "read-step:20:False", "read-step:40:False" }, RiProbe.Events);
         }
     }
 
@@ -282,6 +326,23 @@ namespace Vela.Testing.Tests
             });
     }
 
+    public sealed class RiUpdateLogsTarget : EntityPluginBase<RiRecord>
+    {
+        public RiUpdateLogsTarget(string u, string s) : base(u, s) { }
+
+        protected override void RegisterPluginSteps()
+        {
+            RegisterStep().OnUpdate().PreValidation().Sync().FilterOn(a => a.Name).Handle(ctx => Log(ctx.PluginExecutionContext));
+            RegisterStep().OnUpdate().PreOperation().Sync().FilterOn(a => a.Name).Handle(ctx => Log(ctx.PluginExecutionContext));
+        }
+
+        private static void Log(IPluginExecutionContext context)
+        {
+            Entity target = (Entity)context.InputParameters["Target"];
+            RiProbe.Events.Add($"{context.Stage}:{target.Id}:keys={target.KeyAttributes.Count}:pk={target.GetAttributeValue<Guid>("vela_rirecordid")}");
+        }
+    }
+
     public sealed class RiReadLogsMultiple : EntityPluginBase<RiRecord>
     {
         public RiReadLogsMultiple(string u, string s) : base(u, s) { }
@@ -295,7 +356,13 @@ namespace Vela.Testing.Tests
         public RiReadLogs(string u, string s) : base(u, s) { }
 
         protected override void RegisterPluginSteps()
-            => RegisterStep().OnRetrieve().PostOperation().Sync().Handle(ctx =>
-                RiProbe.Events.Add("read-step:" + ctx.PluginExecutionContext.IsInTransaction));
+        {
+            RegisterStep().OnRetrieve().PreValidation().Sync().Handle(ctx => Log(ctx.PluginExecutionContext));
+            RegisterStep().OnRetrieve().PreOperation().Sync().Handle(ctx => Log(ctx.PluginExecutionContext));
+            RegisterStep().OnRetrieve().PostOperation().Sync().Handle(ctx => Log(ctx.PluginExecutionContext));
+        }
+
+        private static void Log(IPluginExecutionContext context)
+            => RiProbe.Events.Add("read-step:" + context.Stage + ":" + context.IsInTransaction);
     }
 }
