@@ -22,6 +22,9 @@ namespace Vela.Testing
         /// <summary>0x80040800: the message is not supported for the table (verified live for Assign on an org-owned table).</summary>
         public const int MessageNotSupportedForEntity = unchecked((int)0x80040800);
 
+        /// <summary>0x80048D21: a SQL constraint failed (verified live for an N:N related record of the wrong table).</summary>
+        public const int SqlConstraint = unchecked((int)0x80048D21);
+
         /// <summary>0x80045304: the Merge subordinate is already inactive (verified live).</summary>
         public const int MergeSubordinateInactive = unchecked((int)0x80045304);
 
