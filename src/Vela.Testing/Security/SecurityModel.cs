@@ -30,8 +30,9 @@ namespace Vela.Testing.Security
         private const string Team = PrincipalKind.Team;
 
         private readonly Dictionary<Guid, Guid> _businessUnitParents;
-        private readonly Dictionary<string, Dictionary<(string Entity, Privilege Privilege), AccessLevel>> _roles;
-        private readonly HashSet<string> _teamOnlyRoles;
+        // The configuration's own role table, read live: a role declared or redefined after WithSecurity, or its
+        // grants or member privilege inheritance changed, applies to the next check (the version drops the memo).
+        private readonly Dictionary<string, RoleBuilder> _roles;
         private readonly Dictionary<Guid, Principal> _users;
         private readonly Dictionary<Guid, Principal> _teams;
         private readonly Dictionary<Guid, HashSet<Guid>> _memberships;
@@ -65,8 +66,7 @@ namespace Vela.Testing.Security
 
         internal SecurityModel(
             Dictionary<Guid, Guid> businessUnitParents,
-            Dictionary<string, Dictionary<(string Entity, Privilege Privilege), AccessLevel>> roles,
-            HashSet<string> teamOnlyRoles,
+            Dictionary<string, RoleBuilder> roles,
             Dictionary<Guid, Principal> users,
             Dictionary<Guid, Principal> teams,
             Dictionary<Guid, HashSet<Guid>> memberships,
@@ -86,7 +86,6 @@ namespace Vela.Testing.Security
         {
             _businessUnitParents = businessUnitParents;
             _roles = roles;
-            _teamOnlyRoles = teamOnlyRoles;
             _users = users;
             _teams = teams;
             _memberships = memberships;

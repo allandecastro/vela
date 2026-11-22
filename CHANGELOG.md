@@ -137,6 +137,11 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (Framework)
 
+- `Vela.Testing`: a `Role(...)` declared or redefined on the `SecurityConfiguration` after `WithSecurity`, and a
+  `RoleBuilder.MemberPrivilegeInheritance(...)` changed afterwards, apply to the next privilege check, as `Grant`,
+  `User`, `Team` and `Member` changes already did. The security model copied the role list and the "team privileges
+  only" roles when `WithSecurity` built it, so such a change was ignored. The `WithSecurity` validation of role
+  names is not run again for these later changes: a role name that is still undeclared grants nothing.
 - `Vela.Testing`: an N:N `Associate` with a related record of a table the relationship does not join faults with
   `0x80048D21`, the SQL constraint code Dataverse returns (verified live). It faulted with `0x80040203` before; a
   calling record of the wrong table keeps `0x80040203`, with the platform's message.

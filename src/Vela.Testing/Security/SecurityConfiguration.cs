@@ -413,14 +413,14 @@ namespace Vela.Testing.Security
                     "Configure either ManagerHierarchy or PositionHierarchy, not both — Dataverse activates only one hierarchy model at a time.");
             }
 
-            // Flatten each role's grants once; resolve role references eagerly so an unknown role name fails fast.
-            var roles = _roles.ToDictionary(r => r.Key, r => r.Value.Grants, StringComparer.OrdinalIgnoreCase);
-
+            // Resolve role references eagerly so an unknown role name fails fast. These checks run here only: the model
+            // reads the role table itself, live, so a role declared or redefined after WithSecurity, or its grants or
+            // member privilege inheritance changed, applies to the next check without being validated again.
             void ValidateRoles(Principal principal, string kind)
             {
                 foreach (string role in principal.Roles)
                 {
-                    if (!roles.ContainsKey(role))
+                    if (!_roles.ContainsKey(role))
                     {
                         throw new InvalidOperationException(
                             $"{kind} {principal.Id} references role '{role}', which is not defined. Declare it with Role(\"{role}\", ...).");
@@ -455,12 +455,7 @@ namespace Vela.Testing.Security
             ValidatePrincipals();
             ValidateRoleIds();
 
-            // A role whose own setting is "Team privileges only", plus each (team, role) a team declared TeamOnly holds.
-            HashSet<string> teamOnlyRoles = new HashSet<string>(
-                _roles.Where(r => r.Value.Inheritance == TeamPrivilegeInheritance.TeamOnly).Select(r => r.Key),
-                StringComparer.OrdinalIgnoreCase);
-
-            return new SecurityModel(_businessUnitParents, roles, teamOnlyRoles, _users, _teams, _memberships, sharing, accessTeams, _roleIds, _roleTemplateIds, _managers, _positions, _positionParents, _hierarchyDepth, _securedColumns, _fieldRead, _fieldUpdate, _fieldCreate, _version);
+            return new SecurityModel(_businessUnitParents, _roles, _users, _teams, _memberships, sharing, accessTeams, _roleIds, _roleTemplateIds, _managers, _positions, _positionParents, _hierarchyDepth, _securedColumns, _fieldRead, _fieldUpdate, _fieldCreate, _version);
         }
 
         // Settings that name a principal or business unit the configuration does not declare would be ignored
@@ -541,7 +536,7 @@ namespace Vela.Testing.Security
 
     /// <summary>
     /// A counter bumped by every change to the configuration data a built <see cref="SecurityModel"/> keeps reading
-    /// (users, teams, memberships, roles and their grants), so the model's memoized grant resolution is dropped when
+    /// (users, teams, memberships, roles, their grants and their member privilege inheritance), so the model's memoized grant resolution is dropped when
     /// the configuration it was computed from changes.
     /// </summary>
     internal sealed class ConfigurationVersion

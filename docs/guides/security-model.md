@@ -47,6 +47,12 @@ it does not declare: a role or team not defined, a user or team in a business un
 `BusinessUnit(...)` is declared), a `Manager`, `Position` or `FieldPermission` naming an unknown principal, two roles
 with the same id, or one id declared both as a user and as a team.
 
+A change made to the configuration after `WithSecurity` (keep the `SecurityConfiguration` or a `RoleBuilder` in a
+variable) applies to the next privilege check: a role declared or redefined, a grant added, a member's privilege
+inheritance switched, a user, team or membership declared. These later changes are not validated again: a role name
+that no declared role matches grants nothing. The `role`, `systemuserroles`, `teamroles` and `teammembership` rows a
+plugin can query are written when `WithSecurity` runs and do not follow later changes.
+
 ## Arrange with Seed, act with Create
 
 `Seed(...)` writes records straight into the store, without privilege checks: it is your starting state, the data

@@ -140,7 +140,7 @@ namespace Vela.Testing.Security
                         bool teamOnlyTeam = team.Inheritance == TeamPrivilegeInheritance.TeamOnly;
                         foreach ((string role, AccessLevel level) in RoleLevels(team.Roles, table, privilege))
                         {
-                            bool teamOnly = teamOnlyTeam || _teamOnlyRoles.Contains(role);
+                            bool teamOnly = teamOnlyTeam || _roles[role].Inheritance == TeamPrivilegeInheritance.TeamOnly;
                             yield return (level, teamOnly && level == AccessLevel.User ? teamId : (Guid?)null);
                         }
                     }
@@ -156,8 +156,8 @@ namespace Vela.Testing.Security
         {
             foreach (string roleName in roleNames)
             {
-                if (_roles.TryGetValue(roleName, out var grants) &&
-                    grants.TryGetValue((table, privilege), out AccessLevel level) &&
+                if (_roles.TryGetValue(roleName, out RoleBuilder? role) &&
+                    role.Grants.TryGetValue((table, privilege), out AccessLevel level) &&
                     level != AccessLevel.None)
                 {
                     yield return (roleName, level);
