@@ -181,8 +181,9 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
 - **Transactions are simulated with store snapshots.** The stage model follows Dataverse: PreValidation of the
   initial operation runs outside the transaction, reads are not transactional, asynchronous steps run after the
   commit, and a swallowed failed write ends the transaction while a swallowed failed read (or an `Update` denied by
-  its Read check) does not. The harness makes that Read check for the `Update` message only, not for the updates
-  inside Associate, Merge, Assign, SetState and a file upload (not verified live). There is no
+  its Read check) does not. `SetState`, `Merge` (on both records) and a 1:N `Associate` or `Disassociate` check Read
+  too, in their main operation, and that failure, swallowed, ends the transaction like a failed write; `Assign`,
+  `Delete` and a file upload do not check Read. There is no
   locking, isolation level or concurrency: operations run one at a time. Which messages count as reads is a name
   rule (`Retrieve*`, `WhoAmI`, file downloads). A read that a plugin issues inside a write's transaction runs within
   it, and its steps report `IsInTransaction` = `false`, as a top-level read's steps do. `InputParameters["FromSandbox"]`
@@ -269,7 +270,10 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
     `0x80040220`), and record trimming on joins: a join to a record the caller cannot read drops the primary row on
     an inner join, or omits the linked columns on a left outer join, recursively through nested joins;
   - the Read privilege a new record owner must hold, for owners declared in the model; an owner id the model does not
-    know is not checked. A user owner counts Read from any of its roles, whatever its teams' inheritance mode.
+    know is not checked. A user owner whose Read comes only from a "Team privileges only" team needs a level that
+    reaches the owner's business unit from the team's: Business Unit or Parent: Child when they share it, only
+    Organization when the team is in a child business unit. A user in a child business unit of such a team was not
+    verified live. Read from the user's own roles counts at any level.
 
   A role with "Team privileges only" inheritance assigned to a user directly keeps all its grants in the harness.
 
@@ -277,7 +281,7 @@ in-memory store, which you configure with the pipeline's `With*` and `As*` metho
   the test never seeded. A parent's Delete PreValidation steps still see its cascaded children; by PreOperation they
   are gone, because the children's Delete plugins run in between. Step images carry only the columns the calling
   user may read, like a Retrieve: a secured column without field read permission is absent from them. For a step
-  that impersonates another user, the harness still filters the images by the calling user's access.
+  that impersonates another user, the images are filtered by that user's access, not the caller's.
 
   Not modelled:
   - **Ownership across business units.** Each user or team belongs to one business unit (`User(id, businessUnit,

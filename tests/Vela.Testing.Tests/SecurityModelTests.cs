@@ -1116,11 +1116,12 @@ namespace Vela.Testing.Tests
                     });
 
         // What the Update of the child's lookup demands: Write and Append on the child, AppendTo on the parent.
+        // Read on the child too: Associate checks it before the lookup Update (verified live).
         private static Action<SecurityConfiguration> LookupWriter => s => s
             .BusinessUnit(SalesBu)
             .Role("writer", r => r
                 .Grant("account", AccessLevel.Organization, Privilege.AppendTo)
-                .Grant("contact", AccessLevel.Organization, Privilege.Write, Privilege.Append))
+                .Grant("contact", AccessLevel.Organization, Privilege.Read, Privilege.Write, Privilege.Append))
             .User(Alice, SalesBu, "writer");
 
         [Fact]
@@ -1149,7 +1150,7 @@ namespace Vela.Testing.Tests
                 .BusinessUnit(SalesBu)
                 .Role("appender", r => r
                     .Grant("account", AccessLevel.Organization, Privilege.AppendTo, Privilege.Append)
-                    .Grant("contact", AccessLevel.Organization, Privilege.Append, Privilege.AppendTo))
+                    .Grant("contact", AccessLevel.Organization, Privilege.Read, Privilege.Append, Privilege.AppendTo))
                 .User(Alice, SalesBu, "appender"));
 
             FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Associate(
@@ -1169,7 +1170,7 @@ namespace Vela.Testing.Tests
                 .BusinessUnit(SalesBu)
                 .Role("writer", r => r
                     .Grant("account", AccessLevel.Organization, Privilege.Append)
-                    .Grant("contact", AccessLevel.Organization, Privilege.Write, Privilege.Append, Privilege.AppendTo))
+                    .Grant("contact", AccessLevel.Organization, Privilege.Read, Privilege.Write, Privilege.Append, Privilege.AppendTo))
                 .User(Alice, SalesBu, "writer"));
 
             FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() => svc.Associate(
@@ -1193,7 +1194,7 @@ namespace Vela.Testing.Tests
 
             InMemoryOrganizationService denied = WithAccountContact1N(accountId, contactId, s => s
                 .BusinessUnit(SalesBu)
-                .Role("writer", r => r.Grant("contact", AccessLevel.Organization, Privilege.Write, Privilege.Append))
+                .Role("writer", r => r.Grant("contact", AccessLevel.Organization, Privilege.Read, Privilege.Write, Privilege.Append))
                 .User(Alice, SalesBu, "writer"));
             FaultException<OrganizationServiceFault> fault = Assert.Throws<FaultException<OrganizationServiceFault>>(() => denied.Associate(
                 "account", accountId, new Relationship("account_contact"),

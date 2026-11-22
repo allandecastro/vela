@@ -237,7 +237,7 @@ namespace Vela.Testing
             StampOwningExtension(context, registration.Step);
             context.PreEntityImagesCollection = items.Select(item => BuildBulkImageCollection(registration, message, isPre: true, item.PreState)).ToArray();
             context.PostEntityImagesCollection = items.Select(item => BuildBulkImageCollection(registration, message, isPre: false, item.PostState)).ToArray();
-            MaskSecuredImageColumns(context.PreEntityImagesCollection.Concat(context.PostEntityImagesCollection));
+            MaskSecuredImageColumns(registration.Step, context.PreEntityImagesCollection.Concat(context.PostEntityImagesCollection));
 
             // A CreateMultiple Post step sees the created ids as OutputParameters["Ids"], exactly as Dataverse
             // surfaces them, so ctx.Response.Ids resolves in a post-create-multiple handler.
@@ -377,7 +377,7 @@ namespace Vela.Testing
                 context.PostEntityImages[AsyncPrimaryNameImage] = PrimaryNameImage(invocation.PostState);
             }
 
-            MaskSecuredImageColumns(new[] { context.PreEntityImages, context.PostEntityImages });
+            MaskSecuredImageColumns(registration.Step, new[] { context.PreEntityImages, context.PostEntityImages });
 
             PipelineExecutionEntry entry = new PipelineExecutionEntry(registration.Step.PluginTypeName, invocation.Message, invocation.Stage, registration.Step.Mode, invocation.EntityLogicalName, _depth);
             _log.Add(entry);
@@ -554,14 +554,26 @@ namespace Vela.Testing
 
         // Images carry only the columns the calling user may read, as a Retrieve does (verified live: a secured column
         // the caller has no read access to is absent from the pre- and post-images, present for an administrator).
-        // The mask uses the identity the operation runs as; a step impersonating another user was not probed.
-        private void MaskSecuredImageColumns(IEnumerable<EntityImageCollection> collections)
+        // A step that impersonates a user is masked for that user, whatever the caller's access (verified live).
+        private void MaskSecuredImageColumns(StepDefinition step, IEnumerable<EntityImageCollection> collections)
         {
+            Guid? impersonated = step.ImpersonatingUserId is Guid user && user != Guid.Empty ? user : (Guid?)null;
             foreach (EntityImageCollection collection in collections)
             {
                 foreach (Entity image in collection.Values)
                 {
-                    _store.MaskSecuredImageColumns(image);
+                    if (impersonated.HasValue)
+                    {
+                        _store.RunAs<object?>(impersonated, () =>
+                        {
+                            _store.MaskSecuredImageColumns(image);
+                            return null;
+                        });
+                    }
+                    else
+                    {
+                        _store.MaskSecuredImageColumns(image);
+                    }
                 }
             }
         }

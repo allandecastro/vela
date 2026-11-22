@@ -242,9 +242,7 @@ namespace Vela.Testing.Security
                     return null;
                 }
 
-                // Learn says a user whose Read comes only from a "team privileges only" team needs it at Organization
-                // level; that is unverified live, so a user owner takes Read at any level from any of its roles.
-                canRead = HoldsPrivilege(owner.Id, table, Privilege.Read);
+                canRead = UserOwnerHoldsRead(owner.Id, table);
             }
 
             if (canRead)
@@ -254,6 +252,47 @@ namespace Vela.Testing.Security
 
             string message = OwnerReadMessage(owner.Id, isTeam ? Team : "user", entity);
             return Fault(TargetPrincipalLacksReadPrivilege, onCreate ? "Read Privilege Check For Owner failed with exception: " + message : message);
+        }
+
+        // A user owner's Read counts at any level from its own roles and from the teams whose privileges its members
+        // inherit. From a "team privileges only" team, the level must reach the owner's business unit (where the record
+        // lands) counted from the TEAM's business unit (verified live: Basic fails with 0x80040299; with the team and
+        // the user in the root business unit, Business Unit and Parent: Child suffice; with the team in a child
+        // business unit, only Organization does). A user in a child business unit under such a team was not probed.
+        private bool UserOwnerHoldsRead(Guid userId, string table)
+        {
+            if (_users.TryGetValue(userId, out Principal user) && LevelsFor(user.Roles, table, Privilege.Read).Any())
+            {
+                return true;
+            }
+
+            if (!_memberships.TryGetValue(userId, out HashSet<Guid>? teamIds))
+            {
+                return false;
+            }
+
+            Guid userBu = BusinessUnitOf(userId);
+            foreach (Guid teamId in teamIds)
+            {
+                if (!_teams.TryGetValue(teamId, out Principal team))
+                {
+                    continue;
+                }
+
+                foreach ((string role, AccessLevel level) in RoleLevels(team.Roles, table, Privilege.Read))
+                {
+                    bool teamOnly = team.Inheritance == TeamPrivilegeInheritance.TeamOnly || _teamOnlyRoles.Contains(role);
+                    if (!teamOnly
+                        || level == AccessLevel.Organization
+                        || (level == AccessLevel.ParentChild && IsInSubtree(userBu, team.BusinessUnit))
+                        || (level == AccessLevel.BusinessUnit && userBu == team.BusinessUnit && userBu != Guid.Empty))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static string OwnerReadMessage(Guid ownerId, string kind, string entity) =>

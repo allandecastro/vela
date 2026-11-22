@@ -46,6 +46,27 @@ namespace Vela.Testing
         // deactivates the subordinate. The subordinate's own columns are NOT copied to the target (verified live, with
         // UpdateContent null or empty), and an inactive subordinate faults. All-or-nothing. The pipeline passes writeMaster to run the master's Update
         // through its Update steps; without it the store writes the master itself.
+        private void DemandMergePrivileges(string entity)
+        {
+            if (Enforcing is not SecurityModel security)
+            {
+                return;
+            }
+
+            foreach (Privilege privilege in new[] { Privilege.Write, Privilege.AppendTo, Privilege.Share })
+            {
+                if (!security.HoldsPrivilege(_currentUserId, entity, privilege))
+                {
+                    throw PlatformFault.Create(PlatformFault.MergePrivilegeDenied, security.PrivilegeDenied(_currentUserId, privilege, entity).Detail.Message);
+                }
+            }
+
+            if (!security.HoldsPrivilege(_currentUserId, entity, Privilege.Append))
+            {
+                throw security.PrivilegeDenied(_currentUserId, Privilege.Append, entity);
+            }
+        }
+
         internal void Merge(MergeRequest request, Action<Entity>? writeMaster)
         {
             EntityReference target = request.Target ?? throw new ArgumentNullException(nameof(request), "Merge Target is required.");
@@ -73,6 +94,13 @@ namespace Vela.Testing
             {
                 throw PlatformFault.Create(PlatformFault.MergeSubordinateInactive, $"sub-entity:{subordinateId} of type '{entity}' is deactive");
             }
+
+            // Verified live: Merge checks Read on the target and on the subordinate before writing anything, then
+            // needs Write, AppendTo and Share on the table (0x80045301, a message that names no record) and Append
+            // (0x80040220); not Delete or Assign. Its own prvMerge privilege is not modelled.
+            DemandPlatformRead(entity, target.Id);
+            DemandPlatformRead(entity, subordinateId);
+            DemandMergePrivileges(entity);
 
             bool isIncident = string.Equals(entity, "incident", StringComparison.OrdinalIgnoreCase);
 
