@@ -137,6 +137,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (Framework)
 
+- `Vela.Testing`: an N:N `Associate` with a related record of a table the relationship does not join faults with
+  `0x80048D21`, the SQL constraint code Dataverse returns (verified live). It faulted with `0x80040203` before; a
+  calling record of the wrong table keeps `0x80040203`, with the platform's message.
 - `Vela.Testing`: an `Update` checks Read on the record before Write, as on Dataverse (verified live). A caller
   that cannot read the record gets the read fault (`0x80040220` with no Read privilege, `0x80048306` for a record
   out of reach) instead of a Write fault. A plugin that catches that fault inside the transaction carries on, as
