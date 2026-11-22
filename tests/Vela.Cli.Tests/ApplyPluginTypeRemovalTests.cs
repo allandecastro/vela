@@ -13,10 +13,12 @@ using static Vela.Cli.CliExitCodes;
 namespace Vela.Cli.Tests;
 
 /// <summary>
-/// A package update that removes a plugin type (its class deleted or renamed, or its whole assembly renamed). Dataverse
-/// refuses to delete a plugin type that still has steps, even disabled ones (verified live: 0x80040265), and
-/// <see cref="StatefulOrgService"/> refuses the import the same way. Vela deletes its own steps on that type before the
-/// publish; a step it does not manage stops plan and apply with exit 4 before any write.
+/// A package update that removes a plugin type (its class deleted or renamed) or changes the package's set of
+/// assemblies. Dataverse refuses to delete a plugin type that still has steps, even disabled ones (verified live:
+/// 0x80040265), and <see cref="StatefulOrgService"/> refuses the import the same way. Vela deletes its own steps on that
+/// type before the publish; a step it does not manage stops plan and apply with exit 4 before any write. The assemblies
+/// of a package are fixed at create (verified live: a rename or a drop is refused, an addition is ignored), so a changed
+/// set stops plan and apply with exit 4 before any write, whatever the steps.
 /// </summary>
 [Collection("ConsoleRedirect")]
 public sealed class ApplyPluginTypeRemovalTests : IDisposable
@@ -52,68 +54,147 @@ public sealed class ApplyPluginTypeRemovalTests : IDisposable
         }
     }
 
-    [Fact]
-    public void A_renamed_assembly_moves_its_steps_and_custom_api_in_one_apply()
-    {
-        AssertExit(ExitSuccess, Run("apply", Local(OldAssembly, [Step("main"), Api("zava_MyApi")])));
-        Guid oldTypeId = TypeId(AccountPlugin);
-
-        // The project's <AssemblyName> changed: the same package now ships another assembly with the same classes.
-        _org.DefinePackage(Package, NewAssembly, AccountPlugin, OtherPlugin, ApiPlugin);
-        RegistrationState renamed = Local(NewAssembly, [Step("main"), Api("zava_MyApi")]);
-
-        AssertExit(ExitChangesPending, Run("plan", renamed, detailedExitCode: true));
-        JsonElement plan = Output();
-        Assert.Contains(plan.GetProperty("info").EnumerateArray(), i => i.GetString()!.Contains($"Plugin assembly '{OldAssembly}' is no longer in plugin package '{Package}'"));
-        Assert.Single(plan.GetProperty("diff").GetProperty("removed").EnumerateArray());
-
-        AssertExit(ExitSuccess, Run("apply", renamed));
-
-        Guid newTypeId = TypeId(AccountPlugin);
-        Assert.NotEqual(oldTypeId, newTypeId);
-        Entity step = Assert.Single(_org.Rows("sdkmessageprocessingstep"));
-        Assert.Equal(newTypeId, step.GetAttributeValue<EntityReference>("eventhandler").Id);
-        Entity api = Assert.Single(_org.Rows("customapi"));
-        Assert.Equal(TypeId(ApiPlugin), api.GetAttributeValue<EntityReference>("plugintypeid").Id);
-        Assert.Equal(NewAssembly, Assert.Single(_org.Rows("pluginassembly")).GetAttributeValue<string>("name"));
-        // The old step went before the package update.
-        Assert.True(_org.Writes.IndexOf("delete:sdkmessageprocessingstep") < _org.Writes.IndexOf("update:pluginpackage"), string.Join(", ", _org.Writes));
-
-        AssertExit(ExitSuccess, Run("plan", renamed, detailedExitCode: true));
-    }
-
     [Theory]
     [InlineData("plan")]
     [InlineData("apply")]
-    public void A_step_vela_does_not_manage_on_a_retired_assembly_stops_the_run_with_exit_4_before_any_write(string command)
+    public void A_renamed_assembly_stops_the_run_with_exit_4_before_any_write(string command)
     {
-        AssertExit(ExitSuccess, Run("apply", Local(OldAssembly, [Step("main")])));
-        // A step registered with another tool on the same plugin type, disabled.
-        Guid messageId = Assert.Single(_org.Rows("sdkmessage"), m => m.GetAttributeValue<string>("name") == "Update").Id;
-        _org.Create(new Entity("sdkmessageprocessingstep")
-        {
-            ["eventhandler"] = new EntityReference("plugintype", TypeId(AccountPlugin)),
-            ["sdkmessageid"] = new EntityReference("sdkmessage", messageId),
-            ["name"] = "Zava.Plugins.AccountPlugin: Update of account",
-            ["stage"] = new OptionSetValue(40),
-            ["mode"] = new OptionSetValue(0),
-            ["statecode"] = new OptionSetValue(1),
-            ["statuscode"] = new OptionSetValue(2),
-        });
+        AssertExit(ExitSuccess, Run("apply", Local(OldAssembly, [Step("main"), Api("zava_MyApi")])));
         int writes = _org.Writes.Count;
-        _org.DefinePackage(Package, NewAssembly, AccountPlugin, OtherPlugin, ApiPlugin);
 
-        int exit = Run(command, Local(NewAssembly, [Step("main")]));
+        // The project's <AssemblyName> changed: the same package now ships another assembly with the same classes.
+        _org.DefinePackage(Package, NewAssembly, AccountPlugin, OtherPlugin, ApiPlugin);
+        int exit = Run(command, Local(NewAssembly, [Step("main"), Api("zava_MyApi")]));
 
         AssertExit(ExitError, exit);
         Assert.Equal(writes, _org.Writes.Count);
-        Assert.Equal(2, _org.Rows("sdkmessageprocessingstep").Count);
         string error = _error.ToString();
-        Assert.Contains($"The plugin package update removes plugin type '{AccountPlugin}'", error);
-        Assert.Contains("'Zava.Plugins.AccountPlugin: Update of account'", error);
+        Assert.Contains($"Plugin package '{Package}' changes its set of assemblies: plugin assembly '{OldAssembly}' is renamed to '{NewAssembly}'", error);
         Assert.Contains("0x80040265", error);
-        Assert.Contains("nothing was written", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains($"then plugin package '{Package}'", error);
+        Assert.Contains("Nothing was written", error);
         Assert.DoesNotContain("Apply failed mid-run", error);
+        // The type check would repeat the same cause once per type: only the assembly-set problem is reported.
+        Assert.DoesNotContain("removes plugin type", error);
+        Assert.Equal(OldAssembly, Assert.Single(_org.Rows("pluginassembly")).GetAttributeValue<string>("name"));
+        Assert.Single(_org.Rows("sdkmessageprocessingstep"));
+    }
+
+    [Fact]
+    public void A_renamed_assembly_without_steps_still_stops_the_plan()
+    {
+        AssertExit(ExitSuccess, Run("apply", Local(OldAssembly, [Api("zava_MyApi")])));
+        _org.DefinePackage(Package, NewAssembly, AccountPlugin, OtherPlugin, ApiPlugin);
+
+        AssertExit(ExitError, Run("plan", Local(NewAssembly, [Api("zava_MyApi")])));
+
+        Assert.Contains($"plugin assembly '{OldAssembly}' is renamed to '{NewAssembly}'", _error.ToString());
+    }
+
+    [Fact]
+    public void After_the_package_is_deleted_by_hand_apply_creates_it_with_the_renamed_assembly()
+    {
+        AssertExit(ExitSuccess, Run("apply", Local(OldAssembly, [Step("main"), Api("zava_MyApi")])));
+        Guid apiId = Assert.Single(_org.Rows("customapi")).Id;
+
+        // The documented route: delete the steps, clear the Custom API's plugin type, delete the package, apply again.
+        foreach (Entity step in _org.Rows("sdkmessageprocessingstep"))
+        {
+            _org.Delete("sdkmessageprocessingstep", step.Id);
+        }
+
+        _org.Update(new Entity("customapi", apiId) { ["plugintypeid"] = null });
+
+        _org.Delete("pluginpackage", Assert.Single(_org.Rows("pluginpackage")).Id);
+        Assert.Empty(_org.Rows("pluginassembly"));
+        _org.DefinePackage(Package, NewAssembly, AccountPlugin, OtherPlugin, ApiPlugin);
+        RegistrationState renamed = Local(NewAssembly, [Step("main"), Api("zava_MyApi")]);
+
+        AssertExit(ExitSuccess, Run("apply", renamed));
+
+        Assert.Equal(NewAssembly, Assert.Single(_org.Rows("pluginassembly")).GetAttributeValue<string>("name"));
+        Entity created = Assert.Single(_org.Rows("sdkmessageprocessingstep"));
+        Assert.Equal(TypeId(AccountPlugin), created.GetAttributeValue<EntityReference>("eventhandler").Id);
+        // The existing Custom API row is kept and pointed at the new plugin type.
+        Entity api = Assert.Single(_org.Rows("customapi"));
+        Assert.Equal(apiId, api.Id);
+        Assert.Equal(TypeId(ApiPlugin), api.GetAttributeValue<EntityReference>("plugintypeid").Id);
+        AssertExit(ExitSuccess, Run("plan", renamed, detailedExitCode: true));
+    }
+
+    // The fake follows the platform (verified live 2026-11-16): a rename is refused atomically, with the type error while
+    // a step exists and the assembly error without one; an added assembly is accepted and not registered.
+    [Fact]
+    public void The_fake_refuses_a_renamed_assembly_and_ignores_an_added_one_on_package_update()
+    {
+        AssertExit(ExitSuccess, Run("apply", Local(OldAssembly, [Step("main")])));
+        Guid packageId = Assert.Single(_org.Rows("pluginpackage")).Id;
+        Entity Content() => new("pluginpackage", packageId) { ["content"] = "UEs=" };
+        _org.DefinePackage(Package, NewAssembly, AccountPlugin);
+
+        var withStep = Assert.Throws<System.ServiceModel.FaultException<OrganizationServiceFault>>(() => _org.Update(Content()));
+        Assert.Equal(unchecked((int)0x80040265), withStep.Detail.ErrorCode);
+        Assert.Contains($"'{AccountPlugin}' plugintype due to 1 step(s)", withStep.Detail.Message);
+
+        _org.Delete("sdkmessageprocessingstep", Assert.Single(_org.Rows("sdkmessageprocessingstep")).Id);
+        var withoutStep = Assert.Throws<System.ServiceModel.FaultException<OrganizationServiceFault>>(() => _org.Update(Content()));
+        Assert.Equal(unchecked((int)0x80040265), withoutStep.Detail.ErrorCode);
+        Assert.Equal("Unable to delete plug-in assembly as it is part of plugin package", withoutStep.Detail.Message);
+        Assert.Equal(OldAssembly, Assert.Single(_org.Rows("pluginassembly")).GetAttributeValue<string>("name"));
+        Assert.Equal(3, _org.Rows("plugintype").Count);
+
+        // An added assembly: the update succeeds and registers nothing.
+        Guid oldAssemblyId = Assert.Single(_org.Rows("pluginassembly")).Id;
+        _org.Delete("pluginassembly", oldAssemblyId);
+        foreach (Entity type in _org.Rows("plugintype"))
+        {
+            _org.Delete("plugintype", type.Id);
+        }
+
+        _org.Update(Content());
+        Assert.Empty(_org.Rows("pluginassembly"));
+        Assert.Empty(_org.Rows("plugintype"));
+    }
+
+    [Fact]
+    public void FindPackageAssemblySetChanges_reports_a_dropped_and_an_added_assembly()
+    {
+        AssertExit(ExitSuccess, Run("apply", Local(OldAssembly, [Step("main")])));
+        Guid packageId = Assert.Single(_org.Rows("pluginpackage")).Id;
+        _org.Create(new Entity("pluginassembly") { ["name"] = "Zava.Extra", ["packageid"] = new EntityReference("pluginpackage", packageId) });
+        PackagePublishAction[] update = [new(Package, IsCreate: false)];
+
+        // Zava.Extra is deployed in the package but no longer built.
+        string dropped = Assert.Single(DataverseRegistration.FindPackageAssemblySetChanges(_org, Local(OldAssembly, []), update, null));
+        Assert.Contains("plugin assembly 'Zava.Extra' is no longer in the local package", dropped);
+
+        // A local plugin assembly the deployed package does not have; the deployed ones are still built (shipped as
+        // dependencies), so nothing is removed.
+        RegistrationState adding = Local("Zava.New", []) with
+        {
+            SourceAssemblyPayloads = [new AssemblyPayload(OldAssembly, "a.dll"), new AssemblyPayload("Zava.Extra", "b.dll")],
+        };
+        string added = Assert.Single(DataverseRegistration.FindPackageAssemblySetChanges(_org, adding, update, null));
+        Assert.Contains($"plugin assembly 'Zava.New' is added to it (the environment has 'Zava.Extra', '{OldAssembly}')", added);
+        Assert.Contains("does not register an assembly added to one", added);
+
+        // Both at once, with plural wording.
+        string both = Assert.Single(DataverseRegistration.FindPackageAssemblySetChanges(_org, Local("Zava.New", []) with { SourceAssemblies = ["Zava.New"] }, update, null));
+        Assert.Contains($"plugin assemblies 'Zava.Extra', '{OldAssembly}' are no longer in the local package and plugin assembly 'Zava.New' is added", both);
+    }
+
+    [Fact]
+    public void FindPackageAssemblySetChanges_ignores_a_created_or_unchanged_package_and_an_unknown_local_assembly()
+    {
+        AssertExit(ExitSuccess, Run("apply", Local(OldAssembly, [Step("main")])));
+
+        Assert.Empty(DataverseRegistration.FindPackageAssemblySetChanges(_org, Local(OldAssembly, []), [new(Package, IsCreate: false)], null));
+        // A package the run creates or does not republish is not compared.
+        Assert.Empty(DataverseRegistration.FindPackageAssemblySetChanges(_org, Local(NewAssembly, []), [new(Package, IsCreate: true)], null));
+        Assert.Empty(DataverseRegistration.FindPackageAssemblySetChanges(_org, Local(NewAssembly, []), [], null));
+        // A payload that does not name its assembly (built by hand) skips the added half.
+        RegistrationState unnamed = Local(OldAssembly, []) with { PackagePayloads = [new PluginPackagePayload(Package, "1.0.0", WritePackage())] };
+        Assert.Empty(DataverseRegistration.FindPackageAssemblySetChanges(_org, unnamed with { SourceAssemblies = [OldAssembly] }, [new(Package, IsCreate: false)], null));
     }
 
     [Fact]
@@ -148,46 +229,6 @@ public sealed class ApplyPluginTypeRemovalTests : IDisposable
         Assert.Empty(DataverseRegistration.FindPluginTypeRemovalBlockers(_org, local, current, withoutDelete, packageUpdated: false));
     }
 
-    [Fact]
-    public void A_retired_step_with_a_secure_configuration_and_no_value_supplied_is_a_warning()
-    {
-        RegistrationItem retired = Step("main");
-        System.Text.Json.Nodes.JsonObject node = System.Text.Json.Nodes.JsonNode.Parse(retired.Definition.GetRawText())!.AsObject();
-        node["secureConfig"] = DefinitionNormalizer.HashSecret("s3cret");
-        JsonElement withSecret = JsonSerializer.SerializeToElement(node);
-        RegistrationState current = new([], [], [], DateTime.UtcNow, [], [], RetiredAssemblies: [OldAssembly],
-            RetiredItems: [new RegistrationItem("step", AccountPlugin, withSecret) { LiveId = Guid.NewGuid() }]);
-
-        string warning = Assert.Single(DataverseRegistration.RetiredSecureConfigWarnings(Local(NewAssembly, [retired]), current));
-        Assert.Contains("secure configuration is deleted with it", warning);
-
-        RegistrationState supplied = Local(NewAssembly, [retired]) with
-        {
-            SecureConfigByStepKey = new Dictionary<string, string> { [DiffEngine.GetSecureConfigKey(retired)] = "s3cret" },
-        };
-        Assert.Empty(DataverseRegistration.RetiredSecureConfigWarnings(supplied, current));
-    }
-
-    [Fact]
-    public void BuildDiff_deletes_retired_steps_and_moves_a_retired_custom_api_without_pairing_them()
-    {
-        RegistrationItem step = Step("main");
-        RegistrationItem api = Api("zava_MyApi");
-        RegistrationItem retiredStep = step with { LiveId = Guid.NewGuid() };
-        RegistrationState current = new([], [], [], DateTime.UtcNow, [], [], RetiredAssemblies: [OldAssembly],
-            RetiredItems: [retiredStep, api, Api("zava_Gone")]);
-
-        RegistrationDiff diff = DiffEngine.BuildDiff(Local(NewAssembly, [step, api]), current);
-
-        Assert.Equal([step], diff.Added);
-        Assert.Contains(retiredStep, diff.Removed);
-        Assert.Contains(diff.Removed, i => i.Kind == "custom-api" && JsonReader.TryGetString(i.Definition, "uniqueName") == "zava_Gone");
-        RegistrationChange moved = Assert.Single(diff.Changed);
-        Assert.True(moved.MovesFromRetiredAssembly);
-        Assert.True(DataverseRegistration.IsCustomApiImplementationChange(moved));
-        Assert.Contains(OldAssembly, diff.CurrentAssemblies);
-    }
-
     private Guid TypeId(string typeName) =>
         Assert.Single(_org.Rows("plugintype"), t => t.GetAttributeValue<string>("typename") == typeName).Id;
 
@@ -208,7 +249,7 @@ public sealed class ApplyPluginTypeRemovalTests : IDisposable
     // A local state as the scan builds it: one package, its assembly, its plugin types. Each call writes a new package
     // file, so every apply republishes the package.
     private RegistrationState Local(string assembly, RegistrationItem[] items, string[]? types = null) =>
-        new(SourceAssemblies: [assembly], SourceAssemblyPayloads: [], PackagePayloads: [new PluginPackagePayload(Package, "1.0.0", WritePackage())],
+        new(SourceAssemblies: [assembly], SourceAssemblyPayloads: [], PackagePayloads: [new PluginPackagePayload(Package, "1.0.0", WritePackage(), AssemblyName: assembly)],
             GeneratedAtUtc: DateTime.UtcNow, Items: items, Diagnostics: [], PluginTypeNames: types ?? [AccountPlugin, OtherPlugin, ApiPlugin]);
 
     private string WritePackage()

@@ -66,7 +66,11 @@ public sealed record ExtractedPackage(string PackagePath, string TempDirectory, 
 public sealed record AssemblyPayload(string AssemblyName, string AssemblyPath);
 // HasRegistrations (local scan): false when the package holds no step, Custom API or unmanaged plugin type (a freshly
 // scaffolded, still empty project). Such a package is not created in Dataverse; one that already exists is republished.
-public sealed record PluginPackagePayload(string PackageName, string Version, string PackagePath, bool HasRegistrations = true);
+// AssemblyName (local scan): the package's plugin assembly, the one Vela scans. Dataverse registers a package's
+// assemblies when the package is created and never changes that set on update (verified live), so plan/apply compare it
+// with the deployed package's assemblies (DataverseRegistration.FindPackageAssemblySetChanges). Null when unknown (a
+// payload built by hand), which skips the added-assembly half of that check.
+public sealed record PluginPackagePayload(string PackageName, string Version, string PackagePath, bool HasRegistrations = true, string? AssemblyName = null);
 public sealed record RegistrationItem(string Kind, string Type, JsonElement Definition)
 {
     /// <summary>The row id of a live step (the live read sets it). Apply deletes a removed step by this id, never by a
@@ -85,23 +89,13 @@ public sealed record RegistrationItem(string Kind, string Type, JsonElement Defi
 // PluginTypeNames (local scan only) lists every class of the scanned assemblies that Dataverse registers as a plugin
 // type (Vela plugins and Custom APIs, and the unmanaged IPlugin / CodeActivity classes): a live plugin type missing
 // from it is removed by the package update. Null when unknown (a state built by hand), which skips that check.
-// RetiredAssemblies / RetiredItems (live state only): the assemblies of a deployed plugin package that the local
-// package no longer contains (the assembly was renamed), and the Vela steps and the Custom APIs of their plugin types.
-// The diff deletes those steps and moves those Custom APIs (DiffEngine.BuildDiff), never pairing them with a local item.
-public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics, IReadOnlyDictionary<string, string>? SecureConfigByStepKey = null, IReadOnlyDictionary<string, string>? SecureConfigNameByStepKey = null, string[]? UnmanagedPluginTypes = null, string[]? Info = null, string[]? TypedCustomApiUniqueNames = null, string[]? PluginTypeNames = null, string[]? RetiredAssemblies = null, RegistrationItem[]? RetiredItems = null);
+public sealed record RegistrationState(string[] SourceAssemblies, AssemblyPayload[] SourceAssemblyPayloads, PluginPackagePayload[] PackagePayloads, DateTime GeneratedAtUtc, RegistrationItem[] Items, string[] Diagnostics, IReadOnlyDictionary<string, string>? SecureConfigByStepKey = null, IReadOnlyDictionary<string, string>? SecureConfigNameByStepKey = null, string[]? UnmanagedPluginTypes = null, string[]? Info = null, string[]? TypedCustomApiUniqueNames = null, string[]? PluginTypeNames = null);
 public sealed record RegistrationDiff(string[] LocalAssemblies, string[] CurrentAssemblies, RegistrationItem[] Added, RegistrationItem[] Removed, RegistrationChange[] Changed, RegistrationItem[] LocalItems, RegistrationItem[] CurrentItems)
 {
     public DiffSummary Summary { get; init; } = new DiffSummary(Added.Length, Removed.Length, Changed.Length);
 }
 
-public sealed record RegistrationChange(string Kind, string Type, JsonElement Before, JsonElement After)
-{
-    /// <summary>A Custom API implemented by a plugin type of a retired assembly (RegistrationState.RetiredAssemblies):
-    /// apply detaches it before the package update and points it at the local type afterwards, as for a renamed
-    /// class. Not part of the JSON output.</summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public bool MovesFromRetiredAssembly { get; init; }
-}
+public sealed record RegistrationChange(string Kind, string Type, JsonElement Before, JsonElement After);
 public sealed record DiffSummary(int Added, int Removed, int Changed);
 /// <summary>
 /// The plan/apply JSON document (see docs/reference/machine-readable-output.md). <see cref="SchemaVersion"/> is

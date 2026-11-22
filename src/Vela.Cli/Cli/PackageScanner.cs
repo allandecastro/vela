@@ -149,7 +149,7 @@ internal static class PackageScanner
 
         // A package that contributes nothing (no step, Custom API or unmanaged plugin type) is flagged so plan/apply do
         // not create an empty package in Dataverse; its assembly stays in SourceAssemblies so live steps are still read.
-        packagePayloads.Add(packagePayload with { HasRegistrations = items.Count + unmanagedPluginTypes.Count > registrationsBefore });
+        packagePayloads.Add(packagePayload with { HasRegistrations = items.Count + unmanagedPluginTypes.Count > registrationsBefore, AssemblyName = assemblyName });
     }
 
     // A web resources root adds web-resource items alongside the plugin/Custom API items (folder mirror).

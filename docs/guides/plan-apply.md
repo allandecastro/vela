@@ -126,9 +126,12 @@ with every problem on stderr, writes no JSON document, and writes nothing to Dat
   table the message has no filter for (`no message filter exists for entity ...`) is reported. A step on the message
   of a Custom API that the same run creates is not checked here, since that Custom API is not in the environment yet:
   `apply` writes the Custom APIs before the steps (see [Batched writes](#batched-writes)).
+- **Assemblies of the plugin package.** When the package update would rename, drop or add a plugin assembly of a
+  deployed package, Vela stops: an existing package keeps the assemblies it was created with. See
+  [Rename the plugin assembly](#rename-the-plugin-assembly).
 - **Plugin types the package update removes.** When the package update removes a registered plugin type (its class
-  was deleted or renamed, or the assembly was renamed, see [Rename the plugin assembly](#rename-the-plugin-assembly)),
-  Dataverse refuses the update while steps are still registered on that type, even disabled ones. `apply` deletes the
+  was deleted or renamed), Dataverse refuses the update while steps are still registered on that type, even disabled
+  ones. `apply` deletes the
   steps Vela manages on that type before the package update. Any other step on it (for example one added with the
   Plugin Registration Tool) is reported with its plugin type: delete it or move it to another plugin type first.
 
@@ -234,19 +237,26 @@ in CI): the operations that already succeeded do nothing, the failed ones are re
 
 ### Rename the plugin assembly
 
-When the plugins project changes its `<AssemblyName>` but keeps its package id, the deployed plugin package still
-holds the old assembly. `plan` and `apply` read that old assembly through the package and list it under `info`:
+A plugin package keeps the assemblies it was created with: Dataverse refuses a package update that renames or drops
+one of them, and does not register an assembly that an update adds. `plan` and `apply` compare the assemblies of the
+deployed package with the local package's before any write. When they differ (the plugins project changed its
+`<AssemblyName>` but kept its package id, for example), both commands exit `4` with a message that names the package
+and the assemblies, and write nothing.
 
-- its Vela steps are deleted before the package update and created again on the new assembly's plugin types, so the
-  plan shows them as removed and added;
-- a Custom API it implements that the package still declares is moved to the new plugin type (an `update`), and any
-  other one is deleted;
-- a step of the old assembly that Vela did not write stops the run (see
-  [Errors that stop the preview](#errors-that-stop-the-preview)).
+Vela does not delete and recreate the package for you: that deletes every step on the package's plugin types,
+including steps other tools registered, and their secure configurations. Choose one of these:
 
-A step that is deleted and created again loses its secure configuration. When such a step declares one and the run
-supplies no value, `plan` reports a warning: pass the value with `--secure-config` or `VELA_SECURE_CONFIG_<NAME>` (see
-[Secure configuration](#secure-configuration)).
+- Keep the assembly name the environment has: set `<AssemblyName>` in the plugins project back to it.
+- Recreate the package:
+  1. Delete the steps registered on the package's plugin types (the Plugin Registration Tool lists them).
+  2. Delete the plugin package. If a Custom API is implemented by one of its plugin types, clear that Custom API's
+     plugin type first, or delete the Custom API.
+  3. Run `vela plan`, then `vela apply`. `apply` creates the package and registers its steps and Custom APIs again,
+     pointing an existing Custom API at the new plugin type. Supply the steps' secure configurations again with
+     `--secure-config` or `VELA_SECURE_CONFIG_<NAME>` (see [Secure configuration](#secure-configuration)).
+
+See [Build and package plug-in code](https://learn.microsoft.com/power-apps/developer/data-platform/build-and-package)
+for the plugin package itself.
 
 ### Custom APIs owned by another assembly
 

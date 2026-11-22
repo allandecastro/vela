@@ -100,7 +100,7 @@ internal static class PlanApplyCommand
             // none), from the local definition of the API or its live row. Done before the live read, the rank check
             // and the diff, so all of them see the step as apply writes it.
             local = DataverseRegistration.UnscopeGlobalCustomApiSteps(local, DataverseRegistration.ResolveCustomApiBindings(service, local), jsonOptions);
-            RegistrationState current = ReadCurrent(service, local, options, jsonOptions, out string[] unmanaged, withRetired: command != InspectMode);
+            RegistrationState current = ReadCurrent(service, local, options, jsonOptions, out string[] unmanaged);
             local = ResolveSecureConfigs(local, current, options, jsonOptions);
 
             return command switch
@@ -128,17 +128,13 @@ internal static class PlanApplyCommand
         }
     }
 
-    // Reads the live state of the local assemblies and scopes it to what Vela owns (OwnershipScope). plan and apply
-    // also read the retired assemblies of the run's packages (a renamed assembly), whose steps block the package update.
-    private static RegistrationState ReadCurrent(IOrganizationService service, RegistrationState local, SharedOptions options, JsonSerializerOptions jsonOptions, out string[] unmanaged, bool withRetired)
+    // Reads the live state of the local assemblies and scopes it to what Vela owns (OwnershipScope).
+    private static RegistrationState ReadCurrent(IOrganizationService service, RegistrationState local, SharedOptions options, JsonSerializerOptions jsonOptions, out string[] unmanaged)
     {
         RegistrationState current = ConsoleStatus.Run(
             "Reading current registrations…",
             report => DataverseRegistration.ReadDataverseState(service, local.SourceAssemblies, options, jsonOptions, DataverseRegistration.ExtractLocalRankSteps(local), report));
-        RegistrationState scoped = OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out unmanaged);
-        return withRetired
-            ? DataverseRegistration.WithRetiredAssemblies(service, scoped, local, options.SolutionUniqueName, jsonOptions)
-            : scoped;
+        return OwnershipScope.ExcludeUnmanaged(current, local.UnmanagedPluginTypes, out unmanaged);
     }
 
     // Code only names a step's secure configuration; its value comes from --secure-config or VELA_SECURE_CONFIG_<NAME>.
@@ -165,10 +161,13 @@ internal static class PlanApplyCommand
     //       pays for nor can fail on the lookup;
     //     - an added or changed step whose message, or whose table's message filter, does not exist
     //       (FindUnregistrableSteps; the message of a Custom API this run creates is exempt);
-    //     - a plugin type the package update removes (its class was deleted or renamed, or its assembly was renamed)
-    //       that still has steps the run does not delete first: Dataverse refuses the update (0x80040265), so a step
-    //       Vela does not manage stops the run here (FindPluginTypeRemovalBlockers). Vela's own steps on that type are
-    //       in the delete phase, which runs before the publish.
+    //     - a plugin package update that changes the package's set of assemblies (an assembly renamed, dropped or
+    //       added): Dataverse refuses a rename or a drop (0x80040265) and ignores an addition, so the package has to be
+    //       deleted and created again, which Vela leaves to the user (FindPackageAssemblySetChanges);
+    //     - a plugin type the package update removes (its class was deleted or renamed) that still has steps the run
+    //       does not delete first: Dataverse refuses the update (0x80040265), so a step Vela does not manage stops the
+    //       run here (FindPluginTypeRemovalBlockers). Vela's own steps on that type are in the delete phase, which runs
+    //       before the publish.
     internal static PlanPreview BuildPreview(string mode, IOrganizationService service, RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, out RegistrationDiff diff)
     {
         diff = BuildDiff(local, current);
@@ -190,15 +189,20 @@ internal static class PlanApplyCommand
         }
 
         blocking.AddRange(DataverseRegistration.FindUnregistrableSteps(service, diff));
-        blocking.AddRange(DataverseRegistration.FindPluginTypeRemovalBlockers(service, local, current, diff, packageActions.Any(a => !a.IsCreate)));
+        IReadOnlyList<string> assemblySetChanges = DataverseRegistration.FindPackageAssemblySetChanges(service, local, packageActions, options.SolutionUniqueName);
+        blocking.AddRange(assemblySetChanges);
+        // A changed assembly set already stops the run; the type check would only repeat it for each type.
+        if (assemblySetChanges.Count == 0)
+        {
+            blocking.AddRange(DataverseRegistration.FindPluginTypeRemovalBlockers(service, local, current, diff, packageActions.Any(a => !a.IsCreate)));
+        }
         if (blocking.Count > 0)
         {
             throw new InvalidOperationException(BlockingErrorsMessage(blocking));
         }
 
         IReadOnlyList<SolutionMembershipAction> membership = OnlyUnwritten(MissingFromSolution(service, local, options, info), diff, packageActions.Count > 0);
-        string[] currentDiagnostics = [.. current.Diagnostics, .. DataverseRegistration.RetiredSecureConfigWarnings(local, current)];
-        return BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, currentDiagnostics, packageActions, unmanaged, [.. info], membership,
+        return BuildPlanPreview(mode, options.Environment, diff, local.Diagnostics, current.Diagnostics, packageActions, unmanaged, [.. info], membership,
             ReadManagedIdentityLinks(service, local, options, validate: true));
     }
 
@@ -361,7 +365,7 @@ internal static class PlanApplyCommand
             // The read-back is part of the run: every write already landed, so a failure here still ends with the
             // apply-failed document and the partial-apply exit, listing the writes as completed.
             run.Pending = ReadBackOperation;
-            after = ReadCurrent(service, local, options, jsonOptions, out _, withRetired: true);
+            after = ReadCurrent(service, local, options, jsonOptions, out _);
             afterDiff = BuildDiff(local, after);
             // The managed identity link is read again too: a link the platform did not keep is not a success either.
             afterLinks = ReadManagedIdentityLinks(service, local, options, validate: false);
