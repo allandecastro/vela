@@ -48,22 +48,22 @@ namespace Vela.Testing
         // through its Update steps; without it the store writes the master itself.
         private void DemandMergePrivileges(string entity)
         {
-            if (Enforcing == null)
+            if (Enforcing is not SecurityModel security)
             {
                 return;
             }
 
             foreach (Privilege privilege in new[] { Privilege.Write, Privilege.AppendTo, Privilege.Share })
             {
-                if (!_security!.HoldsPrivilege(_currentUserId, entity, privilege))
+                if (!security.HoldsPrivilege(_currentUserId, entity, privilege))
                 {
-                    throw PlatformFault.Create(PlatformFault.MergePrivilegeDenied, _security.PrivilegeDenied(_currentUserId, privilege, entity).Detail.Message);
+                    throw PlatformFault.Create(PlatformFault.MergePrivilegeDenied, security.PrivilegeDenied(_currentUserId, privilege, entity).Detail.Message);
                 }
             }
 
-            if (!_security.HoldsPrivilege(_currentUserId, entity, Privilege.Append))
+            if (!security.HoldsPrivilege(_currentUserId, entity, Privilege.Append))
             {
-                throw _security.PrivilegeDenied(_currentUserId, Privilege.Append, entity);
+                throw security.PrivilegeDenied(_currentUserId, Privilege.Append, entity);
             }
         }
 
