@@ -171,7 +171,7 @@ namespace Vela.Testing.Tests
 
             // Verified live: Target.Id set, no KeyAttributes, and the primary id attribute in the Target.
             Assert.Equal(new[] { $"10:{id}:keys=0:pk={id}", $"20:{id}:keys=0:pk={id}" }, RiProbe.Events);
-            Assert.Empty(target.Attributes.Keys.Where(key => key == "vela_rirecordid"));
+            Assert.False(target.Contains("vela_rirecordid"));
         }
 
         [Fact]
