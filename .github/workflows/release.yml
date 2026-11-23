@@ -159,10 +159,15 @@ jobs:
   publish:
     # Holds the OIDC token for NuGet Trusted Publishing; checks out nothing and runs no repository code.
     needs: build
-    runs-on: ubuntu-latest
+    # ubuntu-latest, or the WINDOWS_RUNNER runner when that variable is set: a repository that sets it may have no
+    # GitHub-hosted minutes, and a hosted job then never starts. The tokens stay per job either way.
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 10
     permissions:
       id-token: write # OIDC token exchange for NuGet Trusted Publishing (no long-lived API key)
+    env:
+      # Self-hosted only, as in `build`: setup-dotnet installs into the runner's tool cache.
+      DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/../../_tool/dotnet', github.workspace) || '' }}
     steps:
       - uses: actions/download-artifact@v8 # errors on a digest mismatch by default
         with:
@@ -184,15 +189,27 @@ jobs:
       - name: Push to NuGet.org
         # Pushes every .nupkg and its matching .snupkg symbol package, using the temporary key from the
         # login step. --skip-duplicate keeps a re-run of the same tag idempotent.
+        if: ${{ !vars.WINDOWS_RUNNER }}
+        shell: bash
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: dotnet nuget push "artifacts/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Push to NuGet.org (WINDOWS_RUNNER)
+        # The same push on the Windows runner, in Windows PowerShell 5.1 as the `build` job.
+        if: ${{ vars.WINDOWS_RUNNER }}
+        shell: powershell
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push "artifacts/*.nupkg" --api-key "$env:NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   gh-release:
     # Holds the write token for the GitHub Release; checks out nothing and runs no repository code. Runs after the
     # NuGet push, so a release page never points at packages that failed to publish.
     needs: [build, publish]
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"ubuntu-latest"') }} # as `publish`
     timeout-minutes: 10
     permissions:
       contents: write # create the GitHub Release and upload the packages to it

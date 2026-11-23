@@ -21,12 +21,14 @@ The workflow runs three jobs, each with only the permissions it needs:
 | Job | Runner | Token | Does |
 | --- | --- | --- | --- |
 | `build` | `windows-latest`, or the runner the `WINDOWS_RUNNER` repository variable names (the net462 harness only builds on Windows, like `ci.yml`) | `contents: read` | Preflight, build, test, pack; uploads the packages and the release notes as one workflow artifact. |
-| `publish` | `ubuntu-latest` | `id-token: write` | Exchanges the OIDC token for a short-lived NuGet key and pushes the packages. |
-| `gh-release` | `ubuntu-latest` | `contents: write` | Creates the GitHub Release with the release notes and attaches the `.nupkg` files. |
+| `publish` | `ubuntu-latest`, or the `WINDOWS_RUNNER` runner | `id-token: write` | Exchanges the OIDC token for a short-lived NuGet key and pushes the packages. |
+| `gh-release` | `ubuntu-latest`, or the `WINDOWS_RUNNER` runner | `contents: write` | Creates the GitHub Release with the release notes and attaches the `.nupkg` files. |
 
 Only `build` checks out and runs repository code. `publish` and `gh-release` only download its artifact, so the
 tokens that can publish never reach the build or the tests. `gh-release` runs after `publish` succeeds. The
 third-party actions of these two jobs (`NuGet/login`, `softprops/action-gh-release`) are pinned by commit SHA.
+With `WINDOWS_RUNNER` set, the three jobs run on that runner: a repository without GitHub-hosted minutes could not
+start `publish`. Each job still holds only its own token.
 
 ### Preflight
 
