@@ -47,22 +47,19 @@ namespace Vela.DocSamples
         {
             Guid userId = Guid.NewGuid();
             Guid buCopyId = Guid.NewGuid();
-            InMemoryOrganizationService store = new InMemoryOrganizationService();
-            store.Create(new Role { Id = buCopyId, ParentRootRoleId = new EntityReference(Role.EntityLogicalNameValue, Roles.SalespersonId) });
+            Guid accountId = Guid.NewGuid();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<SalespersonCheck>().WithCurrentUser(userId);
+            pipeline.Seed(
+                new Account { Id = accountId, Name = "Zava" },
+                new Role { Id = buCopyId, ParentRootRoleId = new EntityReference(Role.EntityLogicalNameValue, Roles.SalespersonId) });
             if (assigned)
             {
-                store.Create(new SystemUserRoles { Id = Guid.NewGuid(), RoleId = buCopyId, SystemUserId = userId });
+                pipeline.Seed(new SystemUserRoles { Id = Guid.NewGuid(), RoleId = buCopyId, SystemUserId = userId });
             }
 
-            RecordingTracingService trace = new RecordingTracingService();
-            PluginContext.For<Account>()
-                .WithInitiatingUserId(userId)
-                .WithSystemService(store)
-                .WithTracingService(trace)
-                .WithTarget(new Account { Id = Guid.NewGuid(), Name = "Contoso" })
-                .Execute<SalespersonCheck>();
+            pipeline.Service.Update(new Account { Id = accountId, Name = "Contoso" });
 
-            Assert.Contains($"salesperson: {assigned}", trace.Traces);
+            Assert.Contains($"salesperson: {assigned}", pipeline.Trace.Traces);
         }
     }
 }

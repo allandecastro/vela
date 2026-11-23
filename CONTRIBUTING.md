@@ -23,7 +23,7 @@ src/
   Vela.Messages/    # Typed request/response base classes (net462 + net10.0), referenced by Vela.Plugins
   Vela.Analyzers/   # Roslyn analyzers VELA001-VELA028 and the image/step-context source generator (netstandard2.0)
   Vela.CodeFixes/   # IDE code fixes, packed inside Vela.Plugins with the analyzers
-  Vela.Testing/     # Test harness (net462): in-memory Dataverse, PluginContext, PluginPipeline
+  Vela.Testing/     # Test harness (net462): in-memory Dataverse, PluginPipeline (PluginContext is internal)
   Vela.Cli/         # The vela tool (net10.0): plan/apply, init/add, models, sign, logs
 tests/              # One test project per src project, plus package fixtures for the CLI scanner
 docs/               # The docfx site; docs/samples holds the compiled snippets it includes

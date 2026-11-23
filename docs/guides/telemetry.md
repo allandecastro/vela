@@ -85,14 +85,17 @@ The integration is safe either way and never throws for telemetry reasons:
 
 The test harness serves a recording `Microsoft.Xrm.Sdk.PluginTelemetry.ILogger`, the same type the platform serves,
 so a test can assert what a handler emitted. In a [`PluginPipeline`](testing.md) test, `pipeline.LogCapture` records
-the entries of the whole cascade. With `PluginContext`, read `builder.LogCapture`:
+the entries of the whole cascade. A plugin that logs:
+
+[!code-csharp[](../samples/Vela.DocSamples/TestingSample.cs#telemetry-plugin)]
+
+is tested by reading `pipeline.LogCapture` after the write:
 
 [!code-csharp[](../samples/Vela.DocSamples/TestingSample.cs#telemetry)]
 
 `LogCapture` (a `RecordingLogger`, namespace `Vela.Testing`) records the level, message, exception and scope
 dimensions of each entry in `Entries`, and the name, value and dimensions of each metric in `Metrics`.
-`TraceCapture` (or `pipeline.Trace`) records the trace-log channel. To use another logger (any
-`PluginTelemetry.ILogger`, a mock included), pass it to `PluginContext` with `WithLogger(...)`.
+`pipeline.Trace` records the trace-log channel.
 
 ## See also
 

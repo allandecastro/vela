@@ -260,7 +260,8 @@ public class ProjectScaffolderTests
             string readme = File.ReadAllText(Path.Combine(root, "README.md"));
             Assert.Contains("vela plan --package artifacts/zava_Zava.Plugins.1.0.0.nupkg", readme);
             Assert.Contains("vela sign --package artifacts/zava_Zava.Integrations.1.0.0.nupkg", readme);
-            Assert.Contains("Test with `PluginPipeline` by default; use `PluginContext` only for edge cases", readme);
+            Assert.Contains("`PluginPipeline` runs what Dataverse runs for a request sent through `pipeline.Service`", readme);
+            Assert.DoesNotContain("PluginContext.", readme);
         });
     }
 
@@ -670,7 +671,8 @@ public class ProjectScaffolderTests
             Assert.Contains("RegisterCustomApi(\"zava_EstimateValue\")", agents);
             Assert.Contains("## Write a test", agents);
             Assert.Contains("PluginPipeline.Empty().Register<AccountCreditPlugin>()", agents);
-            Assert.Contains("Test with `PluginPipeline` by default; use `PluginContext` only for edge cases", agents);
+            Assert.Contains("Test with `PluginPipeline` from `Vela.Testing`", agents);
+            Assert.DoesNotContain("PluginContext.", agents);
 
             // The CLI loop on this solution's own names, always with --solution.
             Assert.Contains("dotnet build ZavaSales.sln -c Release", agents);

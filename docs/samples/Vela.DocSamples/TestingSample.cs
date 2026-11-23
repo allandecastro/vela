@@ -52,23 +52,6 @@ namespace Vela.DocSamples
         }
 
         [Fact]
-        public void Context_Runs_One_Handler()
-        {
-            #region context-test
-            InMemoryOrganizationService crm = new InMemoryOrganizationService();
-
-            // The trigger (Create, PostOperation, Sync) comes from the plugin's only step.
-            PluginContext.For<Account>()
-                .WithTarget(new Account { Id = Guid.NewGuid(), Name = "Zava" })
-                .Depth(2)
-                .WithOrganizationService(crm)
-                .Execute<AccountWelcomeTask>();
-
-            Assert.Single(crm.GetAll("task"));
-            #endregion
-        }
-
-        [Fact]
         public void Security_Faults_A_Record_Out_Of_Reach()
         {
             Guid aliceId = Guid.NewGuid();
@@ -106,16 +89,14 @@ namespace Vela.DocSamples
         public void Telemetry_Is_Recorded()
         {
             #region telemetry
-            PluginContextBuilder<Account> builder = PluginContext.For<Account>().OnCreate();
-            ILocalPluginContext ctx = builder.Build();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<OrderTelemetry>();
 
-            ctx.LogWarning("careful");
-            ctx.LogMetric("Orders", 2);
+            pipeline.Service.Create(new Account { Name = "Zava" });
 
-            LogEntry entry = Assert.Single(builder.LogCapture.Entries);
-            Assert.Equal(LogLevel.Warning, entry.Level);
+            // The runtime logs the execution's start and duration too: pick the plugin's own entries.
+            LogEntry entry = Assert.Single(pipeline.LogCapture.Entries, e => e.Level == LogLevel.Warning);
             Assert.Equal("careful", entry.Message);
-            Assert.Equal(2, Assert.Single(builder.LogCapture.Metrics).Value);
+            Assert.Equal(2, Assert.Single(pipeline.LogCapture.Metrics, m => m.Name == "Orders").Value);
             #endregion
         }
 
@@ -124,7 +105,8 @@ namespace Vela.DocSamples
         {
             #region environment-variables
             Guid definitionId = Guid.NewGuid();
-            InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<ApiUrlReader>();
+            pipeline.Seed(
                 new Entity("environmentvariabledefinition", definitionId)
                 {
                     ["schemaname"] = "adc_ApiBaseUrl",
@@ -138,10 +120,36 @@ namespace Vela.DocSamples
                     ["statecode"] = new OptionSetValue(0),
                 });
 
-            ILocalPluginContext ctx = new PluginContextBuilder().WithSystemService(crm).Build();
+            pipeline.Service.Create(new Account { Name = "Zava" });
 
-            Assert.Equal("https://override", ctx.GetEnvironmentVariable("adc_ApiBaseUrl"));
+            Assert.Contains("api: https://override", pipeline.Trace.Traces);
             #endregion
         }
     }
+
+    #region telemetry-plugin
+    public sealed partial class OrderTelemetry(string unsecureConfig, string secureConfig)
+        : EntityPluginBase<Account>(unsecureConfig, secureConfig)
+    {
+        protected override void RegisterPluginSteps() =>
+            RegisterStep().OnCreate().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .Handle(ctx =>
+                {
+                    ctx.LogWarning("careful");
+                    ctx.LogMetric("Orders", 2);
+                });
+    }
+    #endregion
+
+    #region environment-variables-plugin
+    public sealed partial class ApiUrlReader(string unsecureConfig, string secureConfig)
+        : EntityPluginBase<Account>(unsecureConfig, secureConfig)
+    {
+        protected override void RegisterPluginSteps() =>
+            RegisterStep().OnCreate().PostOperation().Sync()
+                .FilterOn(a => a.Name)
+                .Handle(ctx => ctx.Trace("api: {0}", ctx.GetEnvironmentVariable("adc_ApiBaseUrl")));
+    }
+    #endregion
 }

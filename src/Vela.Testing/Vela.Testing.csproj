@@ -6,12 +6,19 @@
     <PackageId>Vela.Testing</PackageId>
     <Version>0.0.0-local</Version>
     <Title>Vela.Testing — Unit-test Dataverse plugins without a connection</Title>
-    <Description>Test helpers for Vela plugins and Custom APIs: build a fake plugin execution context (no Dataverse connection, no mocking-library dependency) and assert behaviour with a fluent, strongly-typed builder.</Description>
+    <Description>Test harness for Vela plugins and Custom APIs: run the Dataverse plugin pipeline over an in-memory Dataverse (no Dataverse connection, no mocking-library dependency).</Description>
     <!-- Extend the shared tags (defined in Directory.Build.props, imported before this body). -->
     <PackageTags>$(PackageTags);testing;unit-testing;test-doubles</PackageTags>
     <!-- Ship a testing-specific NuGet readme instead of the shared framework one. -->
     <VelaUseSharedReadme>false</VelaUseSharedReadme>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- PluginContext (one plugin against a crafted context) is internal: PluginPipeline is the public harness. The
+         runtime and harness suites keep it for the unit tests of the framework itself. -->
+    <InternalsVisibleTo Include="Vela.Tests" />
+    <InternalsVisibleTo Include="Vela.Testing.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="NUGET.md" Pack="true" PackagePath="/" Visible="false" />

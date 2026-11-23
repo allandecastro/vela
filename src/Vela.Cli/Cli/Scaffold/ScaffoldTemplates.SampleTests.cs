@@ -10,8 +10,6 @@ $$"""
 namespace {{prefix}}.Plugins.Tests.Account.Plugins
 {
     using System;
-    using Vela.Constants;
-    using Vela.Steps;
     using Vela.Testing;
     using Microsoft.Xrm.Sdk;
     using Xunit;
@@ -19,41 +17,34 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
-    /// Tests <see cref="AccountRelatedContactsPlugin"/> two ways. The first test runs the handler directly against an
-    /// in-memory Dataverse and asserts the count returned by its aggregate FetchXML query (the harness parses the
-    /// emitted FetchXML, so the string is exercised end to end). The second drives the plugin through
-    /// <see cref="PluginPipeline"/>, which applies the step registration the way Dataverse does: change
-    /// <c>FilterOn(a =&gt; a.Name)</c> to the wrong column and that test fails.
+    /// Tests <see cref="AccountRelatedContactsPlugin"/> through <see cref="PluginPipeline"/>, which runs the step
+    /// registration the way Dataverse does. The first test asserts the count returned by the handler's aggregate
+    /// FetchXML query (the harness parses the emitted FetchXML, so the string is exercised end to end). The second
+    /// checks the step's filter: change <c>FilterOn(a =&gt; a.Name)</c> to the wrong column and it fails.
     /// </summary>
     public sealed class AccountRelatedContactsPluginTests
     {
         [Fact]
         public void Counts_the_related_contacts_with_an_aggregate_fetchxml_query()
         {
+            // Empty().Register<T>() scopes the pipeline to this plugin (FromAssemblyOf<T>() takes them all). Seed
+            // writes the starting rows without firing any step.
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountRelatedContactsPlugin>();
             Guid accountId = Guid.NewGuid();
-            InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
+            pipeline.Seed(
                 new Account { Id = accountId, Name = "Zava" },
                 new Contact { Id = Guid.NewGuid(), FirstName = "Jane", ParentCustomerId = new EntityReference(Account.EntityLogicalNameValue, accountId) },
                 new Contact { Id = Guid.NewGuid(), FirstName = "John", ParentCustomerId = new EntityReference(Account.EntityLogicalNameValue, accountId) },
                 new Contact { Id = Guid.NewGuid(), FirstName = "Ada" }); // no parent account: not counted
 
-            PluginContextBuilder<Account> builder = PluginContext.For<Account>()
-                .OnUpdate().Stage(PluginStages.PostOperation).Sync()
-                .WithPrimaryEntity(Account.EntityLogicalNameValue, accountId)
-                .WithTarget(new Account { Id = accountId, Name = "Zava (renamed)" })
-                .WithOrganizationService(crm);
+            pipeline.Service.Update(new Account { Id = accountId, Name = "Zava (renamed)" });
 
-            builder.Execute(new AccountRelatedContactsPlugin(string.Empty, string.Empty));
-
-            Assert.Contains("has 2 related contact", builder.TraceCapture.Output);
+            Assert.Contains("has 2 related contact", pipeline.Trace.Output);
         }
 
         [Fact]
         public void Runs_only_when_the_account_name_changes()
         {
-            // PluginContext.For<T>().Execute(...) calls the handler whatever the step's filtering columns, images or
-            // stage. PluginPipeline routes each write through the registered steps instead, so it tests the
-            // registration too. Empty().Register<T>() scopes it to this plugin (FromAssemblyOf<T>() takes them all).
             PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountRelatedContactsPlugin>();
             Guid accountId = pipeline.Service.Create(new Account { Name = "Zava" });
 
@@ -175,31 +166,22 @@ namespace {{prefix}}.Plugins.Tests.Account.Plugins
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
-    /// Tests <see cref="AccountPostCreatePlugin"/> with <c>Vela.Testing</c>: an in-memory Dataverse plus a
-    /// fake execution context - no connection, no mocking library. Plugins are constructed with their
-    /// <c>(unsecureConfig, secureConfig)</c> constructor and run via <c>.Execute(plugin)</c>.
+    /// Tests <see cref="AccountPostCreatePlugin"/> with <c>Vela.Testing</c>: <see cref="PluginPipeline"/> runs the
+    /// plugin's registered steps against an in-memory Dataverse - no connection, no mocking library.
     /// </summary>
     public sealed class AccountPostCreatePluginTests
     {
         [Fact]
         public void Schedules_A_Follow_Up_Task_For_The_New_Account()
         {
-            // Arrange: an in-memory Dataverse the plugin's injected IOrganizationService writes to.
-            InMemoryOrganizationService crm = new InMemoryOrganizationService();
-            Guid accountId = Guid.NewGuid();
-            Account account = new Account { Id = accountId, Name = "Zava" };
+            // Arrange: a pipeline scoped to this plugin.
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountPostCreatePlugin>();
 
-            // Act: run the plugin. The trigger (Create/PostOperation/Synchronous) is auto-derived from the
-            // plugin's own single registered step, so there is no need to restate OnCreate().Stage(...).Mode(...).
-            PluginContext.For<Account>()
-                .WithPrimaryEntity(Account.EntityLogicalNameValue, accountId)
-                .WithTarget(account)
-                .WithPostImage(account)
-                .WithOrganizationService(crm)
-                .Execute(new AccountPostCreatePlugin(string.Empty, string.Empty));
+            // Act: create the account. The Create PostOperation step fires with its post-image, as in Dataverse.
+            Guid accountId = pipeline.Service.Create(new Account { Name = "Zava" });
 
             // Assert: retrieve the created task and check its fields (not just the count).
-            EntityCollection tasks = crm.RetrieveMultiple(
+            EntityCollection tasks = pipeline.Service.RetrieveMultiple(
                 new QueryExpression("task") { ColumnSet = new ColumnSet("subject", "regardingobjectid") });
             Entity task = Assert.Single(tasks.Entities);
             Assert.Equal("Follow up with Zava", task.GetAttributeValue<string>("subject"));
@@ -217,17 +199,15 @@ $$"""
 namespace {{prefix}}.Plugins.Tests.Contact.Plugins
 {
     using System;
-    using Vela.Constants;
-    using Vela.Steps;
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Plugins.Contact.Plugins;
     using {{prefix}}.Shared.Models.Generated;
 
     /// <summary>
-    /// Tests the multi-step "router" <see cref="ContactRouterPlugin"/>. Because a router registers several
-    /// steps, the trigger (message/stage/mode) must be stated explicitly so the right handler runs. Asserts
-    /// on the emitted traces via <c>TraceCapture</c>.
+    /// Tests the multi-step "router" <see cref="ContactRouterPlugin"/>. <see cref="PluginPipeline"/> picks the step
+    /// the write triggers (a Create fires the Create step, not the Update one), so the test states no trigger.
+    /// Asserts on the emitted traces via <c>pipeline.Trace</c>.
     /// </summary>
     public sealed class ContactRouterPluginTests
     {
@@ -236,34 +216,16 @@ namespace {{prefix}}.Plugins.Tests.Contact.Plugins
         {
             // An existing contact shares the email of the one being created.
             Guid existingId = Guid.NewGuid();
-            Guid newContactId = Guid.NewGuid();
-            Contact created = new Contact
-            {
-                Id = newContactId,
-                FirstName = "Janet",
-                LastName = "Doe",
-                EMailAddress1 = "jane@zava.com",
-            };
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<ContactRouterPlugin>();
+            pipeline.Seed(new Contact { Id = existingId, FirstName = "Jane", LastName = "Doe", EMailAddress1 = "jane@zava.com" });
 
-            // PostOperation runs after the row is written, so the new contact is already in Dataverse: seed it too,
-            // or the duplicate query's "not this contact" condition is never put to the test (it is seeded first, so
-            // a query that forgot the condition would report the new contact as its own duplicate).
-            InMemoryOrganizationService crm = new InMemoryOrganizationService().Seed(
-                created,
-                new Contact { Id = existingId, FirstName = "Jane", LastName = "Doe", EMailAddress1 = "jane@zava.com" });
+            // PostOperation runs after the row is written, so the duplicate query also sees the new contact: its
+            // "not this contact" condition keeps it from being reported as its own duplicate.
+            Guid newContactId = pipeline.Service.Create(new Contact { FirstName = "Janet", LastName = "Doe", EMailAddress1 = "jane@zava.com" });
 
-            PluginContextBuilder<Contact> builder = PluginContext.For<Contact>()
-                .OnCreate().Stage(PluginStages.PostOperation).Sync()
-                .WithPrimaryEntity(Contact.EntityLogicalNameValue, newContactId)
-                .WithTarget(created)
-                .WithPostImage(created)
-                .WithOrganizationService(crm);
-
-            builder.Execute(new ContactRouterPlugin(string.Empty, string.Empty));
-
-            Assert.Contains("Contact " + newContactId + " created.", builder.TraceCapture.Output);
-            Assert.Contains("Possible duplicate of contact " + existingId, builder.TraceCapture.Output);
-            Assert.DoesNotContain("Possible duplicate of contact " + newContactId, builder.TraceCapture.Output);
+            Assert.Contains("Contact " + newContactId + " created.", pipeline.Trace.Output);
+            Assert.Contains("Possible duplicate of contact " + existingId, pipeline.Trace.Output);
+            Assert.DoesNotContain("Possible duplicate of contact " + newContactId, pipeline.Trace.Output);
         }
     }
 }
@@ -274,26 +236,30 @@ $$"""
 namespace {{prefix}}.Plugins.Tests.Account.CustomApis
 {
     using System;
-    using Vela.Context;
+    using Microsoft.Xrm.Sdk;
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Plugins.Account.CustomApis;
 
     /// <summary>
-    /// Tests the typed, account-bound Custom API <see cref="AccountEstimateValueCustomApi"/>. The framework
-    /// maps input parameters to the request model and the response model back to output parameters.
+    /// Tests the typed, account-bound Custom API <see cref="AccountEstimateValueCustomApi"/> through
+    /// <see cref="PluginPipeline"/>, which validates the request against the definition as Dataverse does.
+    /// The framework maps input parameters to the request model and the response model back to output parameters.
     /// </summary>
     public sealed class AccountEstimateValueCustomApiTests
     {
         [Fact]
         public void Returns_An_Estimated_Value_For_The_Bound_Account()
         {
-            AccountEstimateValueCustomApi api = new AccountEstimateValueCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForRequest(new EstimateValueRequest { AccountId = Guid.NewGuid() }).Build();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountEstimateValueCustomApi>();
+            Guid accountId = Guid.NewGuid();
+            // A bound Custom API runs on a record of its table: the request's Target.
+            EstimateValueRequest request = new EstimateValueRequest { AccountId = accountId };
+            request["Target"] = new EntityReference("account", accountId);
 
-            api.Execute(context.ServiceProvider);
+            OrganizationResponse response = pipeline.Service.Execute(request);
 
-            Assert.Equal(AccountEstimateValueCustomApi.PlaceholderEstimate, context.PluginExecutionContext.OutputParameters["EstimatedValue"]);
+            Assert.Equal(AccountEstimateValueCustomApi.PlaceholderEstimate, response.Results["EstimatedValue"]);
         }
     }
 }
@@ -304,26 +270,30 @@ $$"""
 namespace {{prefix}}.Plugins.Tests.Contact.CustomApis
 {
     using System;
-    using Vela.Context;
+    using Microsoft.Xrm.Sdk;
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Plugins.Contact.CustomApis;
 
     /// <summary>
-    /// Tests the typed, contact-bound Custom API <see cref="ContactValidateCustomApi"/>. The framework maps
-    /// input parameters to the request model and the response model back to output parameters.
+    /// Tests the typed, contact-bound Custom API <see cref="ContactValidateCustomApi"/> through
+    /// <see cref="PluginPipeline"/>, which validates the request against the definition as Dataverse does.
+    /// The framework maps input parameters to the request model and the response model back to output parameters.
     /// </summary>
     public sealed class ContactValidateCustomApiTests
     {
         [Fact]
         public void Reports_The_Bound_Contact_As_Valid()
         {
-            ContactValidateCustomApi api = new ContactValidateCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForRequest(new ContactValidateRequest { ContactId = Guid.NewGuid() }).Build();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<ContactValidateCustomApi>();
+            Guid contactId = Guid.NewGuid();
+            // A bound Custom API runs on a record of its table: the request's Target.
+            ContactValidateRequest request = new ContactValidateRequest { ContactId = contactId };
+            request["Target"] = new EntityReference("contact", contactId);
 
-            api.Execute(context.ServiceProvider);
+            OrganizationResponse response = pipeline.Service.Execute(request);
 
-            Assert.Equal(true, context.PluginExecutionContext.OutputParameters["IsValid"]);
+            Assert.Equal(true, response.Results["IsValid"]);
         }
     }
 }
@@ -333,7 +303,7 @@ namespace {{prefix}}.Plugins.Tests.Contact.CustomApis
 $$"""
 namespace {{prefix}}.Plugins.Tests.GlobalCustomApis
 {
-    using Vela.Context;
+    using Microsoft.Xrm.Sdk;
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Plugins.GlobalCustomApis;
@@ -347,13 +317,11 @@ namespace {{prefix}}.Plugins.Tests.GlobalCustomApis
         [Fact]
         public void Returns_Pong_With_The_Supplied_Message()
         {
-            PingCustomApi api = new PingCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage(PingCustomApi.UniqueName).Build();
-            context.PluginExecutionContext.InputParameters["Message"] = "hello";
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<PingCustomApi>();
 
-            api.Execute(context.ServiceProvider);
+            OrganizationResponse response = pipeline.Service.Execute(new OrganizationRequest(PingCustomApi.UniqueName) { ["Message"] = "hello" });
 
-            Assert.Equal("pong: hello", context.PluginExecutionContext.OutputParameters["Pong"]);
+            Assert.Equal("pong: hello", response.Results["Pong"]);
         }
     }
 }
@@ -364,23 +332,28 @@ $$"""
 namespace {{prefix}}.Integrations.Tests.Account.CustomApis
 {
     using System;
-    using Vela.Context;
+    using Microsoft.Xrm.Sdk;
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Integrations.Account.CustomApis;
 
-    /// <summary>Tests the typed, account-bound Custom API <see cref="AccountReconcileCustomApi"/>.</summary>
+    /// <summary>
+    /// Tests the typed, account-bound Custom API <see cref="AccountReconcileCustomApi"/>.
+    /// </summary>
     public sealed class AccountReconcileCustomApiTests
     {
         [Fact]
         public void Returns_A_Reconciled_Status_For_The_Bound_Account()
         {
-            AccountReconcileCustomApi api = new AccountReconcileCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForRequest(new AccountReconcileRequest { AccountId = Guid.NewGuid() }).Build();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<AccountReconcileCustomApi>();
+            Guid accountId = Guid.NewGuid();
+            // A bound Custom API runs on a record of its table: the request's Target.
+            AccountReconcileRequest request = new AccountReconcileRequest { AccountId = accountId };
+            request["Target"] = new EntityReference("account", accountId);
 
-            api.Execute(context.ServiceProvider);
+            OrganizationResponse response = pipeline.Service.Execute(request);
 
-            Assert.Equal("Reconciled", context.PluginExecutionContext.OutputParameters["Status"]);
+            Assert.Equal("Reconciled", response.Results["Status"]);
         }
     }
 }
@@ -391,24 +364,28 @@ $$"""
 namespace {{prefix}}.Integrations.Tests.Contact.CustomApis
 {
     using System;
-    using Vela.Context;
+    using Microsoft.Xrm.Sdk;
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Integrations.Contact.CustomApis;
 
-    /// <summary>Tests the typed, contact-bound Custom API <see cref="ContactExportCustomApi"/>.</summary>
+    /// <summary>
+    /// Tests the typed, contact-bound Custom API <see cref="ContactExportCustomApi"/>.
+    /// </summary>
     public sealed class ContactExportCustomApiTests
     {
         [Fact]
         public void Returns_The_Contact_Id_As_External_Id()
         {
-            ContactExportCustomApi api = new ContactExportCustomApi(string.Empty, string.Empty);
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<ContactExportCustomApi>();
             Guid contactId = Guid.NewGuid();
-            LocalPluginContext context = PluginContext.ForRequest(new ContactExportRequest { ContactId = contactId }).Build();
+            // A bound Custom API runs on a record of its table: the request's Target.
+            ContactExportRequest request = new ContactExportRequest { ContactId = contactId };
+            request["Target"] = new EntityReference("contact", contactId);
 
-            api.Execute(context.ServiceProvider);
+            OrganizationResponse response = pipeline.Service.Execute(request);
 
-            Assert.Equal(contactId.ToString(), context.PluginExecutionContext.OutputParameters["ExternalId"]);
+            Assert.Equal(contactId.ToString(), response.Results["ExternalId"]);
         }
     }
 }
@@ -418,23 +395,24 @@ namespace {{prefix}}.Integrations.Tests.Contact.CustomApis
 $$"""
 namespace {{prefix}}.Integrations.Tests.GlobalCustomApis
 {
-    using Vela.Context;
+    using Microsoft.Xrm.Sdk;
     using Vela.Testing;
     using Xunit;
     using {{prefix}}.Integrations.GlobalCustomApis;
 
-    /// <summary>Tests the global (unbound), lightweight Custom API <see cref="IntegrationHeartbeatCustomApi"/>.</summary>
+    /// <summary>
+    /// Tests the global (unbound), lightweight Custom API <see cref="IntegrationHeartbeatCustomApi"/>.
+    /// </summary>
     public sealed class IntegrationHeartbeatCustomApiTests
     {
         [Fact]
         public void Reports_A_Healthy_Status()
         {
-            IntegrationHeartbeatCustomApi api = new IntegrationHeartbeatCustomApi(string.Empty, string.Empty);
-            LocalPluginContext context = PluginContext.ForMessage(IntegrationHeartbeatCustomApi.UniqueName).Build();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<IntegrationHeartbeatCustomApi>();
 
-            api.Execute(context.ServiceProvider);
+            OrganizationResponse response = pipeline.Service.Execute(new OrganizationRequest(IntegrationHeartbeatCustomApi.UniqueName));
 
-            Assert.Equal("healthy", context.PluginExecutionContext.OutputParameters["Status"]);
+            Assert.Equal("healthy", response.Results["Status"]);
         }
     }
 }
