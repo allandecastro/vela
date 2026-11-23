@@ -19,7 +19,7 @@ namespace Vela.Testing
     /// execute a plugin directly.
     /// </summary>
     /// <typeparam name="TEntity">The early-bound entity type of the primary entity (Target/images).</typeparam>
-    public class PluginContextBuilder<TEntity>
+    internal class PluginContextBuilder<TEntity>
         where TEntity : Entity
     {
         private readonly RecordingTracingService _recorder = new RecordingTracingService();
@@ -856,7 +856,7 @@ namespace Vela.Testing
     /// Non-generic builder entry point for Custom APIs and message-only plugins (no specific entity type).
     /// Inherits the full fluent surface; <see cref="PluginContextBuilder{TEntity}.WithTarget"/> accepts any <see cref="Entity"/>.
     /// </summary>
-    public sealed class PluginContextBuilder : PluginContextBuilder<Entity>
+    internal sealed class PluginContextBuilder : PluginContextBuilder<Entity>
     {
     }
 }

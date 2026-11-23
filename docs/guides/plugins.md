@@ -45,8 +45,7 @@ The `using` directives sit inside the namespace so that `Account` resolves to th
 `Zava.Plugins.Account` namespace (see [Namespaces and usings](scaffold.md#namespaces-and-usings)).
 
 Next steps: test the plugin with [`PluginPipeline`](testing.md#simulate-the-pipeline-cascade), which runs its steps
-as Dataverse does (`PluginContext` is for edge cases, see [Which one to use](testing.md#which-one-to-use)), then
-deploy it with [`vela plan` and `vela apply`](plan-apply.md).
+as Dataverse does, then deploy it with [`vela plan` and `vela apply`](plan-apply.md).
 
 ## Choosing a step
 
@@ -434,7 +433,7 @@ knows the sdkmessage, and the handler sees it in `ctx.MessageName`:
 | `AddListMembersList` / `AddMemberList` / `RemoveMemberList` | `AddListMembers` / `AddMember` / `RemoveMember` |
 | `AddItemCampaign` / `RemoveItemCampaign` | `AddItem` / `RemoveItem` |
 
-The test harness (`PluginContext.For<T>().OnMessage("...")`, `WithRequest(...)`) translates the same way. The
+The test harness (`PluginPipeline`) translates the same way. The
 translation covers every SDK request whose name is not an sdkmessage, so `On<CloseQuoteRequest>()` registers on
 `Close` too, and `On<SetStateRequest>()` on `SetStateDynamicEntity` (see [State changes](#state-changes)). A request
 type outside the table states its sdkmessage with `[SdkMessage("...")]` (`Vela.Messages`).

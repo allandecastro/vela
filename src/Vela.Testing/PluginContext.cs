@@ -7,7 +7,7 @@ namespace Vela.Testing
     /// entity plugins (typed Target/images, primary entity name derived from <c>[EntityLogicalName]</c>)
     /// and <see cref="ForRequest"/> (or <see cref="ForMessage"/>) for Custom APIs or message-only plugins.
     /// </summary>
-    public static class PluginContext
+    internal static class PluginContext
     {
         /// <summary>Starts a strongly-typed builder for an entity plugin.</summary>
         public static PluginContextBuilder<TEntity> For<TEntity>()

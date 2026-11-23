@@ -278,7 +278,7 @@ public class ScaffoldTemplatesTests
     }
 
     [Fact]
-    public void AddCustomApiTestFile_ExecutesViaForMessage()
+    public void AddCustomApiTestFile_ExecutesThroughThePipeline()
     {
         string code = ScaffoldTemplates.AddCustomApiTestFile(
             "Acme.Plugins.Tests.GlobalCustomApis", "Acme.Plugins.GlobalCustomApis",
@@ -286,7 +286,9 @@ public class ScaffoldTemplatesTests
 
         Assert.Contains("namespace Acme.Plugins.Tests.GlobalCustomApis", code);
         Assert.Contains("using Acme.Plugins.GlobalCustomApis;", code);
-        Assert.Contains("PluginContext.ForMessage(\"acme_RecalculateTotals\")", code);
+        Assert.Contains("PluginPipeline.Empty().Register<RecalculateTotals>()", code);
+        Assert.Contains("new OrganizationRequest(\"acme_RecalculateTotals\")", code);
+        Assert.Contains("pipeline.Service.Execute(request)", code);
         Assert.Contains("new RecalculateTotals(string.Empty, string.Empty)", code);
     }
 
@@ -370,10 +372,10 @@ public class ScaffoldTemplatesTests
             Assert.DoesNotContain("new ColumnSet(true)", tests);
         }
 
-        // One test drives the plugin through PluginPipeline, so a wrong FilterOn fails; the router test seeds the new
-        // contact, so the duplicate query's self-exclusion is exercised.
+        // The plugin tests run through PluginPipeline, so a wrong FilterOn fails; the router test creates the new contact
+        // through the pipeline (PostOperation sees it stored), so the duplicate query's self-exclusion is exercised.
         Assert.Contains("PluginPipeline.Empty().Register<AccountRelatedContactsPlugin>()", ScaffoldTemplates.AccountRelatedContactsPluginTests("Zava"));
-        Assert.Contains("Seed(\n                created,", ScaffoldTemplates.ContactRouterPluginTests("Zava").Replace("\r\n", "\n"));
+        Assert.Contains("Guid newContactId = pipeline.Service.Create(new Contact", ScaffoldTemplates.ContactRouterPluginTests("Zava"));
     }
 
     [Fact]

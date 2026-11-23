@@ -293,10 +293,12 @@ public class AddTestCommandTests
             string content = File.ReadAllText(Path.Combine(testsDir, "GlobalCustomApis", "RecalcTests.cs"));
             Assert.Contains("namespace Acme.Plugins.Tests.GlobalCustomApis", content);
             Assert.Contains("using Acme.Plugins.GlobalCustomApis;", content);
-            Assert.Contains("PluginContext.ForMessage(\"zs_Recalc\")", content);
+            Assert.Contains("PluginPipeline.Empty().Register<Recalc", content);
+            Assert.Contains("new OrganizationRequest(\"zs_Recalc\")", content);
             Assert.Contains("Assert.Equal(\"zs_Recalc\", definition.UniqueName);", content);
-            Assert.Contains("Assert.True(builder.Context.OutputParameters.Contains(output.Name)", content);
-            Assert.Contains(".WithInputParameter(", content);
+            Assert.Contains("OrganizationResponse response = pipeline.Service.Execute(request);", content);
+            Assert.Contains("Assert.True(response.Results.Contains(output.Name)", content);
+            Assert.DoesNotContain("PluginContext", content);
         });
     }
 
@@ -310,14 +312,15 @@ public class AddTestCommandTests
 
             string content = File.ReadAllText(Path.Combine(testsDir, "Contact", "CustomApis", "ExportContactTests.cs"));
             Assert.Contains("namespace Acme.Plugins.Tests.Contact.CustomApis", content);
-            Assert.Contains("PluginContext.ForRequest(new ExportContactRequest", content);
+            Assert.Contains("OrganizationRequest request = new ExportContactRequest", content);
             Assert.Contains("Assert.Equal(\"acme_ExportContact\", definition.UniqueName);", content);
-            Assert.DoesNotContain("ForMessage(", content);
+            Assert.DoesNotContain("new OrganizationRequest(", content);
+            Assert.DoesNotContain("PluginContext", content);
 
-            // Execute validates the request against the definition, so a bound API's test supplies a Target of its table.
+            // The pipeline validates the request against the definition, so a bound API's test supplies a Target of its table.
             Assert.Contains("if (definition.BoundEntityLogicalName is string boundTable)", content);
             Assert.Contains("[Fact(Skip = \"TODO: set the inputs ExportContact requires\")]", content);
-            Assert.Contains("builder.WithInputParameter(\"Target\", new Microsoft.Xrm.Sdk.EntityReference(boundTable, Guid.NewGuid()));", content);
+            Assert.Contains("request[\"Target\"] = new EntityReference(boundTable, Guid.NewGuid());", content);
         });
     }
 
@@ -338,7 +341,7 @@ public class AddTestCommandTests
             Assert.Contains("public sealed class AccountEstimateValueCustomApiTests", content);
             Assert.Contains("new AccountEstimateValueCustomApi(string.Empty, string.Empty)", content);
             Assert.Contains("Assert.Equal(\"zava_AccountEstimateValue\", definition.UniqueName);", content);
-            Assert.Contains("PluginContext.ForRequest(new EstimateValueRequest", content);
+            Assert.Contains("OrganizationRequest request = new EstimateValueRequest", content);
             Assert.DoesNotContain("AccountEstimateValueRequest", content);
         });
     }
@@ -356,7 +359,7 @@ public class AddTestCommandTests
 
             string content = File.ReadAllText(Path.Combine(testsDir, "GlobalCustomApis", "EstimatorTests.cs"));
             Assert.Contains("new Estimator(string.Empty, string.Empty)", content);
-            Assert.Contains("PluginContext.ForMessage(\"zava_EstimateValue\")", content);
+            Assert.Contains("new OrganizationRequest(\"zava_EstimateValue\")", content);
         });
     }
 
@@ -376,7 +379,7 @@ public class AddTestCommandTests
 
             string content = File.ReadAllText(Path.Combine(testsDir, "Account", "CustomApis", "ScoreAccountApiTests.cs"));
             Assert.Contains("new ScoreAccountApi(string.Empty, string.Empty)", content);
-            Assert.Contains("PluginContext.ForRequest(new ScoreRequest", content);
+            Assert.Contains("OrganizationRequest request = new ScoreRequest", content);
         });
     }
 

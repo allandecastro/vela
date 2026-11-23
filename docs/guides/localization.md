@@ -153,28 +153,11 @@ A plugin test with `PluginPipeline` runs the assembly's registrar too, so the pr
 
 [!code-csharp[](../samples/Vela.DocSamples/LocalizationSample.cs#test)]
 
-To test a source on its own, build a context with `PluginContextBuilder`. Sources resolve through the context's
-system service, so seed the label rows (and a `usersettings` row for the user's language, and an `organization` row
-with a `languagecode` to exercise the organization fallback) into the in-memory Dataverse and read them back:
+To test a Dataverse table source, seed its label rows the same way (and an `organization` row with a
+`languagecode` to exercise the organization fallback): the plugins the pipeline runs read them through their system
+service.
 
-```csharp
-Guid user = Guid.NewGuid();
-var crm = new InMemoryOrganizationService().Seed(
-    new Entity("usersettings", Guid.NewGuid()) { ["systemuserid"] = user, ["uilanguageid"] = 1036 },
-    new Entity("vela_label", Guid.NewGuid()) { ["vela_key"] = "GREETING", ["vela_lcid"] = 1036, ["vela_value"] = "Bonjour {0}" });
-
-ILocalPluginContext ctx = new PluginContextBuilder()
-    .WithSystemService(crm)
-    .WithInitiatingUserId(user)
-    .Build();
-
-ctx.GetRequiredService<IMessageService>()
-    .AddSource(new DataverseTableMessageSource(ctx, new PluginCacheService(), "vela_label", "vela_key", "vela_lcid", "vela_value"));
-
-Assert.Equal("Bonjour Alice", ctx.GetMessage("GREETING", "Alice"));
-```
-
-See [Testing with Vela.Testing](testing.md) for the harnesses.
+See [Testing with Vela.Testing](testing.md) for the harness.
 
 ## See also
 

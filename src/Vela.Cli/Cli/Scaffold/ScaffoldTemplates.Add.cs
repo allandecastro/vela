@@ -257,13 +257,14 @@ $$"""
         return behaviour ? firesTest + "\n" + behaviourTest : firesTest;
     }
 
-    // A typed (bound) Custom API has a generated request type, so its test builds the context from it (message and
-    // inputs, no strings); a lightweight (global) one has none and keeps the message name.
+    // A typed (bound) Custom API has a generated request type, so its test sends it (message and inputs, no
+    // strings); a lightweight (global) one has none and sends the message name.
     public static string AddCustomApiTestFile(string ns, string apiNamespace, string testClass, string apiType, string uniqueName, string? requestType = null) =>
 $$"""
 namespace {{ns}}
 {
     using System;
+    using Microsoft.Xrm.Sdk;
     using Vela.CustomApi;
     using Vela.Testing;
     using Xunit;
@@ -284,40 +285,38 @@ namespace {{ns}}
             Assert.Equal("{{uniqueName}}", definition.UniqueName);
         }
 
-        // Execute validates the request against the definition as Dataverse does, so this test needs the inputs the
-        // Custom API requires: set them, then remove Skip.
+        // The pipeline validates the request against the definition as Dataverse does, so this test needs the inputs
+        // the Custom API requires: set them, then remove Skip.
         [Fact(Skip = "TODO: set the inputs {{apiType}} requires")]
         public void Sets_Every_Declared_Output()
         {
-            {{apiType}} api = new {{apiType}}(string.Empty, string.Empty);
-            CustomApiDefinition definition = api.GetCustomApiDefinition();
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<{{apiType}}>();
+            CustomApiDefinition definition = new {{apiType}}(string.Empty, string.Empty).GetCustomApiDefinition();
 
 {{(requestType is null ? $$"""
-            // Arrange: supply the input parameters the Custom API reads, e.g.
-            //   .WithInputParameter("AccountId", Guid.NewGuid())
-            PluginContextBuilder builder = PluginContext.ForMessage("{{uniqueName}}");
+            // Arrange: supply the input parameters the Custom API reads, e.g. ["AccountId"] = Guid.NewGuid().
+            OrganizationRequest request = new OrganizationRequest("{{uniqueName}}");
 """ : $$"""
             // Arrange: the typed request carries the message and the inputs the Custom API reads.
-            PluginContextBuilder builder = PluginContext.ForRequest(new {{requestType}}
+            OrganizationRequest request = new {{requestType}}
             {
                 // TODO: set the inputs, e.g. AccountId = Guid.NewGuid(),
-            });
-
-            // A bound Custom API runs on a record of its table: the request's Target. Execute validates the request
-            // against the definition as Dataverse does (required inputs, their types, the Target).
-            if (definition.BoundEntityLogicalName is string boundTable)
-            {
-                builder.WithInputParameter("Target", new Microsoft.Xrm.Sdk.EntityReference(boundTable, Guid.NewGuid()));
-            }
+            };
 """)}}
 
-            builder.Execute(api);
+            // A bound Custom API runs on a record of its table: the request's Target.
+            if (definition.BoundEntityLogicalName is string boundTable)
+            {
+                request["Target"] = new EntityReference(boundTable, Guid.NewGuid());
+            }
+
+            OrganizationResponse response = pipeline.Service.Execute(request);
 
             // Assert: every declared response parameter was written. Then assert their values, e.g.
-            //   Assert.Equal(1000m, builder.Context.OutputParameters["EstimatedValue"]);
+            //   Assert.Equal(1000m, response.Results["EstimatedValue"]);
             foreach (CustomApiParameterDefinition output in definition.OutputParameters)
             {
-                Assert.True(builder.Context.OutputParameters.Contains(output.Name), $"Output '{output.Name}' was not set.");
+                Assert.True(response.Results.Contains(output.Name), $"Output '{output.Name}' was not set.");
             }
         }
     }

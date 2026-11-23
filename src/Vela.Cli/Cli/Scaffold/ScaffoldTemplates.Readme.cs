@@ -470,9 +470,9 @@ vela sign --package artifacts/{{packageId}}.1.0.0.nupkg --fingerprint <fingerpri
 $$"""
 ## Test the plugins
 
-The `{{prefix}}.Plugins.Tests` project unit-tests the sample plugins and Custom APIs with
-[`Vela.Testing`](https://www.nuget.org/packages/Vela.Testing) - a fake execution context plus an in-memory
-Dataverse, so the tests run **without a connection and without a mocking library**:
+The `{{prefix}}.Plugins.Tests` project tests the sample plugins and Custom APIs with
+[`Vela.Testing`](https://www.nuget.org/packages/Vela.Testing) - its `PluginPipeline` runs the registered steps
+against an in-memory Dataverse, so the tests run **without a connection and without a mocking library**:
 
 ```powershell
 dotnet test tests/{{prefix}}.Plugins.Tests -c Release
@@ -480,15 +480,14 @@ dotnet test tests/{{prefix}}.Plugins.Tests -c Release
 
 What the samples show:
 
-- `Account/Plugins/AccountPostCreatePluginTests.cs` - runs `AccountPostCreatePlugin` against an
-  `InMemoryOrganizationService` and asserts the follow-up `task` it creates (subject + regarding object).
-- `Account/Plugins/AccountRelatedContactsPluginTests.cs` - runs `AccountRelatedContactsPlugin`, which counts an
-  account's related contacts with an aggregate query from the **typed query builder**
-  (`Query.For<Contact>().Count(...).ToFetchXml()`, checked at compile time), and asserts the traced count. A second
-  test drives the plugin through **`PluginPipeline`**, which applies the step registration (filtering columns,
-  images, stage) the way Dataverse does: an update that does not touch the account name does not run the plugin.
-- `Contact/Plugins/ContactRouterPluginTests.cs` - drives a specific step of the multi-step router and asserts
-  on the emitted traces via `TraceCapture`, seeding the new contact and a duplicate first.
+- `Account/Plugins/AccountPostCreatePluginTests.cs` - creates an account and asserts the follow-up `task` that
+  `AccountPostCreatePlugin` creates (subject + regarding object).
+- `Account/Plugins/AccountRelatedContactsPluginTests.cs` - `AccountRelatedContactsPlugin` counts an account's related
+  contacts with an aggregate query from the **typed query builder** (`Query.For<Contact>().Count(...).ToFetchXml()`,
+  checked at compile time); the test asserts the traced count. A second test checks the step registration
+  (filtering columns): an update that does not touch the account name does not run the plugin.
+- `Contact/Plugins/ContactRouterPluginTests.cs` - creates a contact next to a seeded duplicate, and asserts on the
+  traces of the router's Create step via `pipeline.Trace`.
 - `Account/CustomApis/AccountEstimateValueCustomApiTests.cs` - invokes the typed, bound Custom API and checks
   the mapped output parameter.
 - `Contact/CustomApis/ContactValidateCustomApiTests.cs` - invokes the typed, contact-bound Custom API.
@@ -498,15 +497,9 @@ What the samples show:
   privileges (a denied Retrieve throws) and trims `RetrieveMultiple` to the caller's readable records. Off by
   default, so the other tests keep full access.
 {{integrationsTests}}
-Test with `PluginPipeline` by default; use `PluginContext` only for edge cases the pipeline does not easily produce
-(a `Depth` of 2 or more, a crafted `ParentContext`, shared variables set by another plugin, an invalid Custom API
-input, one error branch of a handler). The samples use both.
-
-A plugin with a `(unsecureConfig, secureConfig)` constructor is run with `.Execute(new MyPlugin("", ""))`;
-the trigger is auto-derived from a single-step plugin's own registration, while a multi-step router needs the
-step stated explicitly (`OnCreate().Stage(...).Mode(...)`) to select the handler under test. `.Execute(...)`
-calls the handler directly, so it does not check the step's filtering columns or images: use `PluginPipeline`
-for that.
+`PluginPipeline` runs what Dataverse runs for a request sent through `pipeline.Service`: every registered step with
+its filtering columns and images, in stage order, with the cascade of the plugins' own writes and the rollback of a
+failure. A Custom API runs through `pipeline.Service.Execute(request)`.
 
 
 """;

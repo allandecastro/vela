@@ -1,19 +1,16 @@
 ---
-_description: "PluginPipeline (the default) runs the whole in-memory pipeline; PluginContext runs one plugin, for edge cases"
+_description: "PluginPipeline runs the Dataverse pipeline in memory: registered steps, cascades, transactions and Custom APIs"
 ---
 
 # Testing with Vela.Testing
 
 `Vela.Testing` runs plugins and Custom APIs **without a Dataverse connection** and **without a mocking library**.
-This page covers its two ways of running a plugin, the in-memory Dataverse they run against, and what the harness
+`PluginPipeline` runs **the Dataverse pipeline in memory**: a write fires the registered steps, cascades, and rolls
+back as on the platform. This page covers the pipeline, the in-memory Dataverse it runs against, and what the harness
 does not simulate. It assumes you have a plugin to test: see [Write a plugin](plugins.md) and
 [Write a Custom API](custom-apis.md).
 
-- `PluginPipeline` runs **the Dataverse pipeline in memory**: a write fires the registered steps, cascades, and rolls
-  back as on the platform. It is the default.
-- `PluginContext` builds a fake execution context and runs **one plugin** against it, for edge cases.
-
-Both run against `InMemoryOrganizationService`, a stateful in-memory Dataverse. To test which records a user can
+The pipeline runs against `InMemoryOrganizationService`, a stateful in-memory Dataverse. To test which records a user can
 read or write, see [Security model in tests](security-model.md).
 
 ```powershell
@@ -23,22 +20,21 @@ dotnet add package Vela.Testing
 `vela add test <Plugin>` writes a first `PluginPipeline` test for each step of a plugin, and a test for a Custom API
 (see [Add a file](add.md)). The test project that `vela init` scaffolds already references `Vela.Testing`.
 
-## Which one to use
+## What the pipeline tests
 
-Test with `PluginPipeline` by default. Registered with every plugin of the assembly
-(`PluginPipeline.FromAssemblyOf<T>()`), it is an integration-style test of your plugins together. It runs what
-Dataverse runs for a request: every registered step with its
-filtering attributes and images, in stage and execution order across plugins, the cascade of the plugins' own writes,
-the rollback of a synchronous failure, and the asynchronous steps after the commit. When several steps of one plugin
-share a trigger and differ only by their filter, images or step key, test them with the pipeline:
-`PluginContext` does not choose between them.
+Registered with every plugin of the assembly (`PluginPipeline.FromAssemblyOf<T>()`), the pipeline is an
+integration-style test of your plugins together. It runs what Dataverse runs for a request: every registered step
+with its filtering attributes and images, in stage and execution order across plugins, the cascade of the plugins'
+own writes, the rollback of a synchronous failure, and the asynchronous steps after the commit.
 
-Use `PluginContext` for unit tests of one handler, in the edge cases the pipeline does not easily produce:
+A plugin runs only from a request, so the test produces each case the way Dataverse does:
 
-- a `Depth` of 2 or more, or a crafted `ParentContext`;
-- shared variables set by another plugin;
-- an invalid Custom API input, to exercise the API's own checks (`.WithoutRequestValidation()`);
-- one specific error branch of a handler.
+- a `Depth` of 2 or more: register the plugin whose write triggers it;
+- shared variables set by another plugin: register that plugin too, or pass a `tag` on the request
+  (`ctx.SharedVariables["tag"]`);
+- one error branch of a handler: seed the records that lead to it;
+- an invalid Custom API input: the request is checked against the API's definition first, with the platform's
+  faults; a value the definition accepts reaches the API's own checks.
 
 ## Simulate the pipeline (cascade)
 
@@ -146,8 +142,7 @@ The pipeline follows the platform's
   unit as `owningbusinessunit`. A plugin fired by a write made through `ctx.SystemService` runs as SYSTEM, so its
   own `ctx.Service` is unrestricted too.
 - **`WhoAmI` inside a plugin** returns the SYSTEM user and the root business unit, on `ctx.Service` as well as on
-  `ctx.SystemService`. Read the calling user from `ctx.UserId` or `ctx.InitiatingUserId` instead. With
-  `PluginContext`, `ctx.Service` is the store itself, so `WhoAmI` on it returns the configured user.
+  `ctx.SystemService`. Read the calling user from `ctx.UserId` or `ctx.InitiatingUserId` instead.
 - **Step registration.** A `.Disabled()` step never fires. The plugin is constructed with the step's
   `WithUnsecureConfig(...)` value and, for `WithSecureConfigFrom("Name")`, the value set with
   `pipeline.WithSecureConfig("Name", "value")` (what `vela apply --secure-config Name=value` provides in production).
@@ -277,91 +272,13 @@ The pipeline follows the platform's
   throws `MessageNotModelledException`. A message the store models (an invalid `Merge`, a missing record) still
   fails as it would, even when steps are registered on it.
 
-## Run a plugin against a fake context
-
-`PluginContext` is for the edge cases listed in [Which one to use](#which-one-to-use). The fluent builder is
-strongly typed. The trigger (message, stage, mode) comes from the plugin's own registration, so you state only what
-the test needs:
-
-[!code-csharp[](../samples/Vela.DocSamples/TestingSample.cs#context-test)]
-
-To inspect the context itself, build a `LocalPluginContext` (state the trigger to override the default):
-
-```csharp
-LocalPluginContext ctx = PluginContext.For<Account>()
-    .OnUpdate().Stage(PluginStages.PostOperation).Sync()
-    .WithTarget(new Account { Name = "Zava" })
-    .Build();
-```
-
-### How the trigger is resolved
-
-`Execute(plugin)`, `Execute<TPlugin>()`, `Build(plugin)` and `Build<TPlugin>()` fill the parts of the trigger you
-did not set from the registered steps that match the parts you did set (and the primary entity): `.OnCreate()` alone
-is enough when the plugin has one `Create` step. When several steps still match (a `Create` step at PreOperation and
-another at PostOperation), or none does, they throw an `InvalidOperationException` that lists the registered steps
-(`Create/PreOperation/Sync on account [step-key]`); add `.Stage(...)` or `.Sync()`/`.Async()` to pick one. A trigger
-you state in full is passed to the plugin as is. The plugin-less `Build()` keeps whatever trigger you set.
-
-`Execute<TPlugin>()` constructs the plugin (parameterless constructor, or the
-`(string unsecureConfig, string secureConfig)` constructor with `null` for both, as `PluginPipeline` passes for a step
-with no configuration) and returns it.
-
-`ctx.PrimaryEntityId` is the `Target`'s id (an entity or an `EntityReference`), and `Guid.Empty` without a Target or
-on a global message such as `Associate`. `WithPrimaryEntity(name, id)` sets it explicitly.
-
-### Custom APIs and message-only plugins
-
-`PluginContext.ForRequest(new DoThingRequest { Amount = 5 })` takes a typed request (an SDK request, or one
-generated by `vela models --messages` or `--custom-apis`): the message and the input parameters come from it. On an
-entity builder, `.WithRequest(request)` does the same. The message is the SDK message the platform runs the request
-on (`CloseQuote` runs as `Close`). For a message with no request type, use
-`PluginContext.ForMessage("vela_DoThing").WithInputParameter("amount", 5)`.
-
-A Custom API's request is checked against its definition first, with the faults `PluginPipeline` raises: a missing
-required input (`0x80040203`), an input of the wrong type or an undeclared one (`0x80040315`), a bound API without
-its `Target`. To feed the API an invalid request on purpose, turn this off with `.WithoutRequestValidation()`. The
-API's context has the primary entity of its binding: `"none"` for a global API, the bound table (and the Target id
-for an entity-bound one) otherwise. `WithPrimaryEntity(...)` overrides it.
-
-### What PluginContext does not apply
-
-`PluginContext` runs the handler of the step the trigger selects, checking the message, stage, mode, table and
-relationship scope as the runtime dispatch does. It does not apply the rest of the registration: `FilterOn`, the
-registered images (it carries only the images you add), `.Disabled()`, the step's configuration and its
-impersonation. It traces a warning in `TraceCapture`, prefixed `Vela.Testing:`, when an `Update` Target holds none of
-the step's filtering attributes or when a registered image alias is missing from the context. To assert that a step
-fires, or does not, use [`PluginPipeline`](#simulate-the-pipeline-cascade).
-
-For the same reason, `PluginContext` cannot test several steps of one plugin that share the message, stage and mode
-and differ by filter, images or step key. The runtime picks the handler from the executing step
-(`OwningExtension`, whose name ends with the step key), and only the pipeline stamps it on each step it fires.
-
-### Builder reference
-
-| Area | Methods |
-| --- | --- |
-| Trigger | `OnCreate`, `OnUpdate`, `OnDelete`, `OnMessage`, `Stage`, `Mode`, `Sync`, `Async`, `Depth` |
-| Data | `WithTarget`, `WithTargets`, `WithPreImage`, `WithPostImage`, `WithBulkPreImages`, `WithBulkPostImages`, `WithInputParameter`, `WithOutputParameter`, `WithRequest`, `WithPrimaryEntity` |
-| Context | `WithSharedVariable`, `WithTag`, `WithParentContext`, `WithUserId`, `WithInitiatingUserId`, `WithCorrelationId`, `WithOrganizationId`, `WithEnvironmentId`, `WithTenantId`, `AsApplicationUser`, `WithClock` |
-| Services | `WithOrganizationService`, `WithUserService`, `WithSystemService`, `WithManagedIdentityService`, `WithTracingService`, `WithLogger`, `WithService` |
-| Capture | `TraceCapture` (a `RecordingTracingService`), `LogCapture` (a `RecordingLogger` of `ctx.Log*` entries and `ctx.LogMetric` metrics) |
-
-`FakePluginExecutionContext` implements the full `IPluginExecutionContext2` to `IPluginExecutionContext7` chain, so
-plugins reading newer context members work.
-
-By default, `PluginContext` serves a hook-based fake `IOrganizationService` (see [Test doubles](#test-doubles)).
-Pass an `InMemoryOrganizationService` with `WithOrganizationService(crm)` when the plugin reads or writes data:
-`ctx.Service` is then the store as its configured user, and `ctx.SystemService` the store as SYSTEM. Under
-`WithSecurity(...)` the first is checked against the user's roles and the second is not.
-
 ## Replacing services
 
 A plugin that registers its own services in `ConfigureServices` (or in an `[assembly: VelaServiceRegistrar]`, see
 [Dependency injection](dependency-injection.md)) gets a test double from the test with `WithService<T>(instance)`,
-on `PluginContext` and on `PluginPipeline`, without changing the plugin. The plugin resolves the test's instance for
-`T`, the same one for the whole execution, whatever the registrar and `ConfigureServices` registered for that type.
-On `PluginPipeline` it applies to every plugin and Custom API the pipeline runs, nested executions included.
+on `PluginPipeline`, without changing the plugin. The plugin resolves the test's instance for `T`, the same one for
+the whole execution, whatever the registrar and `ConfigureServices` registered for that type. It applies to every
+plugin and Custom API the pipeline runs, nested executions included.
 
 A plugin that calls an HTTP API through the `HttpClient` it registers:
 
@@ -392,27 +309,24 @@ affected.
 `WithService` does not take the platform services, which the plugin context reads from the platform rather than
 from the resolver. It throws an `ArgumentException` naming the method to use instead:
 
-| Service | `PluginContext` | `PluginPipeline` |
-| --- | --- | --- |
-| `IManagedIdentityService` | `WithManagedIdentityService` | `WithManagedIdentityService` |
-| `ITracingService` | `WithTracingService` | recorded in `Trace` |
-| `ILogger` (telemetry) | `WithLogger` | recorded in `LogCapture` |
-| `IOrganizationService`, `IOrganizationServiceFactory` | `WithOrganizationService`, `WithUserService`, `WithSystemService` | the pipeline's in-memory store |
-| `IPluginExecutionContext` (and `2` to `7`) | the builder's context methods | built by the pipeline for each step |
+| Service | `PluginPipeline` |
+| --- | --- |
+| `IManagedIdentityService` | `WithManagedIdentityService` |
+| `ITracingService` | recorded in `Trace` |
+| `ILogger` (telemetry) | recorded in `LogCapture` |
+| `IOrganizationService`, `IOrganizationServiceFactory` | the pipeline's in-memory store |
+| `IPluginExecutionContext` (and `2` to `7`) | built by the pipeline for each step (`WithCurrentUser`, `WithEnvironmentId`, ...) |
 
 ## Test doubles
 
 | Type | Purpose |
 | --- | --- |
+| `InMemoryOrganizationService` | A stateful in-memory Dataverse (below), the pipeline's store. |
+| `RecordingTracingService` | Captures `ctx.Trace(...)` for assertions (`pipeline.Trace`). |
+| `RecordingLogger` | Captures `ctx.Log*` entries and metrics (`pipeline.LogCapture`). |
 | `FakePluginExecutionContext` | A mutable execution context (full interface chain). |
 | `HookOrganizationService` | Delegate hooks `OnCreate`, `OnRetrieve`, ... (an unset hook throws `NotSupportedException` naming it). |
 | `HookOrganizationServiceFactory` | Hands out the user and system services. |
-| `RecordingTracingService` | Captures `ctx.Trace(...)` for assertions. |
-| `RecordingLogger` | Captures `ctx.Log*` entries and metrics. |
-| `InMemoryOrganizationService` | A stateful in-memory Dataverse (below). |
-
-`WithOrganizationService(...)` also takes any other `IOrganizationService`: your own fake, or one from a mocking
-library.
 
 ## In-memory Dataverse
 
