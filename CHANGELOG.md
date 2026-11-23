@@ -268,7 +268,29 @@ All notable changes to Vela are documented here. The format is based on
   reflection on every read.
 - `RetryPolicy` rethrows the last fault with its original stack trace when a wait overran the time budget.
 
-### Added (CLI)
+### Docs
+
+- Custom APIs: steps on a global API (any plugin table, registered without one, a sample), the primary entity an
+  extra step sees by binding and mode, and the table rule `vela plan` enforces on a bound API. Testing and limitations:
+  Custom API extra steps, `Upsert` steps on elastic tables only, `IsInTransaction` of an `Upsert`'s inner
+  PreValidation.
+
+- The documentation was reviewed page by page against the code and the CLI: examples compile from
+  `docs/samples/Vela.DocSamples`, the navigation and titles are consistent, and factual errors are fixed, among them
+  the token cache path, certificate authentication through `--connection-string`, `Associate` support for 1:N
+  relationships, and "The plug-in type could not be found" in the first seconds after a deployment (run the operation
+  again after a few seconds; bumping the assembly version does not change it).
+- [`vela add`](docs/guides/add.md) says `--entity` takes the class name or the table logical name.
+- The README lists the typed reads (`Retrieve<T>`, `RetrieveByKey`, `Query.For<T>()`) and `vela logs`, says `--solution`
+  names an unmanaged solution, and links the security policy.
+- The README follows the documentation conventions and matches the current packages, commands and analyzer range;
+  every external link and anchor in the documentation was checked; and the page list of
+  [`docs/llms.txt`](docs/llms.txt) is generated from the tables of contents, with each page's description in its
+  front matter (also the page's meta description).
+
+## [0.32.0] - 2026-11-23 (Vela.Cli)
+
+### Added
 
 - `vela plan` and `vela apply` check the `--solution` solution right after connecting, before reading or writing
   anything, and exit `4` when it is managed in the target environment ("Solution 'X' is managed in <environment>.
@@ -276,13 +298,14 @@ All notable changes to Vela are documented here. The format is based on
   the connection points at a test or production environment. A solution that does not exist fails at the same point
   ("Solution not found"), instead of mid-apply. `vela inspect` is unchanged.
 
-### Changed (CLI)
+### Changed
 
 - `vela init --samples` and `vela add test` write `PluginPipeline` tests only: the sample plugin tests send their
   write through `pipeline.Service`, and the Custom API tests run `pipeline.Service.Execute(request)` and read the
-  response. The scaffolded `AGENTS.md` and `README.md` no longer mention `PluginContext`, which is now internal.
+  response, so they build against Vela.Testing 0.43 and the next framework release alike. The scaffolded `AGENTS.md`
+  and `README.md` no longer mention `PluginContext`, which becomes internal in the next framework release.
 
-### Fixed (CLI)
+### Fixed
 
 - `vela init` and `vela add` end every file they write with a newline. The files ended without one, so a line
   appended to the generated `.gitignore` (`echo "/.vela-runs/" >> .gitignore`) joined its last line, `*.pfx`, and
@@ -388,26 +411,6 @@ All notable changes to Vela are documented here. The format is based on
   `PrimaryEntityRole = EntityRole.Referencing` on their placeholder relationship, which joins two rows of the same
   table. `Vela.Testing` now faults such a call without a role (`0x80040203`), as Dataverse does, so the generated tests
   failed.
-
-### Docs
-
-- Custom APIs: steps on a global API (any plugin table, registered without one, a sample), the primary entity an
-  extra step sees by binding and mode, and the table rule `vela plan` enforces on a bound API. Testing and limitations:
-  Custom API extra steps, `Upsert` steps on elastic tables only, `IsInTransaction` of an `Upsert`'s inner
-  PreValidation.
-
-- The documentation was reviewed page by page against the code and the CLI: examples compile from
-  `docs/samples/Vela.DocSamples`, the navigation and titles are consistent, and factual errors are fixed, among them
-  the token cache path, certificate authentication through `--connection-string`, `Associate` support for 1:N
-  relationships, and "The plug-in type could not be found" in the first seconds after a deployment (run the operation
-  again after a few seconds; bumping the assembly version does not change it).
-- [`vela add`](docs/guides/add.md) says `--entity` takes the class name or the table logical name.
-- The README lists the typed reads (`Retrieve<T>`, `RetrieveByKey`, `Query.For<T>()`) and `vela logs`, says `--solution`
-  names an unmanaged solution, and links the security policy.
-- The README follows the documentation conventions and matches the current packages, commands and analyzer range;
-  every external link and anchor in the documentation was checked; and the page list of
-  [`docs/llms.txt`](docs/llms.txt) is generated from the tables of contents, with each page's description in its
-  front matter (also the page's meta description).
 
 ## [0.31.0] - 2026-11-15 (Vela.Cli)
 
