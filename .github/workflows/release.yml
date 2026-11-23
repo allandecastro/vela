@@ -4,55 +4,131 @@ on:
   push:
     tags:
       # Two independent release lines:
-      #   framework-vX.Y.Z -> Vela.Plugins + Vela.Testing (the framework libs, version-locked together)
+      #   framework-vX.Y.Z -> Vela.Messages + Vela.Plugins + Vela.Testing (the framework libs, version-locked together)
       #   cli-vX.Y.Z       -> Vela.Cli (the global tool, released at its own cadence)
       - "framework-v*"
       - "cli-v*"
 
-permissions:
-  # id-token: OIDC token exchange for NuGet Trusted Publishing (no long-lived API key).
-  # contents: gh release create needs write access to publish the GitHub Release.
-  id-token: write
-  contents: write
+# Least privilege: no permission at the workflow level; each job asks for what it needs. Only `build` restores,
+# builds and runs the tests (repository code and its dependencies), and it holds a read-only token. The jobs that
+# hold `id-token: write` (NuGet) and `contents: write` (GitHub Release) check nothing out and run no repository code:
+# they only consume the packages and release notes that `build` uploaded.
+permissions: {}
 
 # Runner: GitHub-hosted windows-latest unless the WINDOWS_RUNNER repository variable names another runner as a JSON
 # label array, e.g. `gh variable set WINDOWS_RUNNER --body '["self-hosted","Windows"]'` (as ci.yml).
 
 jobs:
-  pack-and-publish:
+  build:
     # Windows runner (as ci.yml): net462 (the harness) only builds on Windows, so packing must run there. Only tag
     # pushes trigger this workflow, so it needs no fork guard.
     runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"windows-latest"') }}
-    timeout-minutes: 30 # cap a hung restore/build/publish
+    timeout-minutes: 30 # cap a hung restore/build/test
+    permissions:
+      contents: read
+    outputs:
+      line: ${{ steps.tag.outputs.line }}
+      version: ${{ steps.tag.outputs.version }}
     env:
       # Self-hosted only (empty on a hosted runner, which leaves setup-dotnet on its default): the runner's service
       # account can't write to 'C:\Program Files\dotnet', so setup-dotnet installs into the runner's tool cache
       # (<work>/_tool, next to the <work>/<repo>/<repo> workspace) and adds it to PATH for the run steps. The tool cache
       # survives the checkout's clean, so the SDK is downloaded once, not on every job. Same as ci.yml.
       DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/../../_tool/dotnet', github.workspace) || '' }}
+    defaults:
+      run:
+        # Windows PowerShell 5.1, as ci.yml: it is on every Windows runner, while the self-hosted runner can't execute
+        # the pwsh WindowsApps stub. So: GITHUB_OUTPUT/GITHUB_ENV written with Out-File -Encoding utf8 (5.1's `>>` is
+        # UTF-16), CHANGELOG.md read as UTF-8, and the release notes written as UTF-8 without a BOM through .NET.
+        shell: powershell
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Full history and every branch, so the preflight can check that the tagged commit is on main.
+          fetch-depth: 0
+          # No token left in .git/config: nothing after the checkout talks to GitHub with git.
+          persist-credentials: false
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
 
       - name: Resolve release line and version from tag
-        # "framework-v1.2.0" -> LINE=framework, VERSION=1.2.0 ; "cli-v1.3.0" -> LINE=cli, VERSION=1.3.0.
+        # "framework-v1.2.0" -> line=framework, version=1.2.0 ; "cli-v1.3.0" -> line=cli, version=1.3.0.
         # The tag is the single source of truth; the <Version> in each .csproj is only the local-dev default.
-        shell: pwsh
+        # The tag reaches the script through an environment variable, never spliced into the script text, and must
+        # match the release tag format before anything uses it.
+        id: tag
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
-          $tag = '${{ github.ref_name }}'
-          if ($tag -like 'framework-v*') { $line = 'framework'; $version = $tag -replace '^framework-v', '' }
-          elseif ($tag -like 'cli-v*')    { $line = 'cli';       $version = $tag -replace '^cli-v', '' }
-          else { Write-Error "Unrecognized release tag: $tag"; exit 1 }
-          echo "LINE=$line" >> $env:GITHUB_ENV
-          echo "VERSION=$version" >> $env:GITHUB_ENV
+          if ($env:TAG -cnotmatch '^(framework|cli)-v(\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?)$') {
+            Write-Error "Release tag '$env:TAG' does not match (framework|cli)-vX.Y.Z[-prerelease]."
+            exit 1
+          }
+          $line = $Matches[1]
+          $version = $Matches[2]
+          if ($version -cnotmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { Write-Error "Invalid version '$version'."; exit 1 }
+          "line=$line", "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "LINE=$line", "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # ---- Preflight: every check runs before the build, and the publish jobs only start when this job succeeds. ----
+
+      - name: "Preflight: tagged commit is on main"
+        # A tag pushed on a branch that never merged would publish unreviewed code.
+        run: |
+          git merge-base --is-ancestor "$env:GITHUB_SHA" origin/main
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "The tagged commit $env:GITHUB_SHA is not an ancestor of origin/main. Tag a commit of main."
+            exit 1
+          }
+
+      - name: "Preflight: CHANGELOG.md has the release section (becomes the release notes)"
+        # The section is '## [X.Y.Z] - YYYY-MM-DD (<packages>)': '(Vela.Cli)' for the CLI line, and a list that
+        # includes Vela.Plugins for the framework line ('(Vela.Messages + Vela.Plugins + Vela.Testing)'). Its body,
+        # up to the next '## ' heading, is written to release-notes.md and becomes the GitHub Release body.
+        run: |
+          $suffix = if ($env:LINE -eq 'cli') { '\(Vela\.Cli\)' } else { '\((?=[^)]*\bVela\.Plugins\b)[^)]*\)' }
+          $pattern = '^## \[' + [regex]::Escape($env:VERSION) + '\] - \d{4}-\d{2}-\d{2} ' + $suffix + '\s*$'
+          $lines = Get-Content -Path CHANGELOG.md -Encoding UTF8
+          $starts = @(for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -cmatch $pattern) { $i } })
+          if ($starts.Count -ne 1) {
+            Write-Error "CHANGELOG.md must have exactly one '## [$env:VERSION] - YYYY-MM-DD (...)' section for the $env:LINE line; found $($starts.Count)."
+            exit 1
+          }
+          $start = $starts[0] + 1
+          $end = $start
+          while ($end -lt $lines.Count -and $lines[$end] -notmatch '^## ') { $end++ }
+          $body = if ($end -gt $start) { ($lines[$start..($end - 1)] -join "`n").Trim() } else { '' }
+          if (-not $body) { Write-Error "The CHANGELOG.md section for $env:VERSION ($env:LINE) is empty."; exit 1 }
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          [System.IO.File]::WriteAllText((Join-Path (Get-Location) 'artifacts/release-notes.md'), $body, (New-Object System.Text.UTF8Encoding $false))
+          Write-Host "Release notes ($($lines[$starts[0]])):"
+          Write-Host $body
+
+      - name: "Preflight: no unshipped analyzer rules (framework)"
+        # A framework release moves the rules of AnalyzerReleases.Unshipped.md to AnalyzerReleases.Shipped.md
+        # (RELEASING.md); a rule row left in Unshipped means that step was skipped.
+        if: env.LINE == 'framework'
+        run: |
+          $rows = Select-String -Path src/Vela.Analyzers/AnalyzerReleases.Unshipped.md -Pattern '^\s*[A-Za-z]+\d+\s*\|'
+          if ($rows) {
+            $rows | ForEach-Object { Write-Host $_.Line }
+            Write-Error "src/Vela.Analyzers/AnalyzerReleases.Unshipped.md still lists rules: move them to a '## Release $env:VERSION' section of AnalyzerReleases.Shipped.md."
+            exit 1
+          }
+
+      # ---- Build, test, pack: the same gates as ci.yml. ----
 
       - name: Restore
         run: dotnet restore Vela.sln
 
       - name: Build
-        run: dotnet build Vela.sln -c Release --no-restore -p:Version=${{ env.VERSION }}
+        # Same warnings-as-errors as ci.yml (NuGet audit advisories stay warnings there too).
+        run: dotnet build Vela.sln -c Release --no-restore "-p:Version=$env:VERSION" -p:TreatWarningsAsErrors=true "-p:WarningsNotAsErrors=NU1901%3BNU1902%3BNU1903%3BNU1904"
+
+      - name: Generated step API is up to date
+        # Same check as ci.yml: the committed StepApi.cs / StepBuilder.Impl.cs match the generator output.
+        run: dotnet run --project tools/codegen/Vela.StepApiGen -c Release --no-build -- --check
 
       - name: Test
         run: dotnet test Vela.sln -c Release --no-build
@@ -63,27 +139,44 @@ jobs:
         # Packing at this exact version emits Vela.Plugins' dependency on Vela.Messages and Vela.Testing's
         # dependency on Vela.Plugins at the same version.
         if: env.LINE == 'framework'
-        shell: pwsh
         run: |
-          dotnet pack .\src\Vela.Messages\Vela.Messages.csproj -c Release -o .\artifacts --no-build -p:Version=${{ env.VERSION }}
-          dotnet pack .\src\Vela.Plugins\Vela.Plugins.csproj -c Release -o .\artifacts --no-build -p:Version=${{ env.VERSION }}
-          dotnet pack .\src\Vela.Testing\Vela.Testing.csproj -c Release -o .\artifacts --no-build -p:Version=${{ env.VERSION }}
+          foreach ($project in 'Vela.Messages', 'Vela.Plugins', 'Vela.Testing') {
+            dotnet pack ".\src\$project\$project.csproj" -c Release -o .\artifacts --no-build "-p:Version=$env:VERSION"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       - name: Pack cli (Vela.Cli)
         if: env.LINE == 'cli'
-        shell: pwsh
-        run: dotnet pack .\src\Vela.Cli\Vela.Cli.csproj -c Release -o .\artifacts --no-build -p:Version=${{ env.VERSION }}
+        run: dotnet pack .\src\Vela.Cli\Vela.Cli.csproj -c Release -o .\artifacts --no-build "-p:Version=$env:VERSION"
 
-      - name: Publish artifacts
+      - name: Upload packages and release notes
         uses: actions/upload-artifact@v7
         with:
-          name: vela-${{ env.LINE }}-${{ env.VERSION }}
-          path: artifacts\**
+          name: vela-${{ steps.tag.outputs.line }}-${{ steps.tag.outputs.version }}
+          path: artifacts/
+          if-no-files-found: error
+
+  publish:
+    # Holds the OIDC token for NuGet Trusted Publishing; checks out nothing and runs no repository code.
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write # OIDC token exchange for NuGet Trusted Publishing (no long-lived API key)
+    steps:
+      - uses: actions/download-artifact@v8 # errors on a digest mismatch by default
+        with:
+          name: vela-${{ needs.build.outputs.line }}-${{ needs.build.outputs.version }}
+          path: artifacts
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
 
       - name: Authenticate to NuGet.org (Trusted Publishing)
         # OIDC token exchange -> short-lived API key. No stored secret. Requires a Trusted Publishing policy
         # on nuget.org bound to this repo + workflow. 'user' must match the policy's package-owner account.
-        uses: NuGet/login@v1
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         id: nuget-login
         with:
           user: AllanDeCastro
@@ -91,14 +184,29 @@ jobs:
       - name: Push to NuGet.org
         # Pushes every .nupkg and its matching .snupkg symbol package, using the temporary key from the
         # login step. --skip-duplicate keeps a re-run of the same tag idempotent.
-        shell: pwsh
-        run: dotnet nuget push "artifacts\**\*.nupkg" --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+  gh-release:
+    # Holds the write token for the GitHub Release; checks out nothing and runs no repository code. Runs after the
+    # NuGet push, so a release page never points at packages that failed to publish.
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the GitHub Release and upload the packages to it
+    steps:
+      - uses: actions/download-artifact@v8 # errors on a digest mismatch by default
+        with:
+          name: vela-${{ needs.build.outputs.line }}-${{ needs.build.outputs.version }}
+          path: artifacts
 
       - name: Create GitHub Release with packages
-        # Use the action for a declarative, pinned release step (uploads the packed artifacts to the release).
-        uses: softprops/action-gh-release@v3
+        # The body is the tag's CHANGELOG.md section, extracted by the build job's preflight.
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          generate_release_notes: true
-          files: artifacts/**/*.nupkg
+          body_path: artifacts/release-notes.md
+          files: artifacts/*.nupkg
