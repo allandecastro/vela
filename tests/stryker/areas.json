@@ -9,7 +9,7 @@
   { "area": "harness-query", "tests": "tests/Vela.Testing.Tests", "timeout": 30, "sources": "^src/Vela\\.Testing/(.*/)?(InMemoryQueryEngine|FetchXmlParser|EntityValues)\\.cs$" },
   { "area": "security-harness", "tests": "tests/Vela.Testing.Tests", "timeout": 45, "sources": "^src/Vela\\.Testing/(Security/(SecurityModel(\\.[A-Za-z]+)?|SecurityConfiguration|SharingTable|AccessTeamGrants)|Fakes/OneToManyRegistry)\\.cs$" },
   { "area": "security-enforcement", "tests": "tests/Vela.Testing.Tests", "timeout": 30, "sources": "^src/Vela\\.Testing/Fakes/InMemoryOrganizationService\\.Security\\.cs$" },
-  { "area": "analyzers", "tests": "tests/Vela.Analyzers.Tests", "timeout": 180, "sources": "^src/Vela\\.Analyzers/.*\\.cs$" },
+  { "area": "analyzers", "tests": "tests/Vela.Analyzers.Tests", "timeout": 360, "sources": "^src/Vela\\.Analyzers/.*\\.cs$" },
   { "area": "plugins-steps", "tests": "tests/Vela.Tests", "timeout": 120, "sources": "^src/Vela\\.Plugins/Steps/.*\\.cs$", "exclude": "^src/Vela\\.Plugins/Steps/(StepApi|StepBuilder\\.Impl|SdkMessageNames)\\.cs$" },
   { "area": "plugins-context", "tests": "tests/Vela.Tests", "timeout": 150, "sources": "^src/Vela\\.Plugins/Context/.*\\.cs$" },
   { "area": "plugins-services", "tests": "tests/Vela.Tests", "timeout": 90, "sources": "^src/Vela\\.Plugins/(DI|Caching|Localization)/.*\\.cs$" },
