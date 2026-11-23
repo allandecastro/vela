@@ -7,6 +7,7 @@ using Microsoft.Xrm.Sdk.Client;
 using Microsoft.Xrm.Sdk.Messages;
 using Vela.Constants;
 using Vela.Context;
+using Vela.Manifest;
 using Vela.CustomApi;
 using Vela.Plugin;
 using Vela.Steps;
@@ -39,6 +40,48 @@ namespace Vela.Testing.Tests
         {
             Assert.Equal("assembly", Assert.Throws<ArgumentNullException>(() => PluginPipeline.FromAssembly(null!)).ParamName);
             Assert.Equal("pluginType", Assert.Throws<ArgumentNullException>(() => PluginPipeline.Empty().Register(null!)).ParamName);
+        }
+
+        // The second registration is refused with the reason and the way out, not just "already registered".
+        [Fact]
+        public void Registering_a_plugin_twice_explains_the_double_firing_and_the_way_out()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<PmRawSteps>();
+
+            InvalidOperationException error = Assert.Throws<InvalidOperationException>(() => pipeline.Register<PmRawSteps>());
+
+            Assert.Contains("so registering it again would fire each of its steps twice.", error.Message);
+            Assert.Contains("Register it once, or start from PluginPipeline.Empty() to name the plugins of the test.", error.Message);
+        }
+
+        // A manifest entry with an empty type name is reported as unresolved (it would never fire), like a renamed
+        // type, instead of failing in Assembly.GetType.
+        [Fact]
+        public void A_definition_without_a_type_name_is_reported_as_unresolved()
+        {
+            FrameworkManifest manifest = new FrameworkManifest
+            {
+                PluginSteps = new[] { new StepDefinition { PluginTypeName = string.Empty, Message = "Create", Stage = PluginStages.PostOperation } },
+            };
+            System.Reflection.MethodInfo fromManifest = typeof(PluginPipeline).GetMethod("FromManifest", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+            System.Reflection.TargetInvocationException wrapped = Assert.Throws<System.Reflection.TargetInvocationException>(
+                () => fromManifest.Invoke(null, new object[] { typeof(PluginPipelineMutationTests).Assembly, manifest }));
+
+            InvalidOperationException error = Assert.IsType<InvalidOperationException>(wrapped.InnerException);
+            Assert.Contains("could not register 1 definition(s)", error.Message);
+        }
+
+        // Without WithEnvironmentId, every step's context carries an empty environment id, not null.
+        [Fact]
+        public void A_step_context_has_an_empty_environment_id_by_default()
+        {
+            PluginPipeline pipeline = PluginPipeline.Empty().Register<PmRawSteps>();
+
+            pipeline.Service.Create(new FakeAccount { Name = "Zava" });
+
+            IPluginExecutionContext6 context = Assert.IsAssignableFrom<IPluginExecutionContext6>(PmRecorder.One("raw-preop").PluginExecutionContext);
+            Assert.Equal(string.Empty, context.EnvironmentId);
         }
 
         [Fact]
