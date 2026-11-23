@@ -306,7 +306,7 @@ reference: it already compiles against `Microsoft.CrmSdk.CoreAssemblies` (net48)
 targets (`primaryobjecttypecode`), so it only compiles inside the `EntityPluginBase<T>` of those tables, like the
 curated `On<Message>()` methods. A global message (`primaryobjecttypecode` `none`), or one that applies to more
 than eight tables, gets a single generic `On<Message><TEntity>()` instead. The request classes also work with
-`On<TRequest>()` directly and with `PluginContext.ForRequest(...)` in tests. The framework knows the `sdkmessage`
+`On<TRequest>()` directly and with `pipeline.Service.Execute(...)` in tests. The framework knows the `sdkmessage`
 of each platform request (`On<CloseQuoteRequest>()` registers on `Close`); a request it does not know is marked
 `[SdkMessage("...")]` (from `Vela.Messages`) so the step and the test harness use the right `sdkmessage`.
 

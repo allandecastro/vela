@@ -156,15 +156,13 @@ is left untouched.
 ## Vela.Testing
 
 The in-memory Dataverse (`InMemoryOrganizationService`) and `PluginPipeline` model the platform faithfully but not
-completely. For anything listed below, a single-plugin test can inject its own `IOrganizationService` with the
-context builder's `WithOrganizationService(...)`. `PluginPipeline` has no such fallback: it always drives its own
-in-memory store, which you configure with the pipeline's `With*` and `As*` methods.
+completely. `PluginPipeline` always drives its own in-memory store, which you configure with the pipeline's `With*`
+and `As*` methods.
 
-- **`PluginContext` runs one handler, not the registration.** It selects the step by message, stage, mode, entity
-  and relationship scope, but does not apply `FilterOn`, the registered images, `.Disabled()`, the step
-  configuration or impersonation. It traces a `Vela.Testing:` warning when an `Update` Target holds none of the
-  filtered columns, or when a registered image is missing from the context. To test whether a step fires, use
-  `PluginPipeline` (see [Testing](../guides/testing.md#run-a-plugin-against-a-fake-context)).
+- **A plugin runs only from a request.** The pipeline builds each step's context from the request it runs, so a test
+  cannot hand a plugin a crafted context (a `ParentContext` from another operation, a `Depth` the request does not
+  reach). It produces them the way Dataverse does: register the plugins that set shared variables or write in
+  cascade, and send the request that triggers them.
 - **`Execute` covers a common set of messages:** `Create`, `Update`, `Delete`, `Retrieve`, `RetrieveMultiple`,
   `CreateMultiple`, `UpdateMultiple`, `Upsert` (by id or alternate key), `Assign`, `SetState`, `Merge`,
   `Associate`, `Disassociate`, `WhoAmI`, the sharing and record-team messages (`GrantAccess`, `ModifyAccess`,

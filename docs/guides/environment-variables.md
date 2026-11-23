@@ -76,13 +76,15 @@ long as the Dataverse sandbox worker process, so treat it as a performance optim
 
 ## Testing
 
-The reader resolves the rows through the context's system service. Seed the definition (and its value, if any) into
-the in-memory store, then read them back:
+The reader resolves the rows through the context's system service. A plugin that reads a variable:
+
+[!code-csharp[](../samples/Vela.DocSamples/TestingSample.cs#environment-variables-plugin)]
+
+is tested by seeding the definition (and its value, if any) with `pipeline.Seed(...)`: every plugin the
+[`PluginPipeline`](testing.md) runs reads them.
 
 [!code-csharp[](../samples/Vela.DocSamples/TestingSample.cs#environment-variables)]
-
-In a [`PluginPipeline`](testing.md) test, seed the same rows with `pipeline.Seed(...)`: every plugin the pipeline
-runs reads them. To test `cacheFor`, move the harness clock past the TTL (see [Caching](caching.md#test-a-ttl)).
+ To test `cacheFor`, move the harness clock past the TTL (see [Caching](caching.md#test-a-ttl)).
 
 ## See also
 

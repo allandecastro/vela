@@ -27,6 +27,24 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Changed (Framework, breaking)
 
+- `Vela.Testing`: `PluginPipeline` is the only public harness. `PluginContext`, `PluginContextBuilder`,
+  `PluginContextBuilder<TEntity>` and the doubles they served (`FakePluginExecutionContext`, `HookOrganizationService`,
+  `HookOrganizationServiceFactory`) are now internal, so a test can no longer run one plugin against a crafted context.
+  Migration, per former use:
+  - `PluginContext.For<T>()...Execute<TPlugin>()`: register the plugin (`PluginPipeline.Empty().Register<TPlugin>()`)
+    and send the write through `pipeline.Service`; seed the starting rows with `pipeline.Seed(...)`. The step that
+    fires is the one the write triggers, so the trigger is no longer stated.
+  - `PluginContext.ForRequest(request)` / `ForMessage(name)`: `pipeline.Service.Execute(request)` (or
+    `new OrganizationRequest(name) { ["Input"] = value }`) and read the outputs from the response's `Results`. A bound
+    Custom API's request carries its `Target`.
+  - `TraceCapture` / `LogCapture`: `pipeline.Trace` / `pipeline.LogCapture`.
+  - `WithInitiatingUserId`, `WithUserId`, `WithOrganizationId`, `WithEnvironmentId`, `WithTenantId`,
+    `AsApplicationUser`, `WithClock`, `WithManagedIdentityService`, `WithService<T>`: the pipeline methods of the same
+    purpose (`WithCurrentUser`, `WithOrganizationId`, ...).
+  - `Depth(n)`, `WithSharedVariable`, `WithParentContext`: register the plugins whose writes produce them; `WithTag`:
+    the request's `tag` parameter.
+  - `WithOrganizationService(service)` with a service of your own, `WithoutRequestValidation()`, and a hand-built
+    `LocalPluginContext` (`Build()`) have no equivalent.
 - `Vela.Testing`: with security on, a record's new owner must hold Read on the table, as in Dataverse. A Create with
   `ownerid`, an Update of `ownerid`, an `AssignRequest`, and a PreOperation plugin that sets `Target["ownerid"]` now
   fail with `0x80040299` when the owner holds no Read, or `0x80042f0a` on Update and Assign when the owner team has no
@@ -257,6 +275,12 @@ All notable changes to Vela are documented here. The format is based on
   Vela deploys to the unmanaged solution in a development environment ..."): a managed solution there usually means
   the connection points at a test or production environment. A solution that does not exist fails at the same point
   ("Solution not found"), instead of mid-apply. `vela inspect` is unchanged.
+
+### Changed (CLI)
+
+- `vela init --samples` and `vela add test` write `PluginPipeline` tests only: the sample plugin tests send their
+  write through `pipeline.Service`, and the Custom API tests run `pipeline.Service.Execute(request)` and read the
+  response. The scaffolded `AGENTS.md` and `README.md` no longer mention `PluginContext`, which is now internal.
 
 ### Fixed (CLI)
 

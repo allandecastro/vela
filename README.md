@@ -62,7 +62,7 @@ Full guides, reference and FAQ live at **[allandecastro.github.io/vela](https://
 | `Vela.Plugins` | .NET Framework 4.6.2 | Runtime: fluent plugin and Custom API base types, typed context helpers, lightweight DI and caching. Bundles the Roslyn analyzers (VELA001 to VELA028), their code fixes and source generators (typed image projections and step contexts). |
 | `Vela.Messages` | .NET Framework 4.6.2, .NET 10.0 | Typed request/response base classes (`TypedRequest`, `CustomApiRequest`); a dependency of `Vela.Plugins`, usable alone from client code. |
 | `Vela.Cli` (command `vela`) | .NET 10.0 | Plan and apply, scaffolding, early-bound model generation and package signing for plugins and Custom APIs. |
-| `Vela.Testing` | .NET Framework 4.6.2 | Test harness: an in-memory Dataverse and plugin pipeline (`PluginPipeline`), plus a fluent fake execution context (`PluginContext`) for single-plugin edge cases. |
+| `Vela.Testing` | .NET Framework 4.6.2 | Test harness: an in-memory Dataverse and plugin pipeline (`PluginPipeline`). |
 
 The libraries target .NET Framework 4.6.2 so any supported plugin project can reference them (see
 [Support for .NET Framework versions](https://learn.microsoft.com/power-apps/developer/data-platform/supported-customizations#support-for-net-framework-versions)

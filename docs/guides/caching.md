@@ -71,9 +71,8 @@ Key and TTL tips:
 
 ## Test a TTL
 
-In the Vela.Testing harnesses the plugin gets a cache of its own: one per `PluginPipeline`, kept across its
-executions, and one per `PluginContext` builder, kept across the builder's `Execute` calls. A test never sees
-another test's entries. The cache expires on the harness's clock, so a test moves time forward instead of sleeping:
+In a `PluginPipeline` test the plugin gets a cache of its own, one per pipeline, kept across its executions. A test
+never sees another test's entries. The cache expires on the harness's clock, so a test moves time forward instead of sleeping:
 
 ```csharp
 DateTime now = new DateTime(2026, 10, 19, 8, 0, 0, DateTimeKind.Utc);
@@ -84,8 +83,7 @@ now = now.AddMinutes(6);
 pipeline.Service.Create(new Account { Name = "b" });   // past the TTL: loads again
 ```
 
-`PluginContext.For<T>()...WithClock(() => now)` does the same for one plugin: execute, move `now`, execute again
-on the same builder. See [Testing with Vela.Testing](testing.md).
+See [Testing with Vela.Testing](testing.md).
 
 ## See also
 
