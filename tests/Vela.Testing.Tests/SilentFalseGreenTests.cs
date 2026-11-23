@@ -186,6 +186,9 @@ namespace Vela.Testing.Tests
             Assert.Contains("could not register 2 definition(s)", ex.Message);
             Assert.Contains("step Update/PostOperation of 'Vela.Testing.Tests.RenamedPlugin'", ex.Message);
             Assert.Contains("Custom API 'vela_Moved' of 'Vela.Testing.Tests.MovedApi'", ex.Message);
+            // One line, the definitions separated by "; ".
+            Assert.Contains("'Vela.Testing.Tests.RenamedPlugin'; Custom API 'vela_Moved'", ex.Message);
+            Assert.Contains("so they would never fire:", ex.Message);
         }
 
         // ---- Row 5: unset hooks throw (covered in DoublesCoverageTests); the builder default service too -----
