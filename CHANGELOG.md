@@ -27,8 +27,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Changed (Framework, breaking)
 
-- `Vela.Testing`: `PluginPipeline` is the only public harness. `PluginContext`, `PluginContextBuilder` and
-  `PluginContextBuilder<TEntity>` are now internal, so a test can no longer run one plugin against a crafted context.
+- `Vela.Testing`: `PluginPipeline` is the only public harness. `PluginContext`, `PluginContextBuilder`,
+  `PluginContextBuilder<TEntity>` and the doubles they served (`FakePluginExecutionContext`, `HookOrganizationService`,
+  `HookOrganizationServiceFactory`) are now internal, so a test can no longer run one plugin against a crafted context.
   Migration, per former use:
   - `PluginContext.For<T>()...Execute<TPlugin>()`: register the plugin (`PluginPipeline.Empty().Register<TPlugin>()`)
     and send the write through `pipeline.Service`; seed the starting rows with `pipeline.Seed(...)`. The step that

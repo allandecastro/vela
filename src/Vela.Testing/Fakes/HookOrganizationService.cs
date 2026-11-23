@@ -12,7 +12,7 @@ namespace Vela.Testing
     /// Consumers can ignore this type and inject their own <see cref="IOrganizationService"/> via the builder, or
     /// use <see cref="InMemoryOrganizationService"/> for a stateful store.
     /// </summary>
-    public sealed class HookOrganizationService : IOrganizationService
+    internal sealed class HookOrganizationService : IOrganizationService
     {
         public Func<Entity, Guid>? OnCreate { get; set; }
         public Func<string, Guid, ColumnSet, Entity>? OnRetrieve { get; set; }

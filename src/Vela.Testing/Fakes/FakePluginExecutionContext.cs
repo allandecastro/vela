@@ -9,7 +9,7 @@ namespace Vela.Testing
     /// newer members (Azure AD ids, environment/tenant, bulk image collections, IsApplicationUser, …) work.
     /// All members are settable and the collections are pre-initialized. Identity Guids default to fresh values.
     /// </summary>
-    public sealed class FakePluginExecutionContext : IPluginExecutionContext7
+    internal sealed class FakePluginExecutionContext : IPluginExecutionContext7
     {
         /// <summary>Initializes a context with sensible defaults (Update / PostOperation / synchronous / depth 1 / account).</summary>
         public FakePluginExecutionContext()

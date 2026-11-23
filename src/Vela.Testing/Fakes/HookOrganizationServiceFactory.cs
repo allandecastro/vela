@@ -8,7 +8,7 @@ namespace Vela.Testing
     /// a system service for a null id. Both services are replaceable so a test can inject any implementation.
     /// The same instances are returned on every call so configured hooks remain observable.
     /// </summary>
-    public sealed class HookOrganizationServiceFactory : IOrganizationServiceFactory
+    internal sealed class HookOrganizationServiceFactory : IOrganizationServiceFactory
     {
         /// <summary>Service returned when a non-null user id is requested.</summary>
         public IOrganizationService UserService { get; set; } = new HookOrganizationService();

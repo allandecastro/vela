@@ -41,9 +41,6 @@ Custom APIs and message-only plugins run through the pipeline with `pipeline.Ser
   stages, rank, filtering attributes, images, cascade, the platform's transaction scope, async steps after the
   outermost commit, reads and Custom APIs through their steps. Inspect `pipeline.ExecutionLog` to see what fired.
 - **Assertions** - `pipeline.Trace` and `pipeline.LogCapture` record the traces, logs and metrics of the whole cascade.
-- **Test doubles** - `FakePluginExecutionContext` (the full `IPluginExecutionContext2..7` chain),
-  `HookOrganizationService` / `HookOrganizationServiceFactory` (delegate hooks `OnCreate`/`OnRetrieve`/...; an unset
-  hook throws), `RecordingTracingService` and `RecordingLogger`.
 - **Stateful in-memory Dataverse** - `InMemoryOrganizationService`: CRUD round-trips, `RetrieveMultiple` (QueryExpression,
   QueryByAttribute, FetchXML with joins and aggregates), `Upsert`, `Assign`/`SetState`/`Merge`, N:N associations,
   bulk and batch requests, file blocks, metadata reads, system columns, alternate keys, auto-numbers and an

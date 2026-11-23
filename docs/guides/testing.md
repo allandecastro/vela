@@ -324,9 +324,6 @@ from the resolver. It throws an `ArgumentException` naming the method to use ins
 | `InMemoryOrganizationService` | A stateful in-memory Dataverse (below), the pipeline's store. |
 | `RecordingTracingService` | Captures `ctx.Trace(...)` for assertions (`pipeline.Trace`). |
 | `RecordingLogger` | Captures `ctx.Log*` entries and metrics (`pipeline.LogCapture`). |
-| `FakePluginExecutionContext` | A mutable execution context (full interface chain). |
-| `HookOrganizationService` | Delegate hooks `OnCreate`, `OnRetrieve`, ... (an unset hook throws `NotSupportedException` naming it). |
-| `HookOrganizationServiceFactory` | Hands out the user and system services. |
 
 ## In-memory Dataverse
 
