@@ -22,6 +22,15 @@ internal static class OutputWriter
     public static string NormalizeNewlines(string content)
         => string.IsNullOrEmpty(content) ? content : content.Replace("\r\n", "\n").Replace("\r", "\n");
 
+    // A raw-string template drops the newline before its closing quotes, so a new file would end without one and a
+    // line appended later (`echo "x" >> .gitignore`) would join its last line. New generated files get LF endings and
+    // exactly the final newline a text file ends with.
+    public static string GeneratedFileText(string content)
+    {
+        string normalized = NormalizeNewlines(content);
+        return string.IsNullOrEmpty(normalized) || normalized.EndsWith('\n') ? normalized : normalized + "\n";
+    }
+
     public static void WriteOutput(string? outPath, string output)
     {
         if (string.IsNullOrWhiteSpace(outPath))

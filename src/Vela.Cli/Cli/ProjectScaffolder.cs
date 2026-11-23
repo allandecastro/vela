@@ -316,7 +316,7 @@ internal static class ProjectScaffolder
         {
             string key = ManifestKey(file.RelativePath);
             string fullPath = Path.Combine(root, file.RelativePath);
-            string content = NormalizeNewlines(file.Content);
+            string content = GeneratedFileText(file.Content);
             string hash = Hash(content);
 
             if (File.Exists(fullPath))

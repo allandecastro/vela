@@ -45,6 +45,7 @@ public class AddCommandTests
             Assert.True(File.Exists(file));
 
             string content = File.ReadAllText(file);
+            Assert.EndsWith("}\n", content); // one final newline, which the raw-string template drops
             Assert.Contains("namespace Acme.Plugins.Account.Plugins", content);
             Assert.Contains("using Acme.Shared.Models.Generated;", content);
             Assert.Contains("public sealed partial class AccountValidatorPlugin(string unsecureConfig, string secureConfig) : EntityPluginBase<Account>(unsecureConfig, secureConfig)", content);
