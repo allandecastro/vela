@@ -201,9 +201,15 @@ jobs:
         shell: powershell
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        # Each package by its path: on Windows, `dotnet nuget push` did not resolve the `artifacts/*.nupkg` pattern ("file
+        # does not exist"). A .nupkg pushes its .snupkg next to it.
         run: |
-          dotnet nuget push "artifacts/*.nupkg" --api-key "$env:NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $packages = @(Get-ChildItem -Path artifacts -Filter *.nupkg)
+          if (-not $packages) { Write-Error 'No .nupkg in the build artifact.'; exit 1 }
+          foreach ($package in $packages) {
+            dotnet nuget push $package.FullName --api-key "$env:NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
   gh-release:
     # Holds the write token for the GitHub Release; checks out nothing and runs no repository code. Runs after the
