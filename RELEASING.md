@@ -1,10 +1,8 @@
 # Releasing
 
 Vela ships as two independent release lines, each cut by pushing a git tag. The
-[`release.yml`](.github/workflows/release.yml) workflow does the rest: build, test, pack, publish to
-NuGet.org via Trusted Publishing (OIDC, no stored API key), and create a GitHub Release. It runs on a
-GitHub-hosted `windows-latest` runner (the net462 harness only builds on Windows), like `ci.yml`, unless the
-`WINDOWS_RUNNER` repository variable names another runner (e.g. a self-hosted one).
+[`release.yml`](.github/workflows/release.yml) workflow does the rest: preflight checks, build, test, pack,
+publish to NuGet.org via Trusted Publishing (OIDC, no stored API key), and create a GitHub Release.
 
 | Line | Tag | Packages |
 | --- | --- | --- |
@@ -12,7 +10,48 @@ GitHub-hosted `windows-latest` runner (the net462 harness only builds on Windows
 | CLI | `cli-vX.Y.Z` | `Vela.Cli` |
 
 The tag is the single source of truth for the version; the `<Version>` in each `.csproj` is only the
-local-dev default, `0.0.0-local`, which never collides with a published version.
+local-dev default, `0.0.0-local`, which never collides with a published version. A tag must match
+`framework-vX.Y.Z` or `cli-vX.Y.Z`, optionally with a pre-release suffix (`cli-v1.2.0-rc.1`); any other tag fails
+the run before anything is built.
+
+## What the workflow does
+
+The workflow runs three jobs, each with only the permissions it needs:
+
+| Job | Runner | Token | Does |
+| --- | --- | --- | --- |
+| `build` | `windows-latest`, or the runner the `WINDOWS_RUNNER` repository variable names (the net462 harness only builds on Windows, like `ci.yml`) | `contents: read` | Preflight, build, test, pack; uploads the packages and the release notes as one workflow artifact. |
+| `publish` | `ubuntu-latest` | `id-token: write` | Exchanges the OIDC token for a short-lived NuGet key and pushes the packages. |
+| `gh-release` | `ubuntu-latest` | `contents: write` | Creates the GitHub Release with the release notes and attaches the `.nupkg` files. |
+
+Only `build` checks out and runs repository code. `publish` and `gh-release` only download its artifact, so the
+tokens that can publish never reach the build or the tests. `gh-release` runs after `publish` succeeds. The
+third-party actions of these two jobs (`NuGet/login`, `softprops/action-gh-release`) are pinned by commit SHA.
+
+### Preflight
+
+Before it builds, `build` fails the release when:
+
+- the tagged commit is not on `main` (not an ancestor of `origin/main`);
+- [`CHANGELOG.md`](CHANGELOG.md) has no section for the tag (see [Release notes](#release-notes)), or it is empty;
+- on a framework tag, [`AnalyzerReleases.Unshipped.md`](src/Vela.Analyzers/AnalyzerReleases.Unshipped.md) still
+  lists a rule.
+
+The build then applies the same gates as `ci.yml`: warnings as errors (NuGet audit advisories excepted) and the
+generated step API `--check`, before the tests run.
+
+### Release notes
+
+The GitHub Release body is the tag's section of `CHANGELOG.md`: everything under its heading up to the next
+`## ` heading. The heading must be exactly:
+
+| Tag | Heading |
+| --- | --- |
+| `framework-vX.Y.Z` | `## [X.Y.Z] - YYYY-MM-DD (Vela.Messages + Vela.Plugins + Vela.Testing)` |
+| `cli-vX.Y.Z` | `## [X.Y.Z] - YYYY-MM-DD (Vela.Cli)` |
+
+For a framework tag, any package list in the parentheses that includes `Vela.Plugins` matches. A missing,
+duplicated or empty section fails the release before anything is published.
 
 ## One-time setup (NuGet.org)
 
@@ -26,6 +65,7 @@ local-dev default, `0.0.0-local`, which never collides with a published version.
 ## Cut a release
 
 1. In [`CHANGELOG.md`](CHANGELOG.md) (open a PR, merge to `main`), cut the line's section out of `## [Unreleased]`.
+   That section becomes the GitHub Release body (see [Release notes](#release-notes)).
    `Unreleased` holds both lines, each heading qualified by its line; a release takes only its own line's entries:
    - Add a section right below `## [Unreleased]`, headed `## [X.Y.Z] - YYYY-MM-DD (Vela.Cli)` for the CLI, or
      `## [X.Y.Z] - YYYY-MM-DD (Vela.Messages + Vela.Plugins + Vela.Testing)` for the framework.
@@ -41,14 +81,17 @@ local-dev default, `0.0.0-local`, which never collides with a published version.
    [`src/Vela.Analyzers/AnalyzerReleases.Unshipped.md`](src/Vela.Analyzers/AnalyzerReleases.Unshipped.md) (its
    `### New Rules`, `### Removed Rules` and `### Changed Rules` tables) to a new `## Release X.Y.Z` section at the
    end of [`AnalyzerReleases.Shipped.md`](src/Vela.Analyzers/AnalyzerReleases.Shipped.md), in the same table
-   format, and leave only the header comment in `AnalyzerReleases.Unshipped.md`.
-3. Tag and push:
+   format, and leave only the header comment in `AnalyzerReleases.Unshipped.md`. The preflight fails a framework
+   release that skips this step.
+3. Tag a commit of `main` and push the tag:
    ```bash
    git tag framework-v0.1.0 && git push origin framework-v0.1.0   # Vela.Messages + Vela.Plugins + Vela.Testing
    git tag cli-v0.1.0       && git push origin cli-v0.1.0         # Vela.Cli
    ```
 4. Watch the run under the repo's Actions tab. On success the packages are live on NuGet.org and a GitHub
-   Release is created. `--skip-duplicate` keeps re-running the same tag safe.
+   Release is created. `--skip-duplicate` keeps re-running the same tag safe. If a preflight check fails, fix
+   `main`, then move the tag to the fixed commit (`git tag -f ...` and `git push -f origin <tag>`): nothing was
+   published.
 
 ## Framework version in scaffolded projects
 
