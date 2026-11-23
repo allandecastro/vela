@@ -260,6 +260,10 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Fixed (CLI)
 
+- `vela init` and `vela add` end every file they write with a newline. The files ended without one, so a line
+  appended to the generated `.gitignore` (`echo "/.vela-runs/" >> .gitignore`) joined its last line, `*.pfx`, and
+  neither pattern applied: signing certificates and the appended path could be committed. `vela init --force` adds the
+  newline to the files it generated and that are still unedited.
 - A step on a global Custom API registers with no message filter, whatever its plugin's table, and fires (verified
   live). Dataverse creates exactly one message filter per Custom API, with no table for a global one (verified live),
   so such a step failed with a message-filter error. The binding comes from the API's `RegisterCustomApi` in the

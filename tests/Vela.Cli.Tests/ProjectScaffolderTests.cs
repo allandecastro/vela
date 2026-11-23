@@ -299,8 +299,8 @@ public class ProjectScaffolderTests
             Assert.Equal("// my code", File.ReadAllText(userPlugin));
             Assert.Equal("// my edit", File.ReadAllText(editedSample));
             // Compare ignoring line endings: the template's follow the compiled source (CRLF on a Windows checkout),
-            // the written file is LF-normalised.
-            Assert.Equal(ScaffoldTemplates.PingCustomApi("Zava").ReplaceLineEndings("\n"), File.ReadAllText(deletedSample).ReplaceLineEndings("\n"));
+            // the written file is LF-normalised, with the final newline the template drops.
+            Assert.Equal(OutputWriter.GeneratedFileText(ScaffoldTemplates.PingCustomApi("Zava")), File.ReadAllText(deletedSample).ReplaceLineEndings("\n"));
 
             // The edit stays recognised as an edit on the next run too (the manifest keeps the hash Vela wrote).
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, force: true)));
@@ -613,7 +613,7 @@ public class ProjectScaffolderTests
             Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, demos: false, force: true)));
 
             Assert.Equal(edited, File.ReadAllText(services));
-            Assert.Equal(ScaffoldTemplates.ProjectMessagesFile("Zava.Plugins").Replace("\r\n", "\n"), File.ReadAllText(Path.Combine(dir, "Messages.cs")).Replace("\r\n", "\n"));
+            Assert.Equal(OutputWriter.GeneratedFileText(ScaffoldTemplates.ProjectMessagesFile("Zava.Plugins")), File.ReadAllText(Path.Combine(dir, "Messages.cs")).Replace("\r\n", "\n"));
         });
     }
 
@@ -1655,6 +1655,61 @@ public class ProjectScaffolderTests
         }
 
         Assert.True(File.Exists(path), $"Expected file to exist: {path}");
+    }
+
+    [Fact]
+    public void Generate_EndsEveryTextFileWithOneNewline_SoAnAppendedLineStaysOnItsOwn()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp)));
+            string root = Path.Combine(temp, "ZavaSales");
+
+            // The raw-string templates drop the newline before their closing quotes: every generated file must still
+            // end with exactly one, as a text file does.
+            foreach (string file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            {
+                string content = File.ReadAllText(file);
+                if (content.Length == 0)
+                {
+                    continue;
+                }
+
+                Assert.True(content.EndsWith('\n'), $"{Path.GetRelativePath(root, file)} does not end with a newline.");
+                Assert.False(content.EndsWith("\n\n", StringComparison.Ordinal), $"{Path.GetRelativePath(root, file)} ends with a blank line.");
+            }
+
+            // What the missing newline broke: a line appended to .gitignore joined "*.pfx", so neither pattern applied.
+            string gitignore = Path.Combine(root, ".gitignore");
+            File.AppendAllText(gitignore, "/.vela-runs/\n");
+            string[] lines = File.ReadAllLines(gitignore);
+            Assert.Contains("*.pfx", lines);
+            Assert.Contains("/.vela-runs/", lines);
+        });
+    }
+
+    [Fact]
+    public void Generate_Force_AddsTheFinalNewline_ToAnUneditedFileFromAnEarlierScaffold()
+    {
+        RunInTempDir(temp =>
+        {
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp)));
+            string gitignore = Path.Combine(temp, "ZavaSales", ".gitignore");
+
+            // Stand in for a .gitignore an earlier vela init wrote without the final newline, then never edited: the
+            // file and the hash the manifest recorded for it match.
+            string withoutNewline = File.ReadAllText(gitignore).TrimEnd('\n');
+            File.WriteAllText(gitignore, withoutNewline);
+            string manifest = Path.Combine(temp, "ZavaSales", ProjectScaffolder.ManifestPath);
+            string recorded = File.ReadAllText(manifest);
+            string newHash = ProjectScaffolder.Hash(withoutNewline + "\n");
+            Assert.Contains(newHash, recorded);
+            File.WriteAllText(manifest, recorded.Replace(newHash, ProjectScaffolder.Hash(withoutNewline)));
+
+            Assert.Equal(ExitSuccess, ProjectScaffolder.Generate(Options(temp, force: true)));
+
+            Assert.EndsWith("*.pfx\n", File.ReadAllText(gitignore));
+        });
     }
 
     [Fact]

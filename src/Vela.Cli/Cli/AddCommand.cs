@@ -375,7 +375,7 @@ internal static class AddCommand
     private static void WriteScaffoldFile(string fullPath, string content, System.Collections.Generic.List<string> created)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        File.WriteAllText(fullPath, NormalizeNewlines(content));
+        File.WriteAllText(fullPath, GeneratedFileText(content));
         created.Add(fullPath);
     }
 
@@ -1170,7 +1170,7 @@ internal static class AddCommand
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        File.WriteAllText(fullPath, NormalizeNewlines(content));
+        File.WriteAllText(fullPath, GeneratedFileText(content));
         if (json)
         {
             Console.WriteLine(BuildAddReport(description, [fullPath], registration));
