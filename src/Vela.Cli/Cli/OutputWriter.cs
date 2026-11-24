@@ -31,7 +31,8 @@ internal static class OutputWriter
         return string.IsNullOrEmpty(normalized) || normalized.EndsWith('\n') ? normalized : normalized + "\n";
     }
 
-    public static void WriteOutput(string? outPath, string output)
+    // document names what --out received in the notice: "Plan", "Apply result" or "Inspection".
+    public static void WriteOutput(string? outPath, string output, string document)
     {
         if (string.IsNullOrWhiteSpace(outPath))
         {
@@ -43,7 +44,7 @@ internal static class OutputWriter
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath) ?? ".");
         File.WriteAllText(outputPath, output);
         // A notice, not output: stderr, so stdout carries nothing but the machine-readable document (or nothing).
-        Console.Error.WriteLine($"Plan written: {outputPath}");
+        Console.Error.WriteLine($"{document} written: {outputPath}");
     }
 
     /// <summary>

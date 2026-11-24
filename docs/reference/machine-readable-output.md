@@ -18,7 +18,7 @@ reports carry no `schemaVersion` and are not part of this contract; `vela <comma
 | Terminal, no `--json`, no `--out` | Colored human summary | Warnings, notices |
 | Piped or redirected stdout | JSON document | Warnings, notices |
 | `--json` | JSON document | Warnings, notices |
-| `--out <file>` | Nothing (the document goes to the file) | `Plan written: <path>`, warnings, notices |
+| `--out <file>` | Nothing (the document goes to the file) | `Plan written: <path>` (`Apply result written` for `apply`, `Inspection written` for `inspect`), warnings, notices |
 | `--verbose` with any of the above | Unchanged | Also the human summary, progress lines and stack traces |
 
 stdout never carries anything but the result. Warnings (for example `--client-secret` on the command line), progress

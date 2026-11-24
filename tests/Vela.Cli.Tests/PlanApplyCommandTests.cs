@@ -375,6 +375,25 @@ public sealed class PlanApplyCommandTests : IDisposable
         Assert.Equal(1, JsonDocument.Parse(File.ReadAllText(path)).RootElement.GetProperty("schemaVersion").GetInt32());
     }
 
+    // The --out notice names the document it wrote: inspect printed "Plan written" for an inspection.
+    [Theory]
+    [InlineData("inspect", false, "Inspection written:")]
+    [InlineData("apply", true, "Apply result written:")]
+    public void Out_notice_names_the_document_of_each_command(string command, bool autoApprove, string notice)
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"vela-{command}-{Guid.NewGuid():N}.json");
+        _files.Add(path);
+
+        int exit = Run(command, Options(outPath: path, autoApprove: autoApprove), Host(Org(), Local([LocalStep()])));
+
+        Assert.Equal(CliExitCodes.ExitSuccess, exit);
+        Assert.Equal(string.Empty, _out.ToString());
+        Assert.Contains($"{notice} {Path.GetFullPath(path)}", _error.ToString());
+        Assert.DoesNotContain("Plan written:", _error.ToString());
+        string mode = JsonDocument.Parse(File.ReadAllText(path)).RootElement.GetProperty("mode").GetString()!;
+        Assert.StartsWith(command, mode, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Inspect_writes_a_versioned_document_with_both_sides()
     {

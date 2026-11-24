@@ -25,6 +25,11 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (CLI)
+
+- `vela inspect --out <file>` reports `Inspection written: <path>` on stderr, and `vela apply --out <file>`
+  `Apply result written: <path>`. Both printed `Plan written: <path>`, as `vela plan` does.
+
 ## [0.33.1] - 2026-11-24 (Vela.Cli)
 
 ### Fixed
