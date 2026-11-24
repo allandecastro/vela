@@ -25,7 +25,14 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Changed (Framework, breaking)
+### Changed (CLI)
+
+- `vela init` scaffolds against framework 0.44.0 (`Vela.Messages`, `Vela.Plugins` and `Vela.Testing`): it takes the
+  newest listed 0.44.x on nuget.org, and 0.44.0 itself when nuget.org is unreachable.
+
+## [0.44.0] - 2026-11-24 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Changed (breaking)
 
 - `Vela.Testing`: `PluginPipeline` is the only public harness. `PluginContext`, `PluginContextBuilder`,
   `PluginContextBuilder<TEntity>` and the doubles they served (`FakePluginExecutionContext`, `HookOrganizationService`,
@@ -137,7 +144,7 @@ All notable changes to Vela are documented here. The format is based on
 - `Vela.Testing`: the PreValidation steps of an `Upsert`'s inner `Create` or `Update` report `IsInTransaction` =
   `false`, as a depth-1 PreValidation step does (verified live). They reported `true`.
 
-### Added (Framework)
+### Added
 
 - `Vela.Testing`: `RoleBuilder.MemberPrivilegeInheritance(TeamPrivilegeInheritance)` sets the member's privilege
   inheritance on the role, where the platform keeps it (`role.isinherited`). A user who holds a "Team privileges only"
@@ -153,7 +160,7 @@ All notable changes to Vela are documented here. The format is based on
   `EnvironmentId`, `TenantId` and `IsApplicationUser` of every step's context, as `PluginContextBuilder` does for one
   plugin.
 
-### Fixed (Framework)
+### Fixed
 
 - `Vela.Testing`: the steps of a read a plugin issues inside a write's transaction report `IsInTransaction` = `true`
   at every stage, as on Dataverse (verified live). They reported `false` before; a top-level read's steps still do.
