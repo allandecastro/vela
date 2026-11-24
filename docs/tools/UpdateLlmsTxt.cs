@@ -8,7 +8,8 @@
 //   (from that heading to the end) are kept as they are.
 // - Between them, it writes one "## " section per entry of docs/toc.yml, in toc order, with one link per page of that
 //   section's toc.yml. A section whose toc groups its pages ("items:", as Guides does) gets one "## " section per
-//   group instead. Landing pages (topicHref) are not listed.
+//   group instead, headed "<section>: <group>" so that two sections' groups never share a heading. Landing pages (topicHref) are not listed, also when the section's toc.yml lists its landing page
+//   as a page before its groups (as the AI agents section, from vela-agentic, does).
 // - A link's title is the page's toc name. Its description is the page's `_description` front matter (which DocFX
 //   also uses as the page's meta description, in place of the site-wide one in docfx.json); a page without one falls
 //   back to the first sentence of its first paragraph. Keep a description on one line, in double quotes.
@@ -57,9 +58,11 @@ foreach (var section in Toc.Read(Path.Combine(docs, "toc.yml")))
     }
 
     var folder = section.Href.TrimEnd('/');
-    var entries = Toc.Read(Path.Combine(docs, folder, "toc.yml"));
+    var entries = Toc.Read(Path.Combine(docs, folder, "toc.yml"))
+        .Where(e => !(e.Items.Count == 0 && e.Href is not null && section.TopicHref == folder + "/" + e.Href))
+        .ToList();
     var groups = entries.All(e => e.Items.Count > 0)
-        ? entries.Select(e => (e.Name, e.Items))
+        ? entries.Select(e => (section.Name + ": " + e.Name, e.Items))
         : new[] { (section.Name, entries) };
     foreach (var (name, pages) in groups)
     {
@@ -95,7 +98,7 @@ else
 return 0;
 
 /// <summary>A toc.yml entry: a page (href) or a group of pages (items).</summary>
-internal sealed record TocEntry(string Name, string? Href, List<TocEntry> Items);
+internal sealed record TocEntry(string Name, string? Href, List<TocEntry> Items, string? TopicHref = null);
 
 /// <summary>
 /// Reads the subset of YAML the docs toc.yml files use: a list of entries with name, href, topicHref and nested
@@ -118,7 +121,7 @@ internal static class Toc
         var entries = new List<TocEntry>();
         while (index < lines.Count && Indent(lines[index]) == indent && lines[index].TrimStart().StartsWith("- "))
         {
-            string? name = null, href = null;
+            string? name = null, href = null, topicHref = null;
             var items = new List<TocEntry>();
             var keyIndent = indent + 2;
             var first = true;
@@ -153,6 +156,7 @@ internal static class Toc
                 {
                     case "name": name = value; break;
                     case "href": href = value; break;
+                    case "topicHref": topicHref = value; break;
                     case "items":
                         var childIndent = index < lines.Count ? Indent(lines[index]) : keyIndent;
                         items = ReadList(file, lines, ref index, childIndent);
@@ -160,7 +164,7 @@ internal static class Toc
                 }
             }
 
-            entries.Add(new TocEntry(name ?? throw new FormatException($"{file}: an entry has no name."), href, items));
+            entries.Add(new TocEntry(name ?? throw new FormatException($"{file}: an entry has no name."), href, items, topicHref));
         }
 
         return entries;
