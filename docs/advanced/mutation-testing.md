@@ -88,33 +88,33 @@ you choose its `break`.
 
 ## Gated areas and scores
 
-Scores come from the full run of 2026-10-11 on the former self-hosted Windows runner (Stryker 4.15, every area on all
-of its files), unless noted.
+Scores come from the weekly run of 2026-11-23 on the self-hosted Windows runner (every area on all of its files),
+unless noted.
 
 | Area | Code mutated | Score | `break` |
 | --- | --- | --- | --- |
-| `diff-engine` | `DiffEngine` and `DefinitionNormalizer` | 87.0% | 85 |
-| `harness-query` | `InMemoryQueryEngine`, `FetchXmlParser`, `EntityValues` | 94.1% | 92 |
-| `security-enforcement` | `InMemoryOrganizationService.Security.cs` | 83.8% | 82 |
-| `security-harness` | `Security/SecurityModel.cs` and its partials, `SecurityConfiguration.cs`, `SharingTable.cs`, `AccessTeamGrants.cs`, `Fakes/OneToManyRegistry.cs` | 89.9% | 87 |
-| `cli-apply` | `DataverseRegistration.Apply.cs`, its `Apply.*.cs` partials, `PluginTypeRemoval.cs` and `PackageAssemblySet.cs` (web resources excluded) | 83.8% (before the split; the partials, `PluginTypeRemoval.cs` and `PackageAssemblySet.cs` not measured yet) | 81 |
-| `cli-customapi` | `DataverseRegistration.CustomApi.cs` | about 82.7% (earlier run) | 80 |
-| `cli-reader` | `DataverseRegistration.cs` | 86.9% | 84 |
-| `cli-steps` | `DataverseRegistration.Steps.cs` | 90.1% | 88 |
-| `cli-scanner` | `PackageScanner.cs` | 84.2% | 82 |
-| `security-cli` | `RoleGenerator.cs` and `RolePrivilegeMapper.cs` | 87.7% | 85 |
-| `analyzers` | the whole `Vela.Analyzers` project (rules and image projection generator) | about 86.3% (earlier run) | 85 |
-| `plugins-steps` | `Vela.Plugins/Steps`, except the generated `StepApi.cs` / `StepBuilder.Impl.cs` and the `SdkMessageNames.cs` data table | about 86% (`net10.0` proxy) | 80 |
-| `plugins-context` | `Vela.Plugins/Context` | 91.9% | 89 |
-| `plugins-services` | `Vela.Plugins/DI`, `Caching`, `Localization` | 86.2% | 84 |
-| `plugins-runtime` | `Vela.Plugins/Plugin` (`PluginBase`, `EntityPluginBase`, handler invocation) and `Retry` | 90.7% | 88 |
-| `harness-store` | `InMemoryOrganizationService.cs` and its message-family partials (the store core; not `.Security.cs` or `.ReadShape.cs`) | 89.9% | 87 |
-| `harness-pipeline` | `PluginPipeline.cs`, `.Stages.cs`, `.Execution.cs` | 95.2% | 93 |
+| `diff-engine` | `DiffEngine` and `DefinitionNormalizer` | 86.7% | 85 |
+| `harness-query` | `InMemoryQueryEngine`, `FetchXmlParser`, `EntityValues` | 93.7% | 92 |
+| `security-enforcement` | `InMemoryOrganizationService.Security.cs` | 84.4% | 82 |
+| `security-harness` | `Security/SecurityModel.cs` and its partials, `SecurityConfiguration.cs`, `SharingTable.cs`, `AccessTeamGrants.cs`, `Fakes/OneToManyRegistry.cs` | 87.9% | 87 |
+| `cli-apply` | `DataverseRegistration.Apply.cs`, its `Apply.*.cs` partials, `PluginTypeRemoval.cs` and `PackageAssemblySet.cs` (web resources excluded) | 84.3% | 81 |
+| `cli-customapi` | `DataverseRegistration.CustomApi.cs` | 80.8% | 80 |
+| `cli-reader` | `DataverseRegistration.cs` | 87.2% | 84 |
+| `cli-steps` | `DataverseRegistration.Steps.cs` | 90.5% | 88 |
+| `cli-scanner` | `PackageScanner.cs` | 84.2% (2026-10-11; the 2026-11-23 job hit its timeout) | 82 |
+| `security-cli` | `RoleGenerator.cs` and `RolePrivilegeMapper.cs` | 90.3% | 85 |
+| `analyzers` | the whole `Vela.Analyzers` project (rules and image projection generator) | about 86.3% (earlier run; the 2026-11-23 job hit its timeout) | 85 |
+| `plugins-steps` | `Vela.Plugins/Steps`, except the generated `StepApi.cs` / `StepBuilder.Impl.cs` and the `SdkMessageNames.cs` data table | 85.1% | 80 |
+| `plugins-context` | `Vela.Plugins/Context` | 92.0% | 89 |
+| `plugins-services` | `Vela.Plugins/DI`, `Caching`, `Localization` | 86.1% | 84 |
+| `plugins-runtime` | `Vela.Plugins/Plugin` (`PluginBase`, `EntityPluginBase`, handler invocation) and `Retry` | 89.3% | 88 |
+| `harness-store` | `InMemoryOrganizationService.cs` and its message-family partials (the store core; not `.Security.cs` or `.ReadShape.cs`) | 88.0% | 87 |
+| `harness-pipeline` | `PluginPipeline.cs`, `.Stages.cs`, `.Execution.cs` | 92.7%, under its `break` (tests that kill five of its survivors have landed since) | 93 |
 
 Notes on the scores:
 
-- **`analyzers` and `plugins-steps` have no full Windows score yet.** Their 2026-10-11 jobs did not complete: the
-  `analyzers` job timed out and the `plugins-steps` job lost the runner. The `analyzers` timeout has since gone from
+- **`analyzers` has no full Windows score yet.** Its 2026-10-11 job timed out, and so did its 2026-11-23 job.
+  `plugins-steps`, whose 2026-10-11 job lost the runner, has one since 2026-11-23. The `analyzers` timeout has since gone from
   45 to 180 minutes, then to 360 (the most a GitHub-hosted job may run) after the 2026-11-23 run also stopped it at
   180; `diff-engine` (done in 28 of its 30 minutes) went to 60, and so did `cli-scanner`, whose 2026-11-23 jobs hit
   their 30 minutes (the Debug build and the initial run of the 2,265 CLI tests take about 5 of them).
