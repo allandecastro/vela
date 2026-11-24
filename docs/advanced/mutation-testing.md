@@ -116,7 +116,8 @@ Notes on the scores:
 - **`analyzers` and `plugins-steps` have no full Windows score yet.** Their 2026-10-11 jobs did not complete: the
   `analyzers` job timed out and the `plugins-steps` job lost the runner. The `analyzers` timeout has since gone from
   45 to 180 minutes, then to 360 (the most a GitHub-hosted job may run) after the 2026-11-23 run also stopped it at
-  180; `diff-engine` (done in 28 of its 30 minutes) went to 60.
+  180; `diff-engine` (done in 28 of its 30 minutes) went to 60, and so did `cli-scanner`, whose 2026-11-23 jobs hit
+  their 30 minutes (the Debug build and the initial run of the 2,265 CLI tests take about 5 of them).
 - **The `net462` areas** (the harness, security and plugin-runtime areas) are measured only on Windows.
 - **Some CLI methods are excluded** with a `// Stryker disable all` block where a real `ServiceClient` cannot run
   offline (the live-connection methods of `cli-reader`).
