@@ -25,6 +25,12 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (CLI)
+
+- `vela sign` opens a password-protected PFX with an ephemeral key set (except on macOS, which has none), so on
+  Windows the private key is no longer written to the user's key store while the passwordless copy is made, where a
+  crash would have left the key file behind.
+
 ## [0.33.0] - 2026-11-24 (Vela.Cli)
 
 ### Changed
