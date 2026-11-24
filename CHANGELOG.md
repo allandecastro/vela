@@ -25,7 +25,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Changed (CLI)
+## [0.33.0] - 2026-11-24 (Vela.Cli)
+
+### Changed
 
 - `vela init` scaffolds against framework 0.44.0 (`Vela.Messages`, `Vela.Plugins` and `Vela.Testing`): it takes the
   newest listed 0.44.x on nuget.org, and 0.44.0 itself when nuget.org is unreachable.
