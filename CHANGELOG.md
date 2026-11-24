@@ -25,6 +25,11 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Docs
+
+- The analyzers reference states the scope of VELA025 and VELA026 inside VELA025, as a **Scope** paragraph, instead of
+  a separate heading that showed up in the page outline among the rule ids.
+
 ## [0.33.0] - 2026-11-24 (Vela.Cli)
 
 ### Changed

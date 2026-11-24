@@ -539,8 +539,7 @@ needed), or move it out of the sandbox: an asynchronous step, a Power Automate f
 
 **Outbound call to an IP address.** Warning.
 
-**Flags.** In plugin code (see [Scope of VELA025 and VELA026](#scope-of-vela025-and-vela026)), a string whose host is
-an IPv4 or IPv6 literal, when it is given to:
+**Flags.** In plugin code (see **Scope** below), a string whose host is an IPv4 or IPv6 literal, when it is given to:
 
 - `new Uri(...)`, which covers `client.BaseAddress = new Uri("https://10.0.0.1/")` and
   `request.RequestUri = new Uri(...)`;
@@ -564,18 +563,17 @@ host cut by an interpolation (`$"https://10.0.0.{n}/"`).
 
 **Fix.** Give the service a DNS name and call that name.
 
-### Scope of VELA025 and VELA026
-
-Both rules check plugin code: a plugin or Custom API type and, in an assembly that declares one, every other type
-too (the services and helpers it resolves run in the sandbox with it). In a test project (one that references
-`Vela.Testing`), only the plugin types are checked. A shared library that declares no plugin type is not checked.
+**Scope** (VELA025 and VELA026). Both rules check plugin code: a plugin or Custom API type and, in an assembly that
+declares one, every other type too (the services and helpers it resolves run in the sandbox with it). In a test
+project (one that references `Vela.Testing`), only the plugin types are checked. A shared library that declares no
+plugin type is not checked.
 
 ## VELA026
 
 **HttpClient without a timeout.** Warning. Code fix.
 
 **Flags.** A `new HttpClient(...)` (or a target-typed `new()`) in plugin code (see
-[Scope of VELA025 and VELA026](#scope-of-vela025-and-vela026)) whose `Timeout` is never set in the member that creates
+the same scope as [VELA025](#vela025)) whose `Timeout` is never set in the member that creates
 it: the method, constructor or accessor (lambdas and local functions in it included), or the field or property
 initializer. The client is fine when:
 
