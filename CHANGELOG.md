@@ -25,6 +25,12 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Docs
+
+- The documentation site has an **AI agents** section: Vela Agentic, the Agent Skills and agents that let Claude Code
+  or GitHub Copilot build Dataverse plugins with the `vela` CLI. Its pages come from the
+  [vela-agentic](https://github.com/allandecastro/vela-agentic) repository at a pinned release (v0.6.0).
+
 ## [0.33.1] - 2026-11-24 (Vela.Cli)
 
 ### Fixed

@@ -10,7 +10,7 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 - [Quickstart](https://allandecastro.github.io/vela/getting-started/quickstart.md): From an empty folder to a tested, registered plugin: install, init, models, add, build and test, plan, apply
 - [Initialize a solution](https://allandecastro.github.io/vela/getting-started/initialize-a-solution.md): What vela init scaffolds and where to edit
 
-## Build plugins
+## Guides: Build plugins
 
 - [Write a plugin](https://allandecastro.github.io/vela/guides/plugins.md): The step builder: typed triggers, stages, modes, FilterOn, images, several steps per class, typed handler contexts, context helpers, errors, tracing and the sandbox rules
 - [Write a Custom API](https://allandecastro.github.io/vela/guides/custom-apis.md): Typed request and response, parameters (required by default), binding, the rules Build() enforces, and changing a deployed Custom API
@@ -18,7 +18,7 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 - [Dependency injection](https://allandecastro.github.io/vela/guides/dependency-injection.md): The sandbox-safe container: registration, lifetimes, the built-in services and the user a service runs as
 - [Escape hatches](https://allandecastro.github.io/vela/guides/escape-hatches.md): Drop to the raw Dataverse SDK, read or create a record with its related records
 
-## Built-in services
+## Guides: Built-in services
 
 - [Caching](https://allandecastro.github.io/vela/guides/caching.md): A TTL cache scoped per organization: what is safe to cache and how to test a TTL
 - [Environment variables](https://allandecastro.github.io/vela/guides/environment-variables.md): Read Dataverse environment variables, typed, with a missing-value policy and optional caching
@@ -26,12 +26,12 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 - [Managed identity](https://allandecastro.github.io/vela/guides/managed-identity.md): Call external APIs with a managed-identity token, link the plugin package to the identity, and test it
 - [Telemetry and Application Insights](https://allandecastro.github.io/vela/guides/telemetry.md): Leveled, structured telemetry to the trace log and Application Insights through the platform logger
 
-## Test
+## Guides: Test
 
 - [Testing](https://allandecastro.github.io/vela/guides/testing.md): PluginPipeline runs the Dataverse pipeline in memory: registered steps, cascades, transactions and Custom APIs
 - [Security model in tests](https://allandecastro.github.io/vela/guides/security-model.md): Opt-in security in the in-memory service: roles, privileges, business units, teams, sharing
 
-## CLI and deployment
+## Guides: CLI and deployment
 
 - [The vela CLI](https://allandecastro.github.io/vela/guides/cli-overview.md): Commands, generated help, option syntax, exit codes, proxy, solution prefix (vela solution show), execution logs (vela logs)
 - [Scaffold a solution (vela init)](https://allandecastro.github.io/vela/guides/scaffold.md): Every vela init option, the generated layout, the optional projects, samples and PROJECT.md
@@ -41,7 +41,7 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 - [Sign the plugin package (vela sign)](https://allandecastro.github.io/vela/guides/signing.md): Sign a plugin package for managed identity
 - [Client-side (preview)](https://allandecastro.github.io/vela/guides/client-side.md): TypeScript form scripts and web resources (preview, work in progress)
 
-## Examples and troubleshooting
+## Guides: Examples and troubleshooting
 
 - [End-to-end example](https://allandecastro.github.io/vela/guides/end-to-end.md): One plugin from code to a running step: write, test, build, plan, apply, read its trace
 - [Cookbook](https://allandecastro.github.io/vela/guides/cookbook.md): Short recipes for the most common patterns
@@ -60,6 +60,42 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 - [Analyzers and generators](https://allandecastro.github.io/vela/reference/analyzers.md): VELA001 to VELA028, their code fixes, and the source generator
 - [Limitations](https://allandecastro.github.io/vela/reference/limitations.md): What is out of scope, and where the harness differs from Dataverse
 - [FAQ](https://allandecastro.github.io/vela/reference/faq.md): Short answers to common questions
+
+## AI agents: Get started
+
+- [Overview](https://allandecastro.github.io/vela/agents/overview.md): What Vela Agentic is, what it does, and what it never does
+- [Install](https://allandecastro.github.io/vela/agents/install.md): Install the pack in Claude Code or GitHub Copilot CLI, and the tools it needs
+
+## AI agents: How it works
+
+- [The build loop](https://allandecastro.github.io/vela/agents/build-loop.md): The steps from a user story to the deploy gate, with the Vela Canvas, the rules registry and the Build Report
+- [Project files](https://allandecastro.github.io/vela/agents/project-files.md): The files Vela Agentic reads and writes in your project: PROJECT.md, docs/features, docs/rules, docs/adr and .vela-runs
+- [The deploy guard (hooks)](https://allandecastro.github.io/vela/agents/hooks.md): The optional host hook that blocks vela apply without approval, edits to generated files, protected pushes and secrets
+
+## AI agents: Agents
+
+- [vela-builder](https://allandecastro.github.io/vela/agents/vela-builder.md): The vela-builder agent: drives a user story through the build loop and stops at the apply gate
+- [vela-reviewer](https://allandecastro.github.io/vela/agents/vela-reviewer.md): The vela-reviewer agent: an isolated, read-only review of a plugin change on spec and standards
+
+## AI agents: Skills
+
+- [All skills](https://allandecastro.github.io/vela/agents/skills/index.md): The 11 skills of Vela Agentic, when each one triggers and the step of the build loop it covers
+- [using-vela](https://allandecastro.github.io/vela/agents/skills/using-vela.md): The using-vela skill: the entry point that maps the build loop to the other skills
+- [vela-plan-review](https://allandecastro.github.io/vela/agents/skills/vela-plan-review.md): The vela-plan-review skill: challenges the plan, writes the rules and fills the Vela Canvas before any code
+- [vela-grill](https://allandecastro.github.io/vela/agents/skills/vela-grill.md): The vela-grill skill: interviews the human to resolve an ambiguous story before building
+- [vela-scaffold](https://allandecastro.github.io/vela/agents/skills/vela-scaffold.md): The vela-scaffold skill: creates a solution with vela init and components with vela add
+- [vela-models](https://allandecastro.github.io/vela/agents/skills/vela-models.md): The vela-models skill: generates typed models from the org, checks them for drift, and generates role classes
+- [vela-plugin-testing](https://allandecastro.github.io/vela/agents/skills/vela-plugin-testing.md): The vela-plugin-testing skill: failing tests first with PluginPipeline, full coverage of the acceptance cases
+- [vela-plugin-authoring](https://allandecastro.github.io/vela/agents/skills/vela-plugin-authoring.md): The vela-plugin-authoring skill: implements the plugin logic until the failing tests pass
+- [vela-custom-api](https://allandecastro.github.io/vela/agents/skills/vela-custom-api.md): The vela-custom-api skill: designs, tests and implements a Custom API through the same build loop
+- [vela-code-review](https://allandecastro.github.io/vela/agents/skills/vela-code-review.md): The vela-code-review skill: spec-check, then an isolated review on spec and standards before the apply gate
+- [vela-apply](https://allandecastro.github.io/vela/agents/skills/vela-apply.md): The vela-apply skill: packages, signs if needed, previews with vela plan and stops at the apply gate
+- [vela-debug-plugin](https://allandecastro.github.io/vela/agents/skills/vela-debug-plugin.md): The vela-debug-plugin skill: reproduces a plugin fault as a failing test before any fix
+
+## AI agents: Reference
+
+- [How the pack is tested](https://allandecastro.github.io/vela/agents/testing-the-pack.md): How the skills are tested: pressure scenarios with hidden criteria, deterministic checks, a separate grader and mutation
+- [FAQ and troubleshooting](https://allandecastro.github.io/vela/agents/faq.md): Short answers to common questions about running Vela Agentic, and what to do when a run stops
 
 ## Advanced
 

@@ -17,7 +17,7 @@ Human contributors: [`CONTRIBUTING.md`](CONTRIBUTING.md). User docs: `docs/` (in
 | `src/Vela.Testing` | net462 | `InMemoryOrganizationService`, `PluginPipeline` (the public harness: stages, transactions, async steps, Custom APIs), the internal `PluginContext` (one plugin, for the framework's own tests). |
 | `src/Vela.Cli` | net10.0 | `Program.cs` dispatches. `Cli/CliCommands.cs` is the command and option table that drives the help and each command's option allowlist. `PlanApplyCommand`, `DiffEngine`, `DataverseRegistration.*` (apply), `PackageScanner` / `IsolatedPackageScan` (the scan runs in a child process), `ProjectScaffolder` / `ScaffoldTemplates*` (`vela init`), `AddCommand` (`vela add`), `ModelsCommand` (`vela models`). |
 | `tests/*` | | One test project per `src` project; `Vela.Tests` and `Vela.Testing.Tests` are net462, the rest net10.0. |
-| `docs/` | | docfx site. `docs/samples/Vela.DocSamples` (net462, in `Vela.sln`) holds compiled snippets that the pages include. |
+| `docs/` | | docfx site. `docs/samples/Vela.DocSamples` (net462, in `Vela.sln`) holds compiled snippets that the pages include. `docs/agents/` (git-ignored) is vela-agentic's `docs/` at the tag in `docs/agents.version`, filled by `docs/tools/Get-AgentsDocs.ps1`. |
 | `tools/codegen/Vela.StepApiGen` | net10.0 | Generates the step API (below). |
 
 Architecture rules (details in [docs/advanced/architecture.md](docs/advanced/architecture.md#architecture-rules)):
@@ -52,7 +52,8 @@ rm -rf ~/.nuget/packages/vela.{plugins,testing,messages}/0.0.0-local
 VELA_BUILD_SMOKE=1 dotnet test tests/Vela.Cli.Tests -c Release --no-build --filter "FullyQualifiedName~Generate_ThenDotnetBuild_Succeeds"
 ```
 
-Docs: `dotnet tool restore`, then `dotnet tool run docfx docs/docfx.json --warningsAsErrors` (DocFX is pinned in
+Docs: `pwsh docs/tools/Get-AgentsDocs.ps1` (the AI agents section), `dotnet tool restore`, then
+`dotnet tool run docfx docs/docfx.json --warningsAsErrors` (DocFX is pinned in
 `.config/dotnet-tools.json`) must report 0 warnings.
 After adding, renaming or moving a docs page (give it a `_description` front matter) or changing a description, run
 `dotnet run docs/tools/UpdateLlmsTxt.cs` and commit the regenerated `docs/llms.txt`.
