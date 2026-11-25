@@ -57,6 +57,10 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json # the SDK pinned in global.json (rollForward: latestPatch)
+      # The "AI agents" section is vela-agentic's docs/ folder at the tag pinned in docs/agents.version.
+      - name: Fetch the AI agents section
+        shell: powershell
+        run: ./docs/tools/Get-AgentsDocs.ps1
       # The page list of llms.txt is generated from the toc.yml files and each page's _description front matter.
       # Regenerate it, and fail when the committed file differs.
       - name: Check that llms.txt matches the tables of contents
@@ -99,6 +103,10 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json # the SDK pinned in global.json (rollForward: latestPatch)
+      # The "AI agents" section is vela-agentic's docs/ folder at the tag pinned in docs/agents.version.
+      - name: Fetch the AI agents section
+        shell: powershell
+        run: ./docs/tools/Get-AgentsDocs.ps1
       - name: Install DocFX (pinned in .config/dotnet-tools.json)
         run: dotnet tool restore
       - name: Build the docs site

@@ -57,6 +57,8 @@ StrykerOutput/
 
 # DocFX local build output
 docs/_site/
+# The "AI agents" section, filled from vela-agentic by docs/tools/Get-AgentsDocs.ps1
+docs/agents/
 docs/obj/
 
 # macOS
