@@ -25,6 +25,11 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (CLI)
+
+- `vela inspect --out <file>` reports `Inspection written: <path>` on stderr, and `vela apply --out <file>`
+  `Apply result written: <path>`. Both printed `Plan written: <path>`, as `vela plan` does.
+
 ### Docs
 
 - The documentation site has an **AI agents** section: Vela Agentic, the Agent Skills and agents that let Claude Code

@@ -396,7 +396,7 @@ internal static class PlanApplyCommand
             };
             if (!WantsHumanOutput(options, host) || !string.IsNullOrWhiteSpace(options.OutPath))
             {
-                WriteOutput(options.OutPath, JsonSerializer.Serialize(failure, jsonOptions));
+                WriteOutput(options.OutPath, JsonSerializer.Serialize(failure, jsonOptions), "Apply result");
             }
 
             return Fail($"Apply failed mid-run; Dataverse may be partially updated: {applyEx.Message}", ExitPartialApply, includeUsage: false);
@@ -518,7 +518,7 @@ internal static class PlanApplyCommand
             Human(Console.Error, ConsoleTheme.StderrColor);
         }
 
-        WriteOutput(options.OutPath, JsonSerializer.Serialize(output, jsonOptions));
+        WriteOutput(options.OutPath, JsonSerializer.Serialize(output, jsonOptions), "Inspection");
         return ExitSuccess;
     }
 
@@ -547,7 +547,7 @@ internal static class PlanApplyCommand
             WritePlanSummary(preview, Console.Error, ConsoleTheme.StderrColor);
         }
 
-        WriteOutput(options.OutPath, JsonSerializer.Serialize(preview, jsonOptions));
+        WriteOutput(options.OutPath, JsonSerializer.Serialize(preview, jsonOptions), preview.Mode.StartsWith(ApplyMode, StringComparison.Ordinal) ? "Apply result" : "Plan");
     }
 
     // Whether to print the styled human summary on stdout instead of JSON: only on a real terminal with neither --json
