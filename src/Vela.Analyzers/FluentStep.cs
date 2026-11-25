@@ -41,7 +41,9 @@ namespace Vela.Analyzers
         // model of its tree: the caller's own model for its tree, the compilation's for any other. A plugin split
         // across files registers a step in one part and declares its handler in another, so the handler bindings of
         // a type are read across all of them. The callers cache the result per type and compilation, so a model for
-        // another part's tree is asked for once per type.
+        // another part's tree is asked for once per type. Compilation.GetSemanticModel inside an analyzer is what
+        // RS1030 warns about (a fresh model per call is costly); it is deliberate here: a partial type's other parts
+        // have no model of their own in this callback, and the per-type cache keeps it to one model per other part.
         public static IEnumerable<(TypeDeclarationSyntax Declaration, SemanticModel Model)> TypeDeclarations(
             INamedTypeSymbol type, SemanticModel current, System.Threading.CancellationToken cancellationToken)
         {

@@ -17,8 +17,9 @@ namespace Vela.Analyzers
     /// step observes it. To keep false positives at zero this fires only in the unambiguous case: the handler is an
     /// instance method bound by exactly one <c>RegisterStep()</c> chain of its type (any part of a partial type, in any
     /// file), and that chain is <c>.Async()</c>. A write through a local that only ever holds the Target
-    /// (<c>var t = ctx.Request.Target;</c>, <c>is Account t</c>) is reported, and so is a call that hands the Target to a non-virtual method of the same type, declared in the
-    /// same file, that writes into that parameter (one level deep). A copy of the Target and a handler shared across
+    /// (<c>var t = ctx.Request.Target;</c>, <c>is Account t</c>) is reported, and so is a call that hands the Target to
+    /// a non-virtual method of the same type, declared in the same file, that writes into that parameter (one level
+    /// deep). A copy of the Target and a handler shared across
     /// steps are left alone.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
