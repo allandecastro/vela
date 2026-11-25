@@ -8,6 +8,10 @@ This page installs the `vela` CLI and lists what you need to build, test and dep
 .NET global tool that exposes the **`vela`** command. The libraries (`Vela.Plugins`, `Vela.Testing`) are NuGet
 packages that `vela init` references for you.
 
+> [!NOTE]
+> Vela is in public preview (pre-1.0): a minor version (`0.y`) may contain breaking changes, with the migration in the
+> [changelog](https://github.com/allandecastro/vela/blob/main/CHANGELOG.md). Pin the versions in your project and read the changelog before you update.
+
 ## Prerequisites
 
 - **.NET 10 SDK.** The CLI is a `net10.0` tool. The same SDK builds the `net48` plugin projects on any OS, because

@@ -30,7 +30,7 @@ Vela is a framework (`Vela.Plugins`), a CLI (`Vela.Cli`, command `vela`) and a n
 (`Vela.Testing`) for building Microsoft Dataverse plugins and Custom APIs, with a safe, preview-first
 `plan` → `apply` workflow.
 
-> **Status:** pre-1.0, published on NuGet.org and actively developed. Until 1.0, a minor version (`0.y`) may contain
+> **Status:** public preview (pre-1.0), published on NuGet.org and actively developed. Until 1.0, a minor version (`0.y`) may contain
 > breaking changes; [`CHANGELOG.md`](CHANGELOG.md) calls them out with the migration. The framework packages
 > (`Vela.Messages`, `Vela.Plugins`, `Vela.Testing`) are versioned together, the CLI (`Vela.Cli`) on its own.
 

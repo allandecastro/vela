@@ -17,6 +17,10 @@ _disableBreadcrumb: true
 
 <p class="vela-hero-for">For Dataverse and Dynamics 365 developers who write plugins and Custom APIs in C#.</p>
 
+> [!NOTE]
+> **Public preview.** Vela is pre-1.0: until 1.0, a minor version (`0.y`) may contain breaking changes, and the
+> [changelog](https://github.com/allandecastro/vela/blob/main/CHANGELOG.md) gives the migration for each. A patch version (`0.y.z`) only fixes, without breaking.
+
 ## See it
 
 Declare a plugin step with a typed handler, preview and apply its registration, then test it in memory with no connection and no mocking library:
