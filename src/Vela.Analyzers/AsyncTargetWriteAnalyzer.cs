@@ -15,9 +15,9 @@ namespace Vela.Analyzers
     /// bound to an <b>asynchronous</b> step. An async step runs after the main operation has committed, in its own
     /// execution, so mutating the Target there has no effect: it is never written back to the database and no later
     /// step observes it. To keep false positives at zero this fires only in the unambiguous case: the handler is an
-    /// instance method bound by exactly one <c>RegisterStep()</c> chain, and that chain is <c>.Async()</c>. A write
-    /// through a local that only ever holds the Target (<c>var t = ctx.Request.Target;</c>, <c>is Account t</c>) is
-    /// reported, and so is a call that hands the Target to a non-virtual method of the same type, declared in the
+    /// instance method bound by exactly one <c>RegisterStep()</c> chain of its type (any part of a partial type, in any
+    /// file), and that chain is <c>.Async()</c>. A write through a local that only ever holds the Target
+    /// (<c>var t = ctx.Request.Target;</c>, <c>is Account t</c>) is reported, and so is a call that hands the Target to a non-virtual method of the same type, declared in the
     /// same file, that writes into that parameter (one level deep). A copy of the Target and a handler shared across
     /// steps are left alone.
     /// </summary>
@@ -90,8 +90,8 @@ namespace Vela.Analyzers
 
             public INamedTypeSymbol Fluent { get; }
 
-            public ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, bool IsAsync)>> Bindings { get; }
-                = new ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, bool IsAsync)>>();
+            public ConcurrentDictionary<INamedTypeSymbol, IReadOnlyDictionary<ISymbol, (int Chains, bool IsAsync)>> Bindings { get; }
+                = new ConcurrentDictionary<INamedTypeSymbol, IReadOnlyDictionary<ISymbol, (int Chains, bool IsAsync)>>(SymbolEqualityComparer.Default);
 
             public ConcurrentDictionary<MethodDeclarationSyntax, ISet<ISymbol>> HandlerAliases { get; }
                 = new ConcurrentDictionary<MethodDeclarationSyntax, ISet<ISymbol>>();
@@ -209,9 +209,9 @@ namespace Vela.Analyzers
         private static MethodDeclarationSyntax? AsyncHandler(SyntaxNodeAnalysisContext context, State state)
         {
             MethodDeclarationSyntax? handler = context.Node.FirstAncestorOrSelf<MethodDeclarationSyntax>();
-            TypeDeclarationSyntax? owningType = handler?.FirstAncestorOrSelf<TypeDeclarationSyntax>();
-            if (handler is null || owningType is null
-                || context.SemanticModel.GetDeclaredSymbol(handler, context.CancellationToken) is not IMethodSymbol handlerSymbol)
+            if (handler is null
+                || context.SemanticModel.GetDeclaredSymbol(handler, context.CancellationToken) is not IMethodSymbol handlerSymbol
+                || handlerSymbol.ContainingType is not INamedTypeSymbol owningType)
             {
                 return null;
             }
@@ -472,13 +472,15 @@ namespace Vela.Analyzers
         private static bool InVela(INamespaceSymbol? ns)
             => ns is not null && ns.ToDisplayString().StartsWith("Vela", System.StringComparison.Ordinal);
 
-        // Scans a type once, mapping each method-group handler bound by a RegisterStep()...Handle(handler) chain to
-        // the number of chains that own it and whether any of those chains is .Async().
+        // Scans a type once (every part of a partial type), mapping each method-group handler bound by a
+        // RegisterStep()...Handle(handler) chain to the number of chains that own it and whether any of those chains
+        // is .Async().
         private static IReadOnlyDictionary<ISymbol, (int Chains, bool IsAsync)> BuildHandlerBindings(
-            TypeDeclarationSyntax owningType, SemanticModel model, INamedTypeSymbol fluent, CancellationToken cancellationToken)
+            INamedTypeSymbol owningType, SemanticModel currentModel, INamedTypeSymbol fluent, CancellationToken cancellationToken)
         {
             var result = new Dictionary<ISymbol, (int Chains, bool IsAsync)>(SymbolEqualityComparer.Default);
-            foreach (InvocationExpressionSyntax handleCall in owningType.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            foreach ((TypeDeclarationSyntax declaration, SemanticModel model) in FluentStep.TypeDeclarations(owningType, currentModel, cancellationToken))
+            foreach (InvocationExpressionSyntax handleCall in declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 if (handleCall.Expression is not MemberAccessExpressionSyntax handleMember || handleMember.Name.Identifier.ValueText != "Handle")
                 {

@@ -255,10 +255,12 @@ with a relationship-aware read such as `RetrieveWithRelated` (see
   the non-generic `ArrayList` / `Hashtable` / `IList` / `IDictionary`, `Collection<T>` / `ObservableCollection<T>` /
   `KeyedCollection<TKey, TItem>`, and `NameValueCollection` / `StringCollection` / `OrderedDictionary`
   (`readonly` freezes the reference, not the contents);
+- a get-only or `init` auto-property holding one of those mutable collections
+  (`public List<string> Items { get; } = new();`), whose backing field is such a `readonly` field;
 - a primary-constructor parameter that a member reads or writes (the compiler stores it in a writable field).
 
 Not flagged: `const`, `readonly` and `static readonly` fields of immutable values, get-only and `init`
-auto-properties, arrays (the usual fixed column lists), read-only views (`IReadOnlyList<T>`,
+auto-properties of other types, arrays (the usual fixed column lists), read-only views (`IReadOnlyList<T>`,
 `ReadOnlyCollection<T>`), the concurrent collections (thread-safe, the deliberate cache), and a primary-constructor
 parameter used only in an initializer or a base constructor call.
 
@@ -372,7 +374,8 @@ plain context with `ctx.PostImageAs<T>()`.
 **Flags.** A handler that reads `ctx.PreImage`, `ctx.PostImage`, `ctx.SubordinatePreImage` or
 `ctx.SubordinatePostImage` when its step has no matching `WithPreImage(...)`, `WithPostImage(...)`,
 `WithSubordinatePreImage(...)` or `WithSubordinatePostImage(...)`. The rule fires only when the handler is an
-instance method bound by exactly one `RegisterStep()` chain in the same class.
+instance method bound by exactly one `RegisterStep()` chain in the same class. The chains of every part of a
+`partial` class count, whatever file they are in.
 
 **Why.** A post-operation context exposes both `PreImage` and `PostImage`, and a Merge context also the subordinate
 images. Reading an image the step did not capture compiles, but returns `null` at runtime.
@@ -384,8 +387,9 @@ images. Reading an image the step did not capture compiles, but returns `null` a
 **Write to the Target in an asynchronous step.** Warning.
 
 **Flags.** A write to the Target (`ctx.Request.Target`, `ctx.GetTarget<T>()`) in the handler of an `.Async()` step.
-The rule fires only when the handler is an instance method bound by exactly one `RegisterStep()` chain; a handler
-shared across steps is left alone.
+The rule fires only when the handler is an instance method bound by exactly one `RegisterStep()` chain of its class
+(the chains of every part of a `partial` class count, whatever file they are in); a handler shared across steps is
+left alone.
 
 A write is an assignment, a compound assignment, or `++` / `--` on a property or indexer of the Target, or on an
 entry of its `Attributes` collection. The rule follows the Target through:

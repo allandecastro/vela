@@ -17,10 +17,9 @@ namespace Vela.Analyzers
     /// accessor is inherited from the base context (a post-operation context exposes both; a pre context exposes
     /// PreImage), so it compiles and returns <c>null</c> at runtime - a silent footgun. To keep false positives
     /// at zero this fires only in the unambiguous case: the handler is an instance method referenced by exactly
-    /// one <c>RegisterStep()</c> chain in the same class, and that chain has no matching
-    /// <c>WithPreImage(...)</c> / <c>WithPostImage(...)</c> / <c>WithSubordinate...Image(...)</c>. Lambda handlers and
-    /// handlers shared across steps are
-    /// left alone.
+    /// one <c>RegisterStep()</c> chain in the same class (any part of a partial class, in any file), and that chain
+    /// has no matching <c>WithPreImage(...)</c> / <c>WithPostImage(...)</c> / <c>WithSubordinate...Image(...)</c>.
+    /// Lambda handlers and handlers shared across steps are left alone.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class UncapturedImageAnalyzer : DiagnosticAnalyzer
@@ -60,7 +59,7 @@ namespace Vela.Analyzers
                     return;
                 }
 
-                var perTypeBindings = new ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, HashSet<string> Captured)>>();
+                var perTypeBindings = new ConcurrentDictionary<INamedTypeSymbol, IReadOnlyDictionary<ISymbol, (int Chains, HashSet<string> Captured)>>(SymbolEqualityComparer.Default);
                 // SimpleMemberAccess covers ctx.PreImage; MemberBinding covers the null-conditional ctx?.PreImage
                 // (the name sits in a member-binding node whose receiver is the enclosing conditional access).
                 start.RegisterSyntaxNodeAction(
@@ -70,7 +69,7 @@ namespace Vela.Analyzers
             });
         }
 
-        private static void AnalyzeAccess(SyntaxNodeAnalysisContext context, INamedTypeSymbol contextType, INamedTypeSymbol fluent, ConcurrentDictionary<TypeDeclarationSyntax, IReadOnlyDictionary<ISymbol, (int Chains, HashSet<string> Captured)>> perTypeBindings)
+        private static void AnalyzeAccess(SyntaxNodeAnalysisContext context, INamedTypeSymbol contextType, INamedTypeSymbol fluent, ConcurrentDictionary<INamedTypeSymbol, IReadOnlyDictionary<ISymbol, (int Chains, HashSet<string> Captured)>> perTypeBindings)
         {
             SimpleNameSyntax nameSyntax;
             ExpressionSyntax receiver;
@@ -108,13 +107,9 @@ namespace Vela.Analyzers
             }
 
             MethodDeclarationSyntax? handler = context.Node.FirstAncestorOrSelf<MethodDeclarationSyntax>();
-            TypeDeclarationSyntax? owningType = handler?.FirstAncestorOrSelf<TypeDeclarationSyntax>();
-            if (handler is null || owningType is null)
-            {
-                return;
-            }
-
-            if (context.SemanticModel.GetDeclaredSymbol(handler, context.CancellationToken) is not IMethodSymbol handlerSymbol)
+            if (handler is null
+                || context.SemanticModel.GetDeclaredSymbol(handler, context.CancellationToken) is not IMethodSymbol handlerSymbol
+                || handlerSymbol.ContainingType is not INamedTypeSymbol owningType)
             {
                 return;
             }
@@ -134,13 +129,15 @@ namespace Vela.Analyzers
             }
         }
 
-        // Scans a type once, mapping each method-group handler bound by a RegisterStep()...Handle(handler) chain to
-        // the number of chains that own it and the image capture methods (WithPreImage, ...) those chains declare.
+        // Scans a type once (every part of a partial type), mapping each method-group handler bound by a
+        // RegisterStep()...Handle(handler) chain to the number of chains that own it and the image capture methods
+        // (WithPreImage, ...) those chains declare.
         private static IReadOnlyDictionary<ISymbol, (int Chains, HashSet<string> Captured)> BuildHandlerBindings(
-            TypeDeclarationSyntax owningType, SemanticModel model, INamedTypeSymbol fluent, CancellationToken cancellationToken)
+            INamedTypeSymbol owningType, SemanticModel currentModel, INamedTypeSymbol fluent, CancellationToken cancellationToken)
         {
             var result = new Dictionary<ISymbol, (int Chains, HashSet<string> Captured)>(SymbolEqualityComparer.Default);
-            foreach (InvocationExpressionSyntax handleCall in owningType.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            foreach ((TypeDeclarationSyntax declaration, SemanticModel model) in FluentStep.TypeDeclarations(owningType, currentModel, cancellationToken))
+            foreach (InvocationExpressionSyntax handleCall in declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 if (handleCall.Expression is not MemberAccessExpressionSyntax handleMember || handleMember.Name.Identifier.ValueText != "Handle")
                 {

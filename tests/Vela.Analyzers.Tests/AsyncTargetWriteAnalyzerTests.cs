@@ -375,4 +375,60 @@ namespace Demo
             "        private void OnUpd(IGeneratedContext ctx) { {|#0:ctx.Request.Target[\"name\"]|} = \"x\"; }");
         await Verify.VerifyAnalyzerAsync(code, Expected());
     }
+
+    // A plugin split across files: the RegisterStep() chain in one part of the partial class, the handler in another.
+    private static async Task VerifyPartsAsync(string registration, string handler, params DiagnosticResult[] expected)
+    {
+        var test = new Microsoft.CodeAnalysis.CSharp.Testing.CSharpAnalyzerTest<Vela.Analyzers.AsyncTargetWriteAnalyzer, DefaultVerifier>();
+        test.TestState.Sources.Add(("Registration.cs", Harness + @"
+namespace Demo
+{
+    using Vela.Context;
+    public partial class Use : Plugin
+    {
+        " + registration + @"
+    }
+}
+"));
+        test.TestState.Sources.Add(("Handlers.cs", @"
+namespace Demo
+{
+    using Vela.Context;
+    public partial class Use
+    {
+        " + handler + @"
+    }
+}
+"));
+        test.ExpectedDiagnostics.AddRange(expected);
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task Flags_a_target_write_when_the_handler_is_in_another_part_of_a_partial_class()
+    {
+        await VerifyPartsAsync(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Async().Handle(OnUpd); }",
+            "private void OnUpd(ILocalPluginContext ctx) { {|#0:ctx.Request.Target.Name|} = \"x\"; }",
+            Expected());
+    }
+
+    [Fact]
+    public async Task Flags_a_helper_write_when_the_handler_and_helper_are_in_another_part_of_a_partial_class()
+    {
+        // The helper sits in the handler's file, so the same-file helper tracking applies.
+        await VerifyPartsAsync(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Async().Handle(OnUpd); }",
+            "private void OnUpd(ILocalPluginContext ctx) { {|#0:Rename(ctx.Request.Target)|}; }\n" +
+            "        private void Rename(Account a) { a.Name = \"x\"; }",
+            Expected());
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_target_write_when_the_chain_in_another_part_is_synchronous()
+    {
+        await VerifyPartsAsync(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpd); }",
+            "private void OnUpd(ILocalPluginContext ctx) { ctx.Request.Target.Name = \"x\"; }");
+    }
 }

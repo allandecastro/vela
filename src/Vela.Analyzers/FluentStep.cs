@@ -37,6 +37,28 @@ namespace Vela.Analyzers
                 ?? (info.CandidateSymbols.Length == 1 ? info.CandidateSymbols[0] as IMethodSymbol : null);
         }
 
+        // Every declaration of a type (each part of a partial type, whatever file it sits in), paired with a semantic
+        // model of its tree: the caller's own model for its tree, the compilation's for any other. A plugin split
+        // across files registers a step in one part and declares its handler in another, so the handler bindings of
+        // a type are read across all of them. The callers cache the result per type and compilation, so a model for
+        // another part's tree is asked for once per type.
+        public static IEnumerable<(TypeDeclarationSyntax Declaration, SemanticModel Model)> TypeDeclarations(
+            INamedTypeSymbol type, SemanticModel current, System.Threading.CancellationToken cancellationToken)
+        {
+            foreach (SyntaxReference reference in type.DeclaringSyntaxReferences)
+            {
+                if (reference.GetSyntax(cancellationToken) is not TypeDeclarationSyntax declaration)
+                {
+                    continue;
+                }
+
+                SemanticModel model = declaration.SyntaxTree == current.SyntaxTree
+                    ? current
+                    : current.Compilation.GetSemanticModel(declaration.SyntaxTree);
+                yield return (declaration, model);
+            }
+        }
+
         public static bool ImplementsFluent(ITypeSymbol type, INamedTypeSymbol fluent)
         {
             if (SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, fluent))

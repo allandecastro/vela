@@ -10,11 +10,12 @@ namespace Vela.Analyzers
     /// <summary>
     /// Flags mutable state on a plugin / Custom API type. The Dataverse sandbox caches and reuses plugin instances
     /// across executions and calls them concurrently, so mutable state leaks between unrelated operations and races.
-    /// Four shapes are flagged: a writable field, a writable auto-property (its backing field is a writable field),
+    /// Five shapes are flagged: a writable field, a writable auto-property (its backing field is a writable field),
     /// a <c>readonly</c> field that holds a mutable collection (<c>readonly</c> freezes the reference, not the
-    /// contents), and a primary-constructor parameter captured by a member (the compiler stores it in a writable
-    /// field). Keep per-execution state in locals or the context; use <c>const</c> / <c>readonly</c> and read-only
-    /// collections for immutable configuration.
+    /// contents), a get-only or init-only auto-property that holds a mutable collection (its backing field is such a
+    /// <c>readonly</c> field), and a primary-constructor parameter captured by a member (the compiler stores it in a
+    /// writable field). Keep per-execution state in locals or the context; use <c>const</c> / <c>readonly</c> and
+    /// read-only collections for immutable configuration.
     /// </summary>
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public sealed class MutablePluginStateAnalyzer : DiagnosticAnalyzer
@@ -24,6 +25,7 @@ namespace Vela.Analyzers
         internal const string WritableField = "a writable field";
         internal const string WritableAutoProperty = "a writable auto-property";
         internal const string ReadOnlyMutableCollection = "a readonly field holding a mutable collection";
+        internal const string ReadOnlyAutoPropertyMutableCollection = "a get-only or init-only auto-property holding a mutable collection";
         internal const string CapturedParameter = "a primary-constructor parameter captured by a member";
 
         // Mutable collection types, by metadata name. A readonly field of one of these still shares its contents
@@ -65,7 +67,7 @@ namespace Vela.Analyzers
             category: "Vela.Reliability",
             defaultSeverity: DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
-            description: "Plugin instances are reused and called concurrently by the Dataverse sandbox. A writable field, a writable auto-property, a readonly field holding a mutable collection or a captured primary-constructor parameter is shared across unrelated executions. Use locals or the execution context for per-call state, and const/readonly fields with immutable values for configuration.");
+            description: "Plugin instances are reused and called concurrently by the Dataverse sandbox. A writable field, a writable auto-property, a readonly field or get-only/init-only auto-property holding a mutable collection, or a captured primary-constructor parameter is shared across unrelated executions. Use locals or the execution context for per-call state, and const/readonly fields with immutable values for configuration.");
 
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 
@@ -115,21 +117,23 @@ namespace Vela.Analyzers
         {
             IPropertySymbol property = (IPropertySymbol)context.Symbol;
 
-            // Only an auto-property with a set accessor stores state: init-only is set once at construction, a
-            // get-only auto-property is backed by a readonly field, and a property with accessor bodies stores
-            // nothing itself (the field it uses is analyzed on its own).
-            if (property.IsIndexer || property.IsAbstract || property.SetMethod is null || property.SetMethod.IsInitOnly ||
-                property.Locations.Length == 0 || !IsAutoProperty(property, context))
+            // Only an auto-property stores state (a property with accessor bodies stores nothing itself; the field it
+            // uses is analyzed on its own). One with a set accessor is a writable field. A get-only or init-only one is
+            // backed by a readonly field, so, like such a field, it is flagged only when it holds a mutable collection.
+            if (property.IsIndexer || property.IsAbstract || property.Locations.Length == 0 || !IsAutoProperty(property, context))
             {
                 return;
             }
 
-            if (!plugins.IsPluginType(property.ContainingType))
+            string? shape = property.SetMethod is { IsInitOnly: false } ? WritableAutoProperty
+                : IsMutableCollection(property.Type) ? ReadOnlyAutoPropertyMutableCollection
+                : null;
+            if (shape is null || !plugins.IsPluginType(property.ContainingType))
             {
                 return;
             }
 
-            context.ReportDiagnostic(Diagnostic.Create(Rule, property.Locations[0], property.Name, WritableAutoProperty));
+            context.ReportDiagnostic(Diagnostic.Create(Rule, property.Locations[0], property.Name, shape));
         }
 
         private static void AnalyzePrimaryConstructor(SymbolStartAnalysisContext context, PluginTypes plugins)
