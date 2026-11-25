@@ -94,6 +94,11 @@ duplicated or empty section fails the release before anything is published.
    Release is created. `--skip-duplicate` keeps re-running the same tag safe. If a preflight check fails, fix
    `main`, then move the tag to the fixed commit (`git tag -f ...` and `git push -f origin <tag>`): nothing was
    published.
+5. For a CLI release, check what it changes for [vela-agentic](https://github.com/allandecastro/vela-agentic), the
+   agent pack that drives Vela through the CLI. A renamed or removed command or option, a changed exit code or a
+   changed JSON output must be in the release notes under `### Changed (breaking)` or `### Changed`, with the reason
+   and the migration. The pack's daily contract check reports *what* changed in `vela help --json`; the release
+   notes tell *why*, which is what the pack's update PR needs.
 
 ## Framework version in scaffolded projects
 
