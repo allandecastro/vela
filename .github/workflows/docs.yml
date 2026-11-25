@@ -89,7 +89,7 @@ jobs:
       id-token: write # deploy-pages authenticates with an OIDC token
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}
     env:
       # Self-hosted only (empty on a hosted runner, which leaves setup-dotnet on its default): the runner's service
       # account can't write to 'C:\Program Files\dotnet', so setup-dotnet installs into the runner's tool cache
@@ -143,6 +143,17 @@ jobs:
           name: github-pages
           path: ${{ runner.temp }}/artifact.tar
           retention-days: 1
+      # deploy-pages looks the artifact up right after the upload, and the artifact API sometimes lists it only a few
+      # seconds later ("Found 0 artifact(s)", #693): on that failure, wait and deploy once more.
       - name: Deploy to GitHub Pages
         id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+      - name: Wait for the artifact to be listed
+        if: steps.deployment.outcome == 'failure'
+        shell: powershell
+        run: Start-Sleep -Seconds 30
+      - name: Deploy to GitHub Pages (retry)
+        id: deployment-retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v5
