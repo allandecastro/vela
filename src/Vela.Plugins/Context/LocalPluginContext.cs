@@ -11,6 +11,10 @@ namespace Vela.Context
     /// <summary>
     /// Runtime wrapper around IServiceProvider for Dataverse plugins.
     /// </summary>
+    /// <remarks>
+    /// One context is created per execution and is <b>not</b> thread-safe: the Dataverse pipeline runs a plugin on a
+    /// single thread. Do not use the context, or the services it hands out, from another thread.
+    /// </remarks>
     public sealed class LocalPluginContext : ILocalPluginContext, IServiceResolverContext
     {
         // Thrown by both AcquireManagedIdentityToken overloads when the host serves no IManagedIdentityService.

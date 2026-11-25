@@ -220,6 +220,12 @@ and `As*` methods.
   the Custom API input checks. Any other exception surfaces as an `OrganizationServiceFault` with no `ErrorCode`.
 - **No server-side logic.** Formula, rollup and calculated columns, business rules and duplicate detection are not
   simulated.
+- **Dates are in UTC.** The store holds UTC values. The relative date operators (`today`, `yesterday`,
+  `last-x-days`, ...) take the current UTC date from `WithClock`, and date grouping (`dategrouping`) groups by the
+  UTC date. Dataverse works in the user's time zone, so a test with a timestamp near midnight can group or match
+  differently from the platform.
+- **A pipeline is not thread-safe.** Use one `PluginPipeline` (or `InMemoryOrganizationService`) per test, driven
+  from one thread. Tests that run in parallel each need their own instance.
 - **N:N `Associate` and `Disassociate` need a declared relationship.** Declare it with `WithManyToMany(...)` or a
   registered `ManyToManyRelationshipMetadata` (the store has no live metadata otherwise). Associate and Disassociate
   then persist the intersect rows, and `RetrieveMultiple` joins through them. Associating an existing pair again
