@@ -77,8 +77,12 @@ Both lifetimes are scoped to a single execution:
 
 | Method | Lifetime | Use for |
 | --- | --- | --- |
-| `AddScoped<T>(factory)` | **One instance per execution**: created on the first resolve, then reused within the same execution. | Services with state or setup cost that the handler shares. |
+| `AddScoped<T>(factory)` | **One instance per execution**: created on the first resolve, then reused within the same execution. Disposed at the end of the execution when it implements `IDisposable`. | Services with state or setup cost that the handler shares. |
 | `AddTransient<T>(factory)` | **A new instance on every resolve.** Disposed at the end of the execution when it implements `IDisposable`. | Cheap, stateless helpers. |
+
+Vela disposes what your factories create. A factory must therefore not return an `IDisposable` instance that lives
+longer than the execution, such as an `HttpClient` kept in a static field: register a service that wraps it
+instead. The built-in services below are never disposed by the resolver.
 
 The factory receives the resolver (`IPluginServiceResolver`), so a service can depend on other registered
 services: `r => new PricingService(context.Service, r.GetRequiredService<IPluginCacheService>())`. A factory that
@@ -98,7 +102,9 @@ These are always available without registering them yourself:
 - `IManagedIdentityService`, when the runtime provides it (see [Managed identity](managed-identity.md)).
 
 The built-in resolver and `AddPluginRuntime` (for a `Microsoft.Extensions.DependencyInjection` container) register
-the same set.
+the same set. `AddPluginRuntime` is for tests and hosts outside the sandbox: inside a plugin, use the built-in
+resolver. `Vela.Plugins` references only the dependency-injection abstractions, and Vela does not support or test
+the full container inside a plugin package.
 
 > [!TIP]
 > `GetRequiredService<T>()` throws if the service isn't registered. Use `GetService(typeof(T))`, which returns

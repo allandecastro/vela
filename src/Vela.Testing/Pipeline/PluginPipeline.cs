@@ -24,6 +24,10 @@ namespace Vela.Testing
     /// back; asynchronous steps run once the outermost operation commits, and never when it rolls back. This is
     /// scenario/behavioural testing — fully offline, not integration testing.
     /// </summary>
+    /// <remarks>
+    /// Not thread-safe: create one pipeline per test and drive it from one thread. Tests that run in parallel each
+    /// need their own instance.
+    /// </remarks>
     public sealed partial class PluginPipeline
     {
         private readonly List<PipelineRegistration> _registrations = new List<PipelineRegistration>();

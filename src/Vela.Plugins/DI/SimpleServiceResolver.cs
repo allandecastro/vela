@@ -26,10 +26,11 @@ namespace Vela.DI
         private readonly Dictionary<Type, Func<IPluginServiceResolver, object>> _factories = new Dictionary<Type, Func<IPluginServiceResolver, object>>();
         private readonly HashSet<Type> _scopedRegistrations = new HashSet<Type>();
         private readonly Dictionary<Type, object> _scopedInstances = new Dictionary<Type, object>();
-        // IDisposable transients this resolver created, disposed when the resolver is disposed at the end of the
-        // execution. Only transients are tracked: scoped registrations are platform/caller-owned (the default
-        // context/service/tracing registrations are scoped) and must not be disposed here.
-        private readonly List<IDisposable> _transientDisposables = new List<IDisposable>();
+        // IDisposable services this resolver's factories created, disposed when the resolver is disposed at the end
+        // of the execution: every transient, and every scoped instance a user factory (AddScoped) created. The default
+        // registrations (context, organization service, tracing, ...) and instance overrides (AddScopedInstance) are
+        // platform/caller-owned and never tracked.
+        private readonly List<IDisposable> _ownedDisposables = new List<IDisposable>();
         // Types currently being resolved on this (per-execution, single-threaded) resolver, to detect a factory that
         // resolves its own type (A -> A) or a cycle (A -> B -> A) and fail with a clear message instead of a
         // StackOverflowException that cannot be caught and would tear down the worker.
@@ -51,7 +52,7 @@ namespace Vela.DI
             foreach (KeyValuePair<Type, Func<object>> registration in DefaultServices(context))
             {
                 Func<object> create = registration.Value;
-                resolver.Add(registration.Key, new Func<IPluginServiceResolver, object>(_ => create()), isScoped: true);
+                resolver.Add(registration.Key, new Func<IPluginServiceResolver, object>(_ => create()), isScoped: true, owned: false);
             }
 
             return resolver;
@@ -91,7 +92,9 @@ namespace Vela.DI
         }
 
         /// <summary>
-        /// Registers scoped service.
+        /// Registers scoped service: one instance per execution. When it implements <see cref="IDisposable"/>, the
+        /// instance the factory created is disposed at the end of the execution, so the factory must not return an
+        /// instance it shares elsewhere (a static field).
         /// </summary>
         /// <typeparam name="TService">Service type.</typeparam>
         /// <param name="factory">Service factory.</param>
@@ -102,7 +105,8 @@ namespace Vela.DI
         }
 
         /// <summary>
-        /// Registers transient service.
+        /// Registers transient service: a new instance on every resolve. Each <see cref="IDisposable"/> instance is
+        /// disposed at the end of the execution.
         /// </summary>
         /// <typeparam name="TService">Service type.</typeparam>
         /// <param name="factory">Service factory.</param>
@@ -115,7 +119,7 @@ namespace Vela.DI
         // Registers an existing instance as scoped under serviceType (the test harness's WithService overrides).
         internal SimpleServiceResolver AddScopedInstance(Type serviceType, object instance)
         {
-            return Add(serviceType, new Func<IPluginServiceResolver, object>(_ => instance), isScoped: true);
+            return Add(serviceType, new Func<IPluginServiceResolver, object>(_ => instance), isScoped: true, owned: false);
         }
 
         /// <inheritdoc />
@@ -165,7 +169,8 @@ namespace Vela.DI
             return (T)service;
         }
 
-        private SimpleServiceResolver Add(Type serviceType, Delegate factory, bool isScoped)
+        // owned: false for an instance the caller or the platform owns (the defaults, AddScopedInstance), never disposed.
+        private SimpleServiceResolver Add(Type serviceType, Delegate factory, bool isScoped, bool owned = true)
         {
             _factories[serviceType] = provider =>
             {
@@ -183,9 +188,10 @@ namespace Vela.DI
                 }
 
                 object resolved = service ?? throw new InvalidPluginExecutionException("Service factory returned null for " + serviceType.FullName);
-                if (!isScoped && resolved is IDisposable disposable)
+                // A scoped factory runs once per execution (the instance is then cached), so it is tracked once.
+                if (owned && resolved is IDisposable disposable)
                 {
-                    _transientDisposables.Add(disposable);
+                    _ownedDisposables.Add(disposable);
                 }
 
                 return resolved;
@@ -208,17 +214,18 @@ namespace Vela.DI
         }
 
         /// <summary>
-        /// Disposes the transient <see cref="IDisposable"/> services this resolver created. Scoped and
-        /// platform-owned services are left untouched. A faulty <c>Dispose</c> is swallowed so it cannot mask the
-        /// plugin result.
+        /// Disposes the <see cref="IDisposable"/> services this resolver's factories created (transients, and scoped
+        /// services registered with <see cref="AddScoped{TService}"/>), last created first. The default platform
+        /// services and instance overrides are left untouched. A faulty <c>Dispose</c> is swallowed so it cannot mask
+        /// the plugin result.
         /// </summary>
         public void Dispose()
         {
-            for (int i = _transientDisposables.Count - 1; i >= 0; i--)
+            for (int i = _ownedDisposables.Count - 1; i >= 0; i--)
             {
                 try
                 {
-                    _transientDisposables[i].Dispose();
+                    _ownedDisposables[i].Dispose();
                 }
                 catch (Exception)
                 {
@@ -226,7 +233,7 @@ namespace Vela.DI
                 }
             }
 
-            _transientDisposables.Clear();
+            _ownedDisposables.Clear();
         }
     }
 }

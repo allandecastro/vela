@@ -116,17 +116,40 @@ public sealed class ResolverAndTypedQueryCoverageTests
     }
 
     [Fact]
-    public void Disposing_the_resolver_leaves_scoped_services_untouched()
+    public void Disposing_the_resolver_disposes_a_scoped_disposable_its_factory_created_once()
     {
-        // Scoped registrations are platform/caller-owned (the default context/service/tracing registrations are
-        // scoped), so the resolver must not dispose them.
+        // Regression (review BUG-04): a user's AddScoped IDisposable was cached for the execution and then dropped
+        // undisposed.
         SimpleServiceResolver resolver = new SimpleServiceResolver();
-        resolver.AddScoped<ITestSvc>(_ => new DisposableSvc());
+        int created = 0;
+        resolver.AddScoped<ITestSvc>(_ => { created++; return new DisposableSvc(); });
         DisposableSvc scoped = (DisposableSvc)resolver.GetService(typeof(ITestSvc))!;
+        Assert.Same(scoped, resolver.GetService(typeof(ITestSvc)));
 
         resolver.Dispose();
 
-        Assert.Equal(0, scoped.DisposeCount);
+        Assert.Equal(1, created);
+        Assert.Equal(1, scoped.DisposeCount);
+    }
+
+    [Fact]
+    public void Disposing_the_resolver_leaves_platform_and_instance_registrations_untouched()
+    {
+        // The default registrations and instance overrides (the harness's WithService) are owned by the platform or
+        // the caller: the resolver hands them out but never disposes them.
+        DisposableSvc instance = new DisposableSvc();
+        Moq.Mock<IManagedIdentityService> platform = new Moq.Mock<IManagedIdentityService>();
+        Moq.Mock<IDisposable> platformDisposable = platform.As<IDisposable>();
+        LocalPluginContext context = new PluginContextBuilder().WithManagedIdentityService(platform.Object).Build();
+        SimpleServiceResolver resolver = SimpleServiceResolver.CreateDefault(context);
+        resolver.AddScopedInstance(typeof(ITestSvc), instance);
+        Assert.Same(instance, resolver.GetService(typeof(ITestSvc)));
+        Assert.Same(platform.Object, resolver.GetService(typeof(IManagedIdentityService)));
+
+        resolver.Dispose();
+
+        Assert.Equal(0, instance.DisposeCount);
+        platformDisposable.Verify(d => d.Dispose(), Moq.Times.Never());
     }
 
     [Fact]

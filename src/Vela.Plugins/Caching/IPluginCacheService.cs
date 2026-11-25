@@ -3,9 +3,11 @@ using System;
 namespace Vela.Caching
 {
     /// <summary>
-    /// Global in-process cache service for plugin workloads.
+    /// In-process cache service for plugin workloads. The instance a plugin resolves is scoped to its organization:
+    /// entries are shared by every user and execution of that organization in the same worker process.
     /// </summary>
     /// <remarks>
+    /// Cache only data that is the same for every user, or put the user in the key (see the caching guide).
     /// The cache exposes a synchronous-only surface on purpose: the Dataverse plugin pipeline executes
     /// synchronously, and a synchronous lock (<c>Monitor</c>) is the most clearly sandbox-supported
     /// primitive. Run any I/O in the factory and cache the result.
