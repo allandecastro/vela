@@ -25,6 +25,7 @@ namespace Vela.Testing
     /// that, inject your own <see cref="IOrganizationService"/> via <c>WithOrganizationService</c>.
     /// </summary>
     /// <remarks>
+    /// Not thread-safe: use one instance per test, from one thread.
     /// This type owns the store and the platform-behaviour configuration (alternate keys, auto-numbers). The
     /// read side (query execution) lives in <see cref="InMemoryQueryEngine"/>; scalar value handling shared by
     /// both is in <see cref="EntityValues"/>. This file holds the configuration, seeding and the Execute dispatch;

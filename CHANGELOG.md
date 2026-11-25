@@ -25,6 +25,15 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed (Framework, breaking)
+
+- **The dependency resolver disposes the scoped services your factories create.** An `IDisposable` service
+  registered with `AddScoped<T>(factory)` is now disposed at the end of the execution, as a transient already was;
+  it used to be dropped undisposed. The built-in services (context, organization service, tracing, ...) and the
+  harness's `WithService` instances are still never disposed. Migration: a factory that returns an `IDisposable`
+  instance living longer than the execution (an `HttpClient` kept in a static field) must return a wrapper instead,
+  or the shared instance is disposed after the first execution.
+
 ### Fixed (CLI)
 
 - `vela inspect --out <file>` reports `Inspection written: <path>` on stderr, and `vela apply --out <file>`
@@ -32,6 +41,10 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Docs
 
+- `AddPluginRuntime` says it is for tests and hosts outside the sandbox; `IPluginCacheService` says its instance is
+  organization-scoped; `LocalPluginContext`, `PluginPipeline` and `InMemoryOrganizationService` say they are not
+  thread-safe. The testing limitations list the UTC date handling of the in-memory store and the one-pipeline-per-test
+  rule.
 - The home page and the Install page say that Vela is in public preview: until 1.0, a minor version may contain
   breaking changes, with the migration in the changelog.
 - The documentation site has an **AI agents** section: Vela Agentic, the Agent Skills and agents that let Claude Code
