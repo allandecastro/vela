@@ -163,7 +163,8 @@ The **AI agents** section is not written here: it is the `docs/` folder of
 [vela-agentic](https://github.com/allandecastro/vela-agentic) at the tag in `docs/agents.version`, copied to the
 git-ignored `docs/agents/` by `docs/tools/Get-AgentsDocs.ps1` (Windows PowerShell or `pwsh`). Its pages change in
 vela-agentic; a new pack release reaches the site when a PR here bumps `docs/agents.version` and regenerates
-`docs/llms.txt`. `-Source ../vela-agentic` copies from a local checkout instead, to preview the pack's pages before
+`docs/llms.txt`. The `AI agents version` workflow checks vela-agentic's latest release every day and opens an issue
+when it is newer than the pin. `-Source ../vela-agentic` copies from a local checkout instead, to preview the pack's pages before
 they are tagged.
 
 [`docs/llms.txt`](docs/llms.txt) indexes the pages for AI tools. Its header and its `## Optional` section are

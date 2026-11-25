@@ -1,0 +1,70 @@
+name: AI agents version
+
+# The "AI agents" docs section is vela-agentic's docs/ folder at the tag pinned in docs/agents.version (see
+# CONTRIBUTING.md#documentation). Every day, this compares that pin with vela-agentic's latest release and, when a
+# newer one exists, opens an issue asking for the bump (one issue per release; nothing is opened while it stays open).
+# The bump itself is a PR here: docs/agents.version, then `dotnet run docs/tools/UpdateLlmsTxt.cs`, built by docs.yml.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write # open the bump issue
+
+# Runner: GitHub-hosted ubuntu-latest unless the WINDOWS_RUNNER repository variable names another runner (as in
+# changelog.yml). The script is Windows PowerShell 5.1-compatible, so it runs under pwsh on ubuntu and under powershell
+# on the Windows runner.
+jobs:
+  check:
+    runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"ubuntu-latest"') }}
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: ${{ vars.WINDOWS_RUNNER && 'powershell' || 'pwsh' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Open an issue when vela-agentic has a newer release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'User-Agent' = 'vela-agents-version' }
+          $pinned = (Get-Content -Raw docs/agents.version).Trim()
+          # The latest release excludes drafts and pre-releases.
+          $latest = (Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/allandecastro/vela-agentic/releases/latest').tag_name
+          function ConvertTo-Version([string] $tag) {
+            if ($tag -cnotmatch '^v(\d+\.\d+\.\d+)') { throw "Not a vX.Y.Z tag: '$tag'." }
+            [version] $Matches[1]
+          }
+          if ((ConvertTo-Version $latest) -le (ConvertTo-Version $pinned)) {
+            Write-Host "docs/agents.version ($pinned) is the latest vela-agentic release."
+            exit 0
+          }
+          $title = "docs: bump the AI agents section to vela-agentic $latest"
+          $open = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:REPO/issues?state=open&labels=area:%20docs&per_page=100")
+          if ($open | Where-Object { $_.title -eq $title }) {
+            Write-Host "An open issue already asks for $latest."
+            exit 0
+          }
+          $body = @(
+            "vela-agentic $latest is released: https://github.com/allandecastro/vela-agentic/releases/tag/$latest",
+            "",
+            "The site shows $pinned. To bump it:",
+            "",
+            '```bash',
+            "echo $latest > docs/agents.version",
+            'pwsh docs/tools/Get-AgentsDocs.ps1',
+            'dotnet run docs/tools/UpdateLlmsTxt.cs',
+            'dotnet tool restore && dotnet tool run docfx docs/docfx.json --warningsAsErrors',
+            '```',
+            "",
+            'Then a PR with `docs/agents.version`, `docs/llms.txt` and a `### Docs` CHANGELOG entry.'
+          ) -join "`n"
+          $issue = @{ title = $title; body = $body; labels = @('area: docs', 'priority: medium') } | ConvertTo-Json
+          $created = Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Uri "https://api.github.com/repos/$env:REPO/issues" -Body $issue
+          Write-Host "Opened $($created.html_url)"
