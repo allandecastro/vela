@@ -25,6 +25,43 @@
   }
 })();
 
+// Click a Mermaid diagram to see it full screen; click again or press Escape to close. Mermaid renders the SVG after
+// the page loads, so the click is caught on the document rather than bound to each diagram.
+(function zoomDiagrams() {
+  function close() {
+    var overlay = document.querySelector('.vela-zoom');
+    if (overlay) overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  }
+  function onKey(e) {
+    if (e.key === 'Escape') close();
+  }
+  document.addEventListener('click', function (e) {
+    if (document.querySelector('.vela-zoom')) {
+      close();
+      return;
+    }
+    var diagram = e.target.closest && e.target.closest('.mermaid');
+    var svg = diagram && diagram.querySelector('svg');
+    if (!svg || e.target.closest('a')) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'vela-zoom';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-label', 'Diagram, full screen (click or press Escape to close)');
+    // Keep the .mermaid class so the diagram styles of main.css still apply to the copy.
+    var content = document.createElement('div');
+    content.className = 'mermaid vela-zoom-content';
+    var copy = svg.cloneNode(true);
+    copy.removeAttribute('style');
+    copy.removeAttribute('width');
+    copy.removeAttribute('height');
+    content.appendChild(copy);
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+    document.addEventListener('keydown', onKey);
+  });
+})();
+
 // DocFX "modern" template config (read via its `import('./main.js').default`).
 export default {
   // Show light mode by default; the visitor can still switch to dark or auto.

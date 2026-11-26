@@ -340,3 +340,19 @@ main.container-xxl > .content:only-child > article > h2 {
   fill: var(--vela-muted) !important;
   font-size: 0.76rem !important;
 }
+
+/* Click to zoom a diagram (main.js). */
+.mermaid svg { cursor: zoom-in; }
+.vela-zoom {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: var(--bs-body-bg);
+  cursor: zoom-out;
+}
+.vela-zoom-content { width: 100%; height: 100%; }
+.vela-zoom-content svg { width: 100%; height: 100%; max-width: none !important; cursor: zoom-out; }
