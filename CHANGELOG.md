@@ -32,8 +32,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Docs
 
-- The **AI layer** section follows vela-agentic v0.7.6: the build loop diagram is back on one row, with the review
-  findings loop dashed, the pages link to the pinned release, and their title is AI layer.
+- The **AI layer** section follows vela-agentic v0.8.0: the build loop diagram is back on one row, with the review
+  findings loop dashed, the introduction says plainly what the pack builds, the pages link to the pinned release,
+  and their title is AI layer.
 - The **AI agents** section of the documentation site is now **AI layer**, at `/vela/ai-layer/` (it was
   `/vela/agents/`): it covers the whole vela-agentic pack (skills, agents, hooks, the build loop), not only its
   agents.
