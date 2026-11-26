@@ -108,7 +108,31 @@ public sealed record PlanPreview(string Mode, string? Environment, bool HasChang
     public int SchemaVersion { get; init; } = MachineOutput.SchemaVersion;
 }
 
-/// <summary>The versioned machine-readable output contract of plan/apply/inspect.</summary>
+/// <summary>
+/// The inspect JSON document (see docs/reference/machine-readable-output.md): the local and the live registrations
+/// side by side. <see cref="SchemaVersion"/> is serialized first and follows the same rule as <see cref="PlanPreview"/>.
+/// </summary>
+public sealed record InspectDocument(string Mode, string? Environment, InspectSide Local, InspectSide Current, string[] Unmanaged, string[] Diagnostics, string[] Info)
+{
+    [System.Text.Json.Serialization.JsonPropertyOrder(-1)]
+    public int SchemaVersion { get; init; } = MachineOutput.SchemaVersion;
+}
+
+/// <summary>One side of <see cref="InspectDocument"/>: the assemblies, then the steps and the Custom APIs (web resources
+/// are not listed).</summary>
+public sealed record InspectSide(string[] Assemblies, InspectItem[] Steps, InspectItem[] CustomApis);
+
+/// <summary>One registration of <see cref="InspectSide"/>, with the same definition as a <see cref="RegistrationItem"/>.</summary>
+public sealed record InspectItem(string Kind, string Type, JsonElement Definition);
+
+/// <summary>The <c>vela solution show --json</c> document: the solution and its publisher prefix.</summary>
+public sealed record SolutionDocument(string Solution, string PublisherPrefix)
+{
+    [System.Text.Json.Serialization.JsonPropertyOrder(-1)]
+    public int SchemaVersion { get; init; } = MachineOutput.SchemaVersion;
+}
+
+/// <summary>The versioned machine-readable output contract of plan/apply/inspect and solution show.</summary>
 public static class MachineOutput
 {
     /// <summary>Bumped only on a breaking change to an existing field; added fields keep the version.</summary>

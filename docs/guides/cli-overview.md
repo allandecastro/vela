@@ -41,7 +41,8 @@ same connection options. See [Authentication](../configuration/authentication.md
 
 - `vela help` lists the commands.
 - `vela help <command>` (or `vela <command> --help`) prints the usage, options, notes and examples of one command.
-- `vela help --json` describes every command, option and exit code as JSON, for scripts and coding agents. See
+- `vela help --json` describes every command, option and exit code as JSON, with a JSON Schema of each JSON
+  document, for scripts and coding agents. See
   [The command table](../reference/machine-readable-output.md#the-command-table).
 
 The help is generated from the same table that validates the options, so it lists exactly the options each command
@@ -113,7 +114,7 @@ solution's publisher. Use it to align a scaffold or a Custom API with the soluti
 
 ```bash
 vela solution show ZavaSales -i            # prints: zava
-vela solution show ZavaSales -i --json     # {"solution":"ZavaSales","publisherPrefix":"zava"}
+vela solution show ZavaSales -i --json     # {"schemaVersion":1,"solution":"ZavaSales","publisherPrefix":"zava"}
 vela init --name ZavaSales --prefix Zava --publisher-prefix "$(vela solution show ZavaSales -i)" --solution ZavaSales
 vela add customapi ApproveOrder --prefix "$(vela solution show ZavaSales -i)"
 ```

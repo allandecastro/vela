@@ -22,6 +22,9 @@ internal static class SolutionCommand
 
     private static readonly HashSet<string> FlagOptions = CliCommands.FlagOptions("solution");
 
+    // One line, camelCase: the document vela help --json describes as "solution".
+    internal static readonly JsonSerializerOptions DocumentJson = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
     public static int Run(string[] args)
     {
         if ((args.Length > 0 && args[0] is "help") || CommandLineOptions.IsHelpRequested(args))
@@ -86,7 +89,7 @@ internal static class SolutionCommand
 
             if (json)
             {
-                Console.WriteLine(JsonSerializer.Serialize(new { solution = uniqueName, publisherPrefix = prefix }));
+                Console.WriteLine(JsonSerializer.Serialize(new SolutionDocument(uniqueName!, prefix), DocumentJson));
             }
             else
             {

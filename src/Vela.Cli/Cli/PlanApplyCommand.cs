@@ -487,24 +487,23 @@ internal static class PlanApplyCommand
 
     private static int EmitInspect(RegistrationState local, RegistrationState current, string[] unmanaged, SharedOptions options, JsonSerializerOptions jsonOptions, PlanApplyHost host)
     {
-        static object[] Shape(RegistrationState state, Func<RegistrationItem, bool> filter) => state.Items.Where(filter)
+        static InspectItem[] Shape(RegistrationState state, Func<RegistrationItem, bool> filter) => state.Items.Where(filter)
             .OrderBy(x => x.Type, StringComparer.Ordinal)
-            .Select(x => (object)new { x.Kind, x.Type, definition = x.Definition })
+            .Select(x => new InspectItem(x.Kind, x.Type, x.Definition))
             .ToArray();
 
         static bool IsCustomApi(RegistrationItem x) => !IsStep(x) && !IsWebResource(x);
 
-        var output = new
-        {
-            schemaVersion = MachineOutput.SchemaVersion,
-            mode = "inspect",
-            environment = options.Environment,
-            local = new { assemblies = local.SourceAssemblies, steps = Shape(local, IsStep), customApis = Shape(local, IsCustomApi) },
-            current = new { assemblies = current.SourceAssemblies, steps = Shape(current, IsStep), customApis = Shape(current, IsCustomApi) },
-            unmanaged,
-            diagnostics = local.Diagnostics.Concat(current.Diagnostics).ToArray(),
-            info = (local.Info ?? []).Concat(current.Info ?? []).ToArray(),
-        };
+        static InspectSide Side(RegistrationState state) => new(state.SourceAssemblies, Shape(state, IsStep), Shape(state, IsCustomApi));
+
+        var output = new InspectDocument(
+            Mode: "inspect",
+            Environment: options.Environment,
+            Local: Side(local),
+            Current: Side(current),
+            Unmanaged: unmanaged,
+            Diagnostics: local.Diagnostics.Concat(current.Diagnostics).ToArray(),
+            Info: (local.Info ?? []).Concat(current.Info ?? []).ToArray());
 
         void Human(TextWriter writer, bool color) => WriteInspectSummary(local, current, options.Environment, writer, color, unmanaged);
         if (WantsHumanOutput(options, host))

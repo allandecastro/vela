@@ -56,7 +56,7 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 ## Reference
 
 - [CLI cheat sheet](https://allandecastro.github.io/vela/reference/cli-cheatsheet.md): Every command, option and environment variable at a glance
-- [Machine-readable output](https://allandecastro.github.io/vela/reference/machine-readable-output.md): The versioned JSON contract of plan, apply and inspect, and the exit codes
+- [Machine-readable output](https://allandecastro.github.io/vela/reference/machine-readable-output.md): The versioned JSON contract of plan, apply, inspect and solution show, their JSON Schemas, and the exit codes
 - [Analyzers and generators](https://allandecastro.github.io/vela/reference/analyzers.md): VELA001 to VELA028, their code fixes, and the source generator
 - [Limitations](https://allandecastro.github.io/vela/reference/limitations.md): What is out of scope, and where the harness differs from Dataverse
 - [FAQ](https://allandecastro.github.io/vela/reference/faq.md): Short answers to common questions
