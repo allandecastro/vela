@@ -27,7 +27,8 @@ All notable changes to Vela are documented here. The format is based on
 
 ### Docs
 
-- The **AI agents** section follows vela-agentic v0.7.3: the build loop diagram on two rows.
+- The **AI agents** section follows vela-agentic v0.7.5: the build loop diagram is back on one row, with the review
+  findings loop dashed, and the pages link to the pinned release.
 - Clicking a diagram on the documentation site shows it full screen; click again or press Escape to close it.
 
 ## [0.34.0] - 2026-11-26 (Vela.Cli)

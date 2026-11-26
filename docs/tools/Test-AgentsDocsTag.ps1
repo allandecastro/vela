@@ -28,3 +28,6 @@ if ($stale.Count -gt 0) {
     exit 1
 }
 Write-Host "Every vela-agentic tag the AI agents pages cite is $tag."
+# Explicit: a caller's earlier native command (git diff in docs.yml) leaves $LASTEXITCODE at 1, which the Actions
+# PowerShell wrapper would return.
+exit 0
