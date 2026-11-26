@@ -2,35 +2,48 @@ name: AI layer version
 
 # The "AI layer" docs section is vela-agentic's docs/ folder at the tag pinned in docs/agents.version (see
 # CONTRIBUTING.md#documentation). Every day, this compares that pin with vela-agentic's latest release and, when a
-# newer one exists, opens an issue asking for the bump (one issue per release; nothing is opened while it stays open).
-# The bump itself is a PR here: docs/agents.version, then `dotnet run docs/tools/UpdateLlmsTxt.cs`, built by docs.yml.
+# newer one exists, bumps it end to end (docs/tools/Update-AgentsPin.ps1):
+# - it fetches the pages, checks the tags they cite, regenerates llms.txt, writes the CHANGELOG entry and builds the
+#   site with --warningsAsErrors: the checks docs.yml runs on a pull request;
+# - it opens the bump PR. When no Mermaid diagram changed, it merges it and starts the deployment; when one changed, it
+#   leaves the PR open for a person to look at the rendered page;
+# - when the pages cite another tag than the release, it opens an issue instead, to report to vela-agentic.
+# A PR opened with GITHUB_TOKEN does not start other workflows (GitHub's rule), so this job runs those checks itself and
+# starts docs.yml with a workflow_dispatch, which GITHUB_TOKEN may do.
 on:
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
 
 permissions:
-  contents: read
-  issues: write # open the bump issue
+  contents: write # push the bump branch, merge the PR
+  pull-requests: write # open the PR
+  issues: write # report a pages problem
+  actions: write # start the docs deployment
+
+concurrency:
+  group: agents-version
+  cancel-in-progress: false
 
 # Runner: GitHub-hosted ubuntu-latest unless the WINDOWS_RUNNER repository variable names another runner (as in
-# changelog.yml). The script is Windows PowerShell 5.1-compatible, so it runs under pwsh on ubuntu and under powershell
-# on the Windows runner.
+# changelog.yml). The scripts are Windows PowerShell 5.1-compatible, so they run under pwsh on ubuntu and under
+# powershell on the Windows runner.
 jobs:
-  check:
+  bump:
     runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"ubuntu-latest"') }}
-    timeout-minutes: 5
+    timeout-minutes: 20
     defaults:
       run:
         shell: ${{ vars.WINDOWS_RUNNER && 'powershell' || 'pwsh' }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      # As in docs.yml: on the self-hosted runner, setup-dotnet installs into the runner's tool cache.
+      DOTNET_INSTALL_DIR: ${{ vars.WINDOWS_RUNNER && format('{0}/../../_tool/dotnet', github.workspace) || '' }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: Open an issue when vela-agentic has a newer release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
+      - name: Find a newer vela-agentic release
+        id: find
         run: |
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
           $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'User-Agent' = 'vela-agents-version' }
@@ -38,39 +51,129 @@ jobs:
           # The latest release excludes drafts and pre-releases.
           $latest = (Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/allandecastro/vela-agentic/releases/latest').tag_name
           function ConvertTo-Version([string] $tag) {
-            if ($tag -cnotmatch '^v(\d+\.\d+\.\d+)') { throw "Not a vX.Y.Z tag: '$tag'." }
+            if ($tag -cnotmatch '^v(\d+\.\d+\.\d+)$') { throw "Not a vX.Y.Z tag: '$tag'." }
             [version] $Matches[1]
           }
           if ((ConvertTo-Version $latest) -le (ConvertTo-Version $pinned)) {
             Write-Host "docs/agents.version ($pinned) is the latest vela-agentic release."
             exit 0
           }
-          $title = "docs: bump the AI layer section to vela-agentic $latest"
-          $open = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:REPO/issues?state=open&labels=area:%20docs&per_page=100")
-          if ($open | Where-Object { $_.title -eq $title }) {
-            Write-Host "An open issue already asks for $latest."
+          $branch = "docs/agents-$latest"
+          $owner = $env:REPO.Split('/')[0]
+          # ForEach-Object unrolls the array: Windows PowerShell's Invoke-RestMethod returns a JSON array as one object.
+          $open = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:REPO/pulls?state=open&head=${owner}:$branch" | ForEach-Object { $_ })
+          if ($open.Count -gt 0) {
+            Write-Host "PR $($open[0].html_url) already bumps to $latest."
             exit 0
+          }
+          $issues = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:REPO/issues?state=open&labels=area:%20docs&per_page=100" | ForEach-Object { $_ })
+          if ($issues | Where-Object { $_.title -eq "docs: vela-agentic $latest pages cite another tag" }) {
+            Write-Host "An open issue already reports the $latest pages."
+            exit 0
+          }
+          "latest=$latest" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+          "pinned=$pinned" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+          "branch=$branch" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+      - uses: actions/setup-dotnet@v6
+        if: steps.find.outputs.latest
+        with:
+          global-json-file: global.json
+      - name: Bump the pin and check the pages
+        id: bump
+        if: steps.find.outputs.latest
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP 'diagrams.txt'
+          $log = Join-Path $env:RUNNER_TEMP 'bump.log'
+          & ./docs/tools/Update-AgentsPin.ps1 -Tag '${{ steps.find.outputs.latest }}' -DiagramReport $report *> $log
+          $exit = $LASTEXITCODE
+          Get-Content $log
+          "failed=$(if ($exit -ne 0) { 'true' } else { 'false' })" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+          $changed = if (Test-Path $report) { @(Get-Content $report | Where-Object { $_ }) } else { @() }
+          "diagrams=$($changed -join ', ')" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+          exit 0
+      - name: Report pages that cite another tag
+        if: steps.find.outputs.latest && steps.bump.outputs.failed == 'true'
+        run: |
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'User-Agent' = 'vela-agents-version' }
+          $latest = '${{ steps.find.outputs.latest }}'
+          $stale = @(Get-Content (Join-Path $env:RUNNER_TEMP 'bump.log') | Where-Object { $_ -match '^\s+docs/ai-layer/' })
+          $body = (@(
+            "vela-agentic $latest is released: https://github.com/allandecastro/vela-agentic/releases/tag/$latest",
+            "",
+            "Its pages cite another tag than $latest, so the pin stays at ${{ steps.find.outputs.pinned }} (docs/tools/Test-AgentsDocsTag.ps1):",
+            "",
+            '```text'
+          ) + $stale + @(
+            '```',
+            "",
+            "Report it to vela-agentic; the next daily run bumps to the release that fixes it."
+          )) -join "`n"
+          $issue = @{ title = "docs: vela-agentic $latest pages cite another tag"; body = $body; labels = @('area: docs', 'priority: medium') } | ConvertTo-Json
+          $created = Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Uri "https://api.github.com/repos/$env:REPO/issues" -Body $issue
+          Write-Host "Opened $($created.html_url)"
+          exit 1
+      - name: Install DocFX (pinned in .config/dotnet-tools.json)
+        if: steps.find.outputs.latest && steps.bump.outputs.failed == 'false'
+        run: dotnet tool restore
+      - name: Build the docs site
+        if: steps.find.outputs.latest && steps.bump.outputs.failed == 'false'
+        run: dotnet tool run docfx docs/docfx.json --warningsAsErrors
+      - name: Open the bump PR, and merge it when no diagram changed
+        if: steps.find.outputs.latest && steps.bump.outputs.failed == 'false'
+        run: |
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'User-Agent' = 'vela-agents-version' }
+          $latest = '${{ steps.find.outputs.latest }}'
+          $pinned = '${{ steps.find.outputs.pinned }}'
+          $branch = '${{ steps.find.outputs.branch }}'
+          $diagrams = '${{ steps.bump.outputs.diagrams }}'
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b $branch
+          git add docs/agents.version docs/llms.txt CHANGELOG.md
+          git commit -m "docs: bump the AI layer section to vela-agentic $latest"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin $branch
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $review = if ($diagrams) {
+            "- [ ] **Diagrams changed** since ${pinned}: $diagrams. Look at the rendered pages (build the site locally, or merge and check the deployment), then merge."
+          } else {
+            "- [x] No Mermaid diagram changed since $pinned."
           }
           $body = @(
             "vela-agentic $latest is released: https://github.com/allandecastro/vela-agentic/releases/tag/$latest",
             "",
-            "The site shows $pinned. To bump it:",
+            "Opened by the AI layer version workflow, which ran the docs checks itself (a PR opened with GITHUB_TOKEN starts no workflow):",
             "",
-            '```bash',
-            "echo $latest > docs/agents.version",
-            'pwsh docs/tools/Get-AgentsDocs.ps1',
-            'dotnet run docs/tools/UpdateLlmsTxt.cs',
-            'dotnet tool restore && dotnet tool run docfx docs/docfx.json --warningsAsErrors',
-            '```',
-            "",
-            'Then a PR with `docs/agents.version`, `docs/llms.txt` and a `### Docs` CHANGELOG entry.',
-            "",
-            'Before merging, review the content, not only the build:',
-            "",
-            '- [ ] `pwsh docs/tools/Test-AgentsDocsTag.ps1` passes: the pages cite this tag, not an older one (docs.yml runs it on the PR).',
-            "- [ ] Compare the Mermaid diagrams with $pinned; look at the rendered pages after the deploy when one changed.",
-            '- [ ] Report any problem to vela-agentic as a message for its maintainer; do not edit the copied pages here.'
+            "- [x] Every vela-agentic tag the pages cite is $latest (Test-AgentsDocsTag.ps1).",
+            "- [x] llms.txt regenerated; docfx --warningsAsErrors passes.",
+            $review
           ) -join "`n"
-          $issue = @{ title = $title; body = $body; labels = @('area: docs', 'priority: medium') } | ConvertTo-Json
-          $created = Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Uri "https://api.github.com/repos/$env:REPO/issues" -Body $issue
+          $pr = @{ title = "docs: bump the AI layer section to vela-agentic $latest"; head = $branch; base = 'main'; body = $body } | ConvertTo-Json
+          $created = Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Uri "https://api.github.com/repos/$env:REPO/pulls" -Body $pr
           Write-Host "Opened $($created.html_url)"
+          $labels = @{ labels = @('area: docs') } | ConvertTo-Json
+          Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Uri "https://api.github.com/repos/$env:REPO/issues/$($created.number)/labels" -Body $labels | Out-Null
+
+          if ($diagrams) {
+            Write-Host "::notice::A diagram changed ($diagrams): the PR waits for a person."
+            exit 0
+          }
+          # GitHub computes whether a new PR is mergeable in the background: retry a few times.
+          $merge = @{ merge_method = 'merge' } | ConvertTo-Json
+          for ($attempt = 1; ; $attempt++) {
+            try {
+              Invoke-RestMethod -Method Put -Headers $headers -ContentType 'application/json' -Uri "https://api.github.com/repos/$env:REPO/pulls/$($created.number)/merge" -Body $merge | Out-Null
+              break
+            } catch {
+              if ($attempt -ge 5) { throw }
+              Start-Sleep -Seconds 10
+            }
+          }
+          Write-Host "Merged $($created.html_url)."
+          # The merge commit is pushed with GITHUB_TOKEN, so docs.yml does not start on its own.
+          $dispatch = @{ ref = 'main' } | ConvertTo-Json
+          Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Uri "https://api.github.com/repos/$env:REPO/actions/workflows/docs.yml/dispatches" -Body $dispatch | Out-Null
+          Write-Host 'Started the docs deployment.'
+          git push origin --delete $branch
