@@ -134,6 +134,12 @@ nav#toc li.active > a,
   border-radius: 0;                                /* keep the marker a clean straight bar, not a rounded nub */
   box-shadow: inset 3px 0 0 var(--vela-accent);
 }
+/* A collapsible entry: DocFX puts its chevron right against the link's left edge, where the active bar is drawn.
+   Move the link off the chevron so the two do not touch. */
+nav#toc li.expander > .expand-stub + a,
+.toc li.expander > .expand-stub + a {
+  margin-left: 0.4rem;
+}
 
 /* --- Right "in this article" affix --- */
 .affix ul > li > a {
