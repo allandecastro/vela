@@ -47,6 +47,14 @@ public sealed class OutputDocumentsTests
         Assert.Equal([0], Codes(Command(help, "version")));
         JsonElement partial = Command(help, "apply").GetProperty("exitCodes").EnumerateArray().Single(e => e.GetProperty("code").GetInt32() == 7);
         Assert.Contains("apply-failed", partial.GetProperty("description").GetString());
+
+        // Every blocking check of PlanApplyCommand.BuildPreview is a cause of 4 that the description names.
+        string error = Command(help, "plan").GetProperty("exitCodes").EnumerateArray().Single(e => e.GetProperty("code").GetInt32() == 4).GetProperty("description").GetString()!;
+        Assert.Contains("publisher prefix", error);
+        Assert.Contains("message or table filter", error);
+        Assert.Contains("bound Custom API", error);
+        Assert.Contains("set of assemblies", error);
+        Assert.Contains("removed plugin type", error);
     }
 
     [Fact]
