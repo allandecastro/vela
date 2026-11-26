@@ -1,4 +1,4 @@
-# Checks that the AI agents pages (docs/agents/, filled by Get-AgentsDocs.ps1) cite the vela-agentic tag pinned in
+# Checks that the AI layer pages (docs/ai-layer/, filled by Get-AgentsDocs.ps1) cite the vela-agentic tag pinned in
 # docs/agents.version: the "at tag `vX.Y.Z`" sentence and the links to the pack's files (blob/, tree/, raw/). A pack
 # release whose pages still name the previous tag would show that tag on the site. Exits 1 and lists each stale
 # reference; report them to vela-agentic rather than editing the copied pages here.
@@ -6,9 +6,9 @@
 $ErrorActionPreference = 'Stop'
 
 $docs = Join-Path (Get-Location) 'docs'
-$target = Join-Path $docs 'agents'
+$target = Join-Path $docs 'ai-layer'
 if (-not (Test-Path (Join-Path $docs 'agents.version'))) { throw 'Run this script from the repository root: docs/agents.version not found.' }
-if (-not (Test-Path $target)) { throw 'docs/agents/ is empty: run docs/tools/Get-AgentsDocs.ps1 first.' }
+if (-not (Test-Path $target)) { throw 'docs/ai-layer/ is empty: run docs/tools/Get-AgentsDocs.ps1 first.' }
 $tag = (Get-Content -Raw (Join-Path $docs 'agents.version')).Trim()
 
 $pattern = 'vela-agentic/(?:blob|tree|raw)/(v\d+\.\d+\.\d+[0-9A-Za-z.-]*)/|at tag `(v\d+\.\d+\.\d+[0-9A-Za-z.-]*)`'
@@ -27,7 +27,7 @@ if ($stale.Count -gt 0) {
     $stale | ForEach-Object { Write-Host "  $_" }
     exit 1
 }
-Write-Host "Every vela-agentic tag the AI agents pages cite is $tag."
+Write-Host "Every vela-agentic tag the AI layer pages cite is $tag."
 # Explicit: a caller's earlier native command (git diff in docs.yml) leaves $LASTEXITCODE at 1, which the Actions
 # PowerShell wrapper would return.
 exit 0

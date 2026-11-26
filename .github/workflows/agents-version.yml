@@ -1,6 +1,6 @@
-name: AI agents version
+name: AI layer version
 
-# The "AI agents" docs section is vela-agentic's docs/ folder at the tag pinned in docs/agents.version (see
+# The "AI layer" docs section is vela-agentic's docs/ folder at the tag pinned in docs/agents.version (see
 # CONTRIBUTING.md#documentation). Every day, this compares that pin with vela-agentic's latest release and, when a
 # newer one exists, opens an issue asking for the bump (one issue per release; nothing is opened while it stays open).
 # The bump itself is a PR here: docs/agents.version, then `dotnet run docs/tools/UpdateLlmsTxt.cs`, built by docs.yml.
@@ -45,7 +45,7 @@ jobs:
             Write-Host "docs/agents.version ($pinned) is the latest vela-agentic release."
             exit 0
           }
-          $title = "docs: bump the AI agents section to vela-agentic $latest"
+          $title = "docs: bump the AI layer section to vela-agentic $latest"
           $open = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:REPO/issues?state=open&labels=area:%20docs&per_page=100")
           if ($open | Where-Object { $_.title -eq $title }) {
             Write-Host "An open issue already asks for $latest."

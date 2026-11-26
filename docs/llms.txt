@@ -61,41 +61,41 @@ Key facts: plugin classes are `sealed partial` with a primary constructor `(stri
 - [Limitations](https://allandecastro.github.io/vela/reference/limitations.md): What is out of scope, and where the harness differs from Dataverse
 - [FAQ](https://allandecastro.github.io/vela/reference/faq.md): Short answers to common questions
 
-## AI agents: Get started
+## AI layer: Get started
 
-- [Overview](https://allandecastro.github.io/vela/agents/overview.md): What Vela Agentic is, what it does, and what it never does
-- [Install](https://allandecastro.github.io/vela/agents/install.md): Install the pack in Claude Code or GitHub Copilot CLI, and the tools it needs
+- [Overview](https://allandecastro.github.io/vela/ai-layer/overview.md): What Vela Agentic is, what it does, and what it never does
+- [Install](https://allandecastro.github.io/vela/ai-layer/install.md): Install the pack in Claude Code or GitHub Copilot CLI, and the tools it needs
 
-## AI agents: How it works
+## AI layer: How it works
 
-- [The build loop](https://allandecastro.github.io/vela/agents/build-loop.md): The steps from a user story to the deploy gate, with the Vela Canvas, the rules registry and the Build Report
-- [Project files](https://allandecastro.github.io/vela/agents/project-files.md): The files Vela Agentic reads and writes in your project: PROJECT.md, docs/features, docs/rules, docs/adr and .vela-runs
-- [The deploy guard (hooks)](https://allandecastro.github.io/vela/agents/hooks.md): The optional host hook that blocks vela apply without approval, edits to generated files, protected pushes and secrets
+- [The build loop](https://allandecastro.github.io/vela/ai-layer/build-loop.md): The steps from a user story to the deploy gate, with the Vela Canvas, the rules registry and the Build Report
+- [Project files](https://allandecastro.github.io/vela/ai-layer/project-files.md): The files Vela Agentic reads and writes in your project: PROJECT.md, docs/features, docs/rules, docs/adr and .vela-runs
+- [The deploy guard (hooks)](https://allandecastro.github.io/vela/ai-layer/hooks.md): The optional host hook that blocks vela apply without approval, edits to generated files, protected pushes and secrets
 
-## AI agents: Agents
+## AI layer: Agents
 
-- [vela-builder](https://allandecastro.github.io/vela/agents/vela-builder.md): The vela-builder agent: drives a user story through the build loop and stops at the apply gate
-- [vela-reviewer](https://allandecastro.github.io/vela/agents/vela-reviewer.md): The vela-reviewer agent: an isolated, read-only review of a plugin change on spec and standards
+- [vela-builder](https://allandecastro.github.io/vela/ai-layer/vela-builder.md): The vela-builder agent: drives a user story through the build loop and stops at the apply gate
+- [vela-reviewer](https://allandecastro.github.io/vela/ai-layer/vela-reviewer.md): The vela-reviewer agent: an isolated, read-only review of a plugin change on spec and standards
 
-## AI agents: Skills
+## AI layer: Skills
 
-- [All skills](https://allandecastro.github.io/vela/agents/skills/index.md): The 11 skills of Vela Agentic, when each one triggers and the step of the build loop it covers
-- [using-vela](https://allandecastro.github.io/vela/agents/skills/using-vela.md): The using-vela skill: the entry point that maps the build loop to the other skills
-- [vela-plan-review](https://allandecastro.github.io/vela/agents/skills/vela-plan-review.md): The vela-plan-review skill: challenges the plan, writes the rules and fills the Vela Canvas before any code
-- [vela-grill](https://allandecastro.github.io/vela/agents/skills/vela-grill.md): The vela-grill skill: interviews the human to resolve an ambiguous story before building
-- [vela-scaffold](https://allandecastro.github.io/vela/agents/skills/vela-scaffold.md): The vela-scaffold skill: creates a solution with vela init and components with vela add
-- [vela-models](https://allandecastro.github.io/vela/agents/skills/vela-models.md): The vela-models skill: generates typed models from the org, checks them for drift, and generates role classes
-- [vela-plugin-testing](https://allandecastro.github.io/vela/agents/skills/vela-plugin-testing.md): The vela-plugin-testing skill: failing tests first with PluginPipeline, full coverage of the acceptance cases
-- [vela-plugin-authoring](https://allandecastro.github.io/vela/agents/skills/vela-plugin-authoring.md): The vela-plugin-authoring skill: implements the plugin logic until the failing tests pass
-- [vela-custom-api](https://allandecastro.github.io/vela/agents/skills/vela-custom-api.md): The vela-custom-api skill: designs, tests and implements a Custom API through the same build loop
-- [vela-code-review](https://allandecastro.github.io/vela/agents/skills/vela-code-review.md): The vela-code-review skill: spec-check, then an isolated review on spec and standards before the apply gate
-- [vela-apply](https://allandecastro.github.io/vela/agents/skills/vela-apply.md): The vela-apply skill: packages, signs if needed, previews with vela plan and stops at the apply gate
-- [vela-debug-plugin](https://allandecastro.github.io/vela/agents/skills/vela-debug-plugin.md): The vela-debug-plugin skill: reproduces a plugin fault as a failing test before any fix
+- [All skills](https://allandecastro.github.io/vela/ai-layer/skills/index.md): The 11 skills of Vela Agentic, when each one triggers and the step of the build loop it covers
+- [using-vela](https://allandecastro.github.io/vela/ai-layer/skills/using-vela.md): The using-vela skill: the entry point that maps the build loop to the other skills
+- [vela-plan-review](https://allandecastro.github.io/vela/ai-layer/skills/vela-plan-review.md): The vela-plan-review skill: challenges the plan, writes the rules and fills the Vela Canvas before any code
+- [vela-grill](https://allandecastro.github.io/vela/ai-layer/skills/vela-grill.md): The vela-grill skill: interviews the human to resolve an ambiguous story before building
+- [vela-scaffold](https://allandecastro.github.io/vela/ai-layer/skills/vela-scaffold.md): The vela-scaffold skill: creates a solution with vela init and components with vela add
+- [vela-models](https://allandecastro.github.io/vela/ai-layer/skills/vela-models.md): The vela-models skill: generates typed models from the org, checks them for drift, and generates role classes
+- [vela-plugin-testing](https://allandecastro.github.io/vela/ai-layer/skills/vela-plugin-testing.md): The vela-plugin-testing skill: failing tests first with PluginPipeline, full coverage of the acceptance cases
+- [vela-plugin-authoring](https://allandecastro.github.io/vela/ai-layer/skills/vela-plugin-authoring.md): The vela-plugin-authoring skill: implements the plugin logic until the failing tests pass
+- [vela-custom-api](https://allandecastro.github.io/vela/ai-layer/skills/vela-custom-api.md): The vela-custom-api skill: designs, tests and implements a Custom API through the same build loop
+- [vela-code-review](https://allandecastro.github.io/vela/ai-layer/skills/vela-code-review.md): The vela-code-review skill: spec-check, then an isolated review on spec and standards before the apply gate
+- [vela-apply](https://allandecastro.github.io/vela/ai-layer/skills/vela-apply.md): The vela-apply skill: packages, signs if needed, previews with vela plan and stops at the apply gate
+- [vela-debug-plugin](https://allandecastro.github.io/vela/ai-layer/skills/vela-debug-plugin.md): The vela-debug-plugin skill: reproduces a plugin fault as a failing test before any fix
 
-## AI agents: Reference
+## AI layer: Reference
 
-- [How the pack is tested](https://allandecastro.github.io/vela/agents/testing-the-pack.md): How the skills are tested: pressure scenarios with hidden criteria, deterministic checks, a separate grader and mutation
-- [FAQ and troubleshooting](https://allandecastro.github.io/vela/agents/faq.md): Short answers to common questions about running Vela Agentic, and what to do when a run stops
+- [How the pack is tested](https://allandecastro.github.io/vela/ai-layer/testing-the-pack.md): How the skills are tested: pressure scenarios with hidden criteria, deterministic checks, a separate grader and mutation
+- [FAQ and troubleshooting](https://allandecastro.github.io/vela/ai-layer/faq.md): Short answers to common questions about running Vela Agentic, and what to do when a run stops
 
 ## Advanced
 

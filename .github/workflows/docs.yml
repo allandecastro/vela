@@ -58,12 +58,12 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json # the SDK pinned in global.json (rollForward: latestPatch)
-      # The "AI agents" section is vela-agentic's docs/ folder at the tag pinned in docs/agents.version.
-      - name: Fetch the AI agents section
+      # The "AI layer" section is vela-agentic's docs/ folder at the tag pinned in docs/agents.version.
+      - name: Fetch the AI layer section
         shell: powershell
         run: ./docs/tools/Get-AgentsDocs.ps1
       # Only on a pull request that changes the pin, so a pinned release with stale tags does not fail every docs PR.
-      - name: Check that the AI agents pages cite the pinned tag
+      - name: Check that the AI layer pages cite the pinned tag
         shell: powershell
         run: |
           git diff --quiet HEAD^1 HEAD -- docs/agents.version
@@ -111,8 +111,8 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json # the SDK pinned in global.json (rollForward: latestPatch)
-      # The "AI agents" section is vela-agentic's docs/ folder at the tag pinned in docs/agents.version.
-      - name: Fetch the AI agents section
+      # The "AI layer" section is vela-agentic's docs/ folder at the tag pinned in docs/agents.version.
+      - name: Fetch the AI layer section
         shell: powershell
         run: ./docs/tools/Get-AgentsDocs.ps1
       - name: Install DocFX (pinned in .config/dotnet-tools.json)
