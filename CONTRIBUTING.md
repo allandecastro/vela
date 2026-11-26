@@ -154,16 +154,16 @@ The documentation site is built with DocFX from `docs/`. A pull request that tou
 warnings:
 
 ```bash
-pwsh docs/tools/Get-AgentsDocs.ps1                        # the AI agents section (below)
+pwsh docs/tools/Get-AgentsDocs.ps1                        # the AI layer section (below)
 dotnet tool restore                                       # DocFX is pinned in .config/dotnet-tools.json
 dotnet tool run docfx docs/docfx.json --warningsAsErrors
 ```
 
-The **AI agents** section is not written here: it is the `docs/` folder of
+The **AI layer** section is not written here: it is the `docs/` folder of
 [vela-agentic](https://github.com/allandecastro/vela-agentic) at the tag in `docs/agents.version`, copied to the
-git-ignored `docs/agents/` by `docs/tools/Get-AgentsDocs.ps1` (Windows PowerShell or `pwsh`). Its pages change in
+git-ignored `docs/ai-layer/` by `docs/tools/Get-AgentsDocs.ps1` (Windows PowerShell or `pwsh`). Its pages change in
 vela-agentic; a new pack release reaches the site when a PR here bumps `docs/agents.version` and regenerates
-`docs/llms.txt`. The `AI agents version` workflow checks vela-agentic's latest release every day and opens an issue
+`docs/llms.txt`. The `AI layer version` workflow checks vela-agentic's latest release every day and opens an issue
 when it is newer than the pin, with the review checklist of the bump. On a pull request that changes the pin,
 `docs.yml` runs `docs/tools/Test-AgentsDocsTag.ps1`, which fails when the pages cite another vela-agentic tag than the
 pinned one. `-Source ../vela-agentic` copies from a local checkout instead, to preview the pack's pages before

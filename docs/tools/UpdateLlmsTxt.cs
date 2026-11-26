@@ -9,7 +9,7 @@
 // - Between them, it writes one "## " section per entry of docs/toc.yml, in toc order, with one link per page of that
 //   section's toc.yml. A section whose toc groups its pages ("items:", as Guides does) gets one "## " section per
 //   group instead, headed "<section>: <group>" so that two sections' groups never share a heading. Landing pages (topicHref) are not listed, also when the section's toc.yml lists its landing page
-//   as a page before its groups (as the AI agents section, from vela-agentic, does).
+//   as a page before its groups (as the AI layer section, from vela-agentic, does).
 // - A link's title is the page's toc name. Its description is the page's `_description` front matter (which DocFX
 //   also uses as the page's meta description, in place of the site-wide one in docfx.json); a page without one falls
 //   back to the first sentence of its first paragraph. Keep a description on one line, in double quotes.
