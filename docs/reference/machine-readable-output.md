@@ -1,15 +1,15 @@
 ---
-_description: "The versioned JSON contract of plan, apply and inspect, and the exit codes"
+_description: "The versioned JSON contract of plan, apply, inspect and solution show, their JSON Schemas, and the exit codes"
 ---
 
 # Machine-readable output
 
-`vela plan`, `vela apply` and `vela inspect` write a versioned JSON document that scripts, CI pipelines and coding
-agents can rely on. This page is that contract: when you get JSON, what each field means, the command table of
-`vela help --json`, and the exit codes of every command.
+`vela plan`, `vela apply`, `vela inspect` and `vela solution show` write a versioned JSON document that scripts, CI
+pipelines and coding agents can rely on. This page is that contract: when you get JSON, what each field means, the
+command table of `vela help --json` with a JSON Schema for each document, and the exit codes of every command.
 
-`init`, `add`, `models`, `logs`, `solution show` and `sign` also accept `--json` and print a JSON report, but those
-reports carry no `schemaVersion` and are not part of this contract; `vela <command> --help` describes them.
+`init`, `add`, `models`, `logs` and `sign` also accept `--json` and print a JSON report, but those reports carry no
+`schemaVersion` and are not part of this contract; `vela <command> --help` describes them.
 
 ## When you get JSON
 
@@ -133,20 +133,41 @@ them against `operations[]` by `kind` and `type` when you need more.
 }
 ```
 
+## `solution show`
+
+`vela solution show <uniquename> --json` prints one line:
+
+```json
+{"schemaVersion":1,"solution":"ZavaSales","publisherPrefix":"zava"}
+```
+
 ## The command table
 
 `vela help --json` describes the CLI for agents and completion scripts, without parsing help text:
 
 - `schemaVersion`, `tool` and `version`;
-- `commands[]`: `name`, `aliases`, `summary`, `usage` and `options[]`, where each option has `name`, `aliases`,
-  `kind` (`flag`, `value` or `optional-value`), `value` (the value placeholder) and `description`;
-- `exitCodes`: each code with a short description.
+- `commands[]`: `name`, `aliases`, `summary`, `usage`, `options[]`, `exitCodes[]` and `outputs[]`:
+  - each option has `name`, `aliases`, `kind` (`flag`, `value` or `optional-value`), `value` (the value
+    placeholder) and `description`;
+  - `exitCodes[]` lists the codes the command can return, each with `code` and a `description` for that command (for
+    example, on `plan`, what makes it exit `4`);
+  - `outputs[]` lists the JSON documents the command writes, each with `document` (a key of `documents`) and, for
+    `plan` and `apply`, the `modes` it can write;
+- `exitCodes`: each code with a short description, for every command;
+- `documents`: one entry per document (`plan`, `inspect`, `solution`), with its `schemaVersion` and its `schema`, a
+  [JSON Schema](https://json-schema.org/draft/2020-12) (draft 2020-12).
+
+The schemas are exported from the types the commands serialize, so they follow the output. A property that the
+schema allows to be `null` can be absent from the document. A step or Custom API `definition` (and the `before` and
+`after` of a change) is any JSON value (`true`) in the schema. A field added to a document appears in
+its schema without a `schemaVersion` change, so validate the fields you read rather than reject unknown ones.
 
 It is generated from the same table that validates the options, so it lists exactly what each command accepts.
 
 ## Exit codes
 
-Every `vela` command returns one of these codes. This table is the reference; other pages summarize it.
+Every `vela` command returns one of these codes. This table is the reference; other pages summarize it. The
+`exitCodes[]` of each command in `vela help --json` lists the codes that command can return.
 
 | Code | Meaning |
 | --- | --- |

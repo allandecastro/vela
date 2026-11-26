@@ -32,8 +32,12 @@ internal sealed record CliOption(string Name, CliOptionKind Kind, string Descrip
     };
 }
 
-/// <summary>One command: its usage lines, its options (grouped), and examples.</summary>
-internal sealed record CliCommand(string Name, string Summary, string[] Usage, (string Group, CliOption[] Options)[] OptionGroups, string[]? Aliases = null, string[]? Notes = null, string[]? Examples = null)
+/// <summary>One exit code a command can return, with what it means for that command.</summary>
+internal sealed record CliExit(int Code, string Description);
+
+/// <summary>One command: its usage lines, its options (grouped), examples, the exit codes it can return and the JSON
+/// documents it writes.</summary>
+internal sealed record CliCommand(string Name, string Summary, string[] Usage, (string Group, CliOption[] Options)[] OptionGroups, string[]? Aliases = null, string[]? Notes = null, string[]? Examples = null, CliExit[]? ExitCodes = null, CliOutput[]? Outputs = null)
 {
     public IEnumerable<CliOption> Options => OptionGroups.SelectMany(g => g.Options);
 }
@@ -92,6 +96,28 @@ internal static class CliCommands
         new("--package-assembly", CliOptionKind.Value, "The primary assembly inside the package(s).", "name.dll"),
     ];
 
+    /// <summary>What each exit code means across commands (<see cref="CliExitCodes"/>); a command's own list may say
+    /// more.</summary>
+    internal static readonly IReadOnlyDictionary<int, string> ExitCodeMeanings = new Dictionary<int, string>
+    {
+        [CliExitCodes.ExitSuccess] = "success",
+        [CliExitCodes.ExitInvalidArguments] = "invalid arguments",
+        [CliExitCodes.ExitFileNotFound] = "file not found",
+        [CliExitCodes.ExitError] = "error (including a --strict failure)",
+        [CliExitCodes.ExitDriftDetected] = "drift detected (models --verify, apply not converged)",
+        [CliExitCodes.ExitConnectionFailure] = "Dataverse connection failure",
+        [CliExitCodes.ExitPartialApply] = "partial apply",
+        [CliExitCodes.ExitChangesPending] = "changes pending (plan --detailed-exitcode)",
+    };
+
+    private static CliExit Exit(int code, string? description = null) => new(code, description ?? ExitCodeMeanings[code]);
+
+    private static CliExit[] Exits(params int[] codes) => codes.Select(c => Exit(c)).ToArray();
+
+    private static readonly CliExit InvalidArguments = Exit(CliExitCodes.ExitInvalidArguments, "invalid arguments: an unknown option, an option of another command, a missing value");
+    private static readonly CliExit PackageNotFound = Exit(CliExitCodes.ExitFileNotFound, "a package, a packages folder, a web resources folder or a --secure-config file was not found");
+    private static readonly CliExit ConnectionFailure = Exit(CliExitCodes.ExitConnectionFailure);
+
     private static readonly string[] ExitCodeNotes =
     [
         "Exit codes: 0 success, 2 invalid arguments, 3 file not found, 4 error (incl. --strict), 5 drift (models --verify, apply not converged),",
@@ -110,6 +136,16 @@ internal static class CliCommands
                 ("Other", [Help]),
             ],
             Notes: [SolutionNote, "A terminal gets a colored summary; piped, redirected, --json or --out gets the JSON document.", .. ExitCodeNotes],
+            ExitCodes:
+            [
+                Exit(CliExitCodes.ExitSuccess, "the plan ran; with --detailed-exitcode, there is nothing to apply"),
+                InvalidArguments,
+                PackageNotFound,
+                Exit(CliExitCodes.ExitError, "a --strict failure, a --solution missing or managed in the environment, or a problem that would make apply fail (a Custom API without the publisher prefix, an unknown message or table filter, a removed plugin type that unmanaged steps use): no JSON document"),
+                ConnectionFailure,
+                Exit(CliExitCodes.ExitChangesPending, "--detailed-exitcode only: the plan has changes to apply"),
+            ],
+            Outputs: [new(OutputDocuments.Plan, ["plan"])],
             Examples:
             [
                 "vela plan --packages-dir artifacts --solution ZavaSales --interactive",
@@ -128,6 +164,17 @@ internal static class CliCommands
                 ("Other", [Help]),
             ],
             Notes: [SolutionNote, "The JSON 'executed' block reports what was done; 'summary' is what remains after the apply.", .. ExitCodeNotes],
+            ExitCodes:
+            [
+                Exit(CliExitCodes.ExitSuccess, "the apply finished (mode apply-execute), there was nothing to apply, or the prompt was not answered yes"),
+                InvalidArguments,
+                PackageNotFound,
+                Exit(CliExitCodes.ExitError, "a --strict failure, stdin is not a terminal and --auto-approve is missing, a --solution missing or managed in the environment, or a problem found before any write: no JSON document"),
+                Exit(CliExitCodes.ExitDriftDetected, "every write ran but the environment still differs (mode apply-not-converged)"),
+                ConnectionFailure,
+                Exit(CliExitCodes.ExitPartialApply, "the apply stopped mid-run (mode apply-failed): Dataverse may be partly updated; run apply again"),
+            ],
+            Outputs: [new(OutputDocuments.Plan, ["apply-execute", "apply-not-converged", "apply-failed"])],
             Examples: ["vela apply --packages-dir artifacts --solution ZavaSales --auto-approve --url https://zava.crm.dynamics.com"]),
         new("inspect", "Show local and live registrations side by side (read-only).",
             ["vela inspect (--package <file.nupkg>... | --packages-dir <folder>) [options] [connection options]"],
@@ -137,7 +184,9 @@ internal static class CliCommands
                 ("Connection", ConnectionOptions),
                 ("Other", [Help]),
             ],
-            Notes: ExitCodeNotes),
+            Notes: ExitCodeNotes,
+            ExitCodes: [Exit(CliExitCodes.ExitSuccess), InvalidArguments, PackageNotFound, Exit(CliExitCodes.ExitError), ConnectionFailure],
+            Outputs: [new(OutputDocuments.Inspect, ["inspect"])]),
         new("init", "Scaffold a new solution on disk (minimal by default; --samples for worked examples).",
             ["vela init --name <SolutionName> [--prefix <Prefix>] [--publisher-prefix <prefix>] [--solution <uniquename>] [--samples] [options]"],
             [
@@ -165,6 +214,7 @@ internal static class CliCommands
                     Help]),
             ],
             Aliases: ["new"],
+            ExitCodes: [Exit(CliExitCodes.ExitSuccess), InvalidArguments, Exit(CliExitCodes.ExitError, "the scaffold failed (a file could not be written)")],
             Notes: ["PROJECT.md (written once, at init) records the publisher prefix and the solution of each package for people and agents. The CLI never reads it: pass the values as flags (--solution on plan/apply, --prefix on add customapi)."],
             Examples: ["vela init --name ZavaSales --prefix Zava --publisher-prefix zava --solution ZavaCore --output .", "vela init --name ZavaDemo --prefix Zava --samples"]),
         new("add", "Add a plugin, service, Custom API, test or step to a project.",
@@ -197,7 +247,8 @@ internal static class CliCommands
                 "step <PluginName> --entity <ModelType> [--message] [--handler] [--stage] [--mode] [--filtering-attributes]: edits an existing multi-step plugin.",
                 "form-script|ribbon-script <entity> [--project <web-resources dir>] [--force]: (preview).",
                 "Each kind accepts only its own options. A Custom API is named <publisherprefix>_<Name>, with the --prefix you pass (never read from the project).",
-            ]),
+            ],
+            ExitCodes: [Exit(CliExitCodes.ExitSuccess), InvalidArguments]),
         new("models", "Generate early-bound models, typed messages or roles.",
             ["vela models <scope>... [options] [connection options]", "vela models --from-solution <solution.zip> --namespace <ns>   (offline)"],
             [
@@ -227,6 +278,15 @@ internal static class CliCommands
                 ("Connection", ConnectionOptions),
                 ("Other", [Help]),
             ],
+            ExitCodes:
+            [
+                Exit(CliExitCodes.ExitSuccess),
+                InvalidArguments,
+                Exit(CliExitCodes.ExitFileNotFound, "a file or folder was not found (a package, a packages folder, a --from-solution zip)"),
+                Exit(CliExitCodes.ExitError, "the generation failed"),
+                Exit(CliExitCodes.ExitDriftDetected, "--verify only: the model on disk is out of date"),
+                ConnectionFailure,
+            ],
             Examples: ["vela models --solution ZavaSales --interactive", "vela models --custom-apis --package artifacts/Zava.Plugins.1.0.0.nupkg -i"]),
         new("logs", "Read plug-in trace logs or failed system jobs (read-only).",
             ["vela logs [options] [connection options]"],
@@ -248,6 +308,7 @@ internal static class CliCommands
                 ("Other", [Help]),
             ],
             Aliases: ["trace"],
+            ExitCodes: [Exit(CliExitCodes.ExitSuccess), InvalidArguments, Exit(CliExitCodes.ExitError, "the trace log or the system jobs could not be read"), ConnectionFailure],
             Examples: ["vela logs --errors --since 1h -i", "vela logs --jobs --since 1d --json"]),
         new("solution", "Print a solution's publisher prefix (read-only).",
             ["vela solution show <uniquename> [--json] [connection options]"],
@@ -256,7 +317,9 @@ internal static class CliCommands
                 ("Connection", ConnectionOptions),
                 ("Other", [Help]),
             ],
-            Notes: ["JSON: {\"solution\":\"...\",\"publisherPrefix\":\"...\"}."],
+            Notes: ["JSON: {\"schemaVersion\":1,\"solution\":\"...\",\"publisherPrefix\":\"...\"}."],
+            ExitCodes: [Exit(CliExitCodes.ExitSuccess), InvalidArguments, Exit(CliExitCodes.ExitError, "the publisher prefix could not be read (for example, no such solution)"), ConnectionFailure],
+            Outputs: [new(OutputDocuments.Solution)],
             Examples: [
                 "vela init --name ZavaSales --prefix Zava --publisher-prefix \"$(vela solution show ZavaSales -i)\"",
                 "vela add customapi ApproveOrder --prefix \"$(vela solution show ZavaSales -i)\"",
@@ -276,17 +339,23 @@ internal static class CliCommands
                     new("--timestamp", CliOptionKind.Value, "RFC 3161 timestamp server.", "url"),
                     Json,
                     Help]),
-            ]),
+            ],
+            ExitCodes: [Exit(CliExitCodes.ExitSuccess), InvalidArguments, Exit(CliExitCodes.ExitFileNotFound, "the package or the PFX file was not found"), Exit(CliExitCodes.ExitError, "dotnet nuget sign failed")]),
         new("logout", "Clear the cached login token and the remembered URL.",
             ["vela logout"],
-            [("Options", [Help])]),
+            [("Options", [Help])],
+            ExitCodes: [Exit(CliExitCodes.ExitSuccess), InvalidArguments]),
         new("update", "Update the vela global tool.",
             ["vela update [--version <x.y.z>]"],
             [("Options", [new("--version", CliOptionKind.Value, "Install this version instead of the latest.", "x.y.z"), Help])],
-            Notes: ["On Windows the running executable is locked: run it from a new shell if the update fails."]),
-        new("menu", "Launch the interactive menu (the default with no arguments).", ["vela menu"], []),
-        new("version", "Print the tool version.", ["vela version"], []),
-        new("help", "Help for one command (vela help <command>), or all as JSON (--json).", ["vela help [<command>] [--json]"], []),
+            Notes: ["On Windows the running executable is locked: run it from a new shell if the update fails."],
+            ExitCodes: [Exit(CliExitCodes.ExitSuccess), InvalidArguments, Exit(CliExitCodes.ExitError, "dotnet tool update failed")]),
+        new("menu", "Launch the interactive menu (the default with no arguments).", ["vela menu"], [],
+            Notes: ["Exits with the code of the command chosen in the menu; 0 when the menu is closed without a choice."],
+            ExitCodes: [Exit(CliExitCodes.ExitSuccess, "the menu was closed, or the chosen command succeeded"), .. ExitCodeMeanings.Keys.Where(c => c != CliExitCodes.ExitSuccess).Select(c => Exit(c, $"returned by the chosen command: {ExitCodeMeanings[c]}"))]),
+        new("version", "Print the tool version.", ["vela version"], [], ExitCodes: [Exit(CliExitCodes.ExitSuccess)]),
+        new("help", "Help for one command (vela help <command>), or all as JSON (--json).", ["vela help [<command>] [--json]"], [],
+            ExitCodes: [Exit(CliExitCodes.ExitSuccess), Exit(CliExitCodes.ExitInvalidArguments, "an unknown command")]),
     ];
 
     public static CliCommand? Find(string name) =>
@@ -426,17 +495,10 @@ internal static class CliCommands
                 value = o.ValueName,
                 description = o.Description,
             }),
+            exitCodes = (c.ExitCodes ?? []).Select(e => new { code = e.Code, description = e.Description }),
+            outputs = (c.Outputs ?? []).Select(o => new { document = o.Document, modes = o.Modes }),
         }),
-        exitCodes = new Dictionary<string, string>
-        {
-            ["0"] = "success",
-            ["2"] = "invalid arguments",
-            ["3"] = "file not found",
-            ["4"] = "error (including a --strict failure)",
-            ["5"] = "drift detected (models --verify, apply not converged)",
-            ["6"] = "Dataverse connection failure",
-            ["7"] = "partial apply",
-            ["8"] = "changes pending (plan --detailed-exitcode)",
-        },
+        exitCodes = ExitCodeMeanings.ToDictionary(e => e.Key.ToString(System.Globalization.CultureInfo.InvariantCulture), e => e.Value),
+        documents = OutputDocuments.Schemas(jsonOptions).ToDictionary(d => d.Key, d => new { schemaVersion = MachineOutput.SchemaVersion, schema = d.Value }),
     }, new JsonSerializerOptions(jsonOptions) { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
 }
