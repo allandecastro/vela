@@ -25,6 +25,11 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed (CLI)
+
+- `vela help --json` and the exit code table list every cause of exit `4` on `plan` and `apply`: a step on a bound
+  Custom API with another table than the bound one, and a plugin package whose set of assemblies changed, were missing.
+
 ### Docs
 
 - The **AI layer** section follows vela-agentic v0.7.6: the build loop diagram is back on one row, with the review
