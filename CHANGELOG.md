@@ -25,7 +25,9 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Added (CLI)
+## [0.34.0] - 2026-11-26 (Vela.Cli)
+
+### Added
 
 - `vela help --json` lists, for each command, the exit codes it can return (`exitCodes[]`, with what each one means
   for that command) and the JSON documents it writes (`outputs[]`, with the `mode` values of `plan` and `apply`). A
@@ -33,14 +35,14 @@ All notable changes to Vela are documented here. The format is based on
   `inspect` and `solution`. Agents can validate what they read, and a changed output shows up as a changed schema.
   The existing fields are unchanged.
 
-### Changed (CLI)
+### Changed
 
 - `vela solution show --json` starts with `"schemaVersion": 1`, like the plan, apply and inspect documents, and is
   part of the versioned contract. `solution` and `publisherPrefix` are unchanged.
 - `vela init` scaffolds against framework 0.45.0 (`Vela.Messages`, `Vela.Plugins` and `Vela.Testing`): it takes the
   newest listed 0.45.x on nuget.org, and 0.45.0 itself when nuget.org is unreachable.
 
-### Fixed (CLI)
+### Fixed
 
 - `vela inspect --out <file>` reports `Inspection written: <path>` on stderr, and `vela apply --out <file>`
   `Apply result written: <path>`. Both printed `Plan written: <path>`, as `vela plan` does.
