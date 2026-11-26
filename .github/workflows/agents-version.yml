@@ -5,8 +5,8 @@ name: AI layer version
 # newer one exists, bumps it end to end (docs/tools/Update-AgentsPin.ps1):
 # - it fetches the pages, checks the tags they cite, regenerates llms.txt, writes the CHANGELOG entry and builds the
 #   site with --warningsAsErrors: the checks docs.yml runs on a pull request;
-# - it opens the bump PR. When no Mermaid diagram changed, it merges it and starts the deployment; when one changed, it
-#   leaves the PR open for a person to look at the rendered page;
+# - it opens the bump PR, merges it and starts the deployment. A changed Mermaid diagram does not hold the merge: the PR
+#   names the pages, to look at once deployed;
 # - when the pages cite another tag than the release, it opens an issue instead, to report to vela-agentic.
 # A PR opened with GITHUB_TOKEN does not start other workflows (GitHub's rule), so this job runs those checks itself and
 # starts docs.yml with a workflow_dispatch, which GITHUB_TOKEN may do.
@@ -118,7 +118,7 @@ jobs:
       - name: Build the docs site
         if: steps.find.outputs.latest && steps.bump.outputs.failed == 'false'
         run: dotnet tool run docfx docs/docfx.json --warningsAsErrors
-      - name: Open the bump PR, and merge it when no diagram changed
+      - name: Open the bump PR and merge it
         if: steps.find.outputs.latest && steps.bump.outputs.failed == 'false'
         run: |
           $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'User-Agent' = 'vela-agents-version' }
@@ -137,7 +137,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $review = if ($diagrams) {
-            "- [ ] **Diagrams changed** since ${pinned}: $diagrams. Look at the rendered pages (build the site locally, or merge and check the deployment), then merge."
+            "- [ ] **Diagrams changed** since ${pinned}: $diagrams. Look at the rendered pages once deployed."
           } else {
             "- [x] No Mermaid diagram changed since $pinned."
           }
@@ -156,10 +156,7 @@ jobs:
           $labels = @{ labels = @('area: docs') } | ConvertTo-Json
           Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Uri "https://api.github.com/repos/$env:REPO/issues/$($created.number)/labels" -Body $labels | Out-Null
 
-          if ($diagrams) {
-            Write-Host "::notice::A diagram changed ($diagrams): the PR waits for a person."
-            exit 0
-          }
+          if ($diagrams) { Write-Host "::notice::Diagrams changed ($diagrams): look at the rendered pages once deployed." }
           # GitHub computes whether a new PR is mergeable in the background: retry a few times.
           $merge = @{ merge_method = 'merge' } | ConvertTo-Json
           for ($attempt = 1; ; $attempt++) {

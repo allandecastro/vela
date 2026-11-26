@@ -165,8 +165,8 @@ git-ignored `docs/ai-layer/` by `docs/tools/Get-AgentsDocs.ps1` (Windows PowerSh
 vela-agentic; a new pack release reaches the site when a PR here bumps `docs/agents.version`. The `AI layer version`
 workflow does it every day: when vela-agentic has a newer release, `docs/tools/Update-AgentsPin.ps1` moves the pin,
 checks that the pages cite that tag (`docs/tools/Test-AgentsDocsTag.ps1`), regenerates `docs/llms.txt` and writes the
-CHANGELOG entry; the workflow builds the site, opens the PR and merges it, unless a Mermaid diagram changed: that PR
-waits for someone to look at the rendered page. Pages that cite another tag open an issue instead, to report to
+CHANGELOG entry; the workflow builds the site, opens the PR and merges it. A changed Mermaid diagram does not hold the
+merge: the PR names the pages to look at once deployed. Pages that cite another tag open an issue instead, to report to
 vela-agentic. A bump by hand runs the same script (`pwsh docs/tools/Update-AgentsPin.ps1 -Tag vX.Y.Z`); `docs.yml`
 runs the tag check on any pull request that changes the pin. `-Source ../vela-agentic` copies from a local checkout instead, to preview the pack's pages before
 they are tagged.
