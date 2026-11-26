@@ -25,6 +25,10 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
+### Docs
+
+- The **AI agents** section follows vela-agentic v0.7.3: the build loop diagram on two rows.
+
 ## [0.34.0] - 2026-11-26 (Vela.Cli)
 
 ### Added
