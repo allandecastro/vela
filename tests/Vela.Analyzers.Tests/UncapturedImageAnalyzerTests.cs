@@ -241,4 +241,59 @@ namespace Demo
             "        private void OnUpd(IGeneratedContext ctx) { object? x = ctx.{|#0:PreImage|}; }");
         await Verify.VerifyAnalyzerAsync(code, Expected("pre-image", "PreImage", "WithPreImage"));
     }
+
+    // A plugin split across files: the RegisterStep() chain in one part of the partial class, the handler in another.
+    private static async Task VerifyPartsAsync(string registration, string handler, params DiagnosticResult[] expected)
+    {
+        var test = new Microsoft.CodeAnalysis.CSharp.Testing.CSharpAnalyzerTest<Vela.Analyzers.UncapturedImageAnalyzer, DefaultVerifier>();
+        test.TestState.Sources.Add(("Registration.cs", Harness + @"
+namespace Demo
+{
+    using Vela.Context;
+    public partial class Use : Plugin
+    {
+        " + registration + @"
+    }
+}
+"));
+        test.TestState.Sources.Add(("Handlers.cs", @"
+namespace Demo
+{
+    using Vela.Context;
+    public partial class Use
+    {
+        " + handler + @"
+    }
+}
+"));
+        test.ExpectedDiagnostics.AddRange(expected);
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task Flags_an_uncaptured_image_when_the_handler_is_in_another_part_of_a_partial_class()
+    {
+        await VerifyPartsAsync(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().WithPostImage(\"name\").Handle(OnUpd); }",
+            "private void OnUpd(ILocalPluginContext ctx) { object? x = ctx.{|#0:PreImage|}; }",
+            Expected("pre-image", "PreImage", "WithPreImage"));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_an_image_captured_by_a_chain_in_another_part_of_a_partial_class()
+    {
+        await VerifyPartsAsync(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().WithPreImage(\"name\").Handle(OnUpd); }",
+            "private void OnUpd(ILocalPluginContext ctx) { object? x = ctx.PreImage; }");
+    }
+
+    [Fact]
+    public async Task Does_not_flag_a_handler_shared_by_chains_in_two_parts_of_a_partial_class()
+    {
+        // One chain per file: neither file alone shows the handler as shared, the type as a whole does.
+        await VerifyPartsAsync(
+            "public void Reg() { RegisterStep().OnUpdate().PostOperation().Sync().Handle(OnUpd); }",
+            "public void Reg2() { RegisterStep().OnCreate().PostOperation().Sync().WithPreImage(\"name\").Handle(OnUpd); }\n" +
+            "        private void OnUpd(ILocalPluginContext ctx) { object? x = ctx.PreImage; }");
+    }
 }

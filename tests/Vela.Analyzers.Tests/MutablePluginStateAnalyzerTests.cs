@@ -218,6 +218,59 @@ namespace Demo
     }
 
     [Fact]
+    public async Task Flags_a_get_only_or_init_only_auto_property_holding_a_mutable_collection()
+    {
+        // Its backing field is a readonly field holding a mutable collection, so the contents are shared the same way.
+        string code = Harness + @"
+namespace System.Runtime.CompilerServices { internal static class IsExternalInit { } }
+namespace Demo
+{
+    using System.Collections.Generic;
+    using Microsoft.Xrm.Sdk;
+    public class MyPlugin : IPlugin
+    {
+        public List<string> {|#0:Items|} { get; } = new();
+        public static IDictionary<string, int> {|#1:Counts|} { get; } = new Dictionary<string, int>();
+        public HashSet<string> {|#2:Seen|} { get; init; } = new HashSet<string>();
+        public void Execute(System.IServiceProvider sp) { }
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(
+            code,
+            Expected("Items", MutablePluginStateAnalyzer.ReadOnlyAutoPropertyMutableCollection, 0),
+            Expected("Counts", MutablePluginStateAnalyzer.ReadOnlyAutoPropertyMutableCollection, 1),
+            Expected("Seen", MutablePluginStateAnalyzer.ReadOnlyAutoPropertyMutableCollection, 2));
+    }
+
+    [Fact]
+    public async Task Does_not_flag_get_only_or_init_only_properties_of_immutable_types_or_computed_collections()
+    {
+        // Read-only views, arrays and plain values on a get-only / init-only auto-property are fine; a computed
+        // property returning a new list stores nothing; the same property on a non-plugin type is not plugin state.
+        string code = Harness + @"
+namespace System.Runtime.CompilerServices { internal static class IsExternalInit { } }
+namespace Demo
+{
+    using System.Collections.Generic;
+    using Microsoft.Xrm.Sdk;
+    public class MyPlugin : IPlugin
+    {
+        public IReadOnlyList<string> Names { get; } = new List<string>();
+        public string[] Columns { get; } = { ""name"" };
+        public string Label { get; init; } = ""x"";
+        public IReadOnlyDictionary<string, int> Map { get; init; } = new Dictionary<string, int>();
+        public List<string> Fresh => new List<string>();
+        public void Execute(System.IServiceProvider sp) { }
+    }
+    public class Helper
+    {
+        public List<string> Items { get; } = new List<string>();
+    }
+}";
+        await Verify.VerifyAnalyzerAsync(code);
+    }
+
+    [Fact]
     public async Task Does_not_flag_readonly_arrays_read_only_concurrent_or_immutable_collections()
     {
         // Arrays (the usual fixed column lists), read-only views and the concurrent collections (thread-safe by

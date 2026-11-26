@@ -34,6 +34,15 @@ All notable changes to Vela are documented here. The format is based on
   instance living longer than the execution (an `HttpClient` kept in a static field) must return a wrapper instead,
   or the shared instance is disposed after the first execution.
 
+### Changed (Framework)
+
+- VELA017 (image read but not captured) and VELA018 (write to the Target in an async step) read the
+  `RegisterStep()` chains of every part of a `partial` plugin class. A handler declared in another file than its
+  step was not checked. This may report new VELA017 errors and VELA018 warnings in existing code.
+- VELA011 (mutable plugin state) flags a get-only or `init` auto-property that holds a mutable collection
+  (`public List<string> Items { get; } = new();`), as it flags a `readonly` field of one. This may report new
+  VELA011 warnings in existing code.
+
 ### Fixed (CLI)
 
 - `vela inspect --out <file>` reports `Inspection written: <path>` on stderr, and `vela apply --out <file>`
