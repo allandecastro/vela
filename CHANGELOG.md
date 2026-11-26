@@ -25,7 +25,19 @@ All notable changes to Vela are documented here. The format is based on
 
 ## [Unreleased]
 
-### Changed (Framework, breaking)
+### Changed (CLI)
+
+- `vela init` scaffolds against framework 0.45.0 (`Vela.Messages`, `Vela.Plugins` and `Vela.Testing`): it takes the
+  newest listed 0.45.x on nuget.org, and 0.45.0 itself when nuget.org is unreachable.
+
+### Fixed (CLI)
+
+- `vela inspect --out <file>` reports `Inspection written: <path>` on stderr, and `vela apply --out <file>`
+  `Apply result written: <path>`. Both printed `Plan written: <path>`, as `vela plan` does.
+
+## [0.45.0] - 2026-11-26 (Vela.Messages + Vela.Plugins + Vela.Testing)
+
+### Changed (breaking)
 
 - **The dependency resolver disposes the scoped services your factories create.** An `IDisposable` service
   registered with `AddScoped<T>(factory)` is now disposed at the end of the execution, as a transient already was;
@@ -34,7 +46,7 @@ All notable changes to Vela are documented here. The format is based on
   instance living longer than the execution (an `HttpClient` kept in a static field) must return a wrapper instead,
   or the shared instance is disposed after the first execution.
 
-### Changed (Framework)
+### Changed
 
 - VELA017 (image read but not captured) and VELA018 (write to the Target in an async step) read the
   `RegisterStep()` chains of every part of a `partial` plugin class. A handler declared in another file than its
@@ -42,11 +54,6 @@ All notable changes to Vela are documented here. The format is based on
 - VELA011 (mutable plugin state) flags a get-only or `init` auto-property that holds a mutable collection
   (`public List<string> Items { get; } = new();`), as it flags a `readonly` field of one. This may report new
   VELA011 warnings in existing code.
-
-### Fixed (CLI)
-
-- `vela inspect --out <file>` reports `Inspection written: <path>` on stderr, and `vela apply --out <file>`
-  `Apply result written: <path>`. Both printed `Plan written: <path>`, as `vela plan` does.
 
 ### Docs
 
