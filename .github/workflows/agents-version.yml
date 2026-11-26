@@ -63,7 +63,13 @@ jobs:
             'dotnet tool restore && dotnet tool run docfx docs/docfx.json --warningsAsErrors',
             '```',
             "",
-            'Then a PR with `docs/agents.version`, `docs/llms.txt` and a `### Docs` CHANGELOG entry.'
+            'Then a PR with `docs/agents.version`, `docs/llms.txt` and a `### Docs` CHANGELOG entry.',
+            "",
+            'Before merging, review the content, not only the build:',
+            "",
+            '- [ ] `pwsh docs/tools/Test-AgentsDocsTag.ps1` passes: the pages cite this tag, not an older one (docs.yml runs it on the PR).',
+            "- [ ] Compare the Mermaid diagrams with $pinned; look at the rendered pages after the deploy when one changed.",
+            '- [ ] Report any problem to vela-agentic as a message for its maintainer; do not edit the copied pages here.'
           ) -join "`n"
           $issue = @{ title = $title; body = $body; labels = @('area: docs', 'priority: medium') } | ConvertTo-Json
           $created = Invoke-RestMethod -Method Post -Headers $headers -ContentType 'application/json' -Uri "https://api.github.com/repos/$env:REPO/issues" -Body $issue
