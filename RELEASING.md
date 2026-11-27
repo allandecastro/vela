@@ -21,7 +21,7 @@ The workflow runs three jobs, each with only the permissions it needs:
 | Job | Runner | Token | Does |
 | --- | --- | --- | --- |
 | `build` | `windows-latest`, or the runner the `WINDOWS_RUNNER` repository variable names (the net462 harness only builds on Windows, like `ci.yml`) | `contents: read` | Preflight, build, test, pack; uploads the packages and the release notes as one workflow artifact. |
-| `publish` | `ubuntu-latest`, or the `WINDOWS_RUNNER` runner | `id-token: write` | Exchanges the OIDC token for a short-lived NuGet key and pushes the packages. |
+| `publish` | `ubuntu-latest`, or the `WINDOWS_RUNNER` runner | `id-token: write` | Runs in the `release` environment; exchanges the OIDC token for a short-lived NuGet key and pushes the packages. |
 | `gh-release` | `ubuntu-latest`, or the `WINDOWS_RUNNER` runner | `contents: write` | Creates the GitHub Release with the release notes and attaches the `.nupkg` files. |
 
 Only `build` checks out and runs repository code. `publish` and `gh-release` only download its artifact, so the
@@ -57,11 +57,13 @@ duplicated or empty section fails the release before anything is published.
 
 ## One-time setup (NuGet.org)
 
-1. Create a **Trusted Publishing** policy on nuget.org for the package owner `AllanDeCastro`, bound to
+1. Create a `release` environment (Settings, Environments) whose deployment rules allow only the tags
+   `framework-v*` and `cli-v*`. The `publish` job runs in it, so no other branch, tag or job can get a NuGet key.
+2. Create a **Trusted Publishing** policy on nuget.org for the package owner `AllanDeCastro`, bound to
    repository `allandecastro/vela` and workflow `release.yml`, with the **Push new packages and package
-   versions** scope and glob `Vela.*`. Leave Environment empty.
-2. Optionally reserve the `Vela.*` ID prefix.
-3. A fresh policy must be used within 7 days to stay active; the first successful publish activates it
+   versions** scope and glob `Vela.*`, and Environment `release`.
+3. Optionally reserve the `Vela.*` ID prefix.
+4. A fresh policy must be used within 7 days to stay active; the first successful publish activates it
    permanently.
 
 ## Cut a release

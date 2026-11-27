@@ -163,6 +163,9 @@ jobs:
     # GitHub-hosted minutes, and a hosted job then never starts. The tokens stay per job either way.
     runs-on: ${{ fromJSON(vars.WINDOWS_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 10
+    # The nuget.org Trusted Publishing policy is bound to this environment, which only framework-v* and cli-v* tags may
+    # deploy to: no other job, branch or workflow of the repository can get a NuGet key.
+    environment: release
     permissions:
       id-token: write # OIDC token exchange for NuGet Trusted Publishing (no long-lived API key)
     env:
