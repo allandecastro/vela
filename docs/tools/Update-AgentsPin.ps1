@@ -1,4 +1,4 @@
-# Moves docs/agents.version to a newer vela-agentic tag and prepares everything the bump PR needs: fetches the pages
+# Moves docs/ai-layer.version to a newer vela-agentic tag and prepares everything the bump PR needs: fetches the pages
 # (Get-AgentsDocs.ps1), checks the tags they cite (Test-AgentsDocsTag.ps1), regenerates docs/llms.txt and writes the
 # CHANGELOG entry. It lists the pages whose Mermaid diagrams changed since the previous pin, since that is the one
 # change a person has to look at rendered. The "AI layer version" workflow runs it every day; it also runs by hand.
@@ -12,9 +12,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $docs = Join-Path (Get-Location) 'docs'
-$pinFile = Join-Path $docs 'agents.version'
+$pinFile = Join-Path $docs 'ai-layer.version'
 $pages = Join-Path $docs 'ai-layer'
-if (-not (Test-Path $pinFile)) { throw 'Run this script from the repository root: docs/agents.version not found.' }
+if (-not (Test-Path $pinFile)) { throw 'Run this script from the repository root: docs/ai-layer.version not found.' }
 if ($Tag -cnotmatch '^v\d+\.\d+\.\d+$') { throw "Not a vX.Y.Z tag: '$Tag'." }
 $previous = (Get-Content -Raw $pinFile).Trim()
 
