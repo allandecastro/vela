@@ -160,14 +160,15 @@ dotnet tool run docfx docs/docfx.json --warningsAsErrors
 ```
 
 The **AI layer** section is not written here: it is the `docs/` folder of
-[vela-agentic](https://github.com/allandecastro/vela-agentic) at the tag in `docs/agents.version`, copied to the
+[vela-agentic](https://github.com/allandecastro/vela-agentic) at the tag in `docs/ai-layer.version`, copied to the
 git-ignored `docs/ai-layer/` by `docs/tools/Get-AgentsDocs.ps1` (Windows PowerShell or `pwsh`). Its pages change in
-vela-agentic; a new pack release reaches the site when a PR here bumps `docs/agents.version`. The `AI layer version`
+vela-agentic; a new pack release reaches the site when a PR here bumps `docs/ai-layer.version`. The `AI layer version`
 workflow does it every day: when vela-agentic has a newer release, `docs/tools/Update-AgentsPin.ps1` moves the pin,
 checks that the pages cite that tag (`docs/tools/Test-AgentsDocsTag.ps1`), regenerates `docs/llms.txt` and writes the
-CHANGELOG entry; the workflow builds the site, opens the PR and merges it. A changed Mermaid diagram does not hold the
-merge: the PR names the pages to look at once deployed. Pages that cite another tag open an issue instead, to report to
-vela-agentic. A bump by hand runs the same script (`pwsh docs/tools/Update-AgentsPin.ps1 -Tag vX.Y.Z`); `docs.yml`
+CHANGELOG entry; the workflow builds the site and pushes the branch `docs/agents-vX.Y.Z`, then fails with a link to
+open its pull request. A maintainer opens it, so the CI runs on it (a pull request opened by the workflow's token starts
+no workflow, and `main` requires its checks), and merges it once green. The run names the pages whose Mermaid diagrams
+changed, to look at once deployed. Pages that cite another tag open an issue instead, to report to vela-agentic. A bump by hand runs the same script (`pwsh docs/tools/Update-AgentsPin.ps1 -Tag vX.Y.Z`); `docs.yml`
 runs the tag check on any pull request that changes the pin. `-Source ../vela-agentic` copies from a local checkout instead, to preview the pack's pages before
 they are tagged.
 

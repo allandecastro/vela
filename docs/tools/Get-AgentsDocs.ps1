@@ -1,5 +1,5 @@
 # Fills docs/ai-layer/ (the "AI layer" section, git-ignored) with the docs/ folder of vela-agentic at the tag pinned in
-# docs/agents.version. Run it from the repository root before building the site or regenerating llms.txt. -Source
+# docs/ai-layer.version. Run it from the repository root before building the site or regenerating llms.txt. -Source
 # copies from a local vela-agentic checkout instead, to preview the pack's pages before tagging them.
 # Windows PowerShell 5.1 and PowerShell 7 alike: the Docs workflow runs it on the self-hosted runner's 5.1.
 param([string] $Source)
@@ -7,15 +7,15 @@ $ErrorActionPreference = 'Stop'
 
 $docs = Join-Path (Get-Location) 'docs'
 $target = Join-Path $docs 'ai-layer'
-if (-not (Test-Path (Join-Path $docs 'agents.version'))) { throw 'Run this script from the repository root: docs/agents.version not found.' }
+if (-not (Test-Path (Join-Path $docs 'ai-layer.version'))) { throw 'Run this script from the repository root: docs/ai-layer.version not found.' }
 
 $temp = $null
 try {
     if ($Source) {
         $from = Join-Path $Source 'docs'
     } else {
-        $tag = (Get-Content -Raw (Join-Path $docs 'agents.version')).Trim()
-        if ($tag -cnotmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "docs/agents.version must hold a vela-agentic tag (vX.Y.Z), not '$tag'." }
+        $tag = (Get-Content -Raw (Join-Path $docs 'ai-layer.version')).Trim()
+        if ($tag -cnotmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "docs/ai-layer.version must hold a vela-agentic tag (vX.Y.Z), not '$tag'." }
         $temp = Join-Path ([System.IO.Path]::GetTempPath()) "vela-agentic-$([guid]::NewGuid().ToString('N'))"
         # git writes progress to stderr, which Windows PowerShell turns into an error under 'Stop': check the exit code.
         $ErrorActionPreference = 'Continue'

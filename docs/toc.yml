@@ -1,6 +1,6 @@
 # Top navigation, in learning order: get started, build and test (Guides), connect the CLI (Configuration), look things
 # up (Reference), let an AI assistant drive Vela (AI layer), then the material about Vela itself (Advanced,
-# Contributing). The AI layer pages come from vela-agentic (docs/agents.version, docs/tools/Get-AgentsDocs.ps1).
+# Contributing). The AI layer pages come from vela-agentic (docs/ai-layer.version, docs/tools/Get-AgentsDocs.ps1).
 - name: Getting started
   href: getting-started/
 - name: Guides
